@@ -1,0 +1,316 @@
+﻿<!DOCTYPE html>
+<html lang="ko" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gmarket Intent Home</title>
+    <link rel="stylesheet" href="https://fonts.cdnfonts.com/css/gmarket-sans">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="./gmarket-advanced.tailwind.js"></script>
+    <link rel="stylesheet" href="./gmarket-advanced.css">
+</head>
+<body class="bg-slate-50 font-sans min-h-screen text-slate-900 overflow-x-hidden">
+
+    <button type="button" id="historySidebarToggle" class="history-sidebar-toggle fixed left-4 top-24 z-[120] inline-flex lg:hidden items-center gap-2 rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 text-sm font-bold text-slate-700 shadow-lg backdrop-blur">
+        <svg class="w-5 h-5 text-gmarket-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 6h16M4 12h16M4 18h10"></path></svg>
+        히스토리
+    </button>
+
+    <aside id="history-panel" class="history-sidebar fixed left-0 top-0 z-[130] h-screen w-[320px] max-w-[86vw] -translate-x-full lg:translate-x-0 border-r border-slate-200/80 bg-white/92 text-slate-900 shadow-[24px_0_60px_-30px_rgba(15,23,42,0.18)] transition-transform duration-300">
+        <div class="flex h-full flex-col">
+            <div class="flex items-center justify-between border-b border-slate-200/80 px-5 py-5">
+                <div class="history-sidebar-copy min-w-0">
+                    <p class="text-[11px] uppercase tracking-[0.28em] text-slate-400 font-bold mb-2">Search History</p>
+                    <h2 class="text-lg font-bold text-slate-800">사용자 솔루션 히스토리</h2>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" id="collapseHistorySidebar" class="hidden lg:inline-flex rounded-xl border border-slate-200 bg-slate-50 p-2 text-slate-500 hover:text-slate-800 hover:border-slate-300 transition-colors">
+                        <svg id="collapseHistorySidebarIcon" class="w-5 h-5 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M15 19l-7-7 7-7"></path></svg>
+                    </button>
+                    <button type="button" id="closeHistorySidebar" class="lg:hidden rounded-xl border border-slate-200 p-2 text-slate-500 hover:text-slate-800 hover:border-slate-300 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="history-sidebar-controls px-4 py-4 border-b border-slate-200/80">
+                <button type="button" id="clearHistoryBtn" class="history-clear-btn w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors font-bold hidden">전체 삭제</button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto px-3 py-4">
+                <div id="history-empty" class="history-empty rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm leading-relaxed text-slate-400 font-bold">
+                    아직 저장된 검색이 없습니다. 검색과 플랜 생성이 진행되면 최근 기록이 이곳에 쌓입니다.
+                </div>
+
+                <div id="history-list" class="hidden space-y-2"></div>
+            </div>
+        </div>
+    </aside>
+
+    <div id="history-sidebar-backdrop" class="history-sidebar-backdrop fixed inset-0 z-[125] hidden bg-slate-950/35 backdrop-blur-sm lg:hidden"></div>
+
+    <header class="fixed top-0 left-0 w-full h-20 z-[100] px-6 md:px-12 flex items-center justify-between border-b border-slate-200/10">
+        <div class="flex items-center cursor-pointer" onclick="window.scrollTo({top:0, behavior:'smooth'})">
+            <img src="https://gds.gmarket.co.kr/_next/static/images/app-a381a063688da7518cd8fb58f645af25.svg" alt="Gmarket" class="h-9 w-auto transition-opacity hover:opacity-80">
+        </div>
+        <div class="flex items-center gap-6">
+            <div class="text-right hidden sm:block">
+                <p class="text-[14px] font-bold text-slate-800">김지마켓</p>
+                <p class="text-[11px] text-slate-400 font-medium font-bold">Data Sync: Active</p>
+            </div>
+            <div class="w-12 h-12 rounded-full bg-slate-200 overflow-hidden border-2 border-white shadow-md hover:ring-2 hover:ring-gmarket-blue transition-all cursor-pointer">
+                <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100" alt="Avatar" class="w-full h-full object-cover">
+            </div>
+        </div>
+    </header>
+
+    <div class="fixed top-[-10%] left-[-10%] w-[60%] h-[60%] rounded-full bg-gmarket-blue bg-blob"></div>
+    <div class="fixed bottom-[-10%] right-[-10%] w-[60%] h-[60%] rounded-full bg-gmarket bg-blob"></div>
+
+    <section id="home-view" class="min-h-screen flex flex-col items-center justify-center p-6 relative z-10 text-left pt-20">
+        <div class="w-full max-w-3xl flex flex-col items-center">
+            <div class="flex flex-col items-center mb-12 group cursor-pointer relative">
+                <div class="relative flex items-center justify-center">
+                    <svg class="w-32 h-32 overflow-visible transition-transform duration-500 group-hover:scale-110" style="color:#FFD200" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+                        <defs><filter id="soft-shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="2" dy="3" stdDeviation="4" flood-color="#000000" flood-opacity="0.15" /></filter></defs>
+                        <g><path d="M 88 80 Q 115 80 120 50" stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none" /><circle cx="120" cy="50" r="5" fill="currentColor" /><animateTransform attributeName="transform" type="rotate" values="0 88 80; 25 88 80; -15 88 80; 25 88 80; -15 88 80; 0 88 80; 0 88 80" keyTimes="0; 0.1; 0.2; 0.3; 0.4; 0.5; 1" dur="2.5s" repeatCount="indefinite" /></g>
+                        <circle cx="55" cy="65" r="45" fill="currentColor" filter="url(#soft-shadow)" />
+                        <ellipse cx="46" cy="50" rx="3.5" ry="5.5" fill="#1e293b"/>
+                        <ellipse cx="64" cy="50" rx="3.5" ry="5.5" fill="#1e293b"/>
+                        <path d="M 35 63 Q 55 78 75 63" stroke="#1e293b" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+                        <circle cx="34" cy="63" r="2.5" fill="#FF5F5F" opacity="0.35" />
+                        <circle cx="76" cy="63" r="2.5" fill="#FF5F5F" opacity="0.35" />
+                    </svg>
+                </div>
+            </div>
+
+            <div class="text-center mb-14">
+                <h1 class="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight mb-5 leading-tight text-slate-800 text-center">무엇을 찾고 계신가요?</h1>
+                <p class="text-slate-500 font-medium tracking-wide flex items-center justify-center gap-2">
+                    <span class="w-8 h-px bg-slate-200"></span>
+                    생각은 당신이, 완성은 <span class="text-gmarket-blue font-bold">지마켓이</span>
+                    <span class="w-8 h-px bg-slate-300"></span>
+                </p>
+            </div>
+
+            <div class="w-full">
+                <form id="searchForm" class="relative flex items-center group">
+                    <div class="absolute inset-0 bg-gradient-to-r from-gmarket to-gmarket-blue rounded-full blur opacity-10 group-focus-within:opacity-30 transition duration-500"></div>
+                    <input type="text" id="searchInput" placeholder="예: 거실 창문에 어울리는 커튼 달기" class="w-full pl-8 pr-20 py-6 rounded-full border-0 shadow-2xl text-slate-700 focus:ring-2 focus:ring-gmarket-blue focus:outline-none text-lg lg:text-xl transition-all relative z-10 bg-white placeholder-slate-300 font-bold" />
+                    <button type="submit" id="submitBtn" class="absolute right-3 z-20 p-4 bg-slate-200 text-white rounded-full transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center" disabled>
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    </button>
+                </form>
+                <div class="text-center mt-8 flex justify-center gap-3 text-sm font-medium font-bold">
+                    <button type="button" id="curtainTag" class="suggestion-tag border border-slate-100 hover:text-gmarket hover:border-gmarket transition-all bg-white px-5 py-2 rounded-full shadow-sm text-slate-400 font-bold">#커튼_달기</button>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <section id="info-view" class="hidden min-h-screen flex-col items-center justify-center p-6 relative z-10 text-left pt-20">
+        <div class="w-full max-w-2xl bg-white rounded-[40px] shadow-2xl p-10 md:p-16 relative overflow-hidden text-left border border-slate-100">
+            <div class="mb-10 text-left">
+                <span class="text-xs font-bold text-gmarket-blue uppercase tracking-widest mb-2 block font-bold">Personalize Plan</span>
+                <h2 class="text-2xl md:text-3xl font-bold text-slate-800 leading-tight">환경에 딱 맞는 계획을 위해<br>몇 가지만 알려주세요</h2>
+            </div>
+
+            <div id="questions-container" class="space-y-10 text-left">
+                <div>
+                    <label class="text-sm font-bold text-slate-400 mb-4 block font-bold">1. 설치할 창문 크기는 어느 정도인가요?</label>
+                    <div class="grid grid-cols-3 gap-3">
+                        <button onclick="selectChoice(this, 'size')" class="info-card border-2 border-slate-100 p-4 rounded-2xl text-center transition-all bg-slate-50 hover:border-gmarket-blue group">
+                            <span class="block text-xl mb-1">작음</span>
+                            <span class="text-xs font-bold text-slate-700 font-bold">작은 창</span>
+                        </button>
+                        <button onclick="selectChoice(this, 'size')" class="info-card border-2 border-slate-100 p-4 rounded-2xl text-center transition-all bg-slate-50 hover:border-gmarket-blue group">
+                            <span class="block text-xl mb-1">보통</span>
+                            <span class="text-xs font-bold text-slate-700 font-bold">중간 창</span>
+                        </button>
+                        <button onclick="selectChoice(this, 'size')" class="info-card border-2 border-slate-100 p-4 rounded-2xl text-center transition-all bg-slate-50 hover:border-gmarket-blue group">
+                            <span class="block text-xl mb-1">큼</span>
+                            <span class="text-xs font-bold text-slate-700 font-bold">전면 창문</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="text-sm font-bold text-slate-400 mb-4 block font-bold">2. 벽면 또는 천장 소재는 무엇인가요?</label>
+                    <div class="grid grid-cols-2 gap-3">
+                        <button onclick="selectChoice(this, 'wall')" class="info-card border-2 border-slate-100 p-4 rounded-2xl text-left flex items-center gap-4 transition-all bg-slate-50 hover:border-gmarket-blue">
+                            <span class="text-xl">콘크리트</span>
+                            <span class="text-xs font-bold text-slate-700 font-bold">단단한 벽면</span>
+                        </button>
+                        <button onclick="selectChoice(this, 'wall')" class="info-card border-2 border-slate-100 p-4 rounded-2xl text-left flex items-center gap-4 transition-all bg-slate-50 hover:border-gmarket-blue">
+                            <span class="text-xl">석고/목재</span>
+                            <span class="text-xs font-bold text-slate-700 font-bold">가벼운 벽면</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="text-sm font-bold text-slate-400 mb-4 block font-bold">3. 가장 중요하게 생각하는 효과는?</label>
+                    <div class="flex gap-3">
+                        <button onclick="selectChoice(this, 'goal')" class="flex-grow info-card border-2 border-slate-100 p-4 rounded-2xl text-center transition-all bg-slate-50 hover:border-gmarket-blue font-bold">
+                            <span class="text-xs font-bold text-slate-700 font-bold">채광 조절</span>
+                        </button>
+                        <button onclick="selectChoice(this, 'goal')" class="flex-grow info-card border-2 border-slate-100 p-4 rounded-2xl text-center transition-all bg-slate-50 hover:border-gmarket-blue font-bold">
+                            <span class="text-xs font-bold text-slate-700 font-bold">아늑한 분위기</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <button onclick="generatePlan()" class="w-full mt-12 py-5 bg-gmarket-blue text-white rounded-2xl font-bold text-lg shadow-xl transition-all active:scale-95 font-bold">지마켓 맞춤 계획 확인하기</button>
+        </div>
+    </section>
+
+    <section id="solution-view" class="hidden min-h-screen pt-28 pb-40 px-6 relative z-10 overflow-hidden text-left bg-slate-50/50 backdrop-blur-sm border-t border-slate-200/50">
+        <div class="max-w-4xl mx-auto text-left">
+            <div class="mb-16 text-left">
+                <h2 id="intent-title" class="text-2xl md:text-4xl font-bold text-slate-800 mb-6 leading-snug">계획을 준비 중입니다...</h2>
+                <div class="flex items-center text-slate-500 text-sm md:text-base font-bold">
+                    <div class="w-2.5 h-2.5 rounded-full bg-gmarket mr-3 animate-pulse"></div>
+                    입력하신 정보를 바탕으로 <span class="text-gmarket-blue font-bold mx-1">최적의 3단계 맞춤 플랜</span>을 구성합니다.
+                </div>
+            </div>
+
+            <div id="plan-container" class="space-y-24 text-left"></div>
+        </div>
+
+    </section>
+
+    <div id="pdp-overlay" class="fixed inset-0 z-[150] invisible opacity-0 pointer-events-none flex justify-end">
+        <div id="pdp-backdrop" class="absolute inset-0 bg-slate-900/10 backdrop-blur-sm opacity-0 pointer-events-none"></div>
+
+        <div id="pdp-floating-card" class="relative w-full max-w-2xl bg-white h-full pointer-events-auto flex flex-col overflow-hidden text-left shadow-2xl">
+            <div class="sticky top-0 bg-white border-b border-slate-100 z-[160] px-6 py-5 flex items-center justify-between shadow-sm">
+                <div class="flex items-center gap-3">
+                    <button onclick="closePDP()" class="p-2 -ml-2 text-slate-400 hover:text-slate-800 transition-colors">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                    <h3 class="font-bold text-lg tracking-tight font-bold">상품 상세</h3>
+                </div>
+            </div>
+
+            <div id="pdp-ai-agent-panel" class="absolute top-20 right-8 z-[120] flex flex-col items-end pointer-events-none">
+                <div onclick="toggleAISpeechBubble()" class="relative cursor-pointer group pointer-events-auto animate-float flex flex-col items-end">
+                    <div id="ai-status-text" class="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-4 transition-opacity duration-300 bg-white/90 px-3 py-1 rounded-full shadow-sm border border-slate-100 font-bold">G-Agent Optimization</div>
+
+                    <div class="relative w-20 h-20 flex items-center justify-center">
+                        <div id="aura-container" class="agent-aura-wrap">
+                            <div class="radial-equalizer" id="equalizer-rays"></div>
+                            <div class="sparkle" style="top: -10px; left: 15px; width: 4px; height: 4px; --dur: 3.5s"></div>
+                            <div class="sparkle" style="bottom: -5px; right: 8px; width: 3px; height: 3px; --dur: 4.2s"></div>
+                        </div>
+
+                        <div id="ai-ready-badge" class="hidden absolute -top-1 -right-1 w-7 h-7 bg-red-500 border-2 border-white rounded-full z-[125] flex items-center justify-center animate-bounce">
+                            <span class="text-[11px] text-white font-bold">!</span>
+                        </div>
+
+                        <div class="w-20 h-20 flex items-center justify-center overflow-visible transition-all duration-300 group-hover:scale-110 relative z-10">
+                            <svg class="w-16 h-16 overflow-visible" style="color:#FFD200" viewBox="0 0 120 120">
+                                <defs><filter id="soft-shadow-pdp-final" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="2" dy="3" stdDeviation="4" flood-color="#000000" flood-opacity="0.1" /></filter></defs>
+                                <g><path d="M 88 80 Q 115 80 120 50" stroke="#1e293b" stroke-width="6" stroke-linecap="round" fill="none" /><circle cx="120" cy="50" r="5" fill="#1e293b" /><animateTransform attributeName="transform" type="rotate" values="0 88 80; 25 88 80; -15 88 80; 25 88 80; -15 88 80; 0 88 80; 0 88 80" keyTimes="0; 0.1; 0.2; 0.3; 0.4; 0.5; 1" dur="2.5s" repeatCount="indefinite" /></g>
+                                <circle cx="55" cy="65" r="45" fill="currentColor" filter="url(#soft-shadow-pdp-final)"/>
+                                <ellipse cx="46" cy="50" rx="3.5" ry="5.5" fill="#1e293b"/>
+                                <ellipse cx="64" cy="50" rx="3.5" ry="5.5" fill="#1e293b"/>
+                                <path d="M 35 63 Q 55 78 75 63" stroke="#1e293b" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+                                <circle cx="34" cy="63" r="2.5" fill="#FF5F5F" opacity="0.35" />
+                                <circle cx="76" cy="63" r="2.5" fill="#FF5F5F" opacity="0.35" />
+                            </svg>
+                        </div>
+
+                        <div id="ai-loading-ring" class="absolute -inset-2 border-2 border-dashed border-gmarket-blue rounded-full animate-spin-slow opacity-20"></div>
+                    </div>
+                </div>
+
+                <div id="ai-speech-bubble" class="hidden speech-bubble bg-white border border-slate-200 rounded-[28px] p-8 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.15)] mt-4 w-[calc(100vw-48px)] max-w-[580px] animate-in fade-in slide-in-from-top-2 duration-400 pointer-events-auto origin-top-right relative z-[115] mr-[-8px]">
+                    <div class="flex items-center gap-3 mb-6 pb-3 border-b border-slate-100 text-left">
+                        <div class="w-2.5 h-2.5 rounded-full bg-gmarket-blue shadow-[0_0_10px_rgba(0,123,255,0.5)]"></div>
+                        <span class="text-[11px] font-bold text-slate-400 uppercase tracking-widest font-bold">G-Agent Intelligence Report</span>
+                    </div>
+
+                    <div class="space-y-6 text-left">
+                        <p class="text-[18px] text-slate-600 leading-relaxed font-bold">
+                            분석 완료! "<span id="pdp-intent-reason-text" class="text-slate-900 font-bold underline decoration-gmarket-blue/30 underline-offset-4"></span>" 목표 달성을 위한 핵심 정보를 확인해보세요.
+                        </p>
+                        <div id="pdp-ai-summary-list" class="space-y-6"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex-grow overflow-y-auto scrollbar-hide text-left">
+                <div class="px-8 py-10">
+                    <div class="flex flex-col gap-8 mb-12">
+                        <div class="aspect-square bg-slate-50 rounded-3xl overflow-hidden border border-slate-100 shadow-sm group">
+                            <img id="pdp-image" src="" alt="" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110">
+                        </div>
+                        <div class="flex flex-col text-left">
+                            <div class="flex items-center gap-2 mb-4">
+                                <span class="bg-gmarket-blue text-white text-[10px] font-bold px-3 py-1 rounded-full font-bold tracking-tight">AI OPTIMIZED</span>
+                                <span class="bg-slate-100 text-slate-600 text-[10px] font-bold px-3 py-1 rounded-full uppercase font-bold tracking-tight font-bold">Match <span id="pdp-match-score"></span>%</span>
+                            </div>
+                            <h1 id="pdp-title" class="text-3xl font-bold text-slate-900 mb-6 leading-tight"></h1>
+                            <div class="flex items-center gap-3">
+                                <span class="text-red-500 text-4xl font-bold font-bold">25%</span>
+                                <div class="flex flex-col">
+                                    <div class="flex items-baseline gap-1">
+                                        <span id="pdp-price" class="text-4xl font-bold tracking-tight font-bold"></span><span class="text-xl font-bold font-bold">원</span>
+                                    </div>
+                                    <span class="text-slate-300 text-base line-through font-medium font-bold" id="pdp-original-price"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-slate-100 mt-16 text-left">
+                        <div class="flex items-center justify-around border-b border-slate-100 mb-12">
+                            <button class="py-5 text-base font-bold tab-active">상세설명</button>
+                            <button class="py-5 text-base font-bold text-slate-400 font-bold font-bold">리뷰 (1,235)</button>
+                            <button class="py-5 text-base font-bold text-slate-400 font-bold font-bold">안내</button>
+                        </div>
+
+                        <div class="space-y-20 pb-40 text-left">
+                            <div class="text-center">
+                                <h4 class="text-2xl font-bold text-slate-800 mb-8 leading-relaxed font-bold uppercase tracking-tight font-bold">Space Optimization Detail</h4>
+                                <div class="rounded-[40px] overflow-hidden bg-slate-100 shadow-xl border border-slate-200/50">
+                                    <img src="https://images.unsplash.com/photo-1513519245088-0e12902e5a38?auto=format&fit=crop&q=80&w=1000" class="w-full h-auto" alt="Space Optimization Image">
+                                </div>
+                            </div>
+                            <div class="bg-slate-50 rounded-[32px] p-8 border border-slate-100 text-left">
+                                <h5 class="font-bold mb-6 text-center text-slate-800 underline decoration-gmarket-blue/20 underline-offset-8 text-xl font-bold text-left font-bold">상세 상품 정보</h5>
+                                <div class="grid grid-cols-2 gap-4 text-xs text-left">
+                                    <div class="p-5 bg-white rounded-2xl border border-slate-100 shadow-sm text-left font-bold">
+                                        <p class="text-slate-400 mb-1.5 font-bold uppercase tracking-wider font-bold">Material</p>
+                                        <p class="font-bold text-slate-800 text-sm font-bold">폴리에스터 100%</p>
+                                    </div>
+                                    <div class="p-5 bg-white rounded-2xl border border-slate-100 shadow-sm text-left font-bold">
+                                        <p class="text-slate-400 mb-1.5 font-bold uppercase tracking-wider font-bold">Size</p>
+                                        <p id="pdp-spec-size" class="font-bold text-slate-800 text-sm font-bold">-</p>
+                                    </div>
+                                    <div class="p-5 bg-white rounded-2xl border border-slate-100 col-span-2 shadow-sm text-left font-bold">
+                                        <p class="text-slate-400 mb-1.5 font-bold uppercase tracking-wider font-bold">Key Feature</p>
+                                        <p id="pdp-spec-feature" class="font-bold text-slate-800 text-sm font-bold">-</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="absolute bottom-0 left-0 w-full bg-white/95 backdrop-blur-md border-t border-slate-100 p-8 flex gap-4 z-[140] shadow-[0_-10px_30px_rgba(0,0,0,0.05)]">
+                <button class="flex-grow py-5 bg-slate-100 text-slate-800 rounded-2xl font-bold text-base transition-all hover:bg-slate-200 font-bold font-bold">장바구니</button>
+                <button class="flex-grow-[2] py-5 bg-gmarket-blue text-white rounded-2xl font-bold text-base shadow-2xl shadow-blue-100 transition-all hover:scale-[1.01] active:scale-95 font-bold font-bold">바로구매</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="./gmarket-advanced.mock.js"></script>
+    <script src="./gmarket-advanced.js"></script>
+</body>
+</html>
+
+
