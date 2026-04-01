@@ -262,5 +262,331 @@
                 ]
             }
         ]
+    },
+    "데스크탑": {
+        title: "데스크탑 조립 맞춤 제안",
+        intentReason: "사용 목적과 세팅 취향에 맞춰 데스크탑 조립 구성을 빠르게 정리하는 목적",
+        steps: [
+            {
+                step: 1,
+                name: "CPU & 메인보드 결정",
+                essential: true,
+                description: "가장 먼저 작업 성격에 맞는 플랫폼을 정해야 이후 그래픽카드, 메모리, 업그레이드 방향이 자연스럽게 맞춰집니다.",
+                products: [
+                    {
+                        id: 511,
+                        name: "라이젠 7 + B650 메인보드 세트",
+                        price: "589,000",
+                        originalPrice: "649,000",
+                        score: 98,
+                        img: "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "멀티태스킹과 게이밍을 함께 잡기 좋은 밸런스형 조합입니다.",
+                            "AM5 플랫폼 기반이라 차후 CPU 업그레이드 여유를 확보하기 쉽습니다.",
+                            "DDR5 메모리와 PCIe 4.0 구성이 기본이라 최신 부품 조합에 무리가 없습니다."
+                        ],
+                        spec: { size: "8코어 CPU / ATX 보드", feature: "업그레이드 여유가 큰 메인 플랫폼" }
+                    },
+                    {
+                        id: 512,
+                        name: "인텔 i5 + B760 메인보드 세트",
+                        price: "479,000",
+                        originalPrice: "539,000",
+                        score: 93,
+                        img: "https://images.unsplash.com/photo-1587202372775-e229f172b9d7?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "사무용부터 캐주얼 게임까지 폭넓게 대응하는 가성비 조합입니다.",
+                            "보드 세트 구성이라 호환성 확인 부담이 상대적으로 적습니다.",
+                            "예산을 그래픽카드나 모니터 쪽에 더 배분하고 싶을 때 유리합니다."
+                        ],
+                        spec: { size: "14코어 CPU / mATX 보드", feature: "가성비 중심 인텔 플랫폼" }
+                    },
+                    {
+                        id: 513,
+                        name: "라이젠 5 + B650M 메인보드 세트",
+                        price: "399,000",
+                        originalPrice: "459,000",
+                        score: 90,
+                        img: "https://images.unsplash.com/photo-1517430816045-df4b7de11d1d?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "합리적인 예산에서 게이밍과 일반 작업을 균형 있게 가져가기 좋은 조합입니다.",
+                            "mATX 보드 조합이라 작은 공간용 케이스에도 구성하기 수월합니다.",
+                            "첫 조립 PC에서 가격 대비 체감 성능을 챙기고 싶을 때 무난합니다."
+                        ],
+                        spec: { size: "6코어 CPU / mATX 보드", feature: "실속형 AM5 플랫폼" }
+                    },
+                    {
+                        id: 514,
+                        name: "인텔 i7 + Z790 메인보드 세트",
+                        price: "729,000",
+                        originalPrice: "809,000",
+                        score: 95,
+                        img: "https://images.unsplash.com/photo-1591799265444-d66432b91588?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "영상 편집과 스트리밍처럼 CPU 부하가 높은 작업에 특히 유리합니다.",
+                            "상위 칩셋 기반이라 확장 슬롯과 전원부 구성이 여유롭습니다.",
+                            "고성능 그래픽카드와 함께 쓰는 메인 세팅으로 적합합니다."
+                        ],
+                        spec: { size: "20코어 CPU / ATX 보드", feature: "하이엔드 인텔 조합" }
+                    }
+                ]
+            },
+            {
+                step: 2,
+                name: "그래픽카드 선택",
+                essential: true,
+                description: "게임, 영상 작업, 멀티모니터 구성처럼 체감 성능 차이가 큰 영역이라 예산 안에서 가장 먼저 우선순위를 정하는 편이 좋습니다.",
+                products: [
+                    {
+                        id: 521,
+                        name: "RTX 4070 SUPER 그래픽카드",
+                        price: "899,000",
+                        originalPrice: "969,000",
+                        score: 99,
+                        img: "https://images.unsplash.com/photo-1591488320449-011701bb6704?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "QHD 게이밍과 크리에이티브 작업을 모두 노리기 좋은 상급 라인업입니다.",
+                            "DLSS와 AV1 인코딩 지원으로 게임 방송이나 영상 출력 활용도가 높습니다.",
+                            "화이트 혹은 RGB 튜닝 모델 선택지도 다양해 세팅 확장성도 좋습니다."
+                        ],
+                        spec: { size: "12GB GDDR6X", feature: "QHD 게이밍 / 크리에이티브 작업" }
+                    },
+                    {
+                        id: 522,
+                        name: "RTX 4060 듀얼팬 그래픽카드",
+                        price: "459,000",
+                        originalPrice: "519,000",
+                        score: 91,
+                        img: "https://images.unsplash.com/photo-1562976540-1502c2145186?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "전력 소모와 가격 부담을 줄이면서 FHD 게이밍을 안정적으로 구성할 수 있습니다.",
+                            "짧은 길이의 듀얼팬 구조라 미들타워나 작은 책상 환경에도 넣기 편합니다.",
+                            "입문 조립 PC에서 가장 무난하게 선택되는 등급입니다."
+                        ],
+                        spec: { size: "8GB GDDR6", feature: "FHD 게이밍 / 컴팩트 듀얼팬" }
+                    },
+                    {
+                        id: 523,
+                        name: "RX 7800 XT 트리플팬 그래픽카드",
+                        price: "699,000",
+                        originalPrice: "759,000",
+                        score: 94,
+                        img: "https://images.unsplash.com/photo-1580894894513-541e068a3e2b?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "QHD 게이밍 성능을 예산 대비 크게 끌어올리고 싶을 때 눈여겨볼 만한 선택지입니다.",
+                            "VRAM 여유가 있어 대형 텍스처 게임이나 멀티작업에서도 유리합니다.",
+                            "튜닝형 쿨러가 달린 모델은 장시간 게임에서도 온도 관리가 안정적입니다."
+                        ],
+                        spec: { size: "16GB GDDR6", feature: "QHD 게이밍 / 고용량 VRAM" }
+                    },
+                    {
+                        id: 524,
+                        name: "RTX 4070 화이트 에디션",
+                        price: "829,000",
+                        originalPrice: "899,000",
+                        score: 92,
+                        img: "https://images.unsplash.com/photo-1625842268584-8f3296236761?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "화이트 셋업을 선호하는 사용자에게 완성도 높은 비주얼을 제공합니다.",
+                            "QHD 해상도 기준 대부분의 게임을 균형 있게 돌리기 좋은 급입니다.",
+                            "동일 성능대 대비 소비전력도 무난해 파워 설계 부담이 상대적으로 적습니다."
+                        ],
+                        spec: { size: "12GB GDDR6X", feature: "화이트 튜닝 / QHD 게이밍" }
+                    }
+                ]
+            },
+            {
+                step: 3,
+                name: "메모리 & 저장장치 구성",
+                essential: true,
+                description: "부팅 속도, 앱 실행 속도, 작업 여유와 직결되기 때문에 사용 패턴에 맞춰 용량과 확장 슬롯 구성을 함께 보는 게 좋습니다.",
+                products: [
+                    {
+                        id: 531,
+                        name: "DDR5 32GB 메모리 킷",
+                        price: "139,000",
+                        originalPrice: "179,000",
+                        score: 97,
+                        img: "https://images.unsplash.com/photo-1540829917886-91ab031b1764?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "게임과 브라우저, 작업 툴을 동시에 띄워도 여유가 남는 체감 용량입니다.",
+                            "튜닝 방열판이 포함된 제품은 화이트 세팅이나 RGB 구성에도 잘 어울립니다.",
+                            "2장 킷 구성이라 듀얼채널 세팅을 손쉽게 맞출 수 있습니다."
+                        ],
+                        spec: { size: "16GB x 2", feature: "DDR5 듀얼채널 메모리" }
+                    },
+                    {
+                        id: 532,
+                        name: "NVMe SSD 2TB",
+                        price: "179,000",
+                        originalPrice: "229,000",
+                        score: 94,
+                        img: "https://images.unsplash.com/photo-1555617981-dac3880eac6e?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "게임 라이브러리와 작업 파일을 함께 넣기 좋은 넉넉한 용량입니다.",
+                            "운영체제와 주력 프로그램을 빠르게 실행할 수 있어 체감 만족도가 높습니다.",
+                            "메인보드의 추가 M.2 슬롯만 확보하면 향후 저장공간 확장도 간단합니다."
+                        ],
+                        spec: { size: "2TB / PCIe 4.0", feature: "고속 NVMe SSD" }
+                    },
+                    {
+                        id: 533,
+                        name: "RGB DDR5 64GB 메모리 킷",
+                        price: "279,000",
+                        originalPrice: "329,000",
+                        score: 93,
+                        img: "https://images.unsplash.com/photo-1563212038-0f1d3f3f0f84?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "영상 편집이나 가상머신처럼 메모리 점유가 큰 작업에서 확실한 여유를 줍니다.",
+                            "RGB 확산형 디자인으로 내부 조명 효과를 강조하는 세팅과 잘 맞습니다.",
+                            "장기적으로 메모리 업그레이드를 생략하고 싶을 때 효율적입니다."
+                        ],
+                        spec: { size: "32GB x 2", feature: "고용량 RGB DDR5 메모리" }
+                    },
+                    {
+                        id: 534,
+                        name: "NVMe SSD 1TB + 방열판 번들",
+                        price: "109,000",
+                        originalPrice: "139,000",
+                        score: 89,
+                        img: "https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "운영체제와 자주 쓰는 게임만 빠르게 분리 저장하고 싶은 경우 효율적인 선택입니다.",
+                            "방열판 번들이 포함돼 발열 관리와 설치 편의가 좋습니다.",
+                            "예산을 아끼면서도 기본 체감 속도를 챙기기 좋습니다."
+                        ],
+                        spec: { size: "1TB / PCIe 4.0", feature: "방열판 포함 SSD 번들" }
+                    }
+                ]
+            },
+            {
+                step: 4,
+                name: "쿨링 & 파워 안정화",
+                essential: false,
+                description: "조용한 환경, 장시간 사용, 튜닝 감성을 원한다면 냉각과 전원 품질을 한 단계 올려두는 편이 전체 만족도가 높습니다.",
+                products: [
+                    {
+                        id: 541,
+                        name: "수랭 RGB 쿨러 240mm",
+                        price: "129,000",
+                        originalPrice: "159,000",
+                        score: 92,
+                        img: "https://images.unsplash.com/photo-1587202372616-b43abea06c2a?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "발열이 높은 CPU에서도 온도를 안정적으로 유지하기 쉬운 구성입니다.",
+                            "헤드와 팬의 RGB 연동 효과로 내부 튜닝 완성도를 끌어올릴 수 있습니다.",
+                            "유리 패널 케이스를 쓰는 세팅과 특히 잘 맞습니다."
+                        ],
+                        spec: { size: "240mm 라디에이터", feature: "일체형 수랭 / RGB 지원" }
+                    },
+                    {
+                        id: 542,
+                        name: "80PLUS GOLD 750W 파워",
+                        price: "119,000",
+                        originalPrice: "149,000",
+                        score: 96,
+                        img: "https://images.unsplash.com/photo-1587202372583-49330a15584d?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "중상급 그래픽카드까지 안정적으로 대응하는 전력 구간입니다.",
+                            "풀모듈러 방식이라 선정리와 내부 공기 흐름 관리가 편합니다.",
+                            "나중에 GPU를 업그레이드해도 재사용하기 좋은 핵심 부품입니다."
+                        ],
+                        spec: { size: "750W", feature: "GOLD 효율 / 풀모듈러" }
+                    },
+                    {
+                        id: 543,
+                        name: "저소음 공랭 타워쿨러",
+                        price: "49,900",
+                        originalPrice: "64,000",
+                        score: 90,
+                        img: "https://images.unsplash.com/photo-1580894908361-967195033215?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "수랭 없이도 발열과 소음을 안정적으로 관리하고 싶은 사용자에게 적합합니다.",
+                            "장착 구조가 비교적 단순해 첫 조립에도 부담이 적습니다.",
+                            "화이트 또는 블랙 버전 선택이 가능해 색상 톤 맞추기에도 좋습니다."
+                        ],
+                        spec: { size: "싱글타워 120mm", feature: "저소음 공랭 쿨러" }
+                    },
+                    {
+                        id: 544,
+                        name: "80PLUS GOLD 850W 화이트 파워",
+                        price: "149,000",
+                        originalPrice: "189,000",
+                        score: 91,
+                        img: "https://images.unsplash.com/photo-1587202372473-53dd7e0648b6?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "고성능 GPU 업그레이드 계획이 있거나 화이트 셋업을 맞추고 싶을 때 잘 맞습니다.",
+                            "용량 여유가 커서 장시간 고부하 환경에서도 안정감이 높습니다.",
+                            "화이트 케이블 구성으로 내부 마감 완성도를 높이기 쉽습니다."
+                        ],
+                        spec: { size: "850W", feature: "화이트 / GOLD 효율 / 풀모듈러" }
+                    }
+                ]
+            },
+            {
+                step: 5,
+                name: "케이스 & 데스크 셋업 마감",
+                essential: false,
+                description: "책상 크기, 색상 톤, 전면 포트, 쿨링 구조까지 고려해 케이스를 고르면 완성 이후 만족도와 관리 편의가 크게 달라집니다.",
+                products: [
+                    {
+                        id: 551,
+                        name: "파노라마 강화유리 미들타워 케이스",
+                        price: "109,000",
+                        originalPrice: "139,000",
+                        score: 95,
+                        img: "https://images.unsplash.com/photo-1593640495253-23196b27a87f?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "내부가 넓고 측면 강화유리 구조라 RGB나 화이트 튜닝 세팅이 잘 드러납니다.",
+                            "전면 메쉬와 상단 배기 구성이 좋아 공랭과 수랭 모두 무난하게 대응합니다.",
+                            "선정리 공간이 넉넉해 첫 조립에서도 마감하기 상대적으로 쉽습니다."
+                        ],
+                        spec: { size: "미들타워 / ATX 지원", feature: "파노라마 유리 / 전면 메쉬" }
+                    },
+                    {
+                        id: 552,
+                        name: "모니터암 + 케이블 정리 키트",
+                        price: "69,900",
+                        originalPrice: "89,000",
+                        score: 88,
+                        img: "https://images.unsplash.com/photo-1527443154391-507e9dc6c5cc?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "듀얼모니터나 작은 공간 세팅에서 책상 활용도를 눈에 띄게 끌어올립니다.",
+                            "케이블 슬리브와 클립까지 함께 정리하면 조립 PC의 완성도가 훨씬 높아집니다.",
+                            "본체뿐 아니라 데스크 환경 전체를 정돈하고 싶은 경우에 잘 맞습니다."
+                        ],
+                        spec: { size: "32인치 이하 지원", feature: "가스스프링 암 / 정리 액세서리 포함" }
+                    },
+                    {
+                        id: 553,
+                        name: "화이트 컴팩트 mATX 케이스",
+                        price: "79,900",
+                        originalPrice: "99,000",
+                        score: 87,
+                        img: "https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "작은 방이나 책상 위 배치를 고려하는 사용자에게 공간 효율이 좋습니다.",
+                            "화이트 외관과 강화유리 측면 패널로 감성 세팅을 깔끔하게 마무리할 수 있습니다.",
+                            "mATX 메인보드 기반 실속형 조립에 특히 잘 어울립니다."
+                        ],
+                        spec: { size: "mATX / 미니타워", feature: "화이트 감성 / 컴팩트 구조" }
+                    },
+                    {
+                        id: 554,
+                        name: "RGB 시스템 팬 3팩",
+                        price: "39,900",
+                        originalPrice: "52,000",
+                        score: 86,
+                        img: "https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "케이스 내부 공기 흐름을 보완하면서 튜닝 효과도 함께 챙길 수 있습니다.",
+                            "메인보드 RGB 싱크를 지원하면 전체 조명 톤을 맞추기 쉽습니다.",
+                            "완성 직전 세팅 만족도를 높이는 마감 아이템으로 적합합니다."
+                        ],
+                        spec: { size: "120mm x 3", feature: "ARGB 시스템 팬 세트" }
+                    }
+                ]
+            }
+        ]
     }
 };

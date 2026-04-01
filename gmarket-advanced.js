@@ -27,11 +27,12 @@ const HISTORY_LIMIT = 6;
 
 const state = {
     currentIntent: "",
+    currentSessionId: "",
     rawQuery: "",
     choices: { size: "", wall: "", goal: "" },
     searchHistory: [],
     isHistoryPanelCollapsed: false,
-    purposeCart: {},      // { intentKey: { intentLabel, rawQuery, selectedItems: { stepIdx: { productIdx, product } } } }
+    purposeCart: {},      // { sessionId: { intentKey, intentLabel, rawQuery, choices, selectedItems: { stepIdx: { productIdx, product } } } }
     activeTab: "cart"
 };
 
@@ -68,7 +69,8 @@ function persistHistoryPanelState() {
 function loadCart() {
     try {
         const stored = window.localStorage.getItem(CART_STORAGE_KEY);
-        return stored ? JSON.parse(stored) : {};
+        const parsed = stored ? JSON.parse(stored) : {};
+        return normalizeCartData(parsed);
     } catch (error) {
         return {};
     }
@@ -76,6 +78,144 @@ function loadCart() {
 
 function persistCart() {
     window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(state.purposeCart));
+}
+
+function normalizeCartData(cartData) {
+    if (!cartData || typeof cartData !== "object" || Array.isArray(cartData)) {
+        return {};
+    }
+
+    const normalized = {};
+
+    Object.entries(cartData).forEach(([key, value], index) => {
+        if (!value || typeof value !== "object" || Array.isArray(value)) return;
+
+        const hasSessionShape = typeof value.intentKey === "string";
+        const sessionId = hasSessionShape ? key : `legacy-${key}-${index}`;
+
+        normalized[sessionId] = {
+            intentKey: hasSessionShape ? value.intentKey : key,
+            intentLabel: value.intentLabel || solutionData[hasSessionShape ? value.intentKey : key]?.title || key,
+            rawQuery: value.rawQuery || "",
+            selectionSummary: value.selectionSummary || "",
+            recommendationSummary: value.recommendationSummary || "",
+            choices: value.choices || { size: "", wall: "", goal: "" },
+            selectedItems: value.selectedItems || {},
+            threadView: value.threadView || "solution",
+            createdAt: value.createdAt || new Date().toISOString(),
+            updatedAt: value.updatedAt || new Date().toISOString()
+        };
+    });
+
+    return normalized;
+}
+
+function createCartSession(intentKey) {
+    return {
+        id: `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        data: {
+            intentKey,
+            intentLabel: solutionData[intentKey]?.title || intentKey,
+            rawQuery: state.rawQuery,
+            selectionSummary: buildHistorySummary(),
+            recommendationSummary: solutionData[intentKey]?.intentReason || "",
+            choices: { ...state.choices },
+            selectedItems: {},
+            threadView: "solution",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        }
+    };
+}
+
+function getCartSession(sessionId) {
+    return sessionId ? state.purposeCart[sessionId] : null;
+}
+
+function getActiveSessionForIntent(intentKey) {
+    const activeSession = getCartSession(state.currentSessionId);
+    if (activeSession?.intentKey === intentKey) {
+        return { sessionId: state.currentSessionId, session: activeSession };
+    }
+
+    return null;
+}
+
+function getSessionSelectionState(intentKey, stepIdx) {
+    const active = getActiveSessionForIntent(intentKey);
+    return active?.session?.selectedItems?.[stepIdx] || null;
+}
+
+function calculateSessionTotals(session) {
+    return Object.values(session?.selectedItems || {}).reduce(
+        (acc, { product }) => {
+            acc.count += 1;
+            acc.price += parseInt(product.price.replace(/,/g, ""), 10) || 0;
+            return acc;
+        },
+        { count: 0, price: 0 }
+    );
+}
+
+function hydrateSessionContext(sessionId) {
+    const session = getCartSession(sessionId);
+    if (!session) return;
+
+    state.currentSessionId = sessionId;
+    state.currentIntent = session.intentKey;
+    state.rawQuery = session.rawQuery || "";
+    state.choices = {
+        size: session.choices?.size || "",
+        wall: session.choices?.wall || "",
+        goal: session.choices?.goal || ""
+    };
+
+    const searchInput = document.getElementById("searchInput");
+    if (searchInput) {
+        searchInput.value = state.rawQuery;
+        updateSearchUI(state.rawQuery);
+    }
+}
+
+function getCurrentVisibleThreadView() {
+    if (!document.getElementById("order-complete-view")?.classList.contains("hidden")) return "complete";
+    if (!document.getElementById("order-view")?.classList.contains("hidden")) return "order";
+    if (!document.getElementById("solution-view")?.classList.contains("hidden")) return "solution";
+    return "info";
+}
+
+function hideThreadViews() {
+    const infoView = document.getElementById("info-view");
+    const solutionView = document.getElementById("solution-view");
+    const orderView = document.getElementById("order-view");
+    const completeView = document.getElementById("order-complete-view");
+
+    infoView?.classList.add("hidden");
+    infoView?.classList.remove("flex");
+    solutionView?.classList.add("hidden");
+    orderView?.classList.add("hidden");
+    orderView?.classList.remove("flex", "flex-col");
+    completeView?.classList.add("hidden");
+    completeView?.classList.remove("flex", "flex-col");
+}
+
+function showSolutionThread(session) {
+    const solutionView = document.getElementById("solution-view");
+    if (!session || !solutionView) return;
+
+    hideThreadViews();
+    closePDP();
+
+    renderInfoView(session.intentKey);
+    renderSolution(session.intentKey, session.rawQuery || session.intentLabel || session.intentKey);
+    updateProductCardCartState(session.intentKey);
+    updateBottomCheckoutBar();
+
+    solutionView.classList.remove("hidden");
+
+    requestAnimationFrame(() => {
+        solutionView.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
 }
 
 /* ─── History panel collapse ────────────────────────────────── */
@@ -189,6 +329,7 @@ function applyHistoryEntry(index) {
 
     if (!entry) return;
 
+    state.currentSessionId = "";
     state.currentIntent = entry.intent;
     state.rawQuery = entry.query;
     state.choices = { ...entry.choices };
@@ -198,7 +339,7 @@ function applyHistoryEntry(index) {
         updateSearchUI(entry.query);
     }
 
-    executeSearch(entry.query);
+    executeSearch(entry.query, { resetChoices: false });
     renderSearchHistory();
     closeHistorySidebar();
 }
@@ -253,28 +394,39 @@ window.addToCart = function addToCart(intentKey, stepIdx, productIdx) {
     const product = intentData.steps[stepIdx]?.products[productIdx];
     if (!product) return;
 
-    if (!state.purposeCart[intentKey]) {
-        state.purposeCart[intentKey] = {
-            intentLabel: intentData.title,
-            rawQuery: state.rawQuery,
-            selectionSummary: buildHistorySummary(),
-            recommendationSummary: intentData.intentReason,
-            selectedItems: {}
-        };
+    let sessionId = state.currentSessionId;
+    let cartSession = getCartSession(sessionId);
+
+    if (!cartSession || cartSession.intentKey !== intentKey) {
+        const nextSession = createCartSession(intentKey);
+        sessionId = nextSession.id;
+        cartSession = nextSession.data;
+        state.purposeCart[sessionId] = cartSession;
+        state.currentSessionId = sessionId;
     }
 
     // Toggle: click same product → remove; click different → replace
-    const existing = state.purposeCart[intentKey].selectedItems[stepIdx];
+    cartSession.rawQuery = state.rawQuery;
+    cartSession.selectionSummary = buildHistorySummary();
+    cartSession.recommendationSummary = intentData.intentReason;
+    cartSession.choices = { ...state.choices };
+    cartSession.threadView = getCurrentVisibleThreadView();
+    cartSession.updatedAt = new Date().toISOString();
+
+    const existing = cartSession.selectedItems[stepIdx];
     const isSame = existing && existing.productIdx === productIdx;
 
     if (isSame) {
-        delete state.purposeCart[intentKey].selectedItems[stepIdx];
+        delete cartSession.selectedItems[stepIdx];
         // Clean up empty intent group
-        if (!Object.keys(state.purposeCart[intentKey].selectedItems).length) {
-            delete state.purposeCart[intentKey];
+        if (!Object.keys(cartSession.selectedItems).length) {
+            delete state.purposeCart[sessionId];
+            if (state.currentSessionId === sessionId) {
+                state.currentSessionId = "";
+            }
         }
     } else {
-        state.purposeCart[intentKey].selectedItems[stepIdx] = { productIdx, product };
+        cartSession.selectedItems[stepIdx] = { productIdx, product };
     }
 
     persistCart();
@@ -289,13 +441,23 @@ window.addToCart = function addToCart(intentKey, stepIdx, productIdx) {
     showMiniToast(toastMsg);
 };
 
-window.removeFromCart = function removeFromCart(intentKey, stepIdx) {
-    if (!state.purposeCart[intentKey]) return;
-    const removed = state.purposeCart[intentKey].selectedItems[stepIdx];
-    delete state.purposeCart[intentKey].selectedItems[stepIdx];
+window.removeFromCart = function removeFromCart(intentKey, stepIdx, sessionIdOverride) {
+    const activeSession = sessionIdOverride
+        ? { sessionId: sessionIdOverride, session: getCartSession(sessionIdOverride) }
+        : getActiveSessionForIntent(intentKey);
+    const sessionId = activeSession?.sessionId;
+    const cartSession = activeSession?.session;
+    if (!sessionId || !cartSession) return;
 
-    if (!Object.keys(state.purposeCart[intentKey].selectedItems).length) {
-        delete state.purposeCart[intentKey];
+    const removed = cartSession.selectedItems[stepIdx];
+    delete cartSession.selectedItems[stepIdx];
+    cartSession.updatedAt = new Date().toISOString();
+
+    if (!Object.keys(cartSession.selectedItems).length) {
+        delete state.purposeCart[sessionId];
+        if (state.currentSessionId === sessionId) {
+            state.currentSessionId = "";
+        }
     }
 
     persistCart();
@@ -306,11 +468,17 @@ window.removeFromCart = function removeFromCart(intentKey, stepIdx) {
     if (removed) showMiniToast(`'${removed.product.name}' 이(가) 제거됐어요`);
 };
 
-window.clearCartIntent = function clearCartIntent(intentKey) {
-    delete state.purposeCart[intentKey];
+window.clearCartIntent = function clearCartIntent(sessionId) {
+    const cartSession = getCartSession(sessionId);
+    if (!cartSession) return;
+
+    delete state.purposeCart[sessionId];
+    if (state.currentSessionId === sessionId) {
+        state.currentSessionId = "";
+    }
     persistCart();
     renderCart();
-    updateProductCardCartState(intentKey);
+    updateProductCardCartState(cartSession.intentKey);
     updateCartBadge();
 };
 
@@ -339,7 +507,8 @@ function updateProductCardCartState(intentKey) {
     const intentData = solutionData[intentKey];
     if (!intentData) return;
 
-    const cartGroup = state.purposeCart[intentKey];
+    const activeSession = getActiveSessionForIntent(intentKey);
+    const cartGroup = activeSession?.session;
 
     intentData.steps.forEach((step, stepIdx) => {
         step.products.forEach((product, productIdx) => {
@@ -365,7 +534,11 @@ function renderCart() {
 
     if (!cartContent || !cartEmpty) return;
 
-    const cartKeys = Object.keys(state.purposeCart);
+    const cartKeys = Object.keys(state.purposeCart).sort((a, b) => {
+        const aTime = new Date(state.purposeCart[a]?.updatedAt || 0).getTime();
+        const bTime = new Date(state.purposeCart[b]?.updatedAt || 0).getTime();
+        return bTime - aTime;
+    });
 
     if (!cartKeys.length) {
         cartContent.classList.add("hidden");
@@ -376,21 +549,18 @@ function renderCart() {
     cartEmpty.classList.add("hidden");
     cartContent.classList.remove("hidden");
 
-    cartContent.innerHTML = cartKeys.map(intentKey => {
-        const cartGroup = state.purposeCart[intentKey];
-        const intentData = solutionData[intentKey];
+    cartContent.innerHTML = cartKeys.map(sessionId => {
+        const cartGroup = state.purposeCart[sessionId];
+        const intentData = solutionData[cartGroup.intentKey];
         if (!intentData) return "";
         const groupSummary = buildCartGroupSummary(cartGroup, intentData);
-
-        let subtotal = 0;
+        const { count: selectedCount, price: subtotal } = calculateSessionTotals(cartGroup);
         let hasEssentialMissing = false;
 
         const stepsHtml = intentData.steps.map((step, stepIdx) => {
             const selected = cartGroup.selectedItems[stepIdx];
 
             if (selected) {
-                const priceNum = parseInt(selected.product.price.replace(/,/g, ""), 10) || 0;
-                subtotal += priceNum;
                 return `
                     <div class="cart-item flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-100 cart-item-enter">
                         <img src="${selected.product.img}" class="w-10 h-10 rounded-lg object-cover flex-shrink-0" onerror="this.src='https://images.unsplash.com/photo-1560393464-5c69a73c5770?auto=format&fit=crop&q=80&w=100'" alt="${selected.product.name}">
@@ -399,7 +569,7 @@ function renderCart() {
                             <p class="text-xs font-bold text-slate-800 truncate leading-tight">${selected.product.name}</p>
                             <p class="text-xs font-bold text-gmarket-blue">${selected.product.price}원</p>
                         </div>
-                        <button onclick="removeFromCart('${intentKey}', ${stepIdx})" class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-slate-300 hover:text-red-400 transition-colors rounded-full hover:bg-red-50" title="제거">
+                        <button onclick="removeFromCart('${cartGroup.intentKey}', ${stepIdx}, '${sessionId}')" class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-slate-300 hover:text-red-400 transition-colors rounded-full hover:bg-red-50" title="제거">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
                         </button>
                     </div>
@@ -432,18 +602,20 @@ function renderCart() {
             }
         }).join("");
 
-        const selectedCount = Object.keys(cartGroup.selectedItems).length;
         const totalSteps = intentData.steps.length;
-        const groupBorder = hasEssentialMissing ? "border-amber-200 bg-amber-50/20" : "border-slate-200 bg-white";
+        const isActive = state.currentSessionId === sessionId;
+        const groupBorder = isActive
+            ? "border-gmarket-blue bg-gmarket-blue/5"
+            : (hasEssentialMissing ? "border-amber-200 bg-amber-50/20" : "border-slate-200 bg-white");
 
         return `
             <div class="purpose-cart-group border ${groupBorder}">
                 <div class="purpose-cart-header px-4 pt-4 pb-3 border-b border-slate-100/80">
                     <div class="flex items-center justify-between">
-                        <span class="text-[11px] font-bold text-gmarket-blue uppercase tracking-[0.16em]">${cartGroup.intentLabel || intentKey}</span>
+                        <span class="text-[11px] font-bold text-gmarket-blue uppercase tracking-[0.16em]">${cartGroup.intentLabel || cartGroup.intentKey}</span>
                         <div class="flex items-center gap-2">
                             <span class="purpose-cart-count text-[10px] text-slate-400 font-bold">${selectedCount}/${totalSteps} 선택</span>
-                            <button onclick="clearCartIntent('${intentKey}')" class="text-[10px] text-slate-300 hover:text-red-400 transition-colors font-bold">전체삭제</button>
+                            <button onclick="clearCartIntent('${sessionId}')" class="text-[10px] text-slate-300 hover:text-red-400 transition-colors font-bold">전체삭제</button>
                         </div>
                     </div>
                     ${groupSummary ? `<p class="text-[11px] text-slate-500 font-bold mt-2 leading-relaxed">${groupSummary}</p>` : ""}
@@ -454,10 +626,13 @@ function renderCart() {
                 </div>
                 <div class="purpose-cart-footer px-4 pb-4 pt-2 border-t border-slate-100">
                     <div class="flex justify-between items-center mb-3">
-                        <span class="text-xs text-slate-400 font-bold">선택 상품 소계</span>
+                        <span class="text-xs text-slate-400 font-bold">합계</span>
                         <span class="text-sm font-bold text-slate-800">${subtotal.toLocaleString()}원</span>
                     </div>
-                    <button onclick="checkoutCart('${intentKey}')" class="w-full py-2.5 bg-gmarket-blue text-white text-sm rounded-xl font-bold transition-all hover:bg-blue-600 active:scale-95">구매하기</button>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="continueCartSession('${sessionId}')" class="w-full py-2.5 bg-slate-100 text-slate-700 text-sm rounded-xl font-bold transition-all hover:bg-slate-200 active:scale-95">이어서 보기</button>
+                        <button onclick="checkoutCart('${sessionId}')" class="w-full py-2.5 bg-gmarket-blue text-white text-sm rounded-xl font-bold transition-all hover:bg-blue-600 active:scale-95">구매하기</button>
+                    </div>
                 </div>
             </div>
         `;
@@ -468,9 +643,9 @@ function renderCart() {
 
 /* ─── Checkout & warning toast ──────────────────────────────── */
 
-window.checkoutCart = function checkoutCart(intentKey) {
-    const cartGroup = state.purposeCart[intentKey];
-    const intentData = solutionData[intentKey];
+window.checkoutCart = function checkoutCart(sessionId) {
+    const cartGroup = getCartSession(sessionId);
+    const intentData = solutionData[cartGroup?.intentKey];
     if (!intentData || !cartGroup) return;
 
     const missingEssentials = intentData.steps.filter(
@@ -478,16 +653,18 @@ window.checkoutCart = function checkoutCart(intentKey) {
     );
 
     if (missingEssentials.length > 0) {
-        showMissingEssentialToast(missingEssentials, intentKey);
+        showMissingEssentialToast(missingEssentials, sessionId);
     } else {
-        openOrderView(intentKey);
+        openOrderView(sessionId);
     }
 };
 
-window.openOrderView = function openOrderView(intentKey) {
-    const cartGroup = state.purposeCart[intentKey];
-    const intentData = solutionData[intentKey];
+window.openOrderView = function openOrderView(sessionId) {
+    const cartGroup = getCartSession(sessionId);
+    const intentData = solutionData[cartGroup?.intentKey];
     if (!cartGroup || !intentData) return;
+
+    hydrateSessionContext(sessionId);
 
     // 주문 상품 목록 렌더링
     const itemsList = document.getElementById("order-items-list");
@@ -635,7 +812,9 @@ window.submitOrder = function submitOrder() {
     }
 };
 
-function showMissingEssentialToast(missingSteps, intentKey) {
+function showMissingEssentialToast(missingSteps, sessionId) {
+    const cartSession = getCartSession(sessionId);
+    const intentKey = cartSession?.intentKey || "";
     // Remove any existing toast
     document.getElementById("missing-toast")?.remove();
 
@@ -651,7 +830,7 @@ function showMissingEssentialToast(missingSteps, intentKey) {
                 <svg class="w-6 h-6 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
             </div>
             <div class="flex-1">
-                <p class="text-sm font-bold text-slate-900 mb-1">${intentKey === "캠핑" ? "이거 챙기지 않으면 캠핑 현장에서 곤란해요! ⛺" : "이거 빠트리고 커튼 설치 할 뻔 했어요! 😅"}</p>
+                <p class="text-sm font-bold text-slate-900 mb-1">${intentKey === "캠핑" ? "이거 챙기지 않으면 캠핑 현장에서 곤란해요! ⛺" : intentKey === "데스크탑" ? "이 부품 빠지면 조립 전에 바로 막혀요! 🖥️" : "이거 빠트리고 커튼 설치 할 뻔 했어요! 😅"}</p>
                 <p class="text-xs text-slate-500 leading-relaxed">${stepNames} 상품을 아직 고르지 않으셨어요. 꼭 필요한 상품이에요!</p>
             </div>
             <button onclick="document.getElementById('missing-toast').remove()" class="text-slate-300 hover:text-slate-500 transition-colors flex-shrink-0">
@@ -660,7 +839,7 @@ function showMissingEssentialToast(missingSteps, intentKey) {
         </div>
         <div class="flex gap-2 mt-5">
             <button onclick="document.getElementById('missing-toast').remove(); switchTab('cart'); if(window.innerWidth < 1024) openHistorySidebar()" class="flex-1 py-2.5 bg-amber-500 text-white text-xs rounded-xl font-bold hover:bg-amber-600 transition-colors">상품 선택하기</button>
-            <button onclick="document.getElementById('missing-toast').remove(); openOrderView('${intentKey}')" class="flex-1 py-2.5 bg-slate-100 text-slate-600 text-xs rounded-xl font-bold hover:bg-slate-200 transition-colors">그냥 구매하기</button>
+            <button onclick="document.getElementById('missing-toast').remove(); openOrderView('${sessionId}')" class="flex-1 py-2.5 bg-slate-100 text-slate-600 text-xs rounded-xl font-bold hover:bg-slate-200 transition-colors">그냥 구매하기</button>
         </div>
     `;
 
@@ -702,14 +881,27 @@ function updateSearchUI(value) {
     submitBtn.classList.toggle("bg-slate-200", !hasValue);
 }
 
-function executeSearch(query) {
+function executeSearch(query, options = {}) {
     const infoView = document.getElementById("info-view");
     if (!query) return;
+    const { resetChoices = true } = options;
+
+    state.currentSessionId = "";
+    if (resetChoices) {
+        state.choices = { size: "", wall: "", goal: "" };
+    }
 
     if (query.includes("커튼") || query.includes("커텐") || query.includes("而ㅽ듉") || query.includes("而ㅽ뀗")) {
         state.currentIntent = "커튼";
         state.rawQuery = query;
         renderInfoView("커튼");
+        infoView?.classList.remove("hidden");
+        infoView?.classList.add("flex");
+        infoView?.scrollIntoView({ behavior: "smooth" });
+    } else if (query.includes("데스크탑") || query.includes("조립") || query.includes("pc") || query.includes("컴퓨터")) {
+        state.currentIntent = "데스크탑";
+        state.rawQuery = query;
+        renderInfoView("데스크탑");
         infoView?.classList.remove("hidden");
         infoView?.classList.add("flex");
         infoView?.scrollIntoView({ behavior: "smooth" });
@@ -784,6 +976,41 @@ const infoViewConfig = {
             ],
             category: "goal"
         }
+    },
+    "데스크탑": {
+        q1: {
+            label: "1. 어떤 용도로 조립할 예정인가요?",
+            layout: "grid grid-cols-2 gap-3",
+            options: [
+                { main: "사무용", sub: "문서 / 회의 / 웹", row: true },
+                { main: "게이밍", sub: "고사양 게임", row: true },
+                { main: "영상편집", sub: "크리에이티브 작업", row: true },
+                { main: "올라운드", sub: "공부 / 취미 / 가정용", row: true }
+            ],
+            category: "size"
+        },
+        q2: {
+            label: "2. 어떤 세팅을 가장 신경 쓰시나요?",
+            layout: "grid grid-cols-2 gap-3",
+            options: [
+                { main: "가성비", sub: "예산 효율 우선", row: true },
+                { main: "성능", sub: "업무 / 게임 속도", row: true },
+                { main: "저소음", sub: "조용한 환경", row: true },
+                { main: "감성 RGB", sub: "튜닝 / 비주얼", row: true }
+            ],
+            category: "wall"
+        },
+        q3: {
+            label: "3. 꼭 넣고 싶은 포인트가 있나요?",
+            layout: "grid grid-cols-2 gap-3",
+            options: [
+                { main: "화이트 셋업" },
+                { main: "업그레이드 여유" },
+                { main: "작은 공간" },
+                { main: "듀얼모니터" }
+            ],
+            category: "goal"
+        }
     }
 };
 
@@ -792,23 +1019,23 @@ function renderInfoView(intent) {
     if (!container) return;
     const cfg = infoViewConfig[intent];
     if (!cfg) return;
-    state.choices = { size: "", wall: "", goal: "" };
 
     const buildQ = (q) => {
         const btnClass = "info-card border-2 border-slate-100 rounded-2xl transition-all bg-slate-50 hover:border-gmarket-blue";
         const buttons = q.options.map(opt => {
+            const buttonAttrs = `data-choice-category="${q.category}" data-choice-value="${opt.main}"`;
             if (opt.row) {
-                return `<button onclick="selectChoice(this, '${q.category}')" class="${btnClass} p-4 text-left flex items-center gap-4">
+                return `<button ${buttonAttrs} onclick="selectChoice(this, '${q.category}')" class="${btnClass} p-4 text-left flex items-center gap-4">
                     <span class="text-xl">${opt.main}</span>
                     <span class="text-xs font-bold text-slate-700">${opt.sub}</span>
                 </button>`;
             } else if (opt.icon) {
-                return `<button onclick="selectChoice(this, '${q.category}')" class="${btnClass} p-4 text-center group">
+                return `<button ${buttonAttrs} onclick="selectChoice(this, '${q.category}')" class="${btnClass} p-4 text-center group">
                     <span class="block text-xl mb-1">${opt.main}</span>
                     <span class="text-xs font-bold text-slate-700">${opt.sub}</span>
                 </button>`;
             } else {
-                return `<button onclick="selectChoice(this, '${q.category}')" class="flex-grow ${btnClass} p-4 text-center font-bold">
+                return `<button ${buttonAttrs} onclick="selectChoice(this, '${q.category}')" class="flex-grow ${btnClass} p-4 text-center font-bold">
                     <span class="text-xs font-bold text-slate-700">${opt.main}</span>
                 </button>`;
             }
@@ -820,6 +1047,14 @@ function renderInfoView(intent) {
     };
 
     container.innerHTML = buildQ(cfg.q1) + buildQ(cfg.q2) + buildQ(cfg.q3);
+
+    Object.entries(state.choices).forEach(([category, value]) => {
+        if (!value) return;
+        const selectedButton = container.querySelector(
+            `[data-choice-category="${category}"][data-choice-value="${value.replace(/"/g, '\\"')}"]`
+        );
+        selectedButton?.classList.add("active-card", "ring-4", "ring-blue-100");
+    });
 }
 
 window.selectChoice = function selectChoice(btn, category) {
@@ -834,6 +1069,18 @@ window.generatePlan = function generatePlan() {
     if (!state.choices.size || !state.choices.wall || !state.choices.goal) return;
     if (!state.currentIntent) state.currentIntent = "커튼";
     if (!state.rawQuery) state.rawQuery = "커튼 설치";
+
+    const activeSession = getCartSession(state.currentSessionId);
+    if (activeSession && activeSession.intentKey === state.currentIntent) {
+        activeSession.rawQuery = state.rawQuery;
+        activeSession.selectionSummary = buildHistorySummary();
+        activeSession.choices = { ...state.choices };
+        activeSession.threadView = "solution";
+        activeSession.updatedAt = new Date().toISOString();
+        persistCart();
+        renderCart();
+    }
+
     saveSearchHistory();
     solutionView?.classList.remove("hidden");
     renderSolution(state.currentIntent, state.rawQuery);
@@ -859,14 +1106,15 @@ window.openPDP = function openPDP(stepIdx, prodIdx) {
 
     // Update PDP cart button state
     const pdpCartBtn = document.getElementById("pdp-cart-btn");
+    const activeSession = getActiveSessionForIntent(state.currentIntent);
     if (pdpCartBtn) {
-        const isInCart = state.purposeCart[state.currentIntent]?.selectedItems[stepIdx]?.productIdx === prodIdx;
+        const isInCart = activeSession?.session?.selectedItems?.[stepIdx]?.productIdx === prodIdx;
         pdpCartBtn.classList.toggle("in-cart", isInCart);
         pdpCartBtn.textContent = isInCart ? "✓ 장바구니에 담았어요" : "장바구니";
         pdpCartBtn.onclick = (e) => {
             e.stopPropagation();
             addToCart(state.currentIntent, stepIdx, prodIdx);
-            const nowInCart = state.purposeCart[state.currentIntent]?.selectedItems[stepIdx]?.productIdx === prodIdx;
+            const nowInCart = getActiveSessionForIntent(state.currentIntent)?.session?.selectedItems?.[stepIdx]?.productIdx === prodIdx;
             pdpCartBtn.classList.toggle("in-cart", nowInCart);
             pdpCartBtn.textContent = nowInCart ? "✓ 장바구니에 담았어요" : "장바구니";
         };
@@ -930,6 +1178,16 @@ window.closePDP = function closePDP() {
     document.body.classList.remove("pdp-active");
 };
 
+window.continueCartSession = function continueCartSession(sessionId) {
+    const session = getCartSession(sessionId);
+    if (!session) return;
+
+    hydrateSessionContext(sessionId);
+    renderCart();
+    closeHistorySidebar();
+    showSolutionThread(session);
+};
+
 /* ─── Solution rendering ────────────────────────────────────── */
 
 function renderSolution(key, rawQuery) {
@@ -951,20 +1209,40 @@ function renderSolution(key, rawQuery) {
     data.steps.forEach((step, stepIndex) => {
         const stepEl = document.createElement("div");
         stepEl.className = "relative pl-8 md:pl-12 border-l-2 border-slate-200 pb-4 text-left font-bold";
+        const selectedState = getSessionSelectionState(key, stepIndex);
+        const maxVisibleCount = Math.min(10, step.products.length);
+        const minVisibleCount = Math.min(2, maxVisibleCount);
+        const visibleCount = maxVisibleCount <= minVisibleCount
+            ? maxVisibleCount
+            : Math.floor(Math.random() * (maxVisibleCount - minVisibleCount + 1)) + minVisibleCount;
+        const shuffledProducts = [...step.products]
+            .map((product, originalIndex) => ({ product, originalIndex, sortKey: Math.random() }))
+            .sort((a, b) => a.sortKey - b.sortKey);
+        let visibleProducts = shuffledProducts.slice(0, visibleCount);
+
+        if (
+            selectedState &&
+            !visibleProducts.some((entry) => entry.originalIndex === selectedState.productIdx)
+        ) {
+            const selectedEntry = shuffledProducts.find((entry) => entry.originalIndex === selectedState.productIdx);
+            if (selectedEntry) {
+                visibleProducts = [...visibleProducts.slice(0, Math.max(visibleProducts.length - 1, 0)), selectedEntry];
+            }
+        }
 
         const essentialBadge = step.essential
             ? `<span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-600 uppercase tracking-wide">필수</span>`
             : `<span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-400 uppercase tracking-wide">선택</span>`;
 
-        const productHtml = step.products
+        const productHtml = visibleProducts
             .map(
-                (product, productIndex) => {
-                    const isInCart = state.purposeCart[key]?.selectedItems[stepIndex]?.productIdx === productIndex;
+                ({ product, originalIndex }) => {
+                    const isInCart = selectedState?.productIdx === originalIndex;
                     return `
                     <div
-                        data-product-card="${key}-${stepIndex}-${productIndex}"
-                        onclick="openPDP(${stepIndex}, ${productIndex})"
-                        class="product-card cursor-pointer flex-shrink-0 w-52 md:w-56 bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden transition-all duration-300 relative group/card text-left font-bold ${isInCart ? "in-cart" : ""}">
+                        data-product-card="${key}-${stepIndex}-${originalIndex}"
+                        onclick="openPDP(${stepIndex}, ${originalIndex})"
+                        class="product-card cursor-pointer snap-start flex-shrink-0 w-52 md:w-56 bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden transition-all duration-300 relative group/card text-left font-bold ${isInCart ? "in-cart" : ""}">
                         <div class="absolute top-3 left-3 z-20 bg-white/95 backdrop-blur px-2.5 py-1.5 rounded-xl border border-slate-100 flex items-center shadow-sm">
                             <span class="text-[10px] font-bold text-slate-400 mr-1.5 uppercase tracking-tighter">Match</span>
                             <span class="text-xs font-bold text-gmarket-blue">${product.score}%</span>
@@ -981,8 +1259,8 @@ function renderSolution(key, rawQuery) {
                             <div class="flex gap-2">
                                 <button class="flex-1 py-3 bg-slate-900 text-white text-[11px] rounded-xl font-bold transition-colors hover:bg-gmarket-blue">상세보기</button>
                                 <button
-                                    data-cart-btn="${key}-${stepIndex}-${productIndex}"
-                                    onclick="event.stopPropagation(); addToCart('${key}', ${stepIndex}, ${productIndex})"
+                                    data-cart-btn="${key}-${stepIndex}-${originalIndex}"
+                                    onclick="event.stopPropagation(); addToCart('${key}', ${stepIndex}, ${originalIndex})"
                                     class="cart-add-btn py-3 px-3 bg-slate-100 text-slate-700 text-[11px] rounded-xl font-bold ${isInCart ? "in-cart" : ""}">
                                     ${isInCart ? "✓ 담았어요" : "담기"}
                                 </button>
@@ -1002,7 +1280,11 @@ function renderSolution(key, rawQuery) {
                 <h3 class="text-2xl font-bold text-slate-800 mb-3 flex items-center flex-wrap gap-1">${step.name}${essentialBadge}</h3>
                 <p class="text-slate-500 text-sm leading-relaxed">${step.description || "지마켓 AI가 제안하는 단계별 상품입니다."}</p>
             </div>
-            <div class="flex gap-5 overflow-x-auto pb-8 -mx-2 px-2 scrollbar-hide text-left">
+            <div class="flex items-center justify-between gap-3 mb-4">
+                <p class="text-xs font-bold text-slate-400">좌우로 넘겨 더 많은 상품을 볼 수 있어요</p>
+                <span class="text-[11px] font-bold text-slate-300">${visibleProducts.length} / ${step.products.length} options</span>
+            </div>
+            <div class="flex gap-5 overflow-x-auto pb-8 -mx-2 px-2 scrollbar-hide text-left snap-x snap-mandatory">
                 ${productHtml}
             </div>
         `;
@@ -1065,6 +1347,14 @@ document.addEventListener("DOMContentLoaded", () => {
         executeSearch(value);
     });
 
+    const desktopTag = document.getElementById("desktopTag");
+    desktopTag?.addEventListener("click", () => {
+        const value = "데스크탑 조립 세팅";
+        if (searchInput) searchInput.value = value;
+        updateSearchUI(value);
+        executeSearch(value);
+    });
+
     historyList?.addEventListener("click", (event) => {
         const button = event.target.closest("[data-history-index]");
         if (!button) return;
@@ -1100,21 +1390,15 @@ function updateBottomCheckoutBar() {
     const solutionView = document.getElementById("solution-view");
     const isSolutionVisible = solutionView && !solutionView.classList.contains("hidden");
 
-    const cartKeys = Object.keys(state.purposeCart);
-    const totalItems = getCartItemCount();
+    const activeSession = getCartSession(state.currentSessionId);
+    const totalItems = Object.keys(activeSession?.selectedItems || {}).length;
 
     if (!isSolutionVisible || totalItems === 0) {
         cta.classList.add("hidden");
         return;
     }
 
-    let totalPrice = 0;
-    cartKeys.forEach(intentKey => {
-        const group = state.purposeCart[intentKey];
-        Object.values(group.selectedItems).forEach(({ product }) => {
-            totalPrice += parseInt(product.price.replace(/,/g, ""), 10) || 0;
-        });
-    });
+    const { price: totalPrice } = calculateSessionTotals(activeSession);
 
     if (countEl) countEl.textContent = `${totalItems}개 선택`;
     if (priceEl) priceEl.textContent = totalPrice.toLocaleString() + "원";
@@ -1123,13 +1407,8 @@ function updateBottomCheckoutBar() {
 }
 
 window.handleBottomCheckout = function handleBottomCheckout() {
-    const cartKeys = Object.keys(state.purposeCart);
-    if (!cartKeys.length) return;
-
-    // 현재 인텐트가 카트에 있으면 우선, 없으면 첫 번째 인텐트 사용
-    const targetKey = cartKeys.includes(state.currentIntent)
-        ? state.currentIntent
-        : cartKeys[0];
-
-    checkoutCart(targetKey);
+    const activeSession = getCartSession(state.currentSessionId);
+    if (activeSession) {
+        checkoutCart(state.currentSessionId);
+    }
 };
