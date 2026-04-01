@@ -21,18 +21,16 @@
 
             <!-- Tabs -->
             <div class="sidebar-tabs flex items-center border-b border-slate-200/80">
-                <button type="button" id="cartTabBtn" class="sidebar-tab sidebar-tab-active flex-1 py-3 text-sm font-bold flex items-center justify-center gap-1.5">
-                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
-                    <span class="sidebar-tab-label">장바구니</span>
-                    <span id="cartBadge" class="hidden sidebar-tab-badge sidebar-tab-cart-badge bg-gmarket-blue text-white text-[10px] rounded-full min-w-[16px] h-4 px-1 font-bold">0</span>
-                </button>
-                <button type="button" id="historyTabBtn" class="sidebar-tab flex-1 py-3 text-sm font-bold text-slate-400 flex items-center justify-center gap-1.5">
-                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    <span class="sidebar-tab-label">히스토리</span>
-                </button>
-                <button type="button" id="collapseHistorySidebar" class="hidden lg:inline-flex mx-2 rounded-xl border border-slate-200 bg-slate-50 p-2 text-slate-500 hover:text-slate-800 hover:border-slate-300 transition-colors">
-                    <svg id="collapseHistorySidebarIcon" class="w-5 h-5 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M15 19l-7-7 7-7"></path></svg>
-                </button>
+                <div class="sidebar-cart-control flex flex-1 items-center gap-2 px-3 py-3">
+                    <button type="button" id="cartTabBtn" class="sidebar-tab sidebar-tab-active flex-1 py-3 text-sm font-bold flex items-center justify-center gap-1.5 rounded-2xl border border-slate-200 bg-white">
+                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                        <span class="sidebar-tab-label">장바구니</span>
+                        <span id="cartBadge" class="hidden sidebar-tab-badge sidebar-tab-cart-badge bg-gmarket-blue text-white text-[10px] rounded-full min-w-[16px] h-4 px-1 font-bold">0</span>
+                    </button>
+                    <button type="button" id="collapseHistorySidebar" class="hidden lg:inline-flex shrink-0 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-slate-500 transition-colors">
+                        <svg id="collapseHistorySidebarIcon" class="w-4 h-4 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M15 19l-7-7 7-7"></path></svg>
+                    </button>
+                </div>
                 <button type="button" id="closeHistorySidebar" class="mx-2 lg:hidden rounded-xl border border-slate-200 p-2 text-slate-500 hover:text-slate-800 hover:border-slate-300 transition-colors">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
@@ -48,15 +46,6 @@
                         <span class="text-xs mt-1 block">상품을 보고 <span class="text-gmarket-blue font-bold">담기</span>를 누르면<br>목적별로 모아볼 수 있어요.</span>
                     </div>
                     <div id="cart-content" class="hidden"></div>
-                </div>
-
-                <!-- History Tab Panel -->
-                <div id="history-tab-panel" class="hidden">
-                    <button type="button" id="clearHistoryBtn" class="history-clear-btn w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors font-bold hidden mb-3">전체 삭제</button>
-                    <div id="history-empty" class="history-empty rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm leading-relaxed text-slate-400 font-bold">
-                        아직 저장된 검색이 없습니다. 검색과 플랜 생성이 진행되면 최근 기록이 이곳에 쌓입니다.
-                    </div>
-                    <div id="history-list" class="hidden space-y-2"></div>
                 </div>
 
             </div>

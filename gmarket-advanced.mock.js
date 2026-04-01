@@ -7,6 +7,7 @@
                 step: 1,
                 name: "공간 실측 준비",
                 essential: false,
+                description: "창문 폭과 설치 높이를 먼저 정확히 잡아야 이후 부자재와 커튼 길이 선택이 흔들리지 않습니다.",
                 products: [
                     {
                         id: 101,
@@ -42,6 +43,7 @@
                 step: 2,
                 name: "설치 부자재 선택",
                 essential: true,
+                description: "설치 방식과 벽면 조건에 맞는 부자재를 정하면 시공 난이도와 완성도 차이가 크게 줄어듭니다.",
                 products: [
                     {
                         id: 201,
@@ -77,6 +79,7 @@
                 step: 3,
                 name: "목적별 커튼 추천",
                 essential: true,
+                description: "채광, 분위기, 프라이버시처럼 사용 목적에 맞는 원단을 골라야 실제 만족도가 높습니다.",
                 products: [
                     {
                         id: 301,
@@ -118,6 +121,7 @@
                 step: 1,
                 name: "텐트 선택",
                 essential: true,
+                description: "인원수와 이동 방식에 맞는 텐트를 먼저 정해야 이후 장비 부피와 전체 캠핑 동선이 자연스럽게 맞춰집니다.",
                 products: [
                     {
                         id: 111,
@@ -153,6 +157,7 @@
                 step: 2,
                 name: "취사 & 조명 준비",
                 essential: true,
+                description: "해 지기 전후로 가장 체감 차이가 큰 영역이라, 기본 취사도구와 조명은 초반에 같이 준비하는 편이 안전합니다.",
                 products: [
                     {
                         id: 211,
@@ -188,6 +193,7 @@
                 step: 3,
                 name: "침구 & 편의 용품",
                 essential: false,
+                description: "밤 기온과 바닥 컨디션을 고려한 침구를 챙기면 초보 캠핑에서도 피로감이 크게 줄어듭니다.",
                 products: [
                     {
                         id: 311,
@@ -223,6 +229,7 @@
                 step: 4,
                 name: "테이블 & 체어 준비",
                 essential: false,
+                description: "식사, 휴식, 장비 정리를 오래 편하게 하려면 마지막으로 체어와 테이블 구성을 맞춰주는 게 좋습니다.",
                 products: [
                     {
                         id: 411,

@@ -32,7 +32,7 @@ const state = {
     searchHistory: [],
     isHistoryPanelCollapsed: false,
     purposeCart: {},      // { intentKey: { intentLabel, rawQuery, selectedItems: { stepIdx: { productIdx, product } } } }
-    activeTab: "cart"     // "cart" | "history"
+    activeTab: "cart"
 };
 
 /* ─── History persistence ───────────────────────────────────── */
@@ -156,6 +156,12 @@ function buildHistorySummary() {
     return [state.choices.size, state.choices.wall, state.choices.goal].filter(Boolean).join(" / ");
 }
 
+function buildCartGroupSummary(cartGroup, intentData) {
+    if (cartGroup?.selectionSummary) return cartGroup.selectionSummary;
+    if (cartGroup?.rawQuery) return `"${cartGroup.rawQuery}" 기준 추천`;
+    return intentData?.intentReason || "";
+}
+
 function saveSearchHistory() {
     const query = state.rawQuery?.trim();
     if (!query || !state.currentIntent) return;
@@ -231,25 +237,11 @@ window.switchTab = function switchTab(tab) {
     state.activeTab = tab;
 
     const cartPanel = document.getElementById("cart-tab-panel");
-    const historyPanel = document.getElementById("history-tab-panel");
     const cartTabBtn = document.getElementById("cartTabBtn");
-    const historyTabBtn = document.getElementById("historyTabBtn");
 
-    if (tab === "cart") {
-        cartPanel?.classList.remove("hidden");
-        historyPanel?.classList.add("hidden");
-        cartTabBtn?.classList.add("sidebar-tab-active");
-        cartTabBtn?.classList.remove("text-slate-400");
-        historyTabBtn?.classList.remove("sidebar-tab-active");
-        historyTabBtn?.classList.add("text-slate-400");
-    } else {
-        historyPanel?.classList.remove("hidden");
-        cartPanel?.classList.add("hidden");
-        historyTabBtn?.classList.add("sidebar-tab-active");
-        historyTabBtn?.classList.remove("text-slate-400");
-        cartTabBtn?.classList.remove("sidebar-tab-active");
-        cartTabBtn?.classList.add("text-slate-400");
-    }
+    cartPanel?.classList.remove("hidden");
+    cartTabBtn?.classList.add("sidebar-tab-active");
+    cartTabBtn?.classList.remove("text-slate-400");
 };
 
 /* ─── Cart logic ─────────────────────────────────────────────── */
@@ -265,6 +257,8 @@ window.addToCart = function addToCart(intentKey, stepIdx, productIdx) {
         state.purposeCart[intentKey] = {
             intentLabel: intentData.title,
             rawQuery: state.rawQuery,
+            selectionSummary: buildHistorySummary(),
+            recommendationSummary: intentData.intentReason,
             selectedItems: {}
         };
     }
@@ -386,6 +380,7 @@ function renderCart() {
         const cartGroup = state.purposeCart[intentKey];
         const intentData = solutionData[intentKey];
         if (!intentData) return "";
+        const groupSummary = buildCartGroupSummary(cartGroup, intentData);
 
         let subtotal = 0;
         let hasEssentialMissing = false;
@@ -451,6 +446,7 @@ function renderCart() {
                             <button onclick="clearCartIntent('${intentKey}')" class="text-[10px] text-slate-300 hover:text-red-400 transition-colors font-bold">전체삭제</button>
                         </div>
                     </div>
+                    ${groupSummary ? `<p class="text-[11px] text-slate-500 font-bold mt-2 leading-relaxed">${groupSummary}</p>` : ""}
                     ${hasEssentialMissing ? `<p class="text-[10px] text-amber-500 font-bold mt-1.5 flex items-center gap-1"><span>⚠</span> 미선택 필수 상품이 있어요</p>` : ""}
                 </div>
                 <div class="purpose-cart-items px-4 py-3 space-y-2">
@@ -1004,7 +1000,7 @@ function renderSolution(key, rawQuery) {
             </div>
             <div class="mb-8 text-left">
                 <h3 class="text-2xl font-bold text-slate-800 mb-3 flex items-center flex-wrap gap-1">${step.name}${essentialBadge}</h3>
-                <p class="text-slate-500 text-sm leading-relaxed">지마켓 AI가 제안하는 단계별 상품입니다.</p>
+                <p class="text-slate-500 text-sm leading-relaxed">${step.description || "지마켓 AI가 제안하는 단계별 상품입니다."}</p>
             </div>
             <div class="flex gap-5 overflow-x-auto pb-8 -mx-2 px-2 scrollbar-hide text-left">
                 ${productHtml}
@@ -1028,7 +1024,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const historySidebarBackdrop = document.getElementById("history-sidebar-backdrop");
     const collapseHistorySidebarBtn = document.getElementById("collapseHistorySidebar");
     const cartTabBtn = document.getElementById("cartTabBtn");
-    const historyTabBtn = document.getElementById("historyTabBtn");
 
     generateEqualizerRays();
 
@@ -1084,7 +1079,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Tab buttons
     cartTabBtn?.addEventListener("click", () => switchTab("cart"));
-    historyTabBtn?.addEventListener("click", () => switchTab("history"));
 
     // 초기 하단 바 상태 반영
     updateBottomCheckoutBar();
