@@ -6,6 +6,7 @@
             {
                 step: 1,
                 name: "공간 실측 준비",
+                essential: false,
                 products: [
                     {
                         id: 101,
@@ -40,6 +41,7 @@
             {
                 step: 2,
                 name: "설치 부자재 선택",
+                essential: true,
                 products: [
                     {
                         id: 201,
@@ -74,6 +76,7 @@
             {
                 step: 3,
                 name: "목적별 커튼 추천",
+                essential: true,
                 products: [
                     {
                         id: 301,
@@ -102,6 +105,152 @@
                             "밝고 부드러운 인테리어 톤을 만들기 쉽습니다."
                         ],
                         spec: { size: "140 x 230cm", feature: "쉬폰/린넨 스타일" }
+                    }
+                ]
+            }
+        ]
+    },
+    "캠핑": {
+        title: "캠핑 입문 맞춤 제안",
+        intentReason: "처음 캠핑을 준비하는 분을 위한 필수 장비 선택 목적",
+        steps: [
+            {
+                step: 1,
+                name: "텐트 선택",
+                essential: true,
+                products: [
+                    {
+                        id: 111,
+                        name: "4시즌 돔텐트 2-3인용",
+                        price: "89,900",
+                        originalPrice: "129,000",
+                        score: 98,
+                        img: "https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "바람과 비에 강한 구조로 다양한 계절에 안정적으로 사용할 수 있습니다.",
+                            "2-3인이 여유롭게 사용할 수 있는 공간으로 입문용에 딱 맞습니다.",
+                            "이중 구조 설계로 결로를 최소화해 쾌적한 수면 환경을 만들어줍니다."
+                        ],
+                        spec: { size: "2-3인용 / 설치 210×180cm", feature: "4시즌 이중 구조 돔텐트" }
+                    },
+                    {
+                        id: 112,
+                        name: "원터치 팝업 텐트 2인용",
+                        price: "45,900",
+                        originalPrice: "65,000",
+                        score: 91,
+                        img: "https://images.unsplash.com/photo-1478131143081-80f7f84ca84d?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "설치와 철수가 1분 이내에 끝나 처음 캠핑하는 분에게 특히 편리합니다.",
+                            "차박이나 당일 캠핑 등 간편한 야외 활동에 잘 어울립니다.",
+                            "가볍고 작은 수납 사이즈로 트렁크 공간을 많이 차지하지 않습니다."
+                        ],
+                        spec: { size: "2인용 / 210×150cm", feature: "원터치 자동 펼침" }
+                    }
+                ]
+            },
+            {
+                step: 2,
+                name: "취사 & 조명 준비",
+                essential: true,
+                products: [
+                    {
+                        id: 211,
+                        name: "캠핑 버너 + 코펠 세트",
+                        price: "34,900",
+                        originalPrice: "49,000",
+                        score: 97,
+                        img: "https://images.unsplash.com/photo-1532375810709-75b1da00537c?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "간단한 라면부터 본격적인 요리까지 폭넓게 활용할 수 있습니다.",
+                            "경량 알루미늄 코펠로 부피를 줄이면서 내구성을 유지했습니다.",
+                            "입문자도 쉽게 연결할 수 있는 안전 잠금 버너 구조입니다."
+                        ],
+                        spec: { size: "버너 직경 65mm + 코펠 4종", feature: "가스 버너 + 코펠 세트" }
+                    },
+                    {
+                        id: 212,
+                        name: "감성 캠핑 LED 랜턴",
+                        price: "28,500",
+                        originalPrice: "38,000",
+                        score: 89,
+                        img: "https://images.unsplash.com/photo-1501854140801-50d01698950b?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "따뜻한 빛 색상으로 캠핑 분위기를 자연스럽게 살려줍니다.",
+                            "USB 충전 방식으로 배터리 걱정 없이 며칠 연속 사용 가능합니다.",
+                            "조도 조절 기능으로 취침 전 무드등으로도 활용할 수 있습니다."
+                        ],
+                        spec: { size: "직경 9cm, 높이 18cm", feature: "USB 충전 / 3단계 밝기 조절" }
+                    }
+                ]
+            },
+            {
+                step: 3,
+                name: "침구 & 편의 용품",
+                essential: false,
+                products: [
+                    {
+                        id: 311,
+                        name: "3시즌 경량 침낭",
+                        price: "42,000",
+                        originalPrice: "58,000",
+                        score: 96,
+                        img: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "봄·여름·가을 3시즌을 커버해 한 번 사면 오래 쓸 수 있습니다.",
+                            "마미형 구조로 체온을 효율적으로 보존해 밤에도 따뜻하게 잘 수 있습니다.",
+                            "경량 소재로 배낭 패킹 시 부피를 크게 줄여줍니다."
+                        ],
+                        spec: { size: "최대 185cm 신장 대응", feature: "마미형 3시즌 / 소형 수납" }
+                    },
+                    {
+                        id: 312,
+                        name: "자충식 캠핑 매트",
+                        price: "26,900",
+                        originalPrice: "36,000",
+                        score: 88,
+                        img: "https://images.unsplash.com/photo-1537225228614-56cc3556d7ed?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "바닥의 냉기와 울퉁불퉁함을 효과적으로 차단해줍니다.",
+                            "밸브를 열면 자동으로 부풀어 별도 펌프가 필요 없습니다.",
+                            "침낭과 함께 쓰면 보온 효과를 크게 높일 수 있습니다."
+                        ],
+                        spec: { size: "185×58cm, 두께 3cm", feature: "자충식 / 경량 폼 내장" }
+                    }
+                ]
+            },
+            {
+                step: 4,
+                name: "테이블 & 체어 준비",
+                essential: false,
+                products: [
+                    {
+                        id: 411,
+                        name: "폴딩 캠핑 체어 2개 세트",
+                        price: "39,900",
+                        originalPrice: "55,000",
+                        score: 93,
+                        img: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "장시간 앉아 있어도 부담이 적어 식사나 휴식 시간이 편해집니다.",
+                            "접이식 구조라 트렁크 수납이 쉽고 설치도 간단합니다.",
+                            "입문 캠핑에서 가장 체감 만족도가 큰 편의 장비입니다."
+                        ],
+                        spec: { size: "내하중 120kg / 2개", feature: "접이식 경량 캠핑 체어" }
+                    },
+                    {
+                        id: 412,
+                        name: "롤테이블 알루미늄 세트",
+                        price: "47,500",
+                        originalPrice: "64,000",
+                        score: 90,
+                        img: "https://images.unsplash.com/photo-1522163182402-834f871fd851?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "조리도구와 식기를 안정적으로 올려둘 수 있어 캠핑 동선이 정리됩니다.",
+                            "알루미늄 상판이라 관리가 쉽고 야외 오염에도 비교적 강합니다.",
+                            "버너와 랜턴을 함께 두기 좋은 기본 테이블 구성입니다."
+                        ],
+                        spec: { size: "90×52cm", feature: "롤업 상판 / 전용 수납가방 포함" }
                     }
                 ]
             }

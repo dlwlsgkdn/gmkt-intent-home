@@ -164,6 +164,10 @@ header {
     width: 92px !important;
 }
 
+.history-sidebar-collapsed .sidebar-tabs + .flex-1 {
+    display: none !important;
+}
+
 .history-sidebar-collapsed .history-sidebar-copy,
 .history-sidebar-collapsed .history-sidebar-controls,
 .history-sidebar-collapsed .history-empty,
@@ -238,4 +242,181 @@ header {
     .history-sidebar-backdrop {
         display: none !important;
     }
+}
+
+/* ─── Sidebar Tabs ─────────────────────────────────────────── */
+.sidebar-tab {
+    border-bottom: 2px solid transparent;
+    transition: color 0.2s, border-color 0.2s;
+}
+
+#collapseHistorySidebar {
+    border-color: transparent;
+    background: transparent;
+    color: #94a3b8;
+    box-shadow: none;
+}
+
+#collapseHistorySidebar:hover {
+    border-color: #e2e8f0;
+    background: #f8fafc;
+    color: #475569;
+}
+
+.sidebar-tab-active {
+    color: #007BFF;
+    border-bottom-color: #007BFF;
+}
+
+.sidebar-tab-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+/* Collapsed: show only icons in tabs */
+.history-sidebar-collapsed .sidebar-tab-label {
+    display: none !important;
+}
+
+.history-sidebar-collapsed .sidebar-tabs {
+    flex-direction: column;
+    gap: 0.625rem;
+    align-items: stretch;
+    padding: 0.75rem 0.625rem;
+    border-bottom: none;
+}
+
+.history-sidebar-collapsed .sidebar-tab {
+    width: 100%;
+    min-height: 3rem;
+    padding: 0.75rem 0.4rem;
+    order: 2;
+    justify-content: center;
+    border: 1px solid rgba(226, 232, 240, 0.95);
+    border-bottom-width: 1px;
+    border-radius: 1rem;
+    background: rgba(248, 250, 252, 0.95);
+}
+
+.history-sidebar-collapsed #historyTabBtn .sidebar-tab-badge {
+    display: none !important;
+}
+
+.history-sidebar-collapsed .sidebar-tab-cart-badge {
+    display: inline-flex !important;
+    min-width: 1.35rem;
+    height: 1.35rem;
+    padding-inline: 0.35rem;
+    border-radius: 9999px;
+    font-size: 0.7rem;
+    line-height: 1;
+}
+
+.history-sidebar-collapsed #collapseHistorySidebar {
+    display: inline-flex !important;
+    width: 100%;
+    order: 1;
+    justify-content: center;
+    margin: 0;
+    padding: 0.75rem 0;
+    border-radius: 1rem;
+    border: 1px solid rgba(226, 232, 240, 0.95);
+    background: rgba(248, 250, 252, 0.95);
+    color: #64748b;
+}
+
+.history-sidebar-collapsed #closeHistorySidebar {
+    display: none !important;
+}
+
+/* ─── Cart "담기" Button ────────────────────────────────────── */
+.cart-add-btn {
+    white-space: nowrap;
+    border: 1.5px solid transparent;
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s, transform 0.15s;
+}
+
+.cart-add-btn:active {
+    transform: scale(0.94);
+}
+
+.cart-add-btn.in-cart {
+    background-color: #FFD200 !important;
+    color: #1e293b !important;
+    border-color: #e6be00 !important;
+}
+
+.cart-add-btn.in-cart:hover {
+    background-color: #e6be00 !important;
+}
+
+/* ─── Product Card – in-cart highlight ─────────────────────── */
+.product-card.in-cart {
+    border-color: #FFD200 !important;
+    box-shadow: 0 0 0 2px #FFD200, 0 4px 16px -4px rgba(255, 210, 0, 0.35) !important;
+}
+
+/* ─── Purpose Cart Group ────────────────────────────────────── */
+.purpose-cart-group {
+    border-radius: 20px;
+    overflow: hidden;
+    margin-bottom: 12px;
+    transition: box-shadow 0.2s;
+}
+
+.purpose-cart-group:hover {
+    box-shadow: 0 8px 24px -8px rgba(15, 23, 42, 0.12);
+}
+
+.cart-item {
+    transition: background-color 0.15s;
+}
+
+/* Collapsed: minimise cart group display */
+.history-sidebar-collapsed .purpose-cart-items,
+.history-sidebar-collapsed .purpose-cart-footer {
+    display: none !important;
+}
+
+.history-sidebar-collapsed .purpose-cart-group {
+    padding: 0.5rem;
+    border-radius: 14px;
+}
+
+.history-sidebar-collapsed .purpose-cart-header {
+    padding: 0;
+    padding-bottom: 0;
+    border-bottom: none !important;
+}
+
+/* ─── Toasts ────────────────────────────────────────────────── */
+@keyframes toastSlideUp {
+    from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.toast-anim {
+    animation: toastSlideUp 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes cartItemEnter {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.cart-item-enter {
+    animation: cartItemEnter 0.22s ease forwards;
+}
+
+/* ─── Cart badge pulse on update ───────────────────────────── */
+@keyframes badgePop {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(1.35); }
+    100% { transform: scale(1); }
+}
+
+.badge-pop {
+    animation: badgePop 0.3s ease forwards;
 }

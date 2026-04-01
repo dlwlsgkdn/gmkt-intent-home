@@ -11,45 +11,61 @@
 </head>
 <body class="bg-slate-50 font-sans min-h-screen text-slate-900 overflow-x-hidden">
 
-    <button type="button" id="historySidebarToggle" class="history-sidebar-toggle fixed left-4 top-24 z-[120] inline-flex lg:hidden items-center gap-2 rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 text-sm font-bold text-slate-700 shadow-lg backdrop-blur">
+    <button type="button" id="historySidebarToggle" class="history-sidebar-toggle fixed left-4 top-20 z-[120] inline-flex lg:hidden items-center gap-2 rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 text-sm font-bold text-slate-700 shadow-lg backdrop-blur">
         <svg class="w-5 h-5 text-gmarket-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 6h16M4 12h16M4 18h10"></path></svg>
         히스토리
     </button>
 
-    <aside id="history-panel" class="history-sidebar fixed left-0 top-0 z-[130] h-screen w-[320px] max-w-[86vw] -translate-x-full lg:translate-x-0 border-r border-slate-200/80 bg-white/92 text-slate-900 shadow-[24px_0_60px_-30px_rgba(15,23,42,0.18)] transition-transform duration-300">
+    <aside id="history-panel" class="history-sidebar fixed left-0 top-16 z-[130] h-[calc(100vh-4rem)] w-[320px] max-w-[86vw] -translate-x-full lg:translate-x-0 border-r border-slate-200/80 bg-white/92 text-slate-900 shadow-[24px_0_60px_-30px_rgba(15,23,42,0.18)] transition-transform duration-300">
         <div class="flex h-full flex-col">
-            <div class="flex items-center justify-between border-b border-slate-200/80 px-5 py-5">
-                <div class="history-sidebar-copy min-w-0">
-                    <p class="text-[11px] uppercase tracking-[0.28em] text-slate-400 font-bold mb-2">Search History</p>
-                    <h2 class="text-lg font-bold text-slate-800">사용자 솔루션 히스토리</h2>
-                </div>
-                <div class="flex items-center gap-2">
-                    <button type="button" id="collapseHistorySidebar" class="hidden lg:inline-flex rounded-xl border border-slate-200 bg-slate-50 p-2 text-slate-500 hover:text-slate-800 hover:border-slate-300 transition-colors">
-                        <svg id="collapseHistorySidebarIcon" class="w-5 h-5 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M15 19l-7-7 7-7"></path></svg>
-                    </button>
-                    <button type="button" id="closeHistorySidebar" class="lg:hidden rounded-xl border border-slate-200 p-2 text-slate-500 hover:text-slate-800 hover:border-slate-300 transition-colors">
+
+            <!-- Tabs -->
+            <div class="sidebar-tabs flex items-center border-b border-slate-200/80">
+                <button type="button" id="cartTabBtn" class="sidebar-tab sidebar-tab-active flex-1 py-3 text-sm font-bold flex items-center justify-center gap-1.5">
+                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                    <span class="sidebar-tab-label">장바구니</span>
+                    <span id="cartBadge" class="hidden sidebar-tab-badge sidebar-tab-cart-badge bg-gmarket-blue text-white text-[10px] rounded-full min-w-[16px] h-4 px-1 font-bold">0</span>
+                </button>
+                <button type="button" id="historyTabBtn" class="sidebar-tab flex-1 py-3 text-sm font-bold text-slate-400 flex items-center justify-center gap-1.5">
+                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <span class="sidebar-tab-label">히스토리</span>
+                </button>
+                <button type="button" id="collapseHistorySidebar" class="hidden lg:inline-flex mx-2 rounded-xl border border-slate-200 bg-slate-50 p-2 text-slate-500 hover:text-slate-800 hover:border-slate-300 transition-colors">
+                    <svg id="collapseHistorySidebarIcon" class="w-5 h-5 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M15 19l-7-7 7-7"></path></svg>
+                </button>
+                <button type="button" id="closeHistorySidebar" class="mx-2 lg:hidden rounded-xl border border-slate-200 p-2 text-slate-500 hover:text-slate-800 hover:border-slate-300 transition-colors">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                    </button>
-                </div>
+                </button>
             </div>
 
-            <div class="history-sidebar-controls px-4 py-4 border-b border-slate-200/80">
-                <button type="button" id="clearHistoryBtn" class="history-clear-btn w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors font-bold hidden">전체 삭제</button>
-            </div>
-
+            <!-- Scrollable content -->
             <div class="flex-1 overflow-y-auto px-3 py-4">
-                <div id="history-empty" class="history-empty rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm leading-relaxed text-slate-400 font-bold">
-                    아직 저장된 검색이 없습니다. 검색과 플랜 생성이 진행되면 최근 기록이 이곳에 쌓입니다.
+
+                <!-- Cart Tab Panel -->
+                <div id="cart-tab-panel">
+                    <div id="cart-empty" class="history-empty rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm leading-relaxed text-slate-400 font-bold text-center">
+                        아직 담은 상품이 없어요.<br>
+                        <span class="text-xs mt-1 block">상품을 보고 <span class="text-gmarket-blue font-bold">담기</span>를 누르면<br>목적별로 모아볼 수 있어요.</span>
+                    </div>
+                    <div id="cart-content" class="hidden"></div>
                 </div>
 
-                <div id="history-list" class="hidden space-y-2"></div>
+                <!-- History Tab Panel -->
+                <div id="history-tab-panel" class="hidden">
+                    <button type="button" id="clearHistoryBtn" class="history-clear-btn w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors font-bold hidden mb-3">전체 삭제</button>
+                    <div id="history-empty" class="history-empty rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm leading-relaxed text-slate-400 font-bold">
+                        아직 저장된 검색이 없습니다. 검색과 플랜 생성이 진행되면 최근 기록이 이곳에 쌓입니다.
+                    </div>
+                    <div id="history-list" class="hidden space-y-2"></div>
+                </div>
+
             </div>
         </div>
     </aside>
 
-    <div id="history-sidebar-backdrop" class="history-sidebar-backdrop fixed inset-0 z-[125] hidden bg-slate-950/35 backdrop-blur-sm lg:hidden"></div>
+    <div id="history-sidebar-backdrop" class="history-sidebar-backdrop fixed left-0 right-0 bottom-0 top-16 z-[125] hidden bg-slate-950/35 backdrop-blur-sm lg:hidden"></div>
 
-    <header class="fixed top-0 left-0 w-full h-20 z-[100] px-6 md:px-12 flex items-center justify-between border-b border-slate-200/10">
+    <header class="fixed top-0 left-0 w-full h-16 z-[100] px-4 md:px-6 flex items-center justify-between border-b border-slate-200 bg-white/80 backdrop-blur-md shadow-[0_1px_0_rgba(148,163,184,0.16)]">
         <div class="flex items-center cursor-pointer" onclick="window.scrollTo({top:0, behavior:'smooth'})">
             <img src="https://gds.gmarket.co.kr/_next/static/images/app-a381a063688da7518cd8fb58f645af25.svg" alt="Gmarket" class="h-9 w-auto transition-opacity hover:opacity-80">
         </div>
@@ -67,7 +83,7 @@
     <div class="fixed top-[-10%] left-[-10%] w-[60%] h-[60%] rounded-full bg-gmarket-blue bg-blob"></div>
     <div class="fixed bottom-[-10%] right-[-10%] w-[60%] h-[60%] rounded-full bg-gmarket bg-blob"></div>
 
-    <section id="home-view" class="min-h-screen flex flex-col items-center justify-center p-6 relative z-10 text-left pt-20">
+    <section id="home-view" class="min-h-screen flex flex-col items-center justify-center p-6 relative z-10 text-left pt-16">
         <div class="w-full max-w-3xl flex flex-col items-center">
             <div class="flex flex-col items-center mb-12 group cursor-pointer relative">
                 <div class="relative flex items-center justify-center">
@@ -103,13 +119,14 @@
                 </form>
                 <div class="text-center mt-8 flex justify-center gap-3 text-sm font-medium font-bold">
                     <button type="button" id="curtainTag" class="suggestion-tag border border-slate-100 hover:text-gmarket hover:border-gmarket transition-all bg-white px-5 py-2 rounded-full shadow-sm text-slate-400 font-bold">#커튼_달기</button>
+                    <button type="button" id="campingTag" class="suggestion-tag border border-slate-100 hover:text-gmarket hover:border-gmarket transition-all bg-white px-5 py-2 rounded-full shadow-sm text-slate-400 font-bold">#캠핑_입문</button>
                 </div>
 
             </div>
         </div>
     </section>
 
-    <section id="info-view" class="hidden min-h-screen flex-col items-center justify-center p-6 relative z-10 text-left pt-20">
+    <section id="info-view" class="hidden min-h-screen flex-col items-center justify-center p-6 relative z-10 text-left pt-16">
         <div class="w-full max-w-2xl bg-white rounded-[40px] shadow-2xl p-10 md:p-16 relative overflow-hidden text-left border border-slate-100">
             <div class="mb-10 text-left">
                 <span class="text-xs font-bold text-gmarket-blue uppercase tracking-widest mb-2 block font-bold">Personalize Plan</span>
@@ -166,7 +183,7 @@
         </div>
     </section>
 
-    <section id="solution-view" class="hidden min-h-screen pt-28 pb-40 px-6 relative z-10 overflow-hidden text-left bg-slate-50/50 backdrop-blur-sm border-t border-slate-200/50">
+    <section id="solution-view" class="hidden min-h-screen pt-24 pb-40 px-6 relative z-10 overflow-hidden text-left bg-slate-50/50 backdrop-blur-sm border-t border-slate-200/50">
         <div class="max-w-4xl mx-auto text-left">
             <div class="mb-16 text-left">
                 <h2 id="intent-title" class="text-2xl md:text-4xl font-bold text-slate-800 mb-6 leading-snug">계획을 준비 중입니다...</h2>
@@ -177,6 +194,21 @@
             </div>
 
             <div id="plan-container" class="space-y-24 text-left"></div>
+            <div id="solution-checkout-cta" class="hidden mt-10 rounded-[32px] border border-slate-200 bg-white/90 p-6 shadow-sm">
+                <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div>
+                        <p id="solution-checkout-count" class="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">0개 선택</p>
+                        <p id="solution-checkout-price" class="mt-1 text-2xl font-bold text-slate-800">0원</p>
+                    </div>
+                    <button
+                        type="button"
+                        onclick="handleBottomCheckout()"
+                        class="w-full rounded-2xl bg-gmarket-blue px-8 py-4 text-base font-bold text-white shadow-lg shadow-blue-100 transition-all hover:scale-[1.01] active:scale-95 md:w-auto"
+                    >
+                        구매하기
+                    </button>
+                </div>
+            </div>
         </div>
 
     </section>
@@ -302,15 +334,211 @@
             </div>
 
             <div class="absolute bottom-0 left-0 w-full bg-white/95 backdrop-blur-md border-t border-slate-100 p-8 flex gap-4 z-[140] shadow-[0_-10px_30px_rgba(0,0,0,0.05)]">
-                <button class="flex-grow py-5 bg-slate-100 text-slate-800 rounded-2xl font-bold text-base transition-all hover:bg-slate-200 font-bold font-bold">장바구니</button>
-                <button class="flex-grow-[2] py-5 bg-gmarket-blue text-white rounded-2xl font-bold text-base shadow-2xl shadow-blue-100 transition-all hover:scale-[1.01] active:scale-95 font-bold font-bold">바로구매</button>
+                <button id="pdp-cart-btn" class="cart-add-btn flex-grow py-5 bg-slate-100 text-slate-800 rounded-2xl font-bold text-base transition-all hover:bg-slate-200">장바구니</button>
+                <button class="flex-grow-[2] py-5 bg-gmarket-blue text-white rounded-2xl font-bold text-base shadow-2xl shadow-blue-100 transition-all hover:scale-[1.01] active:scale-95 font-bold">바로구매</button>
             </div>
         </div>
     </div>
 
+    <!-- ─── 주문서 섹션 ─── -->
+    <section id="order-view" class="hidden min-h-screen pt-24 pb-40 px-6 relative z-10 text-left">
+        <div class="max-w-2xl mx-auto">
+
+            <!-- 헤더 -->
+            <div class="mb-10">
+                <button onclick="closeOrderView()" class="flex items-center gap-2 text-sm text-slate-400 hover:text-slate-700 font-bold mb-6 transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
+                    장바구니로 돌아가기
+                </button>
+                <span class="text-xs font-bold text-gmarket-blue uppercase tracking-widest mb-2 block">Order</span>
+                <h2 class="text-2xl md:text-3xl font-bold text-slate-800">주문서</h2>
+            </div>
+
+            <!-- 배송지 입력 -->
+            <div class="bg-white rounded-[28px] border border-slate-100 shadow-sm p-7 mb-5">
+                <h3 class="text-base font-bold text-slate-800 mb-5 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-gmarket-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    배송지
+                </h3>
+                <div class="space-y-3">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">받는 분</label>
+                            <input type="text" id="order-name" value="김지마켓" class="w-full px-4 py-3 rounded-2xl border border-slate-200 text-sm font-bold text-slate-800 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-gmarket-blue/30 focus:border-gmarket-blue transition-all">
+                        </div>
+                        <div>
+                            <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">연락처</label>
+                            <input type="tel" id="order-phone" value="010-1234-1234" class="w-full px-4 py-3 rounded-2xl border border-slate-200 text-sm font-bold text-slate-800 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-gmarket-blue/30 focus:border-gmarket-blue transition-all">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">주소</label>
+                        <div class="flex gap-2 mb-2">
+                            <input type="text" id="order-postcode" value="06236" class="w-32 px-4 py-3 rounded-2xl border border-slate-200 text-sm font-bold text-slate-800 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-gmarket-blue/30 focus:border-gmarket-blue transition-all" readonly>
+                            <button type="button" class="px-4 py-3 bg-slate-100 text-slate-600 text-sm rounded-2xl font-bold hover:bg-slate-200 transition-colors whitespace-nowrap">주소 검색</button>
+                        </div>
+                        <input type="text" id="order-address" value="서울특별시 강남구 테헤란로 152" class="w-full px-4 py-3 rounded-2xl border border-slate-200 text-sm font-bold text-slate-800 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-gmarket-blue/30 focus:border-gmarket-blue transition-all mb-2">
+                        <input type="text" id="order-address-detail" value="37층" class="w-full px-4 py-3 rounded-2xl border border-slate-200 text-sm font-bold text-slate-800 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-gmarket-blue/30 focus:border-gmarket-blue transition-all">
+                    </div>
+                    <div>
+                        <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">배송 메모</label>
+                        <select id="order-memo" class="w-full px-4 py-3 rounded-2xl border border-slate-200 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-gmarket-blue/30 focus:border-gmarket-blue transition-all bg-white">
+                            <option value="">배송 메모를 선택해 주세요</option>
+                            <option>문 앞에 놓아주세요</option>
+                            <option>경비실에 맡겨주세요</option>
+                            <option>배송 전 연락 바랍니다</option>
+                            <option>직접 수령하겠습니다</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 주문 상품 -->
+            <div class="bg-white rounded-[28px] border border-slate-100 shadow-sm p-7 mb-5">
+                <h3 class="text-base font-bold text-slate-800 mb-5 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-gmarket-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
+                    주문 상품
+                </h3>
+                <div id="order-items-list" class="space-y-3"></div>
+            </div>
+
+            <!-- 결제 수단 -->
+            <div class="bg-white rounded-[28px] border border-slate-100 shadow-sm p-7 mb-5">
+                <h3 class="text-base font-bold text-slate-800 mb-5 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-gmarket-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+                    결제 수단
+                </h3>
+                <div class="flex flex-col gap-3">
+                    <label class="payment-method-label flex items-center gap-4 p-4 rounded-2xl border-2 border-gmarket-blue bg-gmarket-blue/5 cursor-pointer transition-all">
+                        <input type="radio" name="payment-method" value="card" class="hidden" checked>
+                        <div class="w-5 h-5 rounded-full border-2 border-gmarket-blue flex items-center justify-center flex-shrink-0">
+                            <div class="w-2.5 h-2.5 rounded-full bg-gmarket-blue"></div>
+                        </div>
+                        <div class="flex-1">
+                            <p class="text-sm font-bold text-slate-800">신용/체크카드</p>
+                            <p class="text-[10px] text-slate-400 font-bold mt-0.5">최대 24개월 할부</p>
+                        </div>
+                        <svg class="w-8 h-8 text-slate-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+                    </label>
+                    <label class="payment-method-label flex items-center gap-4 p-4 rounded-2xl border-2 border-slate-200 cursor-pointer hover:border-slate-300 transition-all">
+                        <input type="radio" name="payment-method" value="smilepay" class="hidden">
+                        <div class="w-5 h-5 rounded-full border-2 border-slate-300 flex items-center justify-center flex-shrink-0">
+                            <div class="w-2.5 h-2.5 rounded-full bg-slate-300 hidden"></div>
+                        </div>
+                        <div class="flex-1">
+                            <p class="text-sm font-bold text-slate-800">스마일페이</p>
+                            <p class="text-[10px] text-slate-400 font-bold mt-0.5">스마일캐시 · 간편 결제</p>
+                        </div>
+                        <span class="text-lg flex-shrink-0">😊</span>
+                    </label>
+                    <label class="payment-method-label flex items-center gap-4 p-4 rounded-2xl border-2 border-slate-200 cursor-pointer hover:border-slate-300 transition-all">
+                        <input type="radio" name="payment-method" value="transfer" class="hidden">
+                        <div class="w-5 h-5 rounded-full border-2 border-slate-300 flex items-center justify-center flex-shrink-0">
+                            <div class="w-2.5 h-2.5 rounded-full bg-slate-300 hidden"></div>
+                        </div>
+                        <div class="flex-1">
+                            <p class="text-sm font-bold text-slate-800">무통장 입금</p>
+                            <p class="text-[10px] text-slate-400 font-bold mt-0.5">입금 확인 후 배송 시작</p>
+                        </div>
+                        <svg class="w-8 h-8 text-slate-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z"/></svg>
+                    </label>
+                </div>
+            </div>
+
+            <!-- 결제 금액 -->
+            <div class="bg-white rounded-[28px] border border-slate-100 shadow-sm p-7 mb-8">
+                <h3 class="text-base font-bold text-slate-800 mb-5 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-gmarket-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 11h.01M12 11h.01M15 11h.01M4 20h16a2 2 0 002-2V6a2 2 0 00-2-2H4a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                    결제 금액
+                </h3>
+                <div id="order-price-breakdown" class="space-y-3 text-sm font-bold"></div>
+                <div class="border-t border-slate-100 mt-4 pt-4 flex justify-between items-center">
+                    <span class="text-base font-bold text-slate-800">최종 결제 금액</span>
+                    <span id="order-total-price" class="text-2xl font-bold text-gmarket-blue"></span>
+                </div>
+            </div>
+
+            <!-- 결제 버튼 -->
+            <button id="order-submit-btn" onclick="submitOrder()" class="w-full py-5 bg-gmarket-blue text-white rounded-2xl font-bold text-lg shadow-2xl shadow-blue-100 transition-all hover:scale-[1.01] active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:active:scale-100">
+                결제하기
+            </button>
+        </div>
+    </section>
+
+    <!-- ─── 주문완료 섹션 ─── -->
+    <section id="order-complete-view" class="hidden min-h-screen pt-24 pb-40 px-6 relative z-10 text-left bg-slate-50/50">
+        <div class="max-w-xl mx-auto">
+            <!-- 완료 아이콘 -->
+            <div class="flex flex-col items-center justify-center py-16 text-center">
+                <div class="w-24 h-24 rounded-full bg-gmarket-blue/10 flex items-center justify-center mb-6 animate-in zoom-in duration-500">
+                    <svg class="w-12 h-12 text-gmarket-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                    </svg>
+                </div>
+                <h2 class="text-2xl md:text-3xl font-bold text-slate-900 mb-3">주문이 완료되었어요! 🎉</h2>
+                <p class="text-slate-500 text-sm font-bold mb-1">주문번호 <span id="order-complete-number" class="text-gmarket-blue"></span></p>
+                <p class="text-slate-400 text-xs">배송 정보는 등록하신 연락처로 안내드려요.</p>
+            </div>
+
+            <!-- 배송지 요약 -->
+            <div class="bg-white rounded-[28px] border border-slate-100 shadow-sm p-7 mb-4">
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">배송지</p>
+                <div class="space-y-1.5">
+                    <p class="font-bold text-slate-800 text-sm" id="complete-name"></p>
+                    <p class="text-slate-500 text-sm" id="complete-phone"></p>
+                    <p class="text-slate-500 text-sm" id="complete-address"></p>
+                </div>
+            </div>
+
+            <!-- 주문 상품 요약 -->
+            <div class="bg-white rounded-[28px] border border-slate-100 shadow-sm p-7 mb-4">
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">주문 상품</p>
+                <div id="complete-items-list" class="space-y-3"></div>
+                <div class="border-t border-slate-100 mt-4 pt-4 flex justify-between items-center">
+                    <span class="text-sm font-bold text-slate-600">결제 금액</span>
+                    <span id="complete-total-price" class="text-xl font-bold text-gmarket-blue"></span>
+                </div>
+            </div>
+
+            <!-- 하단 버튼 -->
+            <div class="flex gap-3">
+                <button onclick="goBackToSolution()" class="flex-1 py-4 bg-slate-100 text-slate-700 rounded-2xl font-bold text-sm hover:bg-slate-200 transition-all active:scale-95">
+                    쇼핑 계속하기
+                </button>
+                <button onclick="window.scrollTo({top:0,behavior:'smooth'})" class="flex-1 py-4 bg-gmarket-blue text-white rounded-2xl font-bold text-sm shadow-xl shadow-blue-100 hover:bg-blue-600 transition-all active:scale-95">
+                    홈으로 가기
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- 결제 수단 라디오 인터랙션 -->
+    <script>
+        document.addEventListener('change', function(e) {
+            if (e.target && e.target.name === 'payment-method') {
+                document.querySelectorAll('.payment-method-label').forEach(function(label) {
+                    label.classList.remove('border-gmarket-blue', 'bg-gmarket-blue/5');
+                    label.classList.add('border-slate-200');
+                    var dot = label.querySelector('.w-2\\.5');
+                    if (dot) { dot.classList.add('hidden'); dot.classList.remove('bg-gmarket-blue'); dot.classList.add('bg-slate-300'); }
+                    var ring = label.querySelector('.rounded-full.border-2');
+                    if (ring) { ring.classList.remove('border-gmarket-blue'); ring.classList.add('border-slate-300'); }
+                });
+                var selectedLabel = e.target.closest('.payment-method-label');
+                if (selectedLabel) {
+                    selectedLabel.classList.add('border-gmarket-blue', 'bg-gmarket-blue/5');
+                    selectedLabel.classList.remove('border-slate-200');
+                    var dot = selectedLabel.querySelector('.w-2\\.5');
+                    if (dot) { dot.classList.remove('hidden', 'bg-slate-300'); dot.classList.add('bg-gmarket-blue'); }
+                    var ring = selectedLabel.querySelector('.rounded-full.border-2');
+                    if (ring) { ring.classList.remove('border-slate-300'); ring.classList.add('border-gmarket-blue'); }
+                }
+            }
+        });
+    </script>
+
     <script src="./gmarket-advanced.mock.js"></script>
     <script src="./gmarket-advanced.js"></script>
+
 </body>
 </html>
-
-
