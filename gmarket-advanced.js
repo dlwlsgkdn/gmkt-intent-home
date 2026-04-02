@@ -1054,28 +1054,18 @@ function renderInfoView(intent) {
     if (!cfg) return;
 
     const buildQ = (q) => {
-        const btnClass = "info-card border-2 border-slate-100 rounded-2xl transition-all bg-slate-50 hover:border-gmarket-blue";
+        const btnClass = "flex-shrink-0 info-card border-2 border-slate-100 rounded-2xl transition-all bg-slate-50 hover:border-gmarket-blue p-3 text-center flex flex-col items-center justify-center gap-1 min-w-[5rem]";
         const buttons = q.options.map(opt => {
             const buttonAttrs = `data-choice-category="${q.category}" data-choice-value="${opt.main}"`;
-            if (opt.row) {
-                return `<button ${buttonAttrs} onclick="selectChoice(this, '${q.category}')" class="${btnClass} p-4 text-left flex items-center gap-4">
-                    <span class="text-xl">${opt.main}</span>
-                    <span class="text-xs font-bold text-slate-700">${opt.sub}</span>
-                </button>`;
-            } else if (opt.icon) {
-                return `<button ${buttonAttrs} onclick="selectChoice(this, '${q.category}')" class="${btnClass} p-4 text-center group">
-                    <span class="block text-xl mb-1">${opt.main}</span>
-                    <span class="text-xs font-bold text-slate-700">${opt.sub}</span>
-                </button>`;
-            } else {
-                return `<button ${buttonAttrs} onclick="selectChoice(this, '${q.category}')" class="flex-grow ${btnClass} p-4 text-center font-bold">
-                    <span class="text-xs font-bold text-slate-700">${opt.main}</span>
-                </button>`;
-            }
+            const sub = opt.sub ? `<span class="text-[11px] font-bold text-slate-400 whitespace-nowrap">${opt.sub}</span>` : "";
+            return `<button ${buttonAttrs} onclick="selectChoice(this, '${q.category}')" class="${btnClass}">
+                <span class="text-sm font-bold text-slate-800 whitespace-nowrap">${opt.main}</span>
+                ${sub}
+            </button>`;
         }).join("");
         return `<div>
-            <label class="text-sm font-bold text-slate-400 mb-4 block">${q.label}</label>
-            <div class="${q.layout}">${buttons}</div>
+            <label class="text-sm font-bold text-slate-400 mb-3 block">${q.label}</label>
+            <div class="flex gap-2 overflow-x-auto scrollbar-hide pb-1 pt-2 -mt-2">${buttons}</div>
         </div>`;
     };
 
@@ -1174,10 +1164,10 @@ window.openPDP = function openPDP(stepIdx, prodIdx) {
         summaryList.innerHTML = "";
         product.aiSummary.forEach((text, index) => {
             const item = document.createElement("div");
-            item.className = "flex gap-6 items-start transition-all hover:translate-x-1 duration-300 text-left font-bold";
+            item.className = "flex gap-3 items-start transition-all hover:translate-x-1 duration-300 text-left font-bold";
             item.innerHTML = `
-                <div class="w-8 h-8 rounded-full bg-slate-900 text-white text-[14px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5 shadow-[0_4px_10px_rgba(0,0,0,0.2)]">${index + 1}</div>
-                <p class="text-[17px] text-slate-600 leading-relaxed font-medium text-left">${text}</p>
+                <div class="w-5 h-5 rounded-full bg-slate-900 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">${index + 1}</div>
+                <p class="text-sm sm:text-[16px] text-slate-600 leading-relaxed font-medium text-left" style="word-break:keep-all">${text}</p>
             `;
             summaryList.appendChild(item);
         });

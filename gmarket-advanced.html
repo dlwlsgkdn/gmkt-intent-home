@@ -130,47 +130,45 @@
                 <h2 class="text-2xl md:text-3xl font-bold text-slate-800 leading-tight">환경에 딱 맞는 계획을 위해<br>몇 가지만 알려주세요</h2>
             </div>
 
-            <div id="questions-container" class="space-y-10 text-left">
+            <div id="questions-container" class="space-y-8 text-left">
                 <div>
-                    <label class="text-sm font-bold text-slate-400 mb-4 block font-bold">1. 설치할 창문 크기는 어느 정도인가요?</label>
-                    <div class="grid grid-cols-3 gap-2 sm:gap-3">
-                        <button onclick="selectChoice(this, 'size')" class="info-card border-2 border-slate-100 p-4 rounded-2xl text-center transition-all bg-slate-50 hover:border-gmarket-blue group">
-                            <span class="block text-xl mb-1">작음</span>
-                            <span class="text-xs font-bold text-slate-700 font-bold">작은 창</span>
+                    <label class="text-sm font-bold text-slate-400 mb-3 block">1. 설치할 창문 크기는 어느 정도인가요?</label>
+                    <div class="flex gap-2 overflow-x-auto scrollbar-hide pb-1 pt-2 -mt-2"
+                        <button onclick="selectChoice(this, 'size')" class="flex-shrink-0 min-w-[5rem] info-card border-2 border-slate-100 p-3 rounded-2xl text-center transition-all bg-slate-50 hover:border-gmarket-blue flex flex-col items-center justify-center gap-1">
+                            <span class="text-sm font-bold text-slate-800 whitespace-nowrap">작음</span>
+                            <span class="text-[11px] font-bold text-slate-400 whitespace-nowrap">작은 창</span>
                         </button>
-                        <button onclick="selectChoice(this, 'size')" class="info-card border-2 border-slate-100 p-4 rounded-2xl text-center transition-all bg-slate-50 hover:border-gmarket-blue group">
-                            <span class="block text-xl mb-1">보통</span>
-                            <span class="text-xs font-bold text-slate-700 font-bold">중간 창</span>
+                        <button onclick="selectChoice(this, 'size')" class="flex-shrink-0 min-w-[5rem] info-card border-2 border-slate-100 p-3 rounded-2xl text-center transition-all bg-slate-50 hover:border-gmarket-blue flex flex-col items-center justify-center gap-1">
+                            <span class="text-sm font-bold text-slate-800 whitespace-nowrap">보통</span>
+                            <span class="text-[11px] font-bold text-slate-400 whitespace-nowrap">중간 창</span>
                         </button>
-                        <button onclick="selectChoice(this, 'size')" class="info-card border-2 border-slate-100 p-4 rounded-2xl text-center transition-all bg-slate-50 hover:border-gmarket-blue group">
-                            <span class="block text-xl mb-1">큼</span>
-                            <span class="text-xs font-bold text-slate-700 font-bold">전면 창문</span>
+                        <button onclick="selectChoice(this, 'size')" class="flex-shrink-0 min-w-[5rem] info-card border-2 border-slate-100 p-3 rounded-2xl text-center transition-all bg-slate-50 hover:border-gmarket-blue flex flex-col items-center justify-center gap-1">
+                            <span class="text-sm font-bold text-slate-800 whitespace-nowrap">큼</span>
+                            <span class="text-[11px] font-bold text-slate-400 whitespace-nowrap">전면 창문</span>
                         </button>
                     </div>
                 </div>
-
                 <div>
-                    <label class="text-sm font-bold text-slate-400 mb-4 block font-bold">2. 벽면 또는 천장 소재는 무엇인가요?</label>
-                    <div class="grid grid-cols-2 gap-3">
-                        <button onclick="selectChoice(this, 'wall')" class="info-card border-2 border-slate-100 p-4 rounded-2xl text-left flex items-center gap-4 transition-all bg-slate-50 hover:border-gmarket-blue">
-                            <span class="text-xl">콘크리트</span>
-                            <span class="text-xs font-bold text-slate-700 font-bold">단단한 벽면</span>
+                    <label class="text-sm font-bold text-slate-400 mb-3 block">2. 벽면 또는 천장 소재는 무엇인가요?</label>
+                    <div class="flex gap-2 overflow-x-auto scrollbar-hide pb-1 pt-2 -mt-2"
+                        <button onclick="selectChoice(this, 'wall')" class="flex-shrink-0 min-w-[5rem] info-card border-2 border-slate-100 p-3 rounded-2xl text-center transition-all bg-slate-50 hover:border-gmarket-blue flex flex-col items-center justify-center gap-1">
+                            <span class="text-sm font-bold text-slate-800 whitespace-nowrap">콘크리트</span>
+                            <span class="text-[11px] font-bold text-slate-400 whitespace-nowrap">단단한 벽면</span>
                         </button>
-                        <button onclick="selectChoice(this, 'wall')" class="info-card border-2 border-slate-100 p-4 rounded-2xl text-left flex items-center gap-4 transition-all bg-slate-50 hover:border-gmarket-blue">
-                            <span class="text-xl">석고/목재</span>
-                            <span class="text-xs font-bold text-slate-700 font-bold">가벼운 벽면</span>
+                        <button onclick="selectChoice(this, 'wall')" class="flex-shrink-0 min-w-[5rem] info-card border-2 border-slate-100 p-3 rounded-2xl text-center transition-all bg-slate-50 hover:border-gmarket-blue flex flex-col items-center justify-center gap-1">
+                            <span class="text-sm font-bold text-slate-800 whitespace-nowrap">석고/목재</span>
+                            <span class="text-[11px] font-bold text-slate-400 whitespace-nowrap">가벼운 벽면</span>
                         </button>
                     </div>
                 </div>
-
                 <div>
-                    <label class="text-sm font-bold text-slate-400 mb-4 block font-bold">3. 가장 중요하게 생각하는 효과는?</label>
-                    <div class="flex gap-3">
-                        <button onclick="selectChoice(this, 'goal')" class="flex-grow info-card border-2 border-slate-100 p-4 rounded-2xl text-center transition-all bg-slate-50 hover:border-gmarket-blue font-bold">
-                            <span class="text-xs font-bold text-slate-700 font-bold">채광 조절</span>
+                    <label class="text-sm font-bold text-slate-400 mb-3 block">3. 가장 중요하게 생각하는 효과는?</label>
+                    <div class="flex gap-2 overflow-x-auto scrollbar-hide pb-1 pt-2 -mt-2"
+                        <button onclick="selectChoice(this, 'goal')" class="flex-1 info-card border-2 border-slate-100 p-3 rounded-2xl text-center transition-all bg-slate-50 hover:border-gmarket-blue flex flex-col items-center justify-center">
+                            <span class="text-sm font-bold text-slate-800 whitespace-nowrap">채광 조절</span>
                         </button>
-                        <button onclick="selectChoice(this, 'goal')" class="flex-grow info-card border-2 border-slate-100 p-4 rounded-2xl text-center transition-all bg-slate-50 hover:border-gmarket-blue font-bold">
-                            <span class="text-xs font-bold text-slate-700 font-bold">아늑한 분위기</span>
+                        <button onclick="selectChoice(this, 'goal')" class="flex-1 info-card border-2 border-slate-100 p-3 rounded-2xl text-center transition-all bg-slate-50 hover:border-gmarket-blue flex flex-col items-center justify-center">
+                            <span class="text-sm font-bold text-slate-800 whitespace-nowrap">아늑한 분위기</span>
                         </button>
                     </div>
                 </div>
@@ -255,17 +253,17 @@
                     </div>
                 </div>
 
-                <div id="ai-speech-bubble" class="hidden speech-bubble bg-white border border-slate-200 rounded-[28px] p-8 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.15)] mt-4 w-[calc(100vw-48px)] max-w-[580px] animate-in fade-in slide-in-from-top-2 duration-400 pointer-events-auto origin-top-right relative z-[115] mr-[-8px]">
-                    <div class="flex items-center gap-3 mb-6 pb-3 border-b border-slate-100 text-left">
-                        <div class="w-2.5 h-2.5 rounded-full bg-gmarket-blue shadow-[0_0_10px_rgba(0,123,255,0.5)]"></div>
-                        <span class="text-[11px] font-bold text-slate-400 uppercase tracking-widest font-bold">G-Agent Intelligence Report</span>
+                <div id="ai-speech-bubble" class="hidden speech-bubble bg-white border border-slate-200 rounded-[20px] sm:rounded-[28px] p-5 sm:p-8 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.15)] mt-4 w-[calc(100vw-48px)] max-w-[580px] animate-in fade-in slide-in-from-top-2 duration-400 pointer-events-auto origin-top-right relative z-[150] mr-[-8px] max-h-[50vh] overflow-y-auto">
+                    <div class="flex items-center gap-3 mb-4 pb-3 border-b border-slate-100 text-left">
+                        <div class="w-2.5 h-2.5 rounded-full bg-gmarket-blue shadow-[0_0_10px_rgba(0,123,255,0.5)] flex-shrink-0"></div>
+                        <span class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">G-Agent Intelligence Report</span>
                     </div>
 
-                    <div class="space-y-6 text-left">
-                        <p class="text-[18px] text-slate-600 leading-relaxed font-bold">
+                    <div class="space-y-4 text-left">
+                        <p class="text-sm sm:text-[18px] text-slate-600 leading-relaxed font-bold" style="word-break:keep-all">
                             분석 완료! "<span id="pdp-intent-reason-text" class="text-slate-900 font-bold underline decoration-gmarket-blue/30 underline-offset-4"></span>" 목표 달성을 위한 핵심 정보를 확인해보세요.
                         </p>
-                        <div id="pdp-ai-summary-list" class="space-y-6"></div>
+                        <div id="pdp-ai-summary-list" class="space-y-4"></div>
                     </div>
                 </div>
             </div>
@@ -338,8 +336,8 @@
     </div>
 
     <!-- ─── 주문서 섹션 ─── -->
-    <section id="order-view" class="hidden min-h-screen pt-20 sm:pt-24 pb-28 sm:pb-40 px-4 sm:px-6 relative z-10 text-left overflow-x-hidden">
-        <div class="max-w-2xl mx-auto">
+    <section id="order-view" class="hidden min-h-screen pt-20 sm:pt-24 pb-28 sm:pb-40 px-4 sm:px-6 relative z-10 overflow-x-hidden">
+        <div class="max-w-2xl mx-auto w-full">
 
             <!-- 헤더 -->
             <div class="mb-10">
@@ -463,8 +461,8 @@
     </section>
 
     <!-- ─── 주문완료 섹션 ─── -->
-    <section id="order-complete-view" class="hidden min-h-screen pt-20 sm:pt-24 pb-28 sm:pb-40 px-4 sm:px-6 relative z-10 text-left bg-slate-50/50 overflow-x-hidden">
-        <div class="max-w-xl mx-auto">
+    <section id="order-complete-view" class="hidden min-h-screen pt-20 sm:pt-24 pb-28 sm:pb-40 px-4 sm:px-6 relative z-10 bg-slate-50/50 overflow-x-hidden">
+        <div class="max-w-xl mx-auto w-full">
             <!-- 완료 아이콘 -->
             <div class="flex flex-col items-center justify-center py-16 text-center">
                 <div class="w-24 h-24 rounded-full bg-gmarket-blue/10 flex items-center justify-center mb-6 animate-in zoom-in duration-500">
