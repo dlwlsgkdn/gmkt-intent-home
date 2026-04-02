@@ -1,3 +1,26 @@
+/* ─── Page loading overlay ──────────────────────────────── */
+function showPageLoading(label = "") {
+    const overlay = document.getElementById("page-loading-overlay");
+    const labelEl = document.getElementById("page-loading-label");
+    if (!overlay) return;
+    if (labelEl) labelEl.textContent = label;
+    overlay.classList.add("active");
+}
+
+function hidePageLoading() {
+    const overlay = document.getElementById("page-loading-overlay");
+    if (!overlay) return;
+    overlay.classList.remove("active");
+}
+
+function withLoading(label, delayMs, fn) {
+    showPageLoading(label);
+    setTimeout(() => {
+        fn();
+        hidePageLoading();
+    }, delayMs);
+}
+
 function generateEqualizerRays() {
     const container = document.getElementById("equalizer-rays");
     if (!container) return;
@@ -434,6 +457,16 @@ window.addToCart = function addToCart(intentKey, stepIdx, productIdx) {
     updateProductCardCartState(intentKey);
     updateCartBadge();
 
+    if (!isSame) {
+        const toggleBtn = document.getElementById("historySidebarToggle");
+        if (toggleBtn) {
+            toggleBtn.classList.remove("cart-btn-shake");
+            void toggleBtn.offsetWidth;
+            toggleBtn.classList.add("cart-btn-shake");
+            toggleBtn.addEventListener("animationend", () => toggleBtn.classList.remove("cart-btn-shake"), { once: true });
+        }
+    }
+
     // Show brief toast
     const toastMsg = isSame
         ? `'${product.name}' 이(가) 장바구니에서 제거됐어요`
@@ -605,8 +638,8 @@ function renderCart() {
         const totalSteps = intentData.steps.length;
         const isActive = state.currentSessionId === sessionId;
         const groupBorder = isActive
-            ? "border-gmarket-blue bg-gmarket-blue/5"
-            : (hasEssentialMissing ? "border-amber-200 bg-amber-50/20" : "border-slate-200 bg-white");
+            ? "border-gmarket-blue bg-white"
+            : (hasEssentialMissing ? "border-amber-200 bg-white" : "border-slate-200 bg-white");
 
         return `
             <div class="purpose-cart-group border ${groupBorder}">
@@ -727,14 +760,16 @@ window.openOrderView = function openOrderView(sessionId) {
     }
 
     // 주문서 섹션 표시 후 스크롤
-    const orderView = document.getElementById("order-view");
-    if (orderView) {
-        orderView.classList.remove("hidden");
-        orderView.classList.add("flex", "flex-col");
-        setTimeout(() => {
+    showPageLoading("주문서를 준비하는 중...");
+    setTimeout(() => {
+        const orderView = document.getElementById("order-view");
+        if (orderView) {
+            orderView.classList.remove("hidden");
+            orderView.classList.add("flex", "flex-col");
             orderView.scrollIntoView({ behavior: "smooth", block: "start" });
-        }, 50);
-    }
+        }
+        hidePageLoading();
+    }, 800);
 
     // 사이드바 닫기 (모바일)
     closeHistorySidebar();
@@ -802,14 +837,16 @@ window.submitOrder = function submitOrder() {
     if (completeTotal) completeTotal.textContent = totalPrice;
 
     // 주문완료 섹션 표시 후 스크롤
-    const completeView = document.getElementById("order-complete-view");
-    if (completeView) {
-        completeView.classList.remove("hidden");
-        completeView.classList.add("flex", "flex-col");
-        setTimeout(() => {
+    showPageLoading("결제를 처리하는 중...");
+    setTimeout(() => {
+        const completeView = document.getElementById("order-complete-view");
+        if (completeView) {
+            completeView.classList.remove("hidden");
+            completeView.classList.add("flex", "flex-col");
             completeView.scrollIntoView({ behavior: "smooth", block: "start" });
-        }, 50);
-    }
+        }
+        hidePageLoading();
+    }, 1000);
 };
 
 function showMissingEssentialToast(missingSteps, sessionId) {
@@ -891,27 +928,23 @@ function executeSearch(query, options = {}) {
         state.choices = { size: "", wall: "", goal: "" };
     }
 
+    const goToInfoView = (intent) => {
+        state.currentIntent = intent;
+        state.rawQuery = query;
+        withLoading("맞춤 조건을 불러오는 중...", 800, () => {
+            renderInfoView(intent);
+            infoView?.classList.remove("hidden");
+            infoView?.classList.add("flex");
+            infoView?.scrollIntoView({ behavior: "smooth" });
+        });
+    };
+
     if (query.includes("커튼") || query.includes("커텐") || query.includes("而ㅽ듉") || query.includes("而ㅽ뀗")) {
-        state.currentIntent = "커튼";
-        state.rawQuery = query;
-        renderInfoView("커튼");
-        infoView?.classList.remove("hidden");
-        infoView?.classList.add("flex");
-        infoView?.scrollIntoView({ behavior: "smooth" });
+        goToInfoView("커튼");
     } else if (query.includes("데스크탑") || query.includes("조립") || query.includes("pc") || query.includes("컴퓨터")) {
-        state.currentIntent = "데스크탑";
-        state.rawQuery = query;
-        renderInfoView("데스크탑");
-        infoView?.classList.remove("hidden");
-        infoView?.classList.add("flex");
-        infoView?.scrollIntoView({ behavior: "smooth" });
+        goToInfoView("데스크탑");
     } else if (query.includes("캠핑") || query.includes("텐트") || query.includes("캠프") || query.includes("camping")) {
-        state.currentIntent = "캠핑";
-        state.rawQuery = query;
-        renderInfoView("캠핑");
-        infoView?.classList.remove("hidden");
-        infoView?.classList.add("flex");
-        infoView?.scrollIntoView({ behavior: "smooth" });
+        goToInfoView("캠핑");
     }
 }
 
@@ -1082,10 +1115,12 @@ window.generatePlan = function generatePlan() {
     }
 
     saveSearchHistory();
-    solutionView?.classList.remove("hidden");
-    renderSolution(state.currentIntent, state.rawQuery);
-    solutionView?.scrollIntoView({ behavior: "smooth" });
-    updateBottomCheckoutBar();
+    withLoading("AI가 최적의 상품을 분석 중...", 1200, () => {
+        solutionView?.classList.remove("hidden");
+        renderSolution(state.currentIntent, state.rawQuery);
+        solutionView?.scrollIntoView({ behavior: "smooth" });
+        updateBottomCheckoutBar();
+    });
 };
 
 window.openPDP = function openPDP(stepIdx, prodIdx) {
@@ -1210,7 +1245,7 @@ function renderSolution(key, rawQuery) {
         const stepEl = document.createElement("div");
         stepEl.className = "relative pl-8 md:pl-12 border-l-2 border-slate-200 pb-4 text-left font-bold";
         const selectedState = getSessionSelectionState(key, stepIndex);
-        const maxVisibleCount = Math.min(10, step.products.length);
+        const maxVisibleCount = Math.min(7, step.products.length);
         const minVisibleCount = Math.min(2, maxVisibleCount);
         const visibleCount = maxVisibleCount <= minVisibleCount
             ? maxVisibleCount
@@ -1282,7 +1317,6 @@ function renderSolution(key, rawQuery) {
             </div>
             <div class="flex items-center justify-between gap-3 mb-4">
                 <p class="text-xs font-bold text-slate-400">좌우로 넘겨 더 많은 상품을 볼 수 있어요</p>
-                <span class="text-[11px] font-bold text-slate-300">${visibleProducts.length} / ${step.products.length} options</span>
             </div>
             <div class="flex gap-5 overflow-x-auto pb-8 -mx-2 px-2 scrollbar-hide text-left snap-x snap-mandatory">
                 ${productHtml}

@@ -36,6 +36,34 @@
                             "여러 창을 한 번에 준비할 때 시간을 줄여줍니다."
                         ],
                         spec: { size: "최대 40m", feature: "레이저 실측" }
+                    },
+                    {
+                        id: 103,
+                        name: "디지털 수평계",
+                        price: "15,500",
+                        originalPrice: "22,000",
+                        score: 85,
+                        img: "https://images.unsplash.com/photo-1572981779307-38b8cabb2407?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "커튼봉이나 브라켓을 수평으로 맞출 때 유용합니다.",
+                            "디지털 표시로 정밀한 수평 확인이 가능합니다.",
+                            "소형이라 좁은 창틀 위에서도 쉽게 사용할 수 있습니다."
+                        ],
+                        spec: { size: "23cm", feature: "디지털 수평 측정" }
+                    },
+                    {
+                        id: 104,
+                        name: "멀티 측정 키트 세트",
+                        price: "21,900",
+                        originalPrice: "29,000",
+                        score: 87,
+                        img: "https://images.unsplash.com/photo-1586864387789-628af9feed72?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "줄자, 수평계, 마킹펜이 한 세트로 구성되어 있습니다.",
+                            "실측부터 마킹까지 한 번에 준비할 수 있어 효율적입니다.",
+                            "처음 DIY를 시작하는 분에게 가성비 좋은 선택입니다."
+                        ],
+                        spec: { size: "줄자 5m + 수평계 + 마킹펜", feature: "올인원 측정 키트" }
                     }
                 ]
             },
@@ -72,6 +100,76 @@
                             "가벼운 커튼이나 속커튼 구성에 특히 잘 맞습니다."
                         ],
                         spec: { size: "180~360cm", feature: "무타공 확장형" }
+                    },
+                    {
+                        id: 203,
+                        name: "더블 커튼 레일 세트",
+                        price: "24,500",
+                        originalPrice: "33,000",
+                        score: 94,
+                        img: "https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "속커튼과 겉커튼을 함께 걸 수 있는 이중 레일입니다.",
+                            "천장 매립형으로 깔끔한 마감을 원할 때 적합합니다.",
+                            "레일 방식이라 커튼 개폐가 매우 부드럽습니다."
+                        ],
+                        spec: { size: "200cm (커팅 가능)", feature: "이중 레일 천장 매립형" }
+                    },
+                    {
+                        id: 204,
+                        name: "DIY 전동 드릴 세트",
+                        price: "37,800",
+                        originalPrice: "52,000",
+                        score: 82,
+                        img: "https://images.unsplash.com/photo-1504148455328-c376907d081c?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "콘크리트 벽면에 브라켓을 고정할 때 필수적인 도구입니다.",
+                            "토크 조절 기능으로 벽면 손상 없이 안전하게 시공할 수 있습니다.",
+                            "커튼 설치 외에도 다양한 DIY 작업에 활용 가능합니다."
+                        ],
+                        spec: { size: "12V 충전식", feature: "토크 조절 전동 드릴" }
+                    },
+                    {
+                        id: 205,
+                        name: "S자 커튼 고리 30개입",
+                        price: "6,900",
+                        originalPrice: "9,500",
+                        score: 90,
+                        img: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "커튼봉에 바로 걸 수 있는 기본 고리 세트입니다.",
+                            "스테인리스 소재로 녹 걱정 없이 오래 사용 가능합니다.",
+                            "30개 구성으로 양쪽 커튼에 넉넉하게 쓸 수 있습니다."
+                        ],
+                        spec: { size: "30개입", feature: "스테인리스 S자 고리" }
+                    },
+                    {
+                        id: 206,
+                        name: "커튼 타이백 2개 세트",
+                        price: "8,500",
+                        originalPrice: "12,000",
+                        score: 78,
+                        img: "https://images.unsplash.com/photo-1513519245088-0e12902e5a38?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "커튼을 양쪽으로 묶어 깔끔하게 정리할 수 있습니다.",
+                            "마그네틱 방식으로 벽에 타공 없이 사용 가능합니다.",
+                            "인테리어 포인트로도 활용할 수 있는 디자인입니다."
+                        ],
+                        spec: { size: "2개 1세트", feature: "마그네틱 타이백" }
+                    },
+                    {
+                        id: 207,
+                        name: "벽면 앵커 나사 세트",
+                        price: "4,500",
+                        originalPrice: "7,000",
+                        score: 75,
+                        img: "https://images.unsplash.com/photo-1572981779307-38b8cabb2407?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "석고 벽면에 브라켓을 튼튼하게 고정하기 위한 보조 부자재입니다.",
+                            "앵커와 나사가 세트로 구성되어 별도 구매가 필요 없습니다.",
+                            "가벼운 벽면에서도 안정적인 하중 지지가 가능합니다."
+                        ],
+                        spec: { size: "앵커 10개 + 나사 10개", feature: "석고보드용 앵커 세트" }
                     }
                 ]
             },
@@ -108,6 +206,62 @@
                             "밝고 부드러운 인테리어 톤을 만들기 쉽습니다."
                         ],
                         spec: { size: "140 x 230cm", feature: "쉬폰/린넨 스타일" }
+                    },
+                    {
+                        id: 303,
+                        name: "방염 블라인드 커튼",
+                        price: "55,000",
+                        originalPrice: "72,000",
+                        score: 88,
+                        img: "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "방염 처리가 되어 있어 안전 기준이 까다로운 공간에도 적합합니다.",
+                            "롤 블라인드 방식으로 공간을 깔끔하게 정리할 수 있습니다.",
+                            "채광 조절과 프라이버시 확보를 동시에 할 수 있습니다."
+                        ],
+                        spec: { size: "맞춤 제작 가능", feature: "방염 인증 롤 블라인드" }
+                    },
+                    {
+                        id: 304,
+                        name: "내추럴 우드 블라인드",
+                        price: "67,500",
+                        originalPrice: "89,000",
+                        score: 84,
+                        img: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "원목 소재로 고급스러운 인테리어 분위기를 연출합니다.",
+                            "각도 조절로 섬세한 채광 컨트롤이 가능합니다.",
+                            "거실이나 서재처럼 분위기가 중요한 공간에 잘 어울립니다."
+                        ],
+                        spec: { size: "맞춤 제작 가능", feature: "천연 우드 슬랫 블라인드" }
+                    },
+                    {
+                        id: 305,
+                        name: "이중 레이어드 커튼",
+                        price: "62,000",
+                        originalPrice: "82,000",
+                        score: 95,
+                        img: "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "암막과 쉬폰이 결합된 이중 구조로 다양한 연출이 가능합니다.",
+                            "계절에 따라 겉커튼만 또는 속커튼만 활용할 수 있습니다.",
+                            "하나의 레일에 두 겹을 모두 설치할 수 있어 공간이 절약됩니다."
+                        ],
+                        spec: { size: "140 x 235cm (2겹)", feature: "암막 + 쉬폰 이중 레이어" }
+                    },
+                    {
+                        id: 306,
+                        name: "단열 허니콤 블라인드",
+                        price: "73,000",
+                        originalPrice: "98,000",
+                        score: 82,
+                        img: "https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "벌집 구조 공기층이 냉난방 효율을 크게 높여줍니다.",
+                            "깔끔한 디자인으로 미니멀 인테리어에 잘 어울립니다.",
+                            "무선 코드리스 타입이라 아이가 있는 가정에서도 안전합니다."
+                        ],
+                        spec: { size: "맞춤 제작 가능", feature: "허니콤 단열 코드리스" }
                     }
                 ]
             }
@@ -150,6 +304,34 @@
                             "가볍고 작은 수납 사이즈로 트렁크 공간을 많이 차지하지 않습니다."
                         ],
                         spec: { size: "2인용 / 210×150cm", feature: "원터치 자동 펼침" }
+                    },
+                    {
+                        id: 113,
+                        name: "리빙쉘 텐트 4인용",
+                        price: "159,000",
+                        originalPrice: "219,000",
+                        score: 86,
+                        img: "https://images.unsplash.com/photo-1510312305653-8ed496efae75?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "넓은 거실 공간이 있어 비 오는 날에도 실내 활동이 가능합니다.",
+                            "가족 캠핑이나 여유로운 공간을 원할 때 적합합니다.",
+                            "전실 구조로 장비 보관과 취사 공간을 분리할 수 있습니다."
+                        ],
+                        spec: { size: "4인용 / 300×400cm", feature: "리빙쉘 전실 구조" }
+                    },
+                    {
+                        id: 114,
+                        name: "경량 백패킹 텐트 1인용",
+                        price: "68,000",
+                        originalPrice: "95,000",
+                        score: 83,
+                        img: "https://images.unsplash.com/photo-1487730116645-74489c95b41b?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "무게 1.2kg으로 백패킹이나 솔로 캠핑에 최적화되어 있습니다.",
+                            "컴팩트한 수납 사이즈로 배낭에 쉽게 넣을 수 있습니다.",
+                            "가벼우면서도 방수 성능이 뛰어나 갑작스런 비에도 안심입니다."
+                        ],
+                        spec: { size: "1인용 / 210×100cm", feature: "초경량 1.2kg" }
                     }
                 ]
             },
@@ -186,6 +368,48 @@
                             "조도 조절 기능으로 취침 전 무드등으로도 활용할 수 있습니다."
                         ],
                         spec: { size: "직경 9cm, 높이 18cm", feature: "USB 충전 / 3단계 밝기 조절" }
+                    },
+                    {
+                        id: 213,
+                        name: "휴대용 가스 그릴",
+                        price: "52,000",
+                        originalPrice: "69,000",
+                        score: 85,
+                        img: "https://images.unsplash.com/photo-1529543544282-ea57407bc2e3?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "고기 구이부터 간단한 요리까지 바로 할 수 있는 그릴입니다.",
+                            "접이식이라 이동이 편하고 부탄가스로 간편하게 사용합니다.",
+                            "캠핑 분위기를 확 살려주는 바베큐 장비입니다."
+                        ],
+                        spec: { size: "40×30cm 화판", feature: "접이식 가스 그릴" }
+                    },
+                    {
+                        id: 214,
+                        name: "캠핑 쿡웨어 13종 세트",
+                        price: "29,800",
+                        originalPrice: "42,000",
+                        score: 82,
+                        img: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "냄비, 프라이팬, 식기가 한 세트로 구성되어 있습니다.",
+                            "네스팅 구조로 겹쳐 수납하면 부피를 크게 줄일 수 있습니다.",
+                            "입문자가 별도로 식기를 고민할 필요가 없는 올인원 세트입니다."
+                        ],
+                        spec: { size: "냄비 2 + 프라이팬 1 + 식기 10", feature: "네스팅 수납 쿡웨어" }
+                    },
+                    {
+                        id: 215,
+                        name: "헤드랜턴 충전식",
+                        price: "16,500",
+                        originalPrice: "24,000",
+                        score: 80,
+                        img: "https://images.unsplash.com/photo-1517824806704-9040b037703b?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "양손이 자유로워 야간 텐트 설치나 이동 시 편리합니다.",
+                            "밝기 3단 조절과 적색 모드가 있어 상황별 대응이 가능합니다.",
+                            "가볍고 방수 처리가 되어 있어 야외에서 안심하고 쓸 수 있습니다."
+                        ],
+                        spec: { size: "60g", feature: "USB-C 충전 / IPX4 방수" }
                     }
                 ]
             },
@@ -222,6 +446,48 @@
                             "침낭과 함께 쓰면 보온 효과를 크게 높일 수 있습니다."
                         ],
                         spec: { size: "185×58cm, 두께 3cm", feature: "자충식 / 경량 폼 내장" }
+                    },
+                    {
+                        id: 313,
+                        name: "에어 베개 초경량",
+                        price: "8,900",
+                        originalPrice: "14,000",
+                        score: 79,
+                        img: "https://images.unsplash.com/photo-1445991842772-097fea258e7b?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "무게 80g으로 어디든 쉽게 가져갈 수 있는 초경량 베개입니다.",
+                            "입으로 3~4번 불면 완성되어 펌프가 필요 없습니다.",
+                            "목과 머리 지지력이 좋아 야외에서도 편안한 수면이 가능합니다."
+                        ],
+                        spec: { size: "42×28cm", feature: "초경량 80g 에어 베개" }
+                    },
+                    {
+                        id: 314,
+                        name: "담요형 이불 침낭",
+                        price: "35,500",
+                        originalPrice: "48,000",
+                        score: 84,
+                        img: "https://images.unsplash.com/photo-1510672981848-a1c4f1cb5ccf?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "지퍼를 열면 담요처럼 펼쳐 사용할 수 있어 활용도가 높습니다.",
+                            "두 개를 연결하면 더블 침낭으로도 사용할 수 있습니다.",
+                            "부드러운 안감으로 집에서 쓰는 이불과 비슷한 감촉입니다."
+                        ],
+                        spec: { size: "220×150cm (펼침 시)", feature: "담요 겸용 사각 침낭" }
+                    },
+                    {
+                        id: 315,
+                        name: "캠핑 그라운드시트",
+                        price: "12,500",
+                        originalPrice: "18,000",
+                        score: 77,
+                        img: "https://images.unsplash.com/photo-1525811902-f2342640856e?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "텐트 아래 깔아 바닥 습기와 오염을 차단합니다.",
+                            "방수 코팅으로 비 온 뒤에도 텐트 바닥을 보호합니다.",
+                            "타프나 피크닉 시트로도 다용도 활용이 가능합니다."
+                        ],
+                        spec: { size: "240×210cm", feature: "방수 코팅 그라운드시트" }
                     }
                 ]
             },
@@ -258,6 +524,48 @@
                             "버너와 랜턴을 함께 두기 좋은 기본 테이블 구성입니다."
                         ],
                         spec: { size: "90×52cm", feature: "롤업 상판 / 전용 수납가방 포함" }
+                    },
+                    {
+                        id: 413,
+                        name: "릴렉스 리클라이너 체어",
+                        price: "55,000",
+                        originalPrice: "75,000",
+                        score: 87,
+                        img: "https://images.unsplash.com/photo-1523301551780-cd17359a95d6?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "등받이 각도 조절로 식사부터 낮잠까지 편하게 쓸 수 있습니다.",
+                            "내하중이 넉넉해 체격에 상관없이 안정적으로 앉을 수 있습니다.",
+                            "머리 받침이 있어 장시간 쉴 때 목 부담이 적습니다."
+                        ],
+                        spec: { size: "내하중 150kg", feature: "3단 리클라이닝 체어" }
+                    },
+                    {
+                        id: 414,
+                        name: "우드 롤 테이블 L",
+                        price: "62,000",
+                        originalPrice: "82,000",
+                        score: 84,
+                        img: "https://images.unsplash.com/photo-1517457373958-b7bdd4587205?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "너도밤나무 원목 상판으로 감성 캠핑 분위기에 잘 어울립니다.",
+                            "넉넉한 L사이즈로 4인 식사 세팅도 여유롭습니다.",
+                            "롤 방식이라 접으면 슬림하게 수납할 수 있습니다."
+                        ],
+                        spec: { size: "120×60cm", feature: "너도밤나무 원목 롤 테이블" }
+                    },
+                    {
+                        id: 415,
+                        name: "사이드 행잉 랙",
+                        price: "18,900",
+                        originalPrice: "26,000",
+                        score: 78,
+                        img: "https://images.unsplash.com/photo-1496545672447-f699b503d270?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "컵, 랜턴, 소품을 걸어두면 테이블 공간을 절약할 수 있습니다.",
+                            "폴대에 간단히 걸어 사용하는 구조로 설치가 쉽습니다.",
+                            "캠핑 사이트를 깔끔하게 정리하는 데 도움이 됩니다."
+                        ],
+                        spec: { size: "60×35cm", feature: "클램프 고정식 행잉 랙" }
                     }
                 ]
             }
