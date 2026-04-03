@@ -662,9 +662,8 @@ function renderCart() {
                         <span class="text-xs text-slate-400 font-bold">합계</span>
                         <span class="text-sm font-bold text-slate-800">${subtotal.toLocaleString()}원</span>
                     </div>
-                    <div class="grid grid-cols-2 gap-2">
-                        <button onclick="continueCartSession('${sessionId}')" class="w-full py-2.5 bg-slate-100 text-slate-700 text-sm rounded-xl font-bold transition-all hover:bg-slate-200 active:scale-95">이어서 보기</button>
-                        <button onclick="checkoutCart('${sessionId}')" class="w-full py-2.5 bg-gmarket-blue text-white text-sm rounded-xl font-bold transition-all hover:bg-blue-600 active:scale-95">구매하기</button>
+                    <div class="grid grid-cols-1">
+                        <button onclick="checkoutCart('${sessionId}')" class="w-full py-2.5 bg-gmarket-blue text-white text-sm rounded-xl font-bold transition-all hover:bg-blue-600 active:scale-95">일괄 결제하고 완수하기</button>
                     </div>
                 </div>
             </div>
