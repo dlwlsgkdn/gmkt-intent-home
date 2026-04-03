@@ -33,6 +33,32 @@
                     <circle cx="92" cy="128" r="5" fill="currentColor"/>
                 </g>
 
+                <!-- 팔: write 모드 (오른팔로 메모 적는 포즈) -->
+                <g class="mascot-arm-write">
+                    <!-- 왼팔: 클립보드 잡기 -->
+                    <path d="M 28 88 Q 18 106 20 120" stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none"/>
+                    <circle cx="20" cy="120" r="5" fill="currentColor"/>
+                    <!-- 오른팔: 펜 들고 쓰기 -->
+                    <path d="M 80 88 Q 94 102 98 116" stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none"/>
+                    <circle cx="98" cy="116" r="5" fill="currentColor"/>
+                    <!-- 펜 -->
+                    <g class="mascot-pen">
+                        <rect x="96" y="114" width="5" height="18" rx="2" fill="#FFD200" transform="rotate(20, 98, 116)"/>
+                        <rect x="96" y="112" width="5" height="5" rx="1" fill="#FDA4AF" transform="rotate(20, 98, 116)"/>
+                        <polygon points="96,132 101,132 98.5,139" fill="#F97316" transform="rotate(20, 98, 116)"/>
+                    </g>
+                </g>
+
+                <!-- 팔: pay 모드 (양팔 내려서 카드 제시 포즈) -->
+                <g class="mascot-arm-pay">
+                    <!-- 왼팔 -->
+                    <path d="M 22 88 Q 12 108 16 128" stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none"/>
+                    <circle cx="16" cy="128" r="5" fill="currentColor"/>
+                    <!-- 오른팔 -->
+                    <path d="M 85 88 Q 96 108 92 128" stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none"/>
+                    <circle cx="92" cy="128" r="5" fill="currentColor"/>
+                </g>
+
                 <!-- 몸통 -->
                 <circle cx="55" cy="65" r="45" fill="currentColor" filter="url(#soft-shadow-ld)" />
                 <!-- 눈 -->
@@ -49,6 +75,63 @@
                 <circle class="think-dot d3" cx="110" cy="6" r="7" fill="#007BFF" opacity="0"/>
             </svg>
             <div class="ai-pulse-ring"></div>
+        </div>
+
+        <!-- 클립보드 (write 모드 전용) -->
+        <div id="loading-clipboard" class="hidden">
+            <svg class="clipboard-svg" viewBox="0 0 90 80" xmlns="http://www.w3.org/2000/svg">
+                <!-- 클립보드 본체 -->
+                <rect x="8" y="10" width="64" height="66" rx="5" fill="white" stroke="#CBD5E1" stroke-width="1.5"/>
+                <!-- 상단 클립 -->
+                <rect x="26" y="4" width="28" height="11" rx="4" fill="#94A3B8"/>
+                <rect x="32" y="7" width="16" height="5" rx="2" fill="#64748B"/>
+                <!-- 줄 1~4: 왼쪽부터 채워지는 애니메이션 -->
+                <line class="cl cl1" x1="18" y1="28" x2="62" y2="28" stroke="#94A3B8" stroke-width="1.8" stroke-linecap="round"/>
+                <line class="cl cl2" x1="18" y1="38" x2="62" y2="38" stroke="#94A3B8" stroke-width="1.8" stroke-linecap="round"/>
+                <line class="cl cl3" x1="18" y1="48" x2="50" y2="48" stroke="#94A3B8" stroke-width="1.8" stroke-linecap="round"/>
+                <line class="cl cl4" x1="18" y1="58" x2="38" y2="58" stroke="#007BFF" stroke-width="2"   stroke-linecap="round"/>
+            </svg>
+        </div>
+
+        <!-- 카드 단말기 (pay 모드 전용) -->
+        <div id="loading-pay" class="hidden">
+            <svg class="pay-svg" viewBox="0 0 148 82" xmlns="http://www.w3.org/2000/svg">
+                <!-- 단말기 본체 -->
+                <rect x="4" y="4" width="58" height="74" rx="7" fill="#1E293B"/>
+                <!-- 화면 -->
+                <rect x="10" y="10" width="46" height="30" rx="3" fill="#0F172A"/>
+                <!-- 화면 처리중 반짝임 -->
+                <rect class="screen-flash" x="10" y="10" width="46" height="30" rx="3" fill="#007BFF" opacity="0"/>
+                <!-- 화면 내용: 금액 영역 -->
+                <rect x="15" y="17" width="14" height="2.5" rx="1" fill="#334155"/>
+                <rect x="15" y="23" width="34" height="5" rx="1.5" fill="#E2E8F0"/>
+                <rect x="15" y="31" width="22" height="2" rx="1" fill="#334155"/>
+                <!-- 키패드 버튼들 -->
+                <rect x="12" y="48" width="10" height="8"  rx="2" fill="#334155"/>
+                <rect x="25" y="48" width="10" height="8"  rx="2" fill="#334155"/>
+                <rect x="38" y="48" width="10" height="8"  rx="2" fill="#334155"/>
+                <rect x="12" y="60" width="10" height="10" rx="2" fill="#334155"/>
+                <rect x="25" y="60" width="10" height="10" rx="2" fill="#22C55E"/>
+                <rect x="38" y="60" width="10" height="10" rx="2" fill="#EF4444"/>
+
+                <!-- 비접촉 웨이브 (단말기 오른쪽) -->
+                <path class="cwave w1" d="M 68 35 Q 74 41 68 47" fill="none" stroke="#007BFF" stroke-width="2.2" stroke-linecap="round" opacity="0"/>
+                <path class="cwave w2" d="M 74 30 Q 83 41 74 52" fill="none" stroke="#007BFF" stroke-width="2.2" stroke-linecap="round" opacity="0"/>
+                <path class="cwave w3" d="M 80 25 Q 92 41 80 57" fill="none" stroke="#007BFF" stroke-width="2.2" stroke-linecap="round" opacity="0"/>
+
+                <!-- 카드 -->
+                <g class="pay-card">
+                    <rect x="96" y="24" width="48" height="30" rx="5" fill="#007BFF"/>
+                    <!-- 카드 광택 -->
+                    <rect x="96" y="24" width="48" height="12" rx="5" fill="rgba(255,255,255,0.12)"/>
+                    <!-- 칩 -->
+                    <rect x="104" y="33" width="12" height="9" rx="2" fill="#FFD200"/>
+                    <line x1="104" y1="37" x2="116" y2="37" stroke="rgba(0,0,0,0.2)" stroke-width="1"/>
+                    <line x1="110" y1="33" x2="110" y2="42" stroke="rgba(0,0,0,0.2)" stroke-width="1"/>
+                    <!-- 카드 줄 -->
+                    <line x1="104" y1="47" x2="138" y2="47" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" stroke-linecap="round"/>
+                </g>
+            </svg>
         </div>
 
         <!-- 책 (book 모드 전용) -->
@@ -82,7 +165,7 @@
             </div>
         </div>
         <p id="page-loading-label" class="text-base font-bold text-slate-700"></p>
-        <p id="page-loading-sublabel" class="text-xs text-slate-400 font-medium h-5"></p>
+        <p id="page-loading-sublabel" class="text-xs text-slate-400 font-medium"></p>
         <!-- 프로그레스 바 -->
         <div class="ai-progress-track">
             <div id="ai-progress-bar" class="ai-progress-fill"></div>
@@ -412,10 +495,6 @@
 
             <!-- 헤더 -->
             <div class="mb-10">
-                <button onclick="closeOrderView()" class="flex items-center gap-2 text-sm text-slate-400 hover:text-slate-700 font-bold mb-6 transition-colors">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
-                    장바구니로 돌아가기
-                </button>
                 <span class="text-xs font-bold text-gmarket-blue uppercase tracking-widest mb-2 block">Order</span>
                 <h2 class="text-2xl md:text-3xl font-bold text-slate-800">주문서</h2>
             </div>

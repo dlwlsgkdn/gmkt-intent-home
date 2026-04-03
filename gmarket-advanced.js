@@ -12,6 +12,17 @@ const AI_SUB_MESSAGES = [
     "배송 조건까지 고려해서 추천드릴게요",
 ];
 
+const TIP_MESSAGES = [
+    "💡 검색창에 상황을 그대로 적어보세요. 예: '캠핑 첫 입문자 장비 세트'",
+    "💡 장바구니는 목적별로 여러 개 만들 수 있어요.",
+    "💡 '일괄 결제하고 완수하기'로 선택한 상품을 한 번에 구매할 수 있어요.",
+    "💡 조건을 선택하면 AI가 상황에 꼭 맞는 상품만 골라드려요.",
+    "💡 상품 카드를 클릭하면 상세 정보와 리뷰를 바로 확인할 수 있어요.",
+    "💡 사이드바에서 진행 중인 장바구니를 언제든 다시 꺼내볼 수 있어요.",
+    "💡 검색 태그(#커튼_달기 등)를 눌러 빠르게 탐색할 수 있어요.",
+    "💡 여러 목적의 쇼핑을 동시에 진행하고 한 번에 완수해보세요.",
+];
+
 function showPageLoading(label = "", mode = "default") {
     const overlay  = document.getElementById("page-loading-overlay");
     const labelEl  = document.getElementById("page-loading-label");
@@ -21,28 +32,42 @@ function showPageLoading(label = "", mode = "default") {
     if (!overlay) return;
 
     // mode 설정
+    const clipboardEl  = document.getElementById("loading-clipboard");
+    const payEl        = document.getElementById("loading-pay");
     overlay.dataset.mode = mode;
-    if (bookEl) bookEl.classList.toggle("hidden", mode !== "book");
+    if (bookEl)       bookEl.classList.toggle("hidden",      mode !== "book");
+    if (clipboardEl)  clipboardEl.classList.toggle("hidden", mode !== "write");
+    if (payEl)        payEl.classList.toggle("hidden",       mode !== "pay");
 
     if (labelEl) labelEl.textContent = label;
     overlay.classList.add("active");
 
-    /* 서브텍스트 순환 */
-    let idx = Math.floor(Math.random() * AI_SUB_MESSAGES.length);
-    if (subEl) {
-        subEl.style.opacity = "0";
-        setTimeout(() => { subEl.textContent = AI_SUB_MESSAGES[idx]; subEl.style.opacity = "1"; }, 100);
-    }
+    /* 서브텍스트 순환 — AI 관여 없는 모드(write/celebrate)는 표시 안 함 */
+    const AI_MODES = ["default", "book"];
     clearInterval(_aiLoadingInterval);
-    _aiLoadingInterval = setInterval(() => {
-        if (!subEl) return;
-        subEl.style.opacity = "0";
-        setTimeout(() => {
-            idx = (idx + 1) % AI_SUB_MESSAGES.length;
-            subEl.textContent = AI_SUB_MESSAGES[idx];
-            subEl.style.opacity = "1";
-        }, 300);
-    }, 2200);
+    if (subEl) {
+        const TIP_MODES = ["write", "pay"];
+        if (AI_MODES.includes(mode)) {
+            let idx = Math.floor(Math.random() * AI_SUB_MESSAGES.length);
+            subEl.style.opacity = "0";
+            setTimeout(() => { subEl.textContent = AI_SUB_MESSAGES[idx]; subEl.style.opacity = "1"; }, 100);
+            _aiLoadingInterval = setInterval(() => {
+                subEl.style.opacity = "0";
+                setTimeout(() => {
+                    idx = (idx + 1) % AI_SUB_MESSAGES.length;
+                    subEl.textContent = AI_SUB_MESSAGES[idx];
+                    subEl.style.opacity = "1";
+                }, 300);
+            }, 2200);
+        } else if (TIP_MODES.includes(mode)) {
+            const tip = TIP_MESSAGES[Math.floor(Math.random() * TIP_MESSAGES.length)];
+            subEl.style.opacity = "0";
+            setTimeout(() => { subEl.textContent = tip; subEl.style.opacity = "1"; }, 100);
+        } else {
+            subEl.textContent = "";
+            subEl.style.opacity = "0";
+        }
+    }
 
     /* 프로그레스 바 */
     if (bar) {
@@ -74,7 +99,12 @@ function hidePageLoading() {
         overlay.dataset.mode = "default";
         if (bar) bar.style.width = "0%";
         if (subEl) { subEl.textContent = ""; subEl.style.opacity = "0"; }
-        if (bookEl) bookEl.classList.add("hidden");
+        if (bookEl)      bookEl.classList.add("hidden");
+    const clipboardEl2 = document.getElementById("loading-clipboard");
+    const celebrateEl2 = document.getElementById("loading-celebrate");
+    if (clipboardEl2) clipboardEl2.classList.add("hidden");
+    const payEl2 = document.getElementById("loading-pay");
+    if (payEl2) payEl2.classList.add("hidden");
     }, 350);
 }
 
@@ -824,7 +854,7 @@ window.openOrderView = function openOrderView(sessionId) {
     }
 
     // 주문서 섹션 표시 후 스크롤
-    showPageLoading("주문서를 준비하는 중...");
+    showPageLoading("주문서를 준비하는 중...", "write");
     setTimeout(() => {
         const orderView = document.getElementById("order-view");
         if (orderView) {
@@ -833,7 +863,7 @@ window.openOrderView = function openOrderView(sessionId) {
             orderView.scrollIntoView({ behavior: "smooth", block: "start" });
         }
         hidePageLoading();
-    }, 800);
+    }, 2000);
 
     // 사이드바 닫기 (모바일)
     closeHistorySidebar();
@@ -901,7 +931,7 @@ window.submitOrder = function submitOrder() {
     if (completeTotal) completeTotal.textContent = totalPrice;
 
     // 주문완료 섹션 표시 후 스크롤
-    showPageLoading("결제를 처리하는 중...");
+    showPageLoading("결제를 처리하는 중...", "pay");
     setTimeout(() => {
         const completeView = document.getElementById("order-complete-view");
         if (completeView) {
@@ -910,7 +940,7 @@ window.submitOrder = function submitOrder() {
             completeView.scrollIntoView({ behavior: "smooth", block: "start" });
         }
         hidePageLoading();
-    }, 1000);
+    }, 2000);
 };
 
 function showMissingEssentialToast(missingSteps, sessionId) {
@@ -995,7 +1025,7 @@ function executeSearch(query, options = {}) {
     const goToInfoView = (intent) => {
         state.currentIntent = intent;
         state.rawQuery = query;
-        withLoading("맞춤 조건을 불러오는 중...", 2000, () => {
+        withLoading("맞춤 조건을 불러오는 중...", 2500, () => {
             renderInfoView(intent);
             infoView?.classList.remove("hidden");
             infoView?.classList.add("flex");
@@ -1169,7 +1199,7 @@ window.generatePlan = function generatePlan() {
     }
 
     saveSearchHistory();
-    withLoading("AI가 최적의 상품을 분석 중...", 2800, () => {
+    withLoading("AI가 최적의 상품을 분석 중...", 3200, () => {
         solutionView?.classList.remove("hidden");
         renderSolution(state.currentIntent, state.rawQuery);
         solutionView?.scrollIntoView({ behavior: "smooth" });

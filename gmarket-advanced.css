@@ -555,10 +555,15 @@ header {
 /* 서브라벨 전환 */
 #page-loading-sublabel {
     transition: opacity 0.3s ease;
+    max-width: 300px;
+    text-align: center;
+    line-height: 1.5;
 }
 
-/* 기본: book 팔 숨김 */
-.mascot-arm-book { display: none; }
+/* 기본: 특수 팔 모두 숨김 */
+.mascot-arm-book,
+.mascot-arm-write,
+.mascot-arm-pay { display: none; }
 
 /* ── book 모드 ── */
 #page-loading-overlay[data-mode="book"] .loading-mascot {
@@ -597,6 +602,127 @@ header {
 @keyframes armBookSway {
     0%   { transform: rotate(-4deg); }
     100% { transform: rotate(4deg); }
+}
+
+/* ── write 모드 ── */
+#page-loading-overlay[data-mode="write"] .loading-mascot {
+    animation: mascotWrite 1.4s ease-in-out infinite;
+}
+#page-loading-overlay[data-mode="write"] .mascot-arm-think { display: none; }
+#page-loading-overlay[data-mode="write"] .mascot-arm-write  { display: block; }
+#page-loading-overlay[data-mode="write"] .mascot-eye-l { transform: translateY(5px); }
+#page-loading-overlay[data-mode="write"] .mascot-eye-r { transform: translateY(5px); }
+#page-loading-overlay[data-mode="write"] .think-dot { animation: none !important; opacity: 0 !important; }
+#page-loading-overlay[data-mode="write"] .ai-pulse-ring { animation: none; opacity: 0; }
+#page-loading-overlay[data-mode="write"] .mascot-pen {
+    animation: penWrite 0.5s ease-in-out infinite alternate;
+    transform-origin: 98px 116px;
+}
+
+@keyframes mascotWrite {
+    0%, 100% { transform: translateY(0) rotate(-4deg); }
+    50%      { transform: translateY(-3px) rotate(-2deg); }
+}
+@keyframes penWrite {
+    0%   { transform: translate(0px, 0px); }
+    100% { transform: translate(8px, 2px); }
+}
+
+/* 클립보드 */
+.clipboard-svg { width: 90px; height: 80px; }
+
+/* 줄이 왼쪽부터 오른쪽으로 그려지는 애니메이션 */
+.cl {
+    opacity: 0;
+    animation: clipLineWrite 3.6s ease-out infinite;
+}
+.cl1 { stroke-dasharray: 44; stroke-dashoffset: 44; animation-delay: 0s;     }
+.cl2 { stroke-dasharray: 44; stroke-dashoffset: 44; animation-delay: 0.65s;  }
+.cl3 { stroke-dasharray: 32; stroke-dashoffset: 32; animation-delay: 1.3s;   }
+.cl4 { stroke-dasharray: 20; stroke-dashoffset: 20; animation-delay: 1.95s;  }
+
+@keyframes clipLineWrite {
+    0%        { opacity: 0; }
+    4%        { opacity: 1; stroke-dashoffset: 44; } /* 44 = max, works for all via cascade */
+    18%       { opacity: 1; stroke-dashoffset: 0;  }
+    70%       { opacity: 1; stroke-dashoffset: 0;  }
+    80%       { opacity: 0; stroke-dashoffset: 0;  }
+    100%      { opacity: 0; }
+}
+/* cl3, cl4는 dasharray가 다르므로 별도 keyframe */
+.cl3 { animation-name: clipLineWrite32; }
+.cl4 { animation-name: clipLineWrite20; }
+
+@keyframes clipLineWrite32 {
+    0%        { opacity: 0; }
+    4%        { opacity: 1; stroke-dashoffset: 32; }
+    18%       { opacity: 1; stroke-dashoffset: 0;  }
+    70%       { opacity: 1; stroke-dashoffset: 0;  }
+    80%       { opacity: 0; stroke-dashoffset: 0;  }
+    100%      { opacity: 0; }
+}
+@keyframes clipLineWrite20 {
+    0%        { opacity: 0; }
+    4%        { opacity: 1; stroke-dashoffset: 20; }
+    18%       { opacity: 1; stroke-dashoffset: 0;  }
+    70%       { opacity: 1; stroke-dashoffset: 0;  }
+    80%       { opacity: 0; stroke-dashoffset: 0;  }
+    100%      { opacity: 0; }
+}
+
+
+/* ── pay 모드 ── */
+#page-loading-overlay[data-mode="pay"] .loading-mascot {
+    animation: mascotRead 2s ease-in-out infinite; /* 앞으로 살짝 기울기 */
+}
+#page-loading-overlay[data-mode="pay"] .mascot-arm-think { display: none; }
+#page-loading-overlay[data-mode="pay"] .mascot-arm-pay   { display: block; }
+#page-loading-overlay[data-mode="pay"] .mascot-arm-pay {
+    animation: armBookSway 1.8s ease-in-out infinite alternate;
+    transform-origin: 55px 88px;
+}
+#page-loading-overlay[data-mode="pay"] .mascot-eye-l { transform: translateY(5px); }
+#page-loading-overlay[data-mode="pay"] .mascot-eye-r { transform: translateY(5px); }
+#page-loading-overlay[data-mode="pay"] .think-dot { animation: none !important; opacity: 0 !important; }
+#page-loading-overlay[data-mode="pay"] .ai-pulse-ring { animation: none; opacity: 0; }
+
+/* 카드 단말기 SVG */
+.pay-svg { width: 148px; height: 82px; }
+
+/* 카드가 단말기 쪽으로 접근했다가 돌아오는 애니메이션 */
+.pay-card {
+    animation: cardTap 2.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@keyframes cardTap {
+    0%, 100%  { transform: translateX(0); }
+    30%, 55%  { transform: translateX(-22px); }  /* 단말기 쪽으로 접근 */
+    70%       { transform: translateX(0); }
+}
+
+/* 비접촉 웨이브: 카드가 접근했을 때(30~55%) 순차 등장 */
+.cwave {
+    animation: waveAppear 2.6s ease-out infinite;
+}
+.w1 { animation-delay: 0.72s; } /* 2.6 * 0.28 ≈ 카드가 도착하는 시점 */
+.w2 { animation-delay: 0.86s; }
+.w3 { animation-delay: 1.00s; }
+
+@keyframes waveAppear {
+    0%, 25%  { opacity: 0; transform: scaleY(1); }
+    30%      { opacity: 0.9; }
+    50%      { opacity: 0; }
+    100%     { opacity: 0; }
+}
+
+/* 단말기 화면 반짝임: 카드 탭 시 */
+.screen-flash {
+    animation: screenFlash 2.6s ease-out infinite;
+}
+@keyframes screenFlash {
+    0%, 28%  { opacity: 0; }
+    35%      { opacity: 0.25; }
+    50%      { opacity: 0; }
+    100%     { opacity: 0; }
 }
 
 /* ── 책 컨테이너 ── */
