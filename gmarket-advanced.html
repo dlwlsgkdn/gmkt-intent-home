@@ -12,10 +12,81 @@
 <body class="bg-slate-50 font-sans min-h-screen text-slate-900 overflow-x-hidden">
 
     <div id="page-loading-overlay">
-        <div class="loading-dots">
-            <span></span><span></span><span></span>
+        <!-- 메인 캐릭터 -->
+        <div class="ai-loading-icon">
+            <svg class="loading-mascot" style="color:#FFD200" viewBox="0 0 120 145" xmlns="http://www.w3.org/2000/svg">
+                <defs><filter id="soft-shadow-ld" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="2" dy="3" stdDeviation="4" flood-color="#000000" flood-opacity="0.15" /></filter></defs>
+
+                <!-- 팔: 기본 (생각하는 포즈) -->
+                <g class="mascot-arm-think">
+                    <path d="M 40 85 Q 30 100 38 108" stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none" />
+                    <circle cx="38" cy="108" r="5" fill="currentColor" />
+                </g>
+
+                <!-- 팔: book 모드 (양팔 내려서 책 잡는 포즈) -->
+                <g class="mascot-arm-book">
+                    <!-- 왼팔 -->
+                    <path d="M 22 88 Q 12 108 16 128" stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none"/>
+                    <circle cx="16" cy="128" r="5" fill="currentColor"/>
+                    <!-- 오른팔 -->
+                    <path d="M 85 88 Q 96 108 92 128" stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none"/>
+                    <circle cx="92" cy="128" r="5" fill="currentColor"/>
+                </g>
+
+                <!-- 몸통 -->
+                <circle cx="55" cy="65" r="45" fill="currentColor" filter="url(#soft-shadow-ld)" />
+                <!-- 눈 -->
+                <ellipse class="mascot-eye-l" cx="43" cy="52" rx="3.5" ry="5.5" fill="#1e293b"/>
+                <ellipse class="mascot-eye-r" cx="67" cy="52" rx="3.5" ry="5.5" fill="#1e293b"/>
+                <!-- 입 -->
+                <path d="M 40 68 Q 55 76 70 68" stroke="#1e293b" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+                <!-- 입꼬리 -->
+                <circle cx="40" cy="68" r="2.5" fill="#FF5F5F" opacity="0.35" />
+                <circle cx="70" cy="68" r="2.5" fill="#FF5F5F" opacity="0.35" />
+                <!-- 생각 말풍선 점들 (기본 모드) -->
+                <circle class="think-dot d1" cx="85" cy="28" r="3.5" fill="#007BFF" opacity="0"/>
+                <circle class="think-dot d2" cx="96" cy="18" r="5" fill="#007BFF" opacity="0"/>
+                <circle class="think-dot d3" cx="110" cy="6" r="7" fill="#007BFF" opacity="0"/>
+            </svg>
+            <div class="ai-pulse-ring"></div>
         </div>
-        <p id="page-loading-label" class="text-sm font-bold text-slate-400"></p>
+
+        <!-- 책 (book 모드 전용) -->
+        <div id="loading-book" class="hidden">
+            <div class="book-wrap">
+                <svg class="book-svg" viewBox="0 0 130 88" xmlns="http://www.w3.org/2000/svg">
+                    <!-- 왼쪽 페이지 -->
+                    <path d="M62 6 Q40 6 12 11 L12 78 Q40 78 62 78 Z" fill="#FFFDF5" stroke="#E2E8F0" stroke-width="1.5"/>
+                    <!-- 오른쪽 페이지 -->
+                    <path d="M68 6 Q90 6 118 11 L118 78 Q90 78 68 78 Z" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+                    <!-- 책등 -->
+                    <rect x="60" y="4" width="10" height="76" fill="#94A3B8" rx="2"/>
+                    <!-- 왼쪽 줄 -->
+                    <line x1="18" y1="24" x2="56" y2="24" stroke="#CBD5E1" stroke-width="1.2" stroke-linecap="round"/>
+                    <line x1="18" y1="33" x2="56" y2="33" stroke="#CBD5E1" stroke-width="1.2" stroke-linecap="round"/>
+                    <line x1="18" y1="42" x2="56" y2="42" stroke="#CBD5E1" stroke-width="1.2" stroke-linecap="round"/>
+                    <line x1="18" y1="51" x2="48" y2="51" stroke="#CBD5E1" stroke-width="1.2" stroke-linecap="round"/>
+                    <!-- 오른쪽 줄 -->
+                    <line x1="74" y1="24" x2="112" y2="24" stroke="#CBD5E1" stroke-width="1.2" stroke-linecap="round"/>
+                    <line x1="74" y1="33" x2="112" y2="33" stroke="#CBD5E1" stroke-width="1.2" stroke-linecap="round"/>
+                    <line x1="74" y1="42" x2="112" y2="42" stroke="#CBD5E1" stroke-width="1.2" stroke-linecap="round"/>
+                    <line x1="74" y1="51" x2="102" y2="51" stroke="#CBD5E1" stroke-width="1.2" stroke-linecap="round"/>
+                </svg>
+                <!-- 3D 페이지 넘김 -->
+                <div class="flip-stage">
+                    <div class="flip-page">
+                        <div class="flip-front"></div>
+                        <div class="flip-back"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <p id="page-loading-label" class="text-base font-bold text-slate-700"></p>
+        <p id="page-loading-sublabel" class="text-xs text-slate-400 font-medium h-5"></p>
+        <!-- 프로그레스 바 -->
+        <div class="ai-progress-track">
+            <div id="ai-progress-bar" class="ai-progress-fill"></div>
+        </div>
     </div>
 
     <button type="button" id="historySidebarToggle" class="history-sidebar-toggle fixed left-4 top-20 z-[120] inline-flex lg:hidden items-center gap-2 rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 text-sm font-bold text-slate-700 shadow-lg backdrop-blur">

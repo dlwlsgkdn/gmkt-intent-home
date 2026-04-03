@@ -465,10 +465,10 @@ header {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 1rem;
+    gap: 0.75rem;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.2s ease;
+    transition: opacity 0.25s ease;
 }
 
 #page-loading-overlay.active {
@@ -476,27 +476,210 @@ header {
     pointer-events: all;
 }
 
-.loading-dots {
+/* 캐릭터 로딩 아이콘 컨테이너 */
+.ai-loading-icon {
+    position: relative;
+    width: 90px;
+    height: 90px;
     display: flex;
-    gap: 0.5rem;
     align-items: center;
+    justify-content: center;
+    margin-bottom: 0.5rem;
 }
 
-.loading-dots span {
-    width: 10px;
-    height: 10px;
+/* 마스코트 SVG */
+.loading-mascot {
+    width: 90px;
+    height: 90px;
+    animation: mascotBob 2s ease-in-out infinite;
+    overflow: visible;
+}
+
+@keyframes mascotBob {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    30%      { transform: translateY(-5px) rotate(-3deg); }
+    70%      { transform: translateY(-3px) rotate(2deg); }
+}
+
+/* 팔 (생각하는 포즈 흔들림) */
+.mascot-arm-think {
+    animation: armThink 2.4s ease-in-out infinite;
+    transform-origin: 45px 90px;
+}
+
+@keyframes armThink {
+    0%, 100% { transform: rotate(0deg); }
+    40%      { transform: rotate(-8deg); }
+    70%      { transform: rotate(5deg); }
+}
+
+/* 눈 깜빡임 */
+.mascot-eye-l,
+.mascot-eye-r {
+    animation: eyeBlink 3.5s ease-in-out infinite;
+}
+.mascot-eye-r { animation-delay: 0.05s; }
+
+@keyframes eyeBlink {
+    0%, 90%, 100% { ry: 5.5; }
+    95%           { ry: 0.5; }
+}
+
+/* 생각 말풍선 점들 */
+.think-dot {
+    animation: thinkDotPop 2.4s ease-in-out infinite;
+}
+.think-dot.d1 { animation-delay: 0s; }
+.think-dot.d2 { animation-delay: 0.35s; }
+.think-dot.d3 { animation-delay: 0.7s; }
+
+@keyframes thinkDotPop {
+    0%, 50%, 100% { opacity: 0; transform: scale(0.5); }
+    20%, 35%      { opacity: 1; transform: scale(1); }
+}
+
+/* 펄스 링 */
+.ai-pulse-ring {
+    position: absolute;
+    inset: -8px;
     border-radius: 50%;
-    background: #007BFF;
-    animation: dotBounce 1.2s ease-in-out infinite;
+    border: 2px solid rgba(255, 210, 0, 0.3);
+    animation: pulseRing 2s ease-out infinite;
 }
 
-.loading-dots span:nth-child(1) { animation-delay: 0s; }
-.loading-dots span:nth-child(2) { animation-delay: 0.2s; background: #FFD200; }
-.loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes pulseRing {
+    0%   { transform: scale(0.85); opacity: 1; }
+    100% { transform: scale(1.4);  opacity: 0; }
+}
 
-@keyframes dotBounce {
-    0%, 80%, 100% { transform: scale(0.7); opacity: 0.4; }
-    40%            { transform: scale(1.2); opacity: 1; }
+/* 서브라벨 전환 */
+#page-loading-sublabel {
+    transition: opacity 0.3s ease;
+}
+
+/* 기본: book 팔 숨김 */
+.mascot-arm-book { display: none; }
+
+/* ── book 모드 ── */
+#page-loading-overlay[data-mode="book"] .loading-mascot {
+    animation: mascotRead 2s ease-in-out infinite;
+}
+/* 기본 팔 숨기고 book 팔 보이기 */
+#page-loading-overlay[data-mode="book"] .mascot-arm-think {
+    display: none;
+}
+#page-loading-overlay[data-mode="book"] .mascot-arm-book {
+    display: block;
+    animation: armBookSway 1.1s ease-in-out infinite alternate;
+    transform-origin: 55px 88px;
+}
+/* 눈 아래로 */
+#page-loading-overlay[data-mode="book"] .mascot-eye-l {
+    transform: translateY(6px);
+}
+#page-loading-overlay[data-mode="book"] .mascot-eye-r {
+    transform: translateY(6px);
+}
+/* 생각 점 숨김 */
+#page-loading-overlay[data-mode="book"] .think-dot {
+    animation: none !important;
+    opacity: 0 !important;
+}
+#page-loading-overlay[data-mode="book"] .ai-pulse-ring {
+    animation: none;
+    opacity: 0;
+}
+
+@keyframes mascotRead {
+    0%, 100% { transform: translateY(0) rotate(-5deg); }
+    50%      { transform: translateY(-4px) rotate(-3deg); }
+}
+@keyframes armBookSway {
+    0%   { transform: rotate(-4deg); }
+    100% { transform: rotate(4deg); }
+}
+
+/* ── 책 컨테이너 ── */
+#loading-book {
+    position: relative;
+}
+.book-wrap {
+    position: relative;
+    width: 130px;
+    height: 88px;
+}
+.book-svg {
+    width: 130px;
+    height: 88px;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+/* 3D 페이지 넘김 스테이지 */
+.flip-stage {
+    position: absolute;
+    top: 6px;
+    left: 70px;
+    width: 48px;
+    height: 72px;
+    perspective: 400px;
+}
+.flip-page {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    transform-style: preserve-3d;
+    transform-origin: left center;
+    animation: pageFlip 2.4s linear infinite alternate;
+}
+.flip-front,
+.flip-back {
+    position: absolute;
+    inset: 0;
+    backface-visibility: hidden;
+    border-radius: 0 3px 3px 0;
+}
+.flip-front {
+    background: linear-gradient(to right, #dde4eb, #F1F5F9);
+}
+.flip-back {
+    background: linear-gradient(to left, #f0e8d0, #FFFDF5);
+    transform: rotateY(180deg);
+}
+
+/* 페이지가 천천히 들리다가 → 중간에 빠르게 넘어가고 → 착지할 때 다시 느려짐 */
+@keyframes pageFlip {
+    0%,  10%  { transform: rotateY(0deg);    }   /* 잠깐 정지 */
+    30%       { transform: rotateY(-25deg);  }   /* 천천히 들림 */
+    50%       { transform: rotateY(-90deg);  }   /* 가운데서 빠르게 */
+    70%       { transform: rotateY(-155deg); }   /* 감속 */
+    90%, 100% { transform: rotateY(-180deg); }   /* 착지 후 잠깐 정지 */
+}
+
+/* 프로그레스 바 */
+.ai-progress-track {
+    width: 180px;
+    height: 3px;
+    background: #e2e8f0;
+    border-radius: 99px;
+    overflow: hidden;
+    margin-top: 0.25rem;
+}
+
+.ai-progress-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 99px;
+    background: linear-gradient(90deg, #007BFF, #FFD200, #007BFF);
+    background-size: 200% 100%;
+    animation: progressShimmer 1.5s linear infinite;
+    transition: width 0.4s ease;
+}
+
+@keyframes progressShimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
 }
 
 /* ─── Mobile-friendly overrides ──────────────────────────── */

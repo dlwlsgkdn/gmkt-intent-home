@@ -1,20 +1,85 @@
 /* ─── Page loading overlay ──────────────────────────────── */
-function showPageLoading(label = "") {
-    const overlay = document.getElementById("page-loading-overlay");
-    const labelEl = document.getElementById("page-loading-label");
+let _aiLoadingInterval = null;
+let _aiProgressInterval = null;
+
+const AI_SUB_MESSAGES = [
+    "고객님의 구매 패턴을 학습하고 있어요",
+    "수천 개의 상품 데이터를 비교하고 있어요",
+    "최적의 가성비 조합을 계산하고 있어요",
+    "리뷰와 평점을 종합 분석하고 있어요",
+    "비슷한 고객들의 선택을 참고하고 있어요",
+    "할인·쿠폰 적용 가능 여부를 확인하고 있어요",
+    "배송 조건까지 고려해서 추천드릴게요",
+];
+
+function showPageLoading(label = "", mode = "default") {
+    const overlay  = document.getElementById("page-loading-overlay");
+    const labelEl  = document.getElementById("page-loading-label");
+    const subEl    = document.getElementById("page-loading-sublabel");
+    const bar      = document.getElementById("ai-progress-bar");
+    const bookEl   = document.getElementById("loading-book");
     if (!overlay) return;
+
+    // mode 설정
+    overlay.dataset.mode = mode;
+    if (bookEl) bookEl.classList.toggle("hidden", mode !== "book");
+
     if (labelEl) labelEl.textContent = label;
     overlay.classList.add("active");
+
+    /* 서브텍스트 순환 */
+    let idx = Math.floor(Math.random() * AI_SUB_MESSAGES.length);
+    if (subEl) {
+        subEl.style.opacity = "0";
+        setTimeout(() => { subEl.textContent = AI_SUB_MESSAGES[idx]; subEl.style.opacity = "1"; }, 100);
+    }
+    clearInterval(_aiLoadingInterval);
+    _aiLoadingInterval = setInterval(() => {
+        if (!subEl) return;
+        subEl.style.opacity = "0";
+        setTimeout(() => {
+            idx = (idx + 1) % AI_SUB_MESSAGES.length;
+            subEl.textContent = AI_SUB_MESSAGES[idx];
+            subEl.style.opacity = "1";
+        }, 300);
+    }, 2200);
+
+    /* 프로그레스 바 */
+    if (bar) {
+        bar.style.width = "0%";
+        let progress = 0;
+        clearInterval(_aiProgressInterval);
+        _aiProgressInterval = setInterval(() => {
+            progress += Math.random() * 12 + 3;
+            if (progress > 90) progress = 90;
+            bar.style.width = progress + "%";
+        }, 400);
+    }
 }
 
 function hidePageLoading() {
-    const overlay = document.getElementById("page-loading-overlay");
+    const overlay  = document.getElementById("page-loading-overlay");
+    const bar      = document.getElementById("ai-progress-bar");
+    const subEl    = document.getElementById("page-loading-sublabel");
+    const bookEl   = document.getElementById("loading-book");
     if (!overlay) return;
-    overlay.classList.remove("active");
+
+    clearInterval(_aiLoadingInterval);
+    clearInterval(_aiProgressInterval);
+
+    /* 프로그레스 100%로 채운 후 닫기 */
+    if (bar) bar.style.width = "100%";
+    setTimeout(() => {
+        overlay.classList.remove("active");
+        overlay.dataset.mode = "default";
+        if (bar) bar.style.width = "0%";
+        if (subEl) { subEl.textContent = ""; subEl.style.opacity = "0"; }
+        if (bookEl) bookEl.classList.add("hidden");
+    }, 350);
 }
 
-function withLoading(label, delayMs, fn) {
-    showPageLoading(label);
+function withLoading(label, delayMs, fn, mode = "default") {
+    showPageLoading(label, mode);
     setTimeout(() => {
         fn();
         hidePageLoading();
@@ -930,7 +995,7 @@ function executeSearch(query, options = {}) {
     const goToInfoView = (intent) => {
         state.currentIntent = intent;
         state.rawQuery = query;
-        withLoading("맞춤 조건을 불러오는 중...", 800, () => {
+        withLoading("맞춤 조건을 불러오는 중...", 2000, () => {
             renderInfoView(intent);
             infoView?.classList.remove("hidden");
             infoView?.classList.add("flex");
@@ -1104,12 +1169,12 @@ window.generatePlan = function generatePlan() {
     }
 
     saveSearchHistory();
-    withLoading("AI가 최적의 상품을 분석 중...", 1200, () => {
+    withLoading("AI가 최적의 상품을 분석 중...", 2800, () => {
         solutionView?.classList.remove("hidden");
         renderSolution(state.currentIntent, state.rawQuery);
         solutionView?.scrollIntoView({ behavior: "smooth" });
         updateBottomCheckoutBar();
-    });
+    }, "book");
 };
 
 window.openPDP = function openPDP(stepIdx, prodIdx) {
