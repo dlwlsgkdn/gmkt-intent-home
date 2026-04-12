@@ -26,13 +26,17 @@ body {
     background-color: #f0f7ff !important;
 }
 
-#pdp-overlay {
+#pdp-overlay,
+#delivery-overlay,
+#claim-status-overlay {
     position: fixed;
     inset: 0;
     transition: visibility 0s, opacity 0.3s ease;
 }
 
-#pdp-floating-card {
+#pdp-floating-card,
+#delivery-floating-card,
+#claim-status-floating-card {
     position: fixed;
     right: 0;
     transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
@@ -44,21 +48,34 @@ body {
 }
 
 @media (min-width: 640px) {
-    #pdp-floating-card {
+    #pdp-floating-card,
+    #delivery-floating-card,
+    #claim-status-floating-card {
         top: 5rem;
         height: calc(100vh - 5rem);
     }
 }
 
-.pdp-active #pdp-overlay {
+.pdp-active #pdp-overlay,
+.delivery-panel-active #delivery-overlay,
+.claim-status-active #claim-status-overlay {
     visibility: visible;
     opacity: 1;
     pointer-events: auto;
 }
 
-.pdp-active #pdp-floating-card {
+.pdp-active #pdp-floating-card,
+.delivery-panel-active #delivery-floating-card,
+.claim-status-active #claim-status-floating-card {
     transform: translateX(0);
     opacity: 1;
+}
+
+.pdp-active #pdp-backdrop,
+.delivery-panel-active #delivery-backdrop,
+.claim-status-active #claim-status-backdrop {
+    opacity: 1;
+    pointer-events: auto;
 }
 
 .speech-bubble::after {
@@ -385,6 +402,54 @@ header {
 
 .purpose-cart-group:hover {
     box-shadow: 0 8px 24px -8px rgba(15, 23, 42, 0.12);
+}
+
+.purpose-cart-accordion-header {
+    cursor: pointer;
+    user-select: none;
+}
+
+.purpose-cart-accordion-header:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: -2px;
+}
+
+.purpose-cart-summary-preview {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.purpose-cart-chevron {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 9999px;
+    background: #f8fafc;
+    color: #64748b;
+    transition: transform 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+.purpose-cart-accordion-header:hover .purpose-cart-chevron {
+    background: #e2e8f0;
+    color: #334155;
+}
+
+.purpose-cart-chevron.is-expanded {
+    transform: rotate(180deg);
+}
+
+.purpose-cart-group-expanded .purpose-cart-items,
+.purpose-cart-group-expanded .purpose-cart-footer {
+    animation: cartAccordionReveal 0.2s ease;
+}
+
+@keyframes cartAccordionReveal {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 .cart-item {

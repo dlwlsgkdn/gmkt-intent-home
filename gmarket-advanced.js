@@ -150,8 +150,11 @@ const state = {
     choices: { size: "", wall: "", goal: "" },
     searchHistory: [],
     isHistoryPanelCollapsed: false,
+    cartAccordionSessionId: "",
     purposeCart: {},      // { sessionId: { intentKey, intentLabel, rawQuery, choices, selectedItems: { stepIdx: { productIdx, product } } } }
-    activeTab: "cart"
+    activeTab: "cart",
+    latestOrder: null,
+    activeDeliveryItemIndex: 0
 };
 
 /* ─── History persistence ───────────────────────────────────── */
@@ -220,6 +223,7 @@ function normalizeCartData(cartData) {
             choices: value.choices || { size: "", wall: "", goal: "" },
             selectedItems: value.selectedItems || {},
             threadView: value.threadView || "solution",
+            orderMeta: value.orderMeta || null,
             createdAt: value.createdAt || new Date().toISOString(),
             updatedAt: value.updatedAt || new Date().toISOString()
         };
@@ -240,6 +244,7 @@ function createCartSession(intentKey) {
             choices: { ...state.choices },
             selectedItems: {},
             threadView: "solution",
+            orderMeta: null,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         }
@@ -264,6 +269,51 @@ function getSessionSelectionState(intentKey, stepIdx) {
     return active?.session?.selectedItems?.[stepIdx] || null;
 }
 
+function setSessionThreadView(sessionId, threadView) {
+    const session = getCartSession(sessionId);
+    if (!session) return;
+
+    session.threadView = threadView;
+    session.updatedAt = new Date().toISOString();
+}
+
+function buildSessionOrderItems(sessionId) {
+    const session = getCartSession(sessionId);
+    const intentData = solutionData[session?.intentKey];
+    if (!session || !intentData) {
+        return { itemsHtml: "", subtotal: 0, itemCount: 0 };
+    }
+
+    let subtotal = 0;
+    let itemCount = 0;
+    let itemsHtml = "";
+
+    intentData.steps.forEach((step, stepIdx) => {
+        const selected = session.selectedItems[stepIdx];
+        if (!selected) return;
+
+        const priceNum = parseInt(selected.product.price.replace(/,/g, ""), 10) || 0;
+        subtotal += priceNum;
+        itemCount += 1;
+
+        itemsHtml += `
+            <div class="flex items-center gap-4 py-3 border-b border-slate-100 last:border-0">
+                <img src="${selected.product.img}" class="w-14 h-14 rounded-2xl object-cover flex-shrink-0 border border-slate-100"
+                     onerror="this.src='https://images.unsplash.com/photo-1560393464-5c69a73c5770?auto=format&fit=crop&q=80&w=100'"
+                     alt="${selected.product.name}">
+                <div class="flex-1 min-w-0">
+                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">${step.name}</p>
+                    <p class="text-sm font-bold text-slate-800 leading-tight truncate">${selected.product.name}</p>
+                    <p class="text-xs text-slate-400 font-bold mt-0.5">\uC218\uB7C9 1\uAC1C</p>
+                </div>
+                <p class="text-sm font-bold text-slate-800 flex-shrink-0">${selected.product.price}\uC6D0</p>
+            </div>
+        `;
+    });
+
+    return { itemsHtml, subtotal, itemCount };
+}
+
 function calculateSessionTotals(session) {
     return Object.values(session?.selectedItems || {}).reduce(
         (acc, { product }) => {
@@ -273,6 +323,92 @@ function calculateSessionTotals(session) {
         },
         { count: 0, price: 0 }
     );
+}
+
+const DELIVERY_STAGES = [
+    {
+        label: "\uACB0\uC81C\uC644\uB8CC",
+        description: "\uC8FC\uBB38\uACFC \uACB0\uC81C\uAC00 \uC815\uC0C1\uC801\uC73C\uB85C \uC811\uC218\uB418\uC5C8\uC5B4\uC694."
+    },
+    {
+        label: "\uC0C1\uD488\uC900\uBE44\uC911",
+        description: "\uD310\uB9E4\uC790\uAC00 \uC7AC\uACE0\uB97C \uD655\uC778\uD558\uACE0 \uC548\uC804\uD558\uAC8C \uD3EC\uC7A5\uD558\uACE0 \uC788\uC5B4\uC694."
+    },
+    {
+        label: "\uCD9C\uACE0\uC900\uBE44\uC911",
+        description: "\uD0DD\uBC30\uC0AC \uC778\uACC4\uB97C \uC704\uD574 \uC1A1\uC7A5 \uB4F1\uB85D\uACFC \uC9D1\uD654 \uC900\uBE44\uB97C \uC9C4\uD589\uD558\uACE0 \uC788\uC5B4\uC694."
+    },
+    {
+        label: "\uBC30\uC1A1\uC644\uB8CC",
+        description: "\uBC30\uC1A1\uC774 \uC644\uB8CC\uB418\uBA74 \uC218\uB839 \uC548\uB0B4\uC640 \uD568\uAED8 \uC0C1\uD0DC\uAC00 \uC5C5\uB370\uC774\uD2B8\uB3FC\uC694."
+    }
+];
+
+function formatDeliveryDate(dateLike) {
+    try {
+        return new Intl.DateTimeFormat("ko-KR", {
+            month: "long",
+            day: "numeric",
+            weekday: "short"
+        }).format(new Date(dateLike));
+    } catch (error) {
+        return "";
+    }
+}
+
+function getDeliveryStatusMeta(statusIndex) {
+    const safeIndex = Math.max(0, Math.min(statusIndex, DELIVERY_STAGES.length - 1));
+    const stage = DELIVERY_STAGES[safeIndex];
+    const progressMap = [18, 42, 68, 100];
+    const badgeClassMap = [
+        "bg-slate-100 text-slate-600",
+        "bg-amber-50 text-amber-600",
+        "bg-blue-50 text-blue-600",
+        "bg-emerald-50 text-emerald-600"
+    ];
+
+    return {
+        ...stage,
+        progress: progressMap[safeIndex],
+        badgeClass: badgeClassMap[safeIndex]
+    };
+}
+
+function buildLatestOrderData(sessionId, orderNumber) {
+    const session = getCartSession(sessionId);
+    const intentData = solutionData[session?.intentKey];
+    if (!session || !intentData) return null;
+
+    const now = new Date();
+    const selectedEntries = Object.entries(session.selectedItems || {})
+        .sort((a, b) => Number(a[0]) - Number(b[0]));
+
+    const items = selectedEntries.map(([stepIdx, selected], index) => {
+        const step = intentData.steps[stepIdx];
+        const expectedDate = new Date(now.getTime() + (index % 2 === 0 ? 2 : 3) * 24 * 60 * 60 * 1000);
+        return {
+            stepName: step?.name || `Step ${Number(stepIdx) + 1}`,
+            product: selected.product,
+            expectedDate: expectedDate.toISOString(),
+            courier: "\uC2A4\uB9C8\uC77C\uBC30\uC1A1",
+            trackingNumber: `${orderNumber}-${String(index + 1).padStart(2, "0")}`,
+            statusIndex: index === 0 ? 2 : 1
+        };
+    });
+
+    return {
+        sessionId,
+        intentKey: session.intentKey,
+        orderNumber,
+        createdAt: now.toISOString(),
+        recipient: {
+            name: document.getElementById("order-name")?.value || "",
+            phone: document.getElementById("order-phone")?.value || "",
+            address: `${document.getElementById("order-address")?.value || ""} ${document.getElementById("order-address-detail")?.value || ""}`.trim()
+        },
+        items,
+        totalPrice: calculateSessionTotals(session).price
+    };
 }
 
 function hydrateSessionContext(sessionId) {
@@ -296,7 +432,11 @@ function hydrateSessionContext(sessionId) {
 }
 
 function getCurrentVisibleThreadView() {
-    if (!document.getElementById("order-complete-view")?.classList.contains("hidden")) return "complete";
+    if (getSessionEffectiveThreadView(getCartSession(state.currentSessionId)) === "claim") return "claim";
+    if (!document.getElementById("order-claim-view")?.classList.contains("hidden")) return "claim";
+    if (!document.getElementById("order-complete-view")?.classList.contains("hidden")) {
+        return getCartSession(state.currentSessionId)?.orderMeta?.purchaseConfirmed ? "confirmed" : "complete";
+    }
     if (!document.getElementById("order-view")?.classList.contains("hidden")) return "order";
     if (!document.getElementById("solution-view")?.classList.contains("hidden")) return "solution";
     return "info";
@@ -307,6 +447,7 @@ function hideThreadViews() {
     const solutionView = document.getElementById("solution-view");
     const orderView = document.getElementById("order-view");
     const completeView = document.getElementById("order-complete-view");
+    const claimView = document.getElementById("order-claim-view");
 
     infoView?.classList.add("hidden");
     infoView?.classList.remove("flex");
@@ -315,6 +456,10 @@ function hideThreadViews() {
     orderView?.classList.remove("flex", "flex-col");
     completeView?.classList.add("hidden");
     completeView?.classList.remove("flex", "flex-col");
+    claimView?.classList.add("hidden");
+    claimView?.classList.remove("flex", "flex-col");
+    closeDeliveryPanel();
+    closeClaimStatusPanel();
 }
 
 function showSolutionThread(session) {
@@ -323,11 +468,17 @@ function showSolutionThread(session) {
 
     hideThreadViews();
     closePDP();
+    closeDeliveryPanel();
+
+    setSessionThreadView(state.currentSessionId, "solution");
+    persistCart();
+    renderCart();
 
     renderInfoView(session.intentKey);
     renderSolution(session.intentKey, session.rawQuery || session.intentLabel || session.intentKey);
     updateProductCardCartState(session.intentKey);
     updateBottomCheckoutBar();
+    syncTransactionLocks(state.currentSessionId);
 
     solutionView.classList.remove("hidden");
 
@@ -335,6 +486,42 @@ function showSolutionThread(session) {
         solutionView.scrollIntoView({ behavior: "smooth", block: "start" });
     });
 }
+
+window.showSolutionThread = showSolutionThread;
+
+function renderThreadBase(session, options = {}) {
+    const { scrollIntoView = false, persistView = false } = options;
+    const solutionView = document.getElementById("solution-view");
+    if (!session || !solutionView) return false;
+
+    hideThreadViews();
+    closePDP();
+    closeDeliveryPanel();
+
+    renderInfoView(session.intentKey);
+    renderSolution(session.intentKey, session.rawQuery || session.intentLabel || session.intentKey);
+    updateProductCardCartState(session.intentKey);
+    updateBottomCheckoutBar();
+    syncTransactionLocks(state.currentSessionId);
+
+    solutionView.classList.remove("hidden");
+
+    if (persistView) {
+        setSessionThreadView(state.currentSessionId, "solution");
+        persistCart();
+        renderCart();
+    }
+
+    if (scrollIntoView) {
+        requestAnimationFrame(() => {
+            solutionView.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+    }
+
+    return true;
+}
+
+window.renderThreadBase = renderThreadBase;
 
 /* ─── History panel collapse ────────────────────────────────── */
 
@@ -418,6 +605,64 @@ function buildCartGroupSummary(cartGroup, intentData) {
     if (cartGroup?.selectionSummary) return cartGroup.selectionSummary;
     if (cartGroup?.rawQuery) return `"${cartGroup.rawQuery}" 기준 추천`;
     return intentData?.intentReason || "";
+}
+
+function getClaimTypeLabel(type) {
+    const labelMap = {
+        cancel: "\uCDE8\uC18C",
+        return: "\uBC18\uD488",
+        exchange: "\uAD50\uD658"
+    };
+    return labelMap[type] || "\uC2E0\uCCAD";
+}
+
+function getClaimPhaseLabel(claimMeta) {
+    if (!claimMeta?.status) return "\uCDE8\uC18C/\uBC18\uD488/\uAD50\uD658 \uC2E0\uCCAD";
+    return `${getClaimTypeLabel(claimMeta.type)} \uC9C4\uD589\uC911`;
+}
+
+function getSessionEffectiveThreadView(session) {
+    if (!session) return "solution";
+    if (session.orderMeta?.claimMeta?.status) return "claim";
+    if (session.orderMeta?.purchaseConfirmed) return "confirmed";
+    return session.threadView || "solution";
+}
+
+function getThreadPhaseRank(threadView) {
+    const rankMap = {
+        info: 0,
+        solution: 0,
+        order: 1,
+        complete: 2,
+        claim: 3,
+        confirmed: 4
+    };
+    return rankMap[threadView] ?? 0;
+}
+
+function syncTransactionLocks(sessionId = state.currentSessionId) {
+    const session = getCartSession(sessionId);
+    const effectiveThreadView = getSessionEffectiveThreadView(session);
+    const phaseRank = getThreadPhaseRank(effectiveThreadView);
+    const toggleDisabled = (selector, disabled) => {
+        document.querySelectorAll(selector).forEach((element) => {
+            element.disabled = disabled;
+            element.classList.toggle("opacity-50", disabled);
+            element.classList.toggle("cursor-not-allowed", disabled);
+        });
+    };
+
+    toggleDisabled("#info-view button", phaseRank >= 1);
+    toggleDisabled("[data-cart-btn], #pdp-cart-btn", phaseRank >= 1);
+    toggleDisabled("#order-view input, #order-view select, #order-view textarea, #order-view button", phaseRank >= 2);
+    toggleDisabled("#complete-delivery-btn, #complete-claim-btn, #complete-confirm-btn", phaseRank >= 3);
+
+    syncCompleteActionButtons(session?.orderMeta || null);
+    syncClaimFormState(session?.orderMeta?.claimMeta || {});
+
+    if (phaseRank >= 3) {
+        toggleDisabled("#complete-delivery-btn, #complete-claim-btn, #complete-confirm-btn", true);
+    }
 }
 
 function saveSearchHistory() {
@@ -583,6 +828,9 @@ window.removeFromCart = function removeFromCart(intentKey, stepIdx, sessionIdOve
 
     if (!Object.keys(cartSession.selectedItems).length) {
         delete state.purposeCart[sessionId];
+        if (state.cartAccordionSessionId === sessionId) {
+            state.cartAccordionSessionId = "";
+        }
         if (state.currentSessionId === sessionId) {
             state.currentSessionId = "";
         }
@@ -601,6 +849,9 @@ window.clearCartIntent = function clearCartIntent(sessionId) {
     if (!cartSession) return;
 
     delete state.purposeCart[sessionId];
+    if (state.cartAccordionSessionId === sessionId) {
+        state.cartAccordionSessionId = "";
+    }
     if (state.currentSessionId === sessionId) {
         state.currentSessionId = "";
     }
@@ -656,6 +907,11 @@ function updateProductCardCartState(intentKey) {
 
 /* ─── Cart rendering ─────────────────────────────────────────── */
 
+window.toggleCartAccordion = function toggleCartAccordion(sessionId) {
+    state.cartAccordionSessionId = state.cartAccordionSessionId === sessionId ? "" : sessionId;
+    renderCart();
+};
+
 function renderCart() {
     const cartContent = document.getElementById("cart-content");
     const cartEmpty = document.getElementById("cart-empty");
@@ -663,15 +919,20 @@ function renderCart() {
     if (!cartContent || !cartEmpty) return;
 
     const cartKeys = Object.keys(state.purposeCart).sort((a, b) => {
-        const aTime = new Date(state.purposeCart[a]?.updatedAt || 0).getTime();
-        const bTime = new Date(state.purposeCart[b]?.updatedAt || 0).getTime();
+        const aTime = new Date(state.purposeCart[a]?.createdAt || 0).getTime();
+        const bTime = new Date(state.purposeCart[b]?.createdAt || 0).getTime();
         return bTime - aTime;
     });
 
     if (!cartKeys.length) {
+        state.cartAccordionSessionId = "";
         cartContent.classList.add("hidden");
         cartEmpty.classList.remove("hidden");
         return;
+    }
+
+    if (state.cartAccordionSessionId && !cartKeys.includes(state.cartAccordionSessionId)) {
+        state.cartAccordionSessionId = "";
     }
 
     cartEmpty.classList.add("hidden");
@@ -683,6 +944,17 @@ function renderCart() {
         if (!intentData) return "";
         const groupSummary = buildCartGroupSummary(cartGroup, intentData);
         const { count: selectedCount, price: subtotal } = calculateSessionTotals(cartGroup);
+        const effectiveThreadView = getSessionEffectiveThreadView(cartGroup);
+        const phaseLabelMap = {
+            solution: "\uC0C1\uD488 \uBE44\uAD50 \uC911",
+            order: "\uC8FC\uBB38\uC11C \uC791\uC131 \uC911",
+            complete: "\uC8FC\uBB38 \uC644\uB8CC",
+            claim: "\uCDE8\uC18C/\uBC18\uD488/\uAD50\uD658 \uC2E0\uCCAD",
+            confirmed: "\uAD6C\uB9E4\uD655\uC815"
+        };
+        const phaseLabel = effectiveThreadView === "claim"
+            ? getClaimPhaseLabel(cartGroup.orderMeta?.claimMeta)
+            : (phaseLabelMap[effectiveThreadView] || "\uC0C1\uD488 \uBE44\uAD50 \uC911");
         let hasEssentialMissing = false;
 
         const stepsHtml = intentData.steps.map((step, stepIdx) => {
@@ -737,16 +1009,17 @@ function renderCart() {
             : (hasEssentialMissing ? "border-amber-200 bg-white" : "border-slate-200 bg-white");
 
         return `
-            <div class="purpose-cart-group border ${groupBorder}">
+            <div class="purpose-cart-group border ${groupBorder}" data-session-id="${sessionId}">
                 <div class="purpose-cart-header px-4 pt-4 pb-3 border-b border-slate-100/80">
                     <div class="flex items-center justify-between">
                         <span class="text-[11px] font-bold text-gmarket-blue uppercase tracking-[0.16em]">${cartGroup.intentLabel || cartGroup.intentKey}</span>
                         <div class="flex items-center gap-2">
                             <span class="purpose-cart-count text-[10px] text-slate-400 font-bold">${selectedCount}/${totalSteps} 선택</span>
-                            <button onclick="clearCartIntent('${sessionId}')" class="text-[10px] text-slate-300 hover:text-red-400 transition-colors font-bold">전체삭제</button>
+                            <button type="button" data-cart-clear="true" onclick="clearCartIntent('${sessionId}')" class="text-[10px] text-slate-300 hover:text-red-400 transition-colors font-bold">전체삭제</button>
                         </div>
                     </div>
-                    ${groupSummary ? `<p class="text-[11px] text-slate-500 font-bold mt-2 leading-relaxed">${groupSummary}</p>` : ""}
+                    ${groupSummary ? `<p class="purpose-cart-summary-preview text-[11px] text-slate-500 font-bold mt-2 leading-relaxed">${groupSummary}</p>` : ""}
+                    <p class="text-[10px] text-slate-400 font-bold mt-2">\uB9C8\uC9C0\uB9C9 \uD398\uC774\uC988: <span class="text-slate-700">${phaseLabel}</span></p>
                     ${hasEssentialMissing ? `<p class="text-[10px] text-amber-500 font-bold mt-1.5 flex items-center gap-1"><span>⚠</span> 미선택 필수 상품이 있어요</p>` : ""}
                 </div>
                 <div class="purpose-cart-items px-4 py-3 space-y-2">
@@ -754,16 +1027,65 @@ function renderCart() {
                 </div>
                 <div class="purpose-cart-footer px-4 pb-4 pt-2 border-t border-slate-100">
                     <div class="flex justify-between items-center mb-3">
-                        <span class="text-xs text-slate-400 font-bold">합계</span>
-                        <span class="text-sm font-bold text-slate-800">${subtotal.toLocaleString()}원</span>
+                        <span class="text-xs text-slate-400 font-bold">\uD569\uACC4</span>
+                        <span class="text-sm font-bold text-slate-800">${subtotal.toLocaleString()}\uC6D0</span>
                     </div>
-                    <div class="grid grid-cols-1">
-                        <button onclick="checkoutCart('${sessionId}')" class="w-full py-2.5 bg-gmarket-blue text-white text-sm rounded-xl font-bold transition-all hover:bg-blue-600 active:scale-95">일괄 결제하고 완수하기</button>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="moveToCartThread('${sessionId}')" class="w-full py-2.5 bg-slate-100 text-slate-700 text-sm rounded-xl font-bold transition-all hover:bg-slate-200 active:scale-95">\uC4F0\uB808\uB4DC \uC774\uB3D9</button>
+                        <button onclick="checkoutCart('${sessionId}')" class="w-full py-2.5 bg-gmarket-blue text-white text-sm rounded-xl font-bold transition-all hover:bg-blue-600 active:scale-95">\uC8FC\uBB38\uD558\uAE30</button>
                     </div>
                 </div>
             </div>
         `;
     }).join("");
+
+    cartContent.querySelectorAll(".purpose-cart-group").forEach(groupEl => {
+        const sessionId = groupEl.dataset.sessionId;
+        const headerEl = groupEl.querySelector(".purpose-cart-header");
+        const metaEl = headerEl?.querySelector(".flex.items-center.gap-2");
+        const itemsEl = groupEl.querySelector(".purpose-cart-items");
+        const footerEl = groupEl.querySelector(".purpose-cart-footer");
+        if (!sessionId || !headerEl || !itemsEl || !footerEl) return;
+
+        const isExpanded = state.cartAccordionSessionId === sessionId;
+        groupEl.classList.toggle("purpose-cart-group-expanded", isExpanded);
+        groupEl.classList.toggle("purpose-cart-group-collapsed", !isExpanded);
+
+        headerEl.classList.add("purpose-cart-accordion-header");
+        headerEl.setAttribute("role", "button");
+        headerEl.setAttribute("tabindex", "0");
+        headerEl.setAttribute("aria-expanded", isExpanded ? "true" : "false");
+
+        itemsEl.classList.toggle("hidden", !isExpanded);
+        footerEl.classList.toggle("hidden", !isExpanded);
+
+        let chevronEl = headerEl.querySelector(".purpose-cart-chevron");
+        if (!chevronEl) {
+            chevronEl = document.createElement("span");
+            chevronEl.className = "purpose-cart-chevron";
+            chevronEl.setAttribute("aria-hidden", "true");
+            chevronEl.innerHTML = `
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.4" d="M6 9l6 6 6-6"></path>
+                </svg>
+            `;
+            (metaEl || headerEl).appendChild(chevronEl);
+        }
+        chevronEl.classList.toggle("is-expanded", isExpanded);
+
+        const toggleAccordion = (event) => {
+            if (event.target.closest("[data-cart-clear='true']")) return;
+            window.toggleCartAccordion(sessionId);
+        };
+
+        headerEl.onclick = toggleAccordion;
+        headerEl.onkeydown = (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                toggleAccordion(event);
+            }
+        };
+    });
 
     updateBottomCheckoutBar();
 }
@@ -792,6 +1114,7 @@ window.openOrderView = function openOrderView(sessionId) {
     if (!cartGroup || !intentData) return;
 
     hydrateSessionContext(sessionId);
+    closeDeliveryPanel();
 
     // 주문 상품 목록 렌더링
     const itemsList = document.getElementById("order-items-list");
@@ -883,17 +1206,479 @@ window.closeOrderView = function closeOrderView() {
 
 window.goBackToSolution = function goBackToSolution() {
     const completeView = document.getElementById("order-complete-view");
+    const claimView = document.getElementById("order-claim-view");
     if (completeView) {
         completeView.classList.add("hidden");
         completeView.classList.remove("flex", "flex-col");
+    }
+    if (claimView) {
+        claimView.classList.add("hidden");
+        claimView.classList.remove("flex", "flex-col");
     }
     const orderView = document.getElementById("order-view");
     if (orderView) {
         orderView.classList.add("hidden");
         orderView.classList.remove("flex", "flex-col");
     }
+    closeDeliveryPanel();
+    closeClaimStatusPanel();
     const solutionView = document.getElementById("solution-view");
     solutionView?.scrollIntoView({ behavior: "smooth", block: "start" });
+};
+
+function syncCompleteActionButtons(orderMeta = null) {
+    const confirmBtn = document.getElementById("complete-confirm-btn");
+    const claimBtn = document.getElementById("complete-claim-btn");
+    if (!confirmBtn) return;
+
+    const isConfirmed = Boolean(orderMeta?.purchaseConfirmed);
+    confirmBtn.disabled = isConfirmed;
+    confirmBtn.textContent = isConfirmed ? "\uAD6C\uB9E4\uD655\uC815 \uC644\uB8CC" : "\uAD6C\uB9E4\uD655\uC815";
+    confirmBtn.classList.toggle("bg-gmarket-blue", !isConfirmed);
+    confirmBtn.classList.toggle("hover:bg-blue-600", !isConfirmed);
+    confirmBtn.classList.toggle("shadow-xl", !isConfirmed);
+    confirmBtn.classList.toggle("shadow-blue-100", !isConfirmed);
+    confirmBtn.classList.toggle("bg-emerald-500", isConfirmed);
+    confirmBtn.classList.toggle("hover:bg-emerald-500", isConfirmed);
+    confirmBtn.classList.toggle("shadow-none", isConfirmed);
+    confirmBtn.classList.toggle("cursor-not-allowed", isConfirmed);
+    confirmBtn.classList.toggle("opacity-70", isConfirmed);
+
+    if (!claimBtn) return;
+    claimBtn.disabled = isConfirmed;
+    claimBtn.classList.toggle("cursor-not-allowed", isConfirmed);
+    claimBtn.classList.toggle("opacity-50", isConfirmed);
+    claimBtn.classList.toggle("hover:bg-slate-200", !isConfirmed);
+    claimBtn.classList.toggle("hover:bg-slate-100", isConfirmed);
+}
+
+function syncClaimTypeButtons(type) {
+    document.querySelectorAll(".claim-type-btn").forEach((button) => {
+        const isActive = button.dataset.claimType === type;
+        button.classList.toggle("bg-white", isActive);
+        button.classList.toggle("border", isActive);
+        button.classList.toggle("border-gmarket-blue", isActive);
+        button.classList.toggle("bg-gmarket-blue/5", isActive);
+        button.classList.toggle("shadow-sm", isActive);
+        button.classList.toggle("text-slate-400", !isActive);
+    });
+
+    document.querySelectorAll(".claim-panel").forEach((panel) => {
+        panel.classList.toggle("hidden", panel.dataset.claimPanel !== type);
+    });
+
+    const claimSubmitBtn = document.getElementById("claim-submit-btn");
+    const labelMap = {
+        cancel: "\uCDE8\uC18C \uC2E0\uCCAD\uD558\uAE30",
+        return: "\uBC18\uD488 \uC2E0\uCCAD\uD558\uAE30",
+        exchange: "\uAD50\uD658 \uC2E0\uCCAD\uD558\uAE30"
+    };
+    if (claimSubmitBtn && !claimSubmitBtn.disabled) {
+        claimSubmitBtn.textContent = labelMap[type] || "\uC2E0\uCCAD\uD558\uAE30";
+    }
+}
+
+function syncClaimFormState(claimMeta = {}) {
+    const isSubmitted = claimMeta.status === "submitted";
+    const claimView = document.getElementById("order-claim-view");
+    const submitBtn = document.getElementById("claim-submit-btn");
+    const statusBtn = document.getElementById("claim-status-btn");
+
+    if (claimView) {
+        claimView.dataset.claimLocked = isSubmitted ? "true" : "false";
+    }
+
+    document.querySelectorAll("#order-claim-view input, #order-claim-view select, #order-claim-view textarea").forEach((field) => {
+        field.disabled = isSubmitted;
+    });
+
+    document.querySelectorAll(".claim-type-btn").forEach((button) => {
+        button.disabled = isSubmitted;
+        button.classList.toggle("opacity-60", isSubmitted);
+        button.classList.toggle("cursor-not-allowed", isSubmitted);
+    });
+
+    if (submitBtn) {
+        submitBtn.classList.toggle("hidden", isSubmitted);
+    }
+
+    if (statusBtn) {
+        statusBtn.classList.toggle("hidden", !isSubmitted);
+        statusBtn.textContent = isSubmitted
+            ? `${getClaimTypeLabel(claimMeta.type)} \uC9C4\uD589 \uC0C1\uD0DC`
+            : "\uC9C4\uD589 \uC0C1\uD0DC";
+    }
+}
+
+function getClaimStatusConfig(claimMeta = {}) {
+    const type = claimMeta.type || "cancel";
+    const baseMap = {
+        cancel: {
+            title: "\uCDE8\uC18C \uC9C4\uD589 \uC0C1\uD0DC",
+            headline: "\uCDE8\uC18C \uC694\uCCAD\uC774 \uC811\uC218\uB418\uC5B4 \uCC98\uB9AC \uC911\uC774\uC5D0\uC694",
+            message: "\uACB0\uC81C \uCDE8\uC18C \uC5EC\uBD80\uB97C \uD655\uC778\uD558\uACE0 \uD658\uBD88 \uC808\uCC28\uB97C \uC9C4\uD589\uD558\uACE0 \uC788\uC5B4\uC694.",
+            badgeClass: "bg-amber-50 text-amber-600",
+            stages: [
+                { label: "\uCDE8\uC18C \uC811\uC218", description: "\uCDE8\uC18C \uC694\uCCAD\uC774 \uC815\uC0C1 \uC811\uC218\uB410\uC5B4\uC694." },
+                { label: "\uC8FC\uBB38 \uD655\uC778 \uC911", description: "\uBC30\uC1A1/\uACB0\uC81C \uC0C1\uD0DC\uB97C \uD655\uC778\uD558\uACE0 \uC788\uC5B4\uC694." },
+                { label: "\uD658\uBD88 \uCC98\uB9AC \uC911", description: "\uC120\uD0DD\uD55C \uD658\uBD88 \uC218\uB2E8\uC73C\uB85C \uCC98\uB9AC \uC911\uC774\uC5D0\uC694." },
+                { label: "\uCDE8\uC18C \uC644\uB8CC", description: "\uCDE8\uC18C \uBC0F \uD658\uBD88\uC774 \uB9C8\uBB34\uB9AC\uB429\uB2C8\uB2E4." }
+            ]
+        },
+        return: {
+            title: "\uBC18\uD488 \uC9C4\uD589 \uC0C1\uD0DC",
+            headline: "\uBC18\uD488 \uC694\uCCAD\uC774 \uC811\uC218\uB418\uC5B4 \uD68C\uC218\uB97C \uC900\uBE44 \uC911\uC774\uC5D0\uC694",
+            message: "\uD68C\uC218 \uC77C\uC815\uC744 \uD655\uC778\uD55C \uB4A4 \uAC80\uC218\uC640 \uD658\uBD88\uC744 \uC9C4\uD589\uD574\uC694.",
+            badgeClass: "bg-blue-50 text-blue-600",
+            stages: [
+                { label: "\uBC18\uD488 \uC811\uC218", description: "\uBC18\uD488 \uC694\uCCAD\uC774 \uC815\uC0C1 \uC811\uC218\uB410\uC5B4\uC694." },
+                { label: "\uD68C\uC218 \uC77C\uC815 \uD655\uC778", description: "\uD68C\uC218 \uD76C\uB9DD\uC77C \uAE30\uC900\uC73C\uB85C \uC77C\uC815\uC744 \uC870\uC728 \uC911\uC774\uC5D0\uC694." },
+                { label: "\uC0C1\uD488 \uAC80\uC218 \uC911", description: "\uD68C\uC218 \uD6C4 \uC0C1\uD488 \uC0C1\uD0DC\uB97C \uD655\uC778\uD558\uACE0 \uC788\uC5B4\uC694." },
+                { label: "\uBC18\uD488 \uC644\uB8CC", description: "\uBC18\uD488 \uBC0F \uD658\uBD88\uC774 \uC644\uB8CC\uB429\uB2C8\uB2E4." }
+            ]
+        },
+        exchange: {
+            title: "\uAD50\uD658 \uC9C4\uD589 \uC0C1\uD0DC",
+            headline: "\uAD50\uD658 \uC694\uCCAD\uC774 \uC811\uC218\uB418\uC5B4 \uC0C8 \uC0C1\uD488\uC744 \uC900\uBE44 \uC911\uC774\uC5D0\uC694",
+            message: "\uD68C\uC218\uC640 \uAD50\uD658 \uC635\uC158 \uD655\uC778\uC744 \uAC70\uCCD0 \uC0C8 \uC0C1\uD488 \uCD9C\uACE0\uB97C \uC900\uBE44\uD574\uC694.",
+            badgeClass: "bg-violet-50 text-violet-600",
+            stages: [
+                { label: "\uAD50\uD658 \uC811\uC218", description: "\uAD50\uD658 \uC694\uCCAD\uC774 \uC815\uC0C1 \uC811\uC218\uB410\uC5B4\uC694." },
+                { label: "\uD68C\uC218 \uBC0F \uC635\uC158 \uD655\uC778", description: "\uAE30\uC874 \uC0C1\uD488 \uD68C\uC218\uC640 \uD76C\uB9DD \uC635\uC158\uC744 \uD655\uC778 \uC911\uC774\uC5D0\uC694." },
+                { label: "\uAD50\uD658 \uC0C1\uD488 \uC900\uBE44", description: "\uC0C8 \uC0C1\uD488 \uCD9C\uACE0\uB97C \uC900\uBE44 \uC911\uC774\uC5D0\uC694." },
+                { label: "\uAD50\uD658 \uC644\uB8CC", description: "\uAD50\uD658 \uCC98\uB9AC\uAC00 \uC644\uB8CC\uB429\uB2C8\uB2E4." }
+            ]
+        }
+    };
+
+    return baseMap[type] || baseMap.cancel;
+}
+
+function formatClaimSubmittedAt(isoString) {
+    if (!isoString) return "-";
+    try {
+        return new Intl.DateTimeFormat("ko-KR", {
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit"
+        }).format(new Date(isoString));
+    } catch (error) {
+        return isoString;
+    }
+}
+
+function renderClaimStatusPanel(sessionId = state.currentSessionId) {
+    const session = getCartSession(sessionId);
+    const claimMeta = session?.orderMeta?.claimMeta;
+    if (!session || !claimMeta?.status) return false;
+
+    const config = getClaimStatusConfig(claimMeta);
+    const currentIndex = 1;
+    const progress = 55;
+    const detailsMap = {
+        cancel: [
+            ["\uCDE8\uC18C \uC0AC\uC720", claimMeta.fields?.cancelReason || claimMeta.reason || "-"],
+            ["\uD658\uBD88 \uBC29\uC2DD", claimMeta.fields?.cancelRefund || "-"],
+            ["\uBA54\uBAA8", claimMeta.fields?.cancelMessage || "-"]
+        ],
+        return: [
+            ["\uBC18\uD488 \uC0AC\uC720", claimMeta.fields?.returnReason || claimMeta.reason || "-"],
+            ["\uD3EC\uC7A5 \uC0C1\uD0DC", claimMeta.fields?.returnCondition || "-"],
+            ["\uD68C\uC218 \uD76C\uB9DD\uC77C", claimMeta.fields?.returnPickup || "-"],
+            ["\uC0C1\uC138", claimMeta.fields?.returnMessage || "-"]
+        ],
+        exchange: [
+            ["\uAD50\uD658 \uC0AC\uC720", claimMeta.fields?.exchangeReason || claimMeta.reason || "-"],
+            ["\uD76C\uB9DD \uC635\uC158", claimMeta.fields?.exchangeOption || "-"],
+            ["\uD68C\uC218 \uD76C\uB9DD\uC77C", claimMeta.fields?.exchangePickup || "-"],
+            ["\uC0C1\uC138", claimMeta.fields?.exchangeMessage || "-"]
+        ]
+    };
+    const details = detailsMap[claimMeta.type] || [];
+
+    const setText = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value;
+    };
+
+    setText("claim-status-title", config.title);
+    setText("claim-status-order-number", session.orderMeta?.orderNumber || "");
+    setText("claim-status-step", config.stages[currentIndex]?.label || "");
+    setText("claim-status-headline", config.headline);
+    setText("claim-status-message", config.message);
+    setText("claim-status-progress-label", `${progress}%`);
+    setText("claim-status-reason", claimMeta.reason || "-");
+    setText("claim-status-submitted-at", formatClaimSubmittedAt(claimMeta.submittedAt));
+
+    const badgeEl = document.getElementById("claim-status-badge");
+    if (badgeEl) {
+        badgeEl.className = `inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold ${config.badgeClass}`;
+        badgeEl.textContent = getClaimPhaseLabel(claimMeta);
+    }
+
+    const progressBarEl = document.getElementById("claim-status-progress-bar");
+    if (progressBarEl) progressBarEl.style.width = `${progress}%`;
+
+    const detailsEl = document.getElementById("claim-status-details");
+    if (detailsEl) {
+        detailsEl.innerHTML = details.map(([label, value]) => `
+            <div class="rounded-[22px] border border-slate-100 bg-slate-50 px-4 py-3">
+                <p class="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">${label}</p>
+                <p class="mt-1 text-sm font-bold text-slate-800 leading-relaxed break-words">${value || "-"}</p>
+            </div>
+        `).join("");
+    }
+
+    const timelineEl = document.getElementById("claim-status-timeline");
+    if (timelineEl) {
+        timelineEl.innerHTML = config.stages.map((stage, index) => {
+            const isDone = index < currentIndex;
+            const isCurrent = index === currentIndex;
+            const dotClass = isDone
+                ? "bg-gmarket-blue border-gmarket-blue"
+                : (isCurrent ? "bg-white border-gmarket-blue" : "bg-white border-slate-200");
+            const titleClass = isCurrent ? "text-slate-900" : (isDone ? "text-slate-700" : "text-slate-400");
+            const textClass = isCurrent ? "text-slate-600" : "text-slate-400";
+            const badge = isCurrent ? "\uC9C4\uD589\uC911" : (isDone ? "\uC644\uB8CC" : "\uB300\uAE30");
+            const badgeClass = isCurrent
+                ? "bg-gmarket-blue/10 text-gmarket-blue"
+                : (isDone ? "bg-slate-100 text-slate-600" : "bg-slate-100 text-slate-400");
+
+            return `
+                <div class="flex gap-4">
+                    <div class="flex flex-col items-center">
+                        <div class="w-4 h-4 rounded-full border-2 ${dotClass}"></div>
+                        ${index < config.stages.length - 1 ? '<div class="mt-2 h-full min-h-[44px] w-px bg-slate-200"></div>' : ""}
+                    </div>
+                    <div class="flex-1 pb-3">
+                        <div class="flex items-center gap-2">
+                            <p class="text-sm font-bold ${titleClass}">${stage.label}</p>
+                            <span class="inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold ${badgeClass}">${badge}</span>
+                        </div>
+                        <p class="mt-1 text-sm leading-relaxed ${textClass}">${stage.description}</p>
+                    </div>
+                </div>
+            `;
+        }).join("");
+    }
+
+    return true;
+}
+
+window.openClaimStatusPanel = function openClaimStatusPanel() {
+    if (!renderClaimStatusPanel()) return;
+    closePDP();
+    closeDeliveryPanel();
+    const scrollArea = document.querySelector("#claim-status-floating-card .overflow-y-auto");
+    if (scrollArea) scrollArea.scrollTop = 0;
+    document.body.classList.add("claim-status-active");
+};
+
+window.closeClaimStatusPanel = function closeClaimStatusPanel() {
+    document.body.classList.remove("claim-status-active");
+};
+
+function fillClaimFields(claimMeta = {}) {
+    const fields = claimMeta.fields || {};
+    const setValue = (id, value = "") => {
+        const element = document.getElementById(id);
+        if (element) element.value = value;
+    };
+
+    setValue("claim-cancel-reason", fields.cancelReason || "\uB2E8\uC21C \uBCC0\uC2EC");
+    setValue("claim-cancel-refund", fields.cancelRefund || "\uC6D0 \uACB0\uC81C\uC218\uB2E8 \uD658\uBD88");
+    setValue("claim-cancel-message", fields.cancelMessage || "");
+
+    setValue("claim-return-reason", fields.returnReason || "\uC0C1\uD488 \uBD88\uB7C9");
+    setValue("claim-return-condition", fields.returnCondition || "\uBBF8\uAC1C\uBD09");
+    setValue("claim-return-pickup", fields.returnPickup || "");
+    setValue("claim-return-message", fields.returnMessage || "");
+
+    setValue("claim-exchange-reason", fields.exchangeReason || "\uC635\uC158 \uBCC0\uACBD");
+    setValue("claim-exchange-option", fields.exchangeOption || "");
+    setValue("claim-exchange-pickup", fields.exchangePickup || "");
+    setValue("claim-exchange-message", fields.exchangeMessage || "");
+}
+
+function collectClaimFields(type) {
+    if (type === "cancel") {
+        return {
+            cancelReason: document.getElementById("claim-cancel-reason")?.value || "\uB2E8\uC21C \uBCC0\uC2EC",
+            cancelRefund: document.getElementById("claim-cancel-refund")?.value || "\uC6D0 \uACB0\uC81C\uC218\uB2E8 \uD658\uBD88",
+            cancelMessage: document.getElementById("claim-cancel-message")?.value || ""
+        };
+    }
+
+    if (type === "return") {
+        return {
+            returnReason: document.getElementById("claim-return-reason")?.value || "\uC0C1\uD488 \uBD88\uB7C9",
+            returnCondition: document.getElementById("claim-return-condition")?.value || "\uBBF8\uAC1C\uBD09",
+            returnPickup: document.getElementById("claim-return-pickup")?.value || "",
+            returnMessage: document.getElementById("claim-return-message")?.value || ""
+        };
+    }
+
+    return {
+        exchangeReason: document.getElementById("claim-exchange-reason")?.value || "\uC635\uC158 \uBCC0\uACBD",
+        exchangeOption: document.getElementById("claim-exchange-option")?.value || "",
+        exchangePickup: document.getElementById("claim-exchange-pickup")?.value || "",
+        exchangeMessage: document.getElementById("claim-exchange-message")?.value || ""
+    };
+}
+
+function renderClaimView(sessionId, options = {}) {
+    const { scrollIntoView = true } = options;
+    const session = getCartSession(sessionId);
+    const orderMeta = session?.orderMeta;
+    const claimView = document.getElementById("order-claim-view");
+    const claimNumber = document.getElementById("claim-order-number");
+    const claimItems = document.getElementById("claim-items-list");
+    const claimSubmitBtn = document.getElementById("claim-submit-btn");
+    if (!session || !orderMeta || !claimView) return false;
+
+    const claimMeta = orderMeta.claimMeta || {};
+    const claimType = claimMeta.type || "cancel";
+    const claimStatus = claimMeta.status || "";
+    const { itemsHtml } = buildSessionOrderItems(sessionId);
+
+    closeDeliveryPanel();
+    closeClaimStatusPanel();
+    claimView.classList.remove("hidden");
+    claimView.classList.add("flex", "flex-col");
+
+    if (claimNumber) claimNumber.textContent = orderMeta.orderNumber || "";
+    if (claimItems) claimItems.innerHTML = itemsHtml;
+    fillClaimFields(claimMeta);
+
+    claimView.dataset.claimType = claimType;
+    syncClaimTypeButtons(claimType);
+    syncClaimFormState(claimMeta);
+
+    if (claimSubmitBtn) {
+        const isSubmitted = claimStatus === "submitted";
+        const submitLabelMap = {
+            cancel: "\uCDE8\uC18C \uC2E0\uCCAD\uD558\uAE30",
+            return: "\uBC18\uD488 \uC2E0\uCCAD\uD558\uAE30",
+            exchange: "\uAD50\uD658 \uC2E0\uCCAD\uD558\uAE30"
+        };
+        claimSubmitBtn.disabled = isSubmitted;
+        claimSubmitBtn.textContent = isSubmitted ? "\uC2E0\uCCAD \uC644\uB8CC" : (submitLabelMap[claimType] || "\uC2E0\uCCAD\uD558\uAE30");
+        claimSubmitBtn.classList.toggle("opacity-70", isSubmitted);
+        claimSubmitBtn.classList.toggle("cursor-not-allowed", isSubmitted);
+    }
+
+    setSessionThreadView(sessionId, "claim");
+    persistCart();
+    renderCart();
+    syncTransactionLocks(sessionId);
+
+    if (scrollIntoView) {
+        requestAnimationFrame(() => {
+            claimView.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+    }
+
+    return true;
+}
+
+window.selectClaimType = function selectClaimType(type) {
+    const claimView = document.getElementById("order-claim-view");
+    if (!claimView) return;
+    if (claimView.dataset.claimLocked === "true") return;
+    claimView.dataset.claimType = type;
+    syncClaimTypeButtons(type);
+};
+
+window.goBackToCompleteFromClaim = function goBackToCompleteFromClaim() {
+    const session = getCartSession(state.currentSessionId);
+    if (!session) return;
+    restoreCompleteThread(state.currentSessionId);
+};
+
+window.openOrderClaimFlow = function openOrderClaimFlow() {
+    if (getCartSession(state.currentSessionId)?.orderMeta?.purchaseConfirmed) {
+        showMiniToast("\uAD6C\uB9E4\uD655\uC815 \uD6C4\uC5D0\uB294 \uCDE8\uC18C/\uBC18\uD488/\uAD50\uD658\uC774 \uBD88\uAC00\uB2A5\uD574\uC694");
+        return;
+    }
+
+    if (!state.latestOrder?.items?.length) {
+        showMiniToast("\uC8FC\uBB38 \uC815\uBCF4\uB97C \uBA3C\uC800 \uBD88\uB7EC\uC640 \uC8FC\uC138\uC694");
+        return;
+    }
+
+    renderClaimView(state.currentSessionId);
+};
+
+window.submitOrderClaim = function submitOrderClaim() {
+    const sessionId = state.currentSessionId;
+    const session = getCartSession(sessionId);
+    const claimView = document.getElementById("order-claim-view");
+    if (!session || !claimView) return;
+
+    const claimType = claimView.dataset.claimType || "cancel";
+    const claimTypeLabelMap = {
+        cancel: "\uCDE8\uC18C",
+        return: "\uBC18\uD488",
+        exchange: "\uAD50\uD658"
+    };
+    const fields = collectClaimFields(claimType);
+
+    if (claimType === "return" && !fields.returnPickup) {
+        showMiniToast("\uBC18\uD488 \uD68C\uC218 \uD76C\uB9DD\uC77C\uC744 \uC120\uD0DD\uD574 \uC8FC\uC138\uC694");
+        return;
+    }
+
+    if (claimType === "exchange" && (!fields.exchangeOption || !fields.exchangePickup)) {
+        showMiniToast("\uAD50\uD658 \uD76C\uB9DD \uC635\uC158\uACFC \uD68C\uC218 \uD76C\uB9DD\uC77C\uC744 \uC785\uB825\uD574 \uC8FC\uC138\uC694");
+        return;
+    }
+
+    session.orderMeta = {
+        ...(session.orderMeta || {}),
+        claimMeta: {
+            type: claimType,
+            reason: fields.cancelReason || fields.returnReason || fields.exchangeReason || "\uB2E8\uC21C \uBCC0\uC2EC",
+            note: fields.cancelMessage || fields.returnMessage || fields.exchangeMessage || "",
+            fields,
+            status: "submitted",
+            submittedAt: new Date().toISOString()
+        }
+    };
+
+    setSessionThreadView(sessionId, "claim");
+    persistCart();
+    renderCart();
+    renderClaimView(sessionId, { scrollIntoView: false });
+    showMiniToast(`${claimTypeLabelMap[claimType]} \uC2E0\uCCAD\uC774 \uC811\uC218\uB410\uC5B4\uC694`, "success");
+};
+
+window.confirmPurchase = function confirmPurchase() {
+    const sessionId = state.currentSessionId;
+    const session = getCartSession(sessionId);
+    if (!session) return;
+
+    const confirmedAt = new Date().toISOString();
+    session.orderMeta = {
+        ...(session.orderMeta || {}),
+        purchaseConfirmed: true,
+        purchaseConfirmedAt: confirmedAt
+    };
+
+    if (state.latestOrder?.sessionId === sessionId) {
+        state.latestOrder = {
+            ...state.latestOrder,
+            purchaseConfirmed: true,
+            purchaseConfirmedAt: confirmedAt
+        };
+    }
+
+    setSessionThreadView(sessionId, "confirmed");
+    persistCart();
+    renderCart();
+    syncCompleteActionButtons(session.orderMeta);
+    syncTransactionLocks(sessionId);
+    showMiniToast("\uAD6C\uB9E4\uD655\uC815\uC774 \uC644\uB8CC\uB410\uC5B4\uC694", "success");
 };
 
 window.submitOrder = function submitOrder() {
@@ -917,6 +1702,9 @@ window.submitOrder = function submitOrder() {
     // 주문번호 생성
     const orderNum = "GM" + Date.now().toString().slice(-8);
     document.getElementById("order-complete-number").textContent = orderNum;
+    state.latestOrder = buildLatestOrderData(state.currentSessionId, orderNum);
+    state.activeDeliveryItemIndex = 0;
+    syncCompleteActionButtons({ purchaseConfirmed: false });
 
     // 주문 상품 복사
     const srcItems = document.getElementById("order-items-list");
@@ -1167,9 +1955,10 @@ function renderInfoView(intent) {
 
     Object.entries(state.choices).forEach(([category, value]) => {
         if (!value) return;
-        const selectedButton = container.querySelector(
-            `[data-choice-category="${category}"][data-choice-value="${value.replace(/"/g, '\\"')}"]`
-        );
+        const selectedButton = Array.from(container.querySelectorAll("button")).find((button) => {
+            if (button.dataset.choiceCategory !== category) return false;
+            return button.dataset.choiceValue === value || button.innerText.trim() === value;
+        });
         selectedButton?.classList.add("active-card", "ring-4", "ring-blue-100");
     });
 }
@@ -1178,7 +1967,7 @@ window.selectChoice = function selectChoice(btn, category) {
     const buttons = btn.parentElement.querySelectorAll("button");
     buttons.forEach((button) => button.classList.remove("active-card", "ring-4", "ring-blue-100"));
     btn.classList.add("active-card", "ring-4", "ring-blue-100");
-    state.choices[category] = btn.innerText.trim();
+    state.choices[category] = btn.dataset.choiceValue || btn.innerText.trim();
 };
 
 window.generatePlan = function generatePlan() {
@@ -1213,6 +2002,8 @@ window.openPDP = function openPDP(stepIdx, prodIdx) {
 
     const product = intentData.steps[stepIdx]?.products[prodIdx];
     if (!product) return;
+
+    closeDeliveryPanel();
 
     document.getElementById("pdp-image").src = product.img;
     document.getElementById("pdp-title").innerText = product.name;
@@ -1297,14 +2088,334 @@ window.closePDP = function closePDP() {
     document.body.classList.remove("pdp-active");
 };
 
-window.continueCartSession = function continueCartSession(sessionId) {
+function renderDeliveryPanel() {
+    const latestOrder = state.latestOrder;
+    if (!latestOrder?.items?.length) return;
+
+    const itemIndex = Math.max(0, Math.min(state.activeDeliveryItemIndex, latestOrder.items.length - 1));
+    state.activeDeliveryItemIndex = itemIndex;
+
+    const currentItem = latestOrder.items[itemIndex];
+    const statusMeta = getDeliveryStatusMeta(currentItem.statusIndex);
+
+    const orderNumberEl = document.getElementById("delivery-order-number");
+    const currentImageEl = document.getElementById("delivery-current-item-image");
+    const currentStatusBadgeEl = document.getElementById("delivery-current-status-badge");
+    const currentStepEl = document.getElementById("delivery-current-step");
+    const currentTitleEl = document.getElementById("delivery-current-item-title");
+    const currentPriceEl = document.getElementById("delivery-current-item-price");
+    const currentMessageEl = document.getElementById("delivery-current-message");
+    const progressLabelEl = document.getElementById("delivery-current-progress-label");
+    const progressBarEl = document.getElementById("delivery-current-progress-bar");
+    const expectedDateEl = document.getElementById("delivery-expected-date");
+    const trackingNumberEl = document.getElementById("delivery-tracking-number");
+    const courierEl = document.getElementById("delivery-courier");
+    const itemCountEl = document.getElementById("delivery-item-count");
+    const itemSelectorListEl = document.getElementById("delivery-item-selector-list");
+    const timelineEl = document.getElementById("delivery-timeline");
+
+    if (orderNumberEl) orderNumberEl.textContent = latestOrder.orderNumber;
+    if (currentImageEl) {
+        currentImageEl.src = currentItem.product.img;
+        currentImageEl.alt = currentItem.product.name;
+    }
+    if (currentStatusBadgeEl) {
+        currentStatusBadgeEl.className = `inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold ${statusMeta.badgeClass}`;
+        currentStatusBadgeEl.textContent = statusMeta.label;
+    }
+    if (currentStepEl) currentStepEl.textContent = currentItem.stepName;
+    if (currentTitleEl) currentTitleEl.textContent = currentItem.product.name;
+    if (currentPriceEl) currentPriceEl.textContent = `${currentItem.product.price}\uC6D0`;
+    if (currentMessageEl) currentMessageEl.textContent = statusMeta.description;
+    if (progressLabelEl) progressLabelEl.textContent = `${statusMeta.progress}%`;
+    if (progressBarEl) progressBarEl.style.width = `${statusMeta.progress}%`;
+    if (expectedDateEl) expectedDateEl.textContent = formatDeliveryDate(currentItem.expectedDate);
+    if (trackingNumberEl) trackingNumberEl.textContent = currentItem.trackingNumber;
+    if (courierEl) courierEl.textContent = `${currentItem.courier} | \uC2E4\uC2DC\uAC04 \uBC30\uC1A1 \uC900\uBE44\uC911`;
+    if (itemCountEl) itemCountEl.textContent = `${latestOrder.items.length}\uAC1C \uC0C1\uD488`;
+
+    if (itemSelectorListEl) {
+        itemSelectorListEl.innerHTML = latestOrder.items.map((item, index) => {
+            const itemStatus = getDeliveryStatusMeta(item.statusIndex);
+            const isActive = index === itemIndex;
+            return `
+                <button
+                    type="button"
+                    onclick="openDeliveryPanel(${index})"
+                    class="w-full rounded-[22px] border px-4 py-4 text-left transition-all ${isActive ? "border-gmarket-blue bg-gmarket-blue/5 shadow-sm" : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white"}">
+                    <div class="flex items-center gap-3">
+                        <img src="${item.product.img}" alt="${item.product.name}" class="w-14 h-14 rounded-2xl object-cover border border-slate-100 bg-white flex-shrink-0">
+                        <div class="min-w-0 flex-1">
+                            <div class="flex flex-wrap items-center gap-2 mb-1.5">
+                                <span class="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">${item.stepName}</span>
+                                <span class="inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold ${itemStatus.badgeClass}">${itemStatus.label}</span>
+                            </div>
+                            <p class="text-sm font-bold text-slate-800 truncate">${item.product.name}</p>
+                            <p class="mt-1 text-xs font-bold text-slate-400">\uB3C4\uCC29 \uC608\uC815 ${formatDeliveryDate(item.expectedDate)}</p>
+                        </div>
+                        <svg class="w-5 h-5 flex-shrink-0 ${isActive ? "text-gmarket-blue" : "text-slate-300"}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                    </div>
+                </button>
+            `;
+        }).join("");
+    }
+
+    if (timelineEl) {
+        timelineEl.innerHTML = DELIVERY_STAGES.map((stage, index) => {
+            const isDone = index < currentItem.statusIndex;
+            const isCurrent = index === currentItem.statusIndex;
+            const dotClass = isDone
+                ? "bg-gmarket-blue border-gmarket-blue"
+                : (isCurrent ? "bg-white border-gmarket-blue" : "bg-white border-slate-200");
+            const titleClass = isCurrent ? "text-slate-900" : (isDone ? "text-slate-700" : "text-slate-400");
+            const textClass = isCurrent ? "text-slate-600" : "text-slate-400";
+            const badge = isCurrent ? "\uD604\uC7AC" : (isDone ? "\uC644\uB8CC" : "\uB300\uAE30");
+            const badgeClass = isCurrent
+                ? "bg-gmarket-blue/10 text-gmarket-blue"
+                : (isDone ? "bg-slate-100 text-slate-600" : "bg-slate-100 text-slate-400");
+
+            return `
+                <div class="flex gap-4">
+                    <div class="flex flex-col items-center">
+                        <div class="w-4 h-4 rounded-full border-2 ${dotClass}"></div>
+                        ${index < DELIVERY_STAGES.length - 1 ? '<div class="mt-2 h-full min-h-[44px] w-px bg-slate-200"></div>' : ""}
+                    </div>
+                    <div class="flex-1 pb-3">
+                        <div class="flex items-center gap-2">
+                            <p class="text-sm font-bold ${titleClass}">${stage.label}</p>
+                            <span class="inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold ${badgeClass}">${badge}</span>
+                        </div>
+                        <p class="mt-1 text-sm leading-relaxed ${textClass}">${stage.description}</p>
+                    </div>
+                </div>
+            `;
+        }).join("");
+    }
+}
+
+window.openDeliveryPanel = function openDeliveryPanel(itemIndex = state.activeDeliveryItemIndex || 0) {
+    if (!state.latestOrder?.items?.length) return;
+
+    state.activeDeliveryItemIndex = Number.isFinite(Number(itemIndex)) ? Number(itemIndex) : 0;
+    closePDP();
+    closeClaimStatusPanel();
+    renderDeliveryPanel();
+
+    const scrollArea = document.querySelector("#delivery-floating-card .overflow-y-auto");
+    if (scrollArea) scrollArea.scrollTop = 0;
+    document.body.classList.add("delivery-panel-active");
+};
+
+window.closeDeliveryPanel = function closeDeliveryPanel() {
+    document.body.classList.remove("delivery-panel-active");
+};
+
+function restoreOrderThread(sessionId, options = {}) {
+    const { scrollIntoView = false } = options;
+    const session = getCartSession(sessionId);
+    if (!session) return false;
+
+    const itemsList = document.getElementById("order-items-list");
+    const priceBreakdown = document.getElementById("order-price-breakdown");
+    const totalPriceEl = document.getElementById("order-total-price");
+    const orderView = document.getElementById("order-view");
+    const completeView = document.getElementById("order-complete-view");
+    const claimView = document.getElementById("order-claim-view");
+    const submitBtn = document.getElementById("order-submit-btn");
+    const { itemsHtml, subtotal, itemCount } = buildSessionOrderItems(sessionId);
+
+    const breakdownHtml = `
+        <div class="flex justify-between text-slate-500">
+            <span>\uC0C1\uD488 \uAE08\uC561${itemCount ? ` (${itemCount}\uAC1C)` : ""}</span>
+            <span>${subtotal.toLocaleString()}\uC6D0</span>
+        </div>
+        <div class="flex justify-between text-slate-500">
+            <span>\uBC30\uC1A1\uBE44</span>
+            <span class="text-green-500 font-bold">\uBB34\uB8CC</span>
+        </div>
+    `;
+
+    if (itemsList) itemsList.innerHTML = itemsHtml;
+    if (priceBreakdown) priceBreakdown.innerHTML = breakdownHtml;
+    if (totalPriceEl) totalPriceEl.textContent = `${subtotal.toLocaleString()}\uC6D0`;
+
+    if (completeView) {
+        completeView.classList.add("hidden");
+        completeView.classList.remove("flex", "flex-col");
+    }
+    if (claimView) {
+        claimView.classList.add("hidden");
+        claimView.classList.remove("flex", "flex-col");
+    }
+    if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "\uACB0\uC81C\uD558\uAE30";
+    }
+    if (orderView) {
+        orderView.classList.remove("hidden");
+        orderView.classList.add("flex", "flex-col");
+        if (scrollIntoView) {
+            orderView.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+    }
+
+    syncTransactionLocks(sessionId);
+
+    return true;
+}
+
+function restoreCompleteThread(sessionId) {
+    const session = getCartSession(sessionId);
+    const orderMeta = session?.orderMeta;
+    if (!session || !orderMeta) return false;
+
+    const completeName = document.getElementById("complete-name");
+    const completePhone = document.getElementById("complete-phone");
+    const completeAddress = document.getElementById("complete-address");
+    const completeNumber = document.getElementById("order-complete-number");
+    const completeItems = document.getElementById("complete-items-list");
+    const completeTotal = document.getElementById("complete-total-price");
+    const completeView = document.getElementById("order-complete-view");
+    const claimView = document.getElementById("order-claim-view");
+    const { itemsHtml, subtotal } = buildSessionOrderItems(sessionId);
+
+    if (completeName) completeName.textContent = orderMeta.recipient?.name || "";
+    if (completePhone) completePhone.textContent = orderMeta.recipient?.phone || "";
+    if (completeAddress) completeAddress.textContent = orderMeta.recipient?.address || "";
+    if (completeNumber) completeNumber.textContent = orderMeta.orderNumber || "";
+    if (completeItems) completeItems.innerHTML = itemsHtml;
+    if (completeTotal) completeTotal.textContent = orderMeta.totalPrice || `${subtotal.toLocaleString()}\uC6D0`;
+
+    state.latestOrder = orderMeta.latestOrder || null;
+    state.activeDeliveryItemIndex = 0;
+    syncCompleteActionButtons(orderMeta);
+
+    if (completeView) {
+        completeView.classList.remove("hidden");
+        completeView.classList.add("flex", "flex-col");
+        completeView.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    if (claimView) {
+        claimView.classList.add("hidden");
+        claimView.classList.remove("flex", "flex-col");
+    }
+
+    setSessionThreadView(
+        sessionId,
+        orderMeta.claimMeta?.status ? "claim" : (orderMeta.purchaseConfirmed ? "confirmed" : "complete")
+    );
+    persistCart();
+    renderCart();
+    syncTransactionLocks(sessionId);
+
+    return true;
+}
+
+function restoreClaimThread(sessionId) {
+    const session = getCartSession(sessionId);
+    if (!session || !session.orderMeta) return false;
+
+    return renderClaimView(sessionId);
+}
+
+window.moveToCartThread = function moveToCartThread(sessionId) {
     const session = getCartSession(sessionId);
     if (!session) return;
+    const effectiveThreadView = getSessionEffectiveThreadView(session);
 
     hydrateSessionContext(sessionId);
-    renderCart();
     closeHistorySidebar();
-    showSolutionThread(session);
+
+    renderThreadBase(session, { persistView: false });
+
+    if (effectiveThreadView === "complete" || effectiveThreadView === "confirmed" || effectiveThreadView === "claim") {
+        restoreOrderThread(sessionId);
+        if ((effectiveThreadView === "complete" || effectiveThreadView === "confirmed" || effectiveThreadView === "claim") && restoreCompleteThread(sessionId) && effectiveThreadView !== "claim") {
+            return;
+        }
+    }
+
+    if (effectiveThreadView === "claim") {
+        if (restoreClaimThread(sessionId)) {
+            return;
+        }
+    }
+
+    if (effectiveThreadView === "order") {
+        restoreOrderThread(sessionId, { scrollIntoView: true });
+        setSessionThreadView(sessionId, "order");
+        persistCart();
+        renderCart();
+        return;
+    }
+
+    setSessionThreadView(sessionId, "solution");
+    persistCart();
+    renderCart();
+    syncTransactionLocks(sessionId);
+    const solutionView = document.getElementById("solution-view");
+    solutionView?.scrollIntoView({ behavior: "smooth", block: "start" });
+};
+
+const originalOpenOrderView = window.openOrderView;
+window.openOrderView = function wrappedOpenOrderView(sessionId) {
+    setSessionThreadView(sessionId, "order");
+    persistCart();
+    renderCart();
+    syncTransactionLocks(sessionId);
+    return originalOpenOrderView(sessionId);
+};
+
+const originalCloseOrderView = window.closeOrderView;
+window.closeOrderView = function wrappedCloseOrderView() {
+    const result = originalCloseOrderView();
+    setSessionThreadView(state.currentSessionId, "solution");
+    persistCart();
+    renderCart();
+    syncTransactionLocks(state.currentSessionId);
+    return result;
+};
+
+const originalGoBackToSolution = window.goBackToSolution;
+window.goBackToSolution = function wrappedGoBackToSolution() {
+    const result = originalGoBackToSolution();
+    setSessionThreadView(state.currentSessionId, "solution");
+    persistCart();
+    renderCart();
+    syncTransactionLocks(state.currentSessionId);
+    return result;
+};
+
+const originalSubmitOrder = window.submitOrder;
+window.submitOrder = function wrappedSubmitOrder() {
+    const sessionId = state.currentSessionId;
+    const result = originalSubmitOrder();
+    const session = getCartSession(sessionId);
+
+    if (session) {
+        session.orderMeta = {
+            orderNumber: document.getElementById("order-complete-number")?.textContent || "",
+            recipient: {
+                name: document.getElementById("complete-name")?.textContent || "",
+                phone: document.getElementById("complete-phone")?.textContent || "",
+                address: document.getElementById("complete-address")?.textContent || ""
+            },
+            totalPrice: document.getElementById("complete-total-price")?.textContent || document.getElementById("order-total-price")?.textContent || "",
+            latestOrder: state.latestOrder,
+            purchaseConfirmed: false,
+            purchaseConfirmedAt: null
+        };
+        setSessionThreadView(sessionId, "complete");
+        persistCart();
+        renderCart();
+        syncTransactionLocks(sessionId);
+    }
+
+    return result;
+};
+
+window.continueCartSession = function continueCartSession(sessionId) {
+    window.moveToCartThread(sessionId);
 };
 
 /* ─── Solution rendering ────────────────────────────────────── */

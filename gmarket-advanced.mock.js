@@ -15,7 +15,7 @@
                         price: "9,800",
                         originalPrice: "13,000",
                         score: 98,
-                        img: "https://images.unsplash.com/photo-1581147036324-c17da42e26c2?auto=format&fit=crop&q=80&w=600",
+                        img: "https://images.unsplash.com/photo-1586864387789-628af9feed72?auto=format&fit=crop&q=80&w=600",
                         aiSummary: [
                             "창문 폭과 높이를 안정적으로 잴 수 있는 기본 측정 도구입니다.",
                             "실측 오차를 줄이기 쉬워 커튼 주문 전 준비 단계에 잘 맞습니다.",

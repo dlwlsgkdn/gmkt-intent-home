@@ -489,6 +489,84 @@
         </div>
     </div>
 
+    <div id="delivery-overlay" class="fixed inset-0 z-[150] invisible opacity-0 pointer-events-none flex justify-end">
+        <button type="button" id="delivery-backdrop" onclick="closeDeliveryPanel()" aria-label="배송조회 패널 닫기" class="absolute inset-0 bg-slate-900/10 backdrop-blur-sm opacity-0 pointer-events-none"></button>
+
+        <div id="delivery-floating-card" class="relative w-full max-w-full sm:max-w-2xl bg-white h-full pointer-events-auto flex flex-col overflow-hidden text-left shadow-2xl">
+            <div class="sticky top-0 bg-white border-b border-slate-100 z-[160] px-6 py-5 flex items-center justify-between shadow-sm">
+                <div class="flex items-center gap-3">
+                    <button type="button" onclick="closeDeliveryPanel()" class="p-2 -ml-2 text-slate-400 hover:text-slate-800 transition-colors">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                    <div>
+                        <p class="text-[11px] font-bold uppercase tracking-[0.22em] text-gmarket-blue">Delivery</p>
+                        <h3 class="font-bold text-lg tracking-tight">배송조회</h3>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <p class="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">주문번호</p>
+                    <p id="delivery-order-number" class="text-sm font-bold text-slate-800"></p>
+                </div>
+            </div>
+
+            <div class="flex-grow overflow-y-auto scrollbar-hide text-left">
+                <div class="px-4 py-6 sm:px-8 sm:py-8 space-y-6">
+                    <div class="rounded-[28px] border border-slate-100 bg-slate-50/80 p-5 sm:p-6">
+                        <div class="flex items-start gap-4">
+                            <img id="delivery-current-item-image" src="" alt="" class="w-20 h-20 rounded-3xl object-cover border border-slate-100 bg-white flex-shrink-0">
+                            <div class="min-w-0 flex-1">
+                                <div class="flex flex-wrap items-center gap-2 mb-2">
+                                    <span id="delivery-current-status-badge" class="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold"></span>
+                                    <span id="delivery-current-step" class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400"></span>
+                                </div>
+                                <h4 id="delivery-current-item-title" class="text-lg font-bold text-slate-900 leading-snug break-words"></h4>
+                                <p id="delivery-current-item-price" class="mt-2 text-sm font-bold text-gmarket-blue"></p>
+                                <p id="delivery-current-message" class="mt-3 text-sm leading-relaxed text-slate-600 font-bold"></p>
+                            </div>
+                        </div>
+                        <div class="mt-5">
+                            <div class="flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-[0.16em]">
+                                <span>배송 진행도</span>
+                                <span id="delivery-current-progress-label"></span>
+                            </div>
+                            <div class="mt-2 h-2 rounded-full bg-slate-200 overflow-hidden">
+                                <div id="delivery-current-progress-bar" class="h-full rounded-full bg-gmarket-blue transition-all duration-500" style="width:0%"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="rounded-[24px] border border-slate-100 bg-white p-4">
+                            <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 mb-2">도착 예정</p>
+                            <p id="delivery-expected-date" class="text-base font-bold text-slate-800 leading-snug"></p>
+                        </div>
+                        <div class="rounded-[24px] border border-slate-100 bg-white p-4">
+                            <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 mb-2">송장 정보</p>
+                            <p id="delivery-tracking-number" class="text-base font-bold text-slate-800 leading-snug"></p>
+                            <p id="delivery-courier" class="mt-1 text-xs font-bold text-slate-400"></p>
+                        </div>
+                    </div>
+
+                    <div class="rounded-[28px] border border-slate-100 bg-white p-5 sm:p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">현재 주문 상품</p>
+                                <h4 class="text-lg font-bold text-slate-900 mt-1">상품별 배송상태</h4>
+                            </div>
+                            <span id="delivery-item-count" class="text-xs font-bold text-slate-400"></span>
+                        </div>
+                        <div id="delivery-item-selector-list" class="space-y-3"></div>
+                    </div>
+
+                    <div class="rounded-[28px] border border-slate-100 bg-white p-5 sm:p-6">
+                        <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 mb-4">배송 타임라인</p>
+                        <div id="delivery-timeline" class="space-y-4"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- ─── 주문서 섹션 ─── -->
     <section id="order-view" class="hidden min-h-screen pt-20 sm:pt-24 pb-28 sm:pb-40 px-4 sm:px-6 relative z-10 overflow-x-hidden">
         <div class="max-w-2xl mx-auto w-full">
@@ -646,16 +724,216 @@
             </div>
 
             <!-- 하단 버튼 -->
-            <div class="flex gap-3">
-                <button onclick="goBackToSolution()" class="flex-1 py-4 bg-slate-100 text-slate-700 rounded-2xl font-bold text-sm hover:bg-slate-200 transition-all active:scale-95">
-                    쇼핑 계속하기
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <button type="button" id="complete-delivery-btn" onclick="openDeliveryPanel()" class="inline-flex items-center justify-center gap-2 py-4 bg-slate-100 text-slate-700 rounded-2xl font-bold text-sm hover:bg-slate-200 transition-all active:scale-95">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17h6m-9 0h.01M6 7h12l-1 6H7L6 7zm0 0L5 5H3"/></svg>
+                    배송조회
                 </button>
-                <button onclick="window.scrollTo({top:0,behavior:'smooth'})" class="flex-1 py-4 bg-gmarket-blue text-white rounded-2xl font-bold text-sm shadow-xl shadow-blue-100 hover:bg-blue-600 transition-all active:scale-95">
-                    홈으로 가기
+                <button type="button" id="complete-claim-btn" onclick="openOrderClaimFlow()" class="inline-flex items-center justify-center gap-2 py-4 bg-slate-100 text-slate-700 rounded-2xl font-bold text-sm hover:bg-slate-200 transition-all active:scale-95">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17h6m-9 0h.01M6 7h12l-1 6H7L6 7zm0 0L5 5H3"/></svg>
+                    취소/반품/교환
+                </button>
+                <button type="button" id="complete-confirm-btn" onclick="confirmPurchase()" class="py-4 bg-gmarket-blue text-white rounded-2xl font-bold text-sm shadow-xl shadow-blue-100 hover:bg-blue-600 transition-all active:scale-95">
+                    구매확정
                 </button>
             </div>
         </div>
     </section>
+
+    <section id="order-claim-view" class="hidden min-h-screen pt-20 sm:pt-24 pb-28 sm:pb-40 px-4 sm:px-6 relative z-10 bg-slate-50/50 overflow-x-hidden">
+        <div class="max-w-xl mx-auto w-full">
+            <div class="mb-6">
+                <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-gmarket-blue">After Order Care</p>
+                <h2 class="text-2xl font-bold text-slate-900 mt-1">취소/반품/교환 신청</h2>
+            </div>
+
+            <div class="bg-white rounded-[28px] border border-slate-100 shadow-sm p-6 mb-4">
+                <p class="text-sm font-bold text-slate-800 mb-1">주문번호 <span id="claim-order-number" class="text-gmarket-blue"></span></p>
+                <p class="text-xs text-slate-500 leading-relaxed">탭에서 신청 유형을 선택하면 필요한 정보 입력 폼이 바뀌어요.</p>
+            </div>
+
+            <div class="bg-white rounded-[28px] border border-slate-100 shadow-sm p-6 mb-4">
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">신청 유형</p>
+                <div class="grid grid-cols-3 gap-2 rounded-[24px] bg-slate-50 p-2">
+                    <button type="button" data-claim-type="cancel" onclick="selectClaimType('cancel')" class="claim-type-btn rounded-2xl px-4 py-4 text-left transition-all">
+                        <p class="text-sm font-bold text-slate-800">취소</p>
+                        <p class="text-[11px] text-slate-500 mt-1">결제 취소</p>
+                    </button>
+                    <button type="button" data-claim-type="return" onclick="selectClaimType('return')" class="claim-type-btn rounded-2xl px-4 py-4 text-left transition-all">
+                        <p class="text-sm font-bold text-slate-800">반품</p>
+                        <p class="text-[11px] text-slate-500 mt-1">반품 접수</p>
+                    </button>
+                    <button type="button" data-claim-type="exchange" onclick="selectClaimType('exchange')" class="claim-type-btn rounded-2xl px-4 py-4 text-left transition-all">
+                        <p class="text-sm font-bold text-slate-800">교환</p>
+                        <p class="text-[11px] text-slate-500 mt-1">교환 요청</p>
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-[28px] border border-slate-100 shadow-sm p-6 mb-4">
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">주문 상품</p>
+                <div id="claim-items-list" class="space-y-3"></div>
+            </div>
+
+            <div class="bg-white rounded-[28px] border border-slate-100 shadow-sm p-6 mb-6">
+                <div data-claim-panel="cancel" class="claim-panel space-y-5">
+                    <div>
+                        <label for="claim-cancel-reason" class="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">취소 사유</label>
+                        <select id="claim-cancel-reason" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-gmarket-blue">
+                            <option value="단순 변심">단순 변심</option>
+                            <option value="배송 지연">배송 지연</option>
+                            <option value="가격 비교 후 취소">가격 비교 후 취소</option>
+                            <option value="중복 주문">중복 주문</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="claim-cancel-refund" class="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">환불 방식</label>
+                        <select id="claim-cancel-refund" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-gmarket-blue">
+                            <option value="원 결제수단 환불">원 결제수단 환불</option>
+                            <option value="스마일캐시 환불">스마일캐시 환불</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="claim-cancel-message" class="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">취소 메모</label>
+                        <textarea id="claim-cancel-message" rows="4" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none resize-none focus:border-gmarket-blue" placeholder="취소 요청 메모를 남겨 주세요."></textarea>
+                    </div>
+                </div>
+
+                <div data-claim-panel="return" class="claim-panel hidden space-y-5">
+                    <div>
+                        <label for="claim-return-reason" class="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">반품 사유</label>
+                        <select id="claim-return-reason" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-gmarket-blue">
+                            <option value="상품 불량">상품 불량</option>
+                            <option value="오배송">오배송</option>
+                            <option value="단순 변심">단순 변심</option>
+                            <option value="구성품 누락">구성품 누락</option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label for="claim-return-condition" class="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">포장 상태</label>
+                            <select id="claim-return-condition" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-gmarket-blue">
+                                <option value="미개봉">미개봉</option>
+                                <option value="개봉 후 미사용">개봉 후 미사용</option>
+                                <option value="사용 흔적 있음">사용 흔적 있음</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="claim-return-pickup" class="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">회수 희망일</label>
+                            <input id="claim-return-pickup" type="date" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-gmarket-blue">
+                        </div>
+                    </div>
+                    <div>
+                        <label for="claim-return-message" class="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">반품 상세</label>
+                        <textarea id="claim-return-message" rows="4" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none resize-none focus:border-gmarket-blue" placeholder="반품 사유와 상태를 자세히 적어 주세요."></textarea>
+                    </div>
+                </div>
+
+                <div data-claim-panel="exchange" class="claim-panel hidden space-y-5">
+                    <div>
+                        <label for="claim-exchange-reason" class="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">교환 사유</label>
+                        <select id="claim-exchange-reason" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-gmarket-blue">
+                            <option value="옵션 변경">옵션 변경</option>
+                            <option value="상품 하자">상품 하자</option>
+                            <option value="오배송">오배송</option>
+                            <option value="색상/사이즈 변경">색상/사이즈 변경</option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label for="claim-exchange-option" class="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">희망 교환 옵션</label>
+                            <input id="claim-exchange-option" type="text" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-gmarket-blue" placeholder="예: 블랙 / L 사이즈">
+                        </div>
+                        <div>
+                            <label for="claim-exchange-pickup" class="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">회수 희망일</label>
+                            <input id="claim-exchange-pickup" type="date" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-gmarket-blue">
+                        </div>
+                    </div>
+                    <div>
+                        <label for="claim-exchange-message" class="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">교환 상세</label>
+                        <textarea id="claim-exchange-message" rows="4" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none resize-none focus:border-gmarket-blue" placeholder="교환 요청 사항을 자세히 적어 주세요."></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button type="button" onclick="goBackToCompleteFromClaim()" class="py-4 bg-slate-100 text-slate-700 rounded-2xl font-bold text-sm hover:bg-slate-200 transition-all active:scale-95">
+                    이전으로
+                </button>
+                <button type="button" id="claim-submit-btn" onclick="submitOrderClaim()" class="py-4 bg-gmarket-blue text-white rounded-2xl font-bold text-sm shadow-xl shadow-blue-100 hover:bg-blue-600 transition-all active:scale-95">
+                    신청하기
+                </button>
+                <button type="button" id="claim-status-btn" onclick="openClaimStatusPanel()" class="hidden sm:col-start-2 py-4 bg-slate-900 text-white rounded-2xl font-bold text-sm shadow-xl transition-all hover:bg-slate-800 active:scale-95">
+                    진행 상태
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <div id="claim-status-overlay" class="fixed inset-0 z-[150] invisible opacity-0 pointer-events-none flex justify-end">
+        <button type="button" id="claim-status-backdrop" onclick="closeClaimStatusPanel()" aria-label="신청 진행 상태 패널 닫기" class="absolute inset-0 bg-slate-900/10 backdrop-blur-sm opacity-0 pointer-events-none"></button>
+
+        <div id="claim-status-floating-card" class="relative w-full max-w-full sm:max-w-2xl bg-white h-full pointer-events-auto flex flex-col overflow-hidden text-left shadow-2xl">
+            <div class="sticky top-0 bg-white border-b border-slate-100 z-[160] px-6 py-5 flex items-center justify-between shadow-sm">
+                <div class="flex items-center gap-3">
+                    <button type="button" onclick="closeClaimStatusPanel()" class="p-2 -ml-2 text-slate-400 hover:text-slate-800 transition-colors">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                    <div>
+                        <p class="text-[11px] font-bold uppercase tracking-[0.22em] text-gmarket-blue">Claim Status</p>
+                        <h3 id="claim-status-title" class="font-bold text-lg tracking-tight">신청 진행 상태</h3>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <p class="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">주문번호</p>
+                    <p id="claim-status-order-number" class="text-sm font-bold text-slate-800"></p>
+                </div>
+            </div>
+
+            <div class="flex-grow overflow-y-auto scrollbar-hide text-left">
+                <div class="px-4 py-6 sm:px-8 sm:py-8 space-y-6">
+                    <div class="rounded-[28px] border border-slate-100 bg-slate-50/80 p-5 sm:p-6">
+                        <div class="flex flex-wrap items-center gap-2 mb-3">
+                            <span id="claim-status-badge" class="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold"></span>
+                            <span id="claim-status-step" class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400"></span>
+                        </div>
+                        <h4 id="claim-status-headline" class="text-lg font-bold text-slate-900"></h4>
+                        <p id="claim-status-message" class="mt-3 text-sm leading-relaxed text-slate-600 font-bold"></p>
+                        <div class="mt-5">
+                            <div class="flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-[0.16em]">
+                                <span>처리 진행도</span>
+                                <span id="claim-status-progress-label"></span>
+                            </div>
+                            <div class="mt-2 h-2 rounded-full bg-slate-200 overflow-hidden">
+                                <div id="claim-status-progress-bar" class="h-full rounded-full bg-gmarket-blue transition-all duration-500" style="width:0%"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="rounded-[24px] border border-slate-100 bg-white p-4">
+                            <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 mb-2">신청 사유</p>
+                            <p id="claim-status-reason" class="text-base font-bold text-slate-800 leading-snug"></p>
+                        </div>
+                        <div class="rounded-[24px] border border-slate-100 bg-white p-4">
+                            <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 mb-2">접수 일시</p>
+                            <p id="claim-status-submitted-at" class="text-base font-bold text-slate-800 leading-snug"></p>
+                        </div>
+                    </div>
+
+                    <div class="rounded-[28px] border border-slate-100 bg-white p-5 sm:p-6">
+                        <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 mb-4">접수 정보</p>
+                        <div id="claim-status-details" class="space-y-3"></div>
+                    </div>
+
+                    <div class="rounded-[28px] border border-slate-100 bg-white p-5 sm:p-6">
+                        <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 mb-4">처리 타임라인</p>
+                        <div id="claim-status-timeline" class="space-y-4"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- 결제 수단 라디오 인터랙션 -->
     <script>
@@ -684,6 +962,7 @@
 
     <script src="./gmarket-advanced.mock.js"></script>
     <script src="./gmarket-advanced.js"></script>
+    <script src="./gmarket-thread-navigation.js"></script>
 
 </body>
 </html>
