@@ -1749,7 +1749,7 @@ function showMissingEssentialToast(missingSteps, sessionId) {
                 <svg class="w-6 h-6 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
             </div>
             <div class="flex-1">
-                <p class="text-sm font-bold text-slate-900 mb-1">${intentKey === "캠핑" ? "이거 챙기지 않으면 캠핑 현장에서 곤란해요! ⛺" : intentKey === "데스크탑" ? "이 부품 빠지면 조립 전에 바로 막혀요! 🖥️" : "이거 빠트리고 커튼 설치 할 뻔 했어요! 😅"}</p>
+                <p class="text-sm font-bold text-slate-900 mb-1">${intentKey === "캠핑" ? "이거 챙기지 않으면 캠핑 현장에서 곤란해요! ⛺" : intentKey === "데스크탑" ? "이 부품 빠지면 조립 전에 바로 막혀요! 🖥️" : intentKey === "이사" ? "이거 없으면 첫 출근 전날 곤란해요! 📦" : "이거 빠트리고 커튼 설치 할 뻔 했어요! 😅"}</p>
                 <p class="text-xs text-slate-500 leading-relaxed">${stepNames} 상품을 아직 고르지 않으셨어요. 꼭 필요한 상품이에요!</p>
             </div>
             <button onclick="document.getElementById('missing-toast').remove()" class="text-slate-300 hover:text-slate-500 transition-colors flex-shrink-0">
@@ -1827,6 +1827,8 @@ function executeSearch(query, options = {}) {
         goToInfoView("데스크탑");
     } else if (query.includes("캠핑") || query.includes("텐트") || query.includes("캠프") || query.includes("camping")) {
         goToInfoView("캠핑");
+    } else if (query.includes("이사") || query.includes("원룸") || query.includes("자취") || query.includes("입사") || query.includes("신입")) {
+        goToInfoView("이사");
     }
 }
 
@@ -1926,6 +1928,56 @@ const infoViewConfig = {
             ],
             category: "goal"
         }
+    },
+    "이사": {
+        q1: {
+            label: "1. 원룸 크기가 어느 정도인가요?",
+            layout: "grid grid-cols-3 gap-3",
+            options: [
+                { main: "5평 이하", sub: "소형 원룸", icon: true },
+                { main: "6~8평", sub: "일반 원룸", icon: true },
+                { main: "9평+", sub: "넓은 원룸", icon: true }
+            ],
+            category: "size"
+        },
+        q2: {
+            label: "2. 방 옵션 상태는 어떤가요?",
+            layout: "grid grid-cols-2 gap-3",
+            options: [
+                { main: "옵션 없음", sub: "가구·가전 없음", row: true },
+                { main: "풀옵션", sub: "기본 가전 포함", row: true }
+            ],
+            category: "wall"
+        },
+        q3: {
+            label: "3. 자취 경험이 있으신가요?",
+            layout: "grid grid-cols-2 gap-3",
+            options: [
+                { main: "처음", sub: "첫 자취", row: true },
+                { main: "경험 있음", sub: "재이사", row: true }
+            ],
+            category: "experience"
+        },
+        q4: {
+            label: "4. 예산은 어느 정도 생각하고 계신가요?",
+            layout: "grid grid-cols-3 gap-3",
+            options: [
+                { main: "50만원 이하", sub: "최소 구성", icon: true },
+                { main: "50~100만원", sub: "기본 구성", icon: true },
+                { main: "100만원+", sub: "넉넉하게", icon: true }
+            ],
+            category: "budget"
+        },
+        q5: {
+            label: "5. 이사 준비에서 가장 중요한 것은?",
+            layout: "flex gap-3",
+            options: [
+                { main: "가성비" },
+                { main: "깔끔한 인테리어" },
+                { main: "빠른 정착" }
+            ],
+            category: "goal"
+        }
     }
 };
 
@@ -1951,7 +2003,15 @@ function renderInfoView(intent) {
         </div>`;
     };
 
-    container.innerHTML = buildQ(cfg.q1) + buildQ(cfg.q2) + buildQ(cfg.q3);
+    container.innerHTML = Object.keys(cfg).filter(k => k.startsWith("q")).sort().map(k => buildQ(cfg[k])).join("");
+
+    container.querySelectorAll(".info-card").forEach(btn => {
+        btn.addEventListener("pointerdown", () => {
+            btn.classList.remove("card-pop");
+            void btn.offsetWidth;
+            btn.classList.add("card-pop");
+        });
+    });
 
     Object.entries(state.choices).forEach(([category, value]) => {
         if (!value) return;
@@ -1972,7 +2032,9 @@ window.selectChoice = function selectChoice(btn, category) {
 
 window.generatePlan = function generatePlan() {
     const solutionView = document.getElementById("solution-view");
-    if (!state.choices.size || !state.choices.wall || !state.choices.goal) return;
+    const cfg = infoViewConfig[state.currentIntent];
+    const requiredCategories = cfg ? Object.keys(cfg).filter(k => k.startsWith("q")).map(k => cfg[k].category) : ["size", "wall", "goal"];
+    if (requiredCategories.some(cat => !state.choices[cat])) return;
     if (!state.currentIntent) state.currentIntent = "커튼";
     if (!state.rawQuery) state.rawQuery = "커튼 설치";
 
@@ -2434,6 +2496,9 @@ function renderSolution(key, rawQuery) {
         </span>입니다
     `;
 
+    const stepCountLabel = document.getElementById("step-count-label");
+    if (stepCountLabel) stepCountLabel.textContent = data.steps.length;
+
     planContainer.innerHTML = "";
 
     data.steps.forEach((step, stepIndex) => {
@@ -2579,6 +2644,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const desktopTag = document.getElementById("desktopTag");
     desktopTag?.addEventListener("click", () => {
         const value = "데스크탑 조립 세팅";
+        if (searchInput) searchInput.value = value;
+        updateSearchUI(value);
+        executeSearch(value);
+    });
+
+    const movingTag = document.getElementById("movingTag");
+    movingTag?.addEventListener("click", () => {
+        const value = "원룸 이사 준비";
         if (searchInput) searchInput.value = value;
         updateSearchUI(value);
         executeSearch(value);
