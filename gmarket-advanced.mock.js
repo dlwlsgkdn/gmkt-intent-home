@@ -903,70 +903,6 @@
         steps: [
             {
                 step: 1,
-                name: "이삿짐 정리 & 수납",
-                essential: true,
-                description: "원룸은 수납 공간이 부족하기 때문에 이삿짐 정리와 수납 구조를 먼저 잡아야 생활이 편해집니다.",
-                products: [
-                    {
-                        id: 401,
-                        name: "접이식 이사 박스 5개 세트",
-                        price: "18,900",
-                        originalPrice: "25,000",
-                        score: 96,
-                        img: "https://images.unsplash.com/photo-1600585152220-90363fe7e115?auto=format&fit=crop&q=80&w=600",
-                        aiSummary: [
-                            "이삿짐을 분류해서 담기 좋은 튼튼한 박스 세트입니다.",
-                            "접이식이라 이사 후 보관하거나 재사용하기 편리합니다.",
-                            "원룸 규모에 5개면 옷·책·잡화를 나누기 충분합니다."
-                        ],
-                        spec: { size: "50x35x30cm x 5", feature: "접이식 재사용 이사 박스" }
-                    },
-                    {
-                        id: 402,
-                        name: "3단 스틸 선반",
-                        price: "29,800",
-                        originalPrice: "42,000",
-                        score: 94,
-                        img: "https://images.unsplash.com/photo-1595428774223-ef52624120d2?auto=format&fit=crop&q=80&w=600",
-                        aiSummary: [
-                            "원룸 자투리 공간을 수직으로 활용할 수 있는 선반입니다.",
-                            "조립이 간단해서 혼자서도 10분이면 세팅이 가능합니다.",
-                            "세탁기 위, 현관 옆 등 좁은 공간에 맞추기 좋은 크기입니다."
-                        ],
-                        spec: { size: "60x30x90cm", feature: "볼트리스 조립 스틸 선반" }
-                    },
-                    {
-                        id: 403,
-                        name: "압축 옷걸이 행거",
-                        price: "34,500",
-                        originalPrice: "48,000",
-                        score: 91,
-                        img: "https://images.unsplash.com/photo-1558618666-fcd25c85f82e?auto=format&fit=crop&q=80&w=600",
-                        aiSummary: [
-                            "붙박이장이 없는 원룸에서 옷 정리 핵심 아이템입니다.",
-                            "바퀴가 있어 청소할 때 쉽게 이동할 수 있습니다.",
-                            "하단 선반에 신발이나 가방도 함께 수납할 수 있습니다."
-                        ],
-                        spec: { size: "80x45x150cm", feature: "이동식 행거 + 하단 선반" }
-                    },
-                    {
-                        id: 404,
-                        name: "다용도 리빙 수납함 3종",
-                        price: "15,900",
-                        originalPrice: "22,000",
-                        score: 88,
-                        img: "https://images.unsplash.com/photo-1616627547584-bf28cee262db?auto=format&fit=crop&q=80&w=600",
-                        aiSummary: [
-                            "속옷, 양말, 소품을 분류해서 넣을 수 있는 수납함 세트입니다.",
-                            "서랍장 안이나 선반 위에 올려두고 쓰기 적합합니다.",
-                            "뚜껑이 있어 먼지 걱정 없이 깔끔하게 보관됩니다."
-                        ],
-                        spec: { size: "대·중·소 각 1개", feature: "뚜껑형 패브릭 수납함" }
-                    }
-                ]
-            },
-            {
-                step: 2,
                 name: "침구 & 매트리스 세팅",
                 essential: true,
                 description: "이사 첫날부터 잠자리가 확보되어야 출근에 지장이 없습니다. 원룸에 맞는 싱글 침구를 먼저 준비합니다.",
@@ -1030,10 +966,10 @@
                 ]
             },
             {
-                step: 3,
-                name: "주방 & 생활가전",
+                step: 2,
+                name: "주방용품",
                 essential: true,
-                description: "자취 첫 달은 외식비가 부담될 수 있으므로, 간단한 조리와 세탁이 가능한 기본 가전을 갖춰두면 생활비를 아낄 수 있습니다.",
+                description: "자취 첫날 바로 밥 먹고 간단한 조리를 할 수 있도록 기본 주방용품부터 갖춰두면 생활 리듬을 빠르게 잡을 수 있습니다.",
                 products: [
                     {
                         id: 422,
@@ -1048,20 +984,6 @@
                             "4인분 구성이지만 혼자 써도 여유 있게 돌려쓰기 좋습니다."
                         ],
                         spec: { size: "수저 4개 + 젓가락 4쌍", feature: "스테인리스 18-8 수저 세트" }
-                    },
-                    {
-                        id: 412,
-                        name: "무선 핸디 청소기",
-                        price: "59,800",
-                        originalPrice: "79,000",
-                        score: 95,
-                        img: "https://images.unsplash.com/photo-1558317374-067fb5f30001?auto=format&fit=crop&q=80&w=600",
-                        aiSummary: [
-                            "원룸은 면적이 좁아 무선 핸디형이면 충분합니다.",
-                            "충전 거치대 포함이라 세워두면 보관 공간을 차지하지 않습니다.",
-                            "틈새 노즐로 좁은 원룸 구석구석 청소가 쉽습니다."
-                        ],
-                        spec: { size: "2.1kg", feature: "무선 경량 핸디 청소기" }
                     },
                     {
                         id: 409,
@@ -1104,6 +1026,70 @@
                             "보온 가방 포함이라 출근길에 들고 가기 편합니다."
                         ],
                         spec: { size: "700ml 2단", feature: "스텐 도시락 + 보온가방" }
+                    }
+                ]
+            },
+            {
+                step: 3,
+                name: "청소용품",
+                essential: true,
+                description: "원룸은 먼지와 머리카락이 금방 쌓이기 때문에 기본 청소용품을 먼저 갖춰두면 생활 만족도가 빠르게 올라갑니다.",
+                products: [
+                    {
+                        id: 412,
+                        name: "무선 핸디 청소기",
+                        price: "59,800",
+                        originalPrice: "79,000",
+                        score: 95,
+                        img: "https://images.unsplash.com/photo-1558317374-067fb5f30001?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "원룸은 면적이 좁아 무선 핸디형이면 충분합니다.",
+                            "충전 거치대 포함이라 세워두면 보관 공간을 차지하지 않습니다.",
+                            "틈새 노즐로 좁은 원룸 구석구석 청소가 쉽습니다."
+                        ],
+                        spec: { size: "2.1kg", feature: "무선 경량 핸디 청소기" }
+                    },
+                    {
+                        id: 423,
+                        name: "밀대 청소기 + 극세사 패드 세트",
+                        price: "18,500",
+                        originalPrice: "26,000",
+                        score: 92,
+                        img: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "물걸레와 마른걸레를 번갈아 사용할 수 있어 바닥 관리가 편합니다.",
+                            "극세사 패드가 포함되어 이사 후 먼지 제거에 바로 쓸 수 있습니다.",
+                            "가벼워서 좁은 원룸에서도 손목 부담 없이 청소하기 좋습니다."
+                        ],
+                        spec: { size: "봉 길이 125cm", feature: "극세사 패드 2장 포함" }
+                    },
+                    {
+                        id: 424,
+                        name: "테이프 클리너 돌돌이 세트",
+                        price: "9,800",
+                        originalPrice: "14,000",
+                        score: 89,
+                        img: "https://images.unsplash.com/photo-1616628182509-6f0c7f6b0e29?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "침구, 러그, 소파 위 머리카락과 먼지를 빠르게 정리할 수 있습니다.",
+                            "리필 롤이 함께 들어 있어 이사 직후부터 넉넉하게 사용 가능합니다.",
+                            "청소기를 꺼내기 애매한 순간에 간편하게 쓰기 좋습니다."
+                        ],
+                        spec: { size: "본품 1 + 리필 3", feature: "컷팅형 점착 롤 클리너" }
+                    },
+                    {
+                        id: 425,
+                        name: "다목적 청소포 4팩",
+                        price: "11,900",
+                        originalPrice: "17,000",
+                        score: 86,
+                        img: "https://images.unsplash.com/photo-1563453392212-326f5e854473?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "바닥, 책상, 선반까지 한 번에 닦을 수 있어 입주 청소에 유용합니다.",
+                            "대용량 구성이라 자주 갈아 써도 부담이 적습니다.",
+                            "향이 강하지 않아 좁은 원룸에서도 사용감이 깔끔합니다."
+                        ],
+                        spec: { size: "25매 x 4팩", feature: "먼지 흡착 건식/습식 겸용" }
                     }
                 ]
             },
@@ -1173,65 +1159,65 @@
             },
             {
                 step: 5,
-                name: "출근 준비 & 신입사원 필수템",
+                name: "이삿짐 정리 & 수납",
                 essential: false,
-                description: "출근 첫 달, 인상과 실용 모두 챙길 수 있는 아이템입니다. 신입사원 시기에 갖춰두면 적응이 빨라집니다.",
+                description: "기본 생활 세팅이 끝난 뒤 남은 짐과 자잘한 물건을 정리해두면 원룸 생활 동선이 훨씬 편해집니다.",
                 products: [
                     {
-                        id: 417,
-                        name: "핸디 스팀다리미",
-                        price: "28,900",
-                        originalPrice: "39,000",
+                        id: 401,
+                        name: "접이식 이사 박스 5개 세트",
+                        price: "18,900",
+                        originalPrice: "25,000",
                         score: 95,
-                        img: "https://images.unsplash.com/photo-1489274495757-95c7c837b101?auto=format&fit=crop&q=80&w=600",
+                        img: "https://images.unsplash.com/photo-1600585152220-90363fe7e115?auto=format&fit=crop&q=80&w=600",
                         aiSummary: [
-                            "신입사원 첫인상에서 구겨진 셔츠는 감점 요소입니다.",
-                            "행거에 건 채로 바로 쓸 수 있어 아침 시간이 부족할 때 유용합니다.",
-                            "다리미판 없이도 되니 원룸에서 공간을 차지하지 않습니다."
+                            "이삿짐을 분류해서 담기 좋은 튼튼한 박스 세트입니다.",
+                            "접이식이라 이사 후 보관하거나 재사용하기 편리합니다.",
+                            "원룸 규모에 5개면 옷·책·잡화를 나누기 충분합니다."
                         ],
-                        spec: { size: "1.1kg", feature: "행거 스팀 30초 예열" }
+                        spec: { size: "50x35x30cm x 5", feature: "접이식 재사용 이사 박스" }
                     },
                     {
-                        id: 418,
-                        name: "비즈니스 노트북 백팩",
-                        price: "45,800",
-                        originalPrice: "62,000",
+                        id: 402,
+                        name: "3단 스틸 선반",
+                        price: "29,800",
+                        originalPrice: "42,000",
                         score: 93,
-                        img: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&q=80&w=600",
+                        img: "https://images.unsplash.com/photo-1595428774223-ef52624120d2?auto=format&fit=crop&q=80&w=600",
                         aiSummary: [
-                            "노트북·서류·텀블러까지 수납할 수 있어 출퇴근 가방으로 적합합니다.",
-                            "깔끔한 디자인이라 오피스 룩에 어울리면서 캐주얼에도 무난합니다.",
-                            "회사까지 도보 통근 시 양손이 자유로워 편합니다."
+                            "원룸 자투리 공간을 수직으로 활용할 수 있는 선반입니다.",
+                            "조립이 간단해서 혼자서도 10분이면 세팅이 가능합니다.",
+                            "세탁기 위, 현관 옆 등 좁은 공간에 맞추기 좋은 크기입니다."
                         ],
-                        spec: { size: "15.6인치 수납", feature: "방수 비즈니스 백팩" }
+                        spec: { size: "60x30x90cm", feature: "볼트리스 조립 스틸 선반" }
                     },
                     {
-                        id: 419,
-                        name: "보온보냉 텀블러 500ml",
-                        price: "16,900",
-                        originalPrice: "24,000",
+                        id: 403,
+                        name: "압축 옷걸이 행거",
+                        price: "34,500",
+                        originalPrice: "48,000",
                         score: 89,
-                        img: "https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&q=80&w=600",
+                        img: "https://images.unsplash.com/photo-1558618666-fcd25c85f82e?auto=format&fit=crop&q=80&w=600",
                         aiSummary: [
-                            "사무실에서 매번 카페 커피를 사면 한 달 지출이 상당합니다.",
-                            "집에서 커피를 내려 가면 하루 5,000원 이상 절약됩니다.",
-                            "회의실 이동 시에도 흘림 방지 뚜껑이라 안심할 수 있습니다."
+                            "붙박이장이 없는 원룸에서 옷 정리 핵심 아이템입니다.",
+                            "바퀴가 있어 청소할 때 쉽게 이동할 수 있습니다.",
+                            "하단 선반에 신발이나 가방도 함께 수납할 수 있습니다."
                         ],
-                        spec: { size: "500ml", feature: "진공 단열 12시간 보온" }
+                        spec: { size: "80x45x150cm", feature: "이동식 행거 + 하단 선반" }
                     },
                     {
-                        id: 420,
-                        name: "구두 관리 키트 (브러시+크림)",
-                        price: "12,500",
-                        originalPrice: "18,000",
+                        id: 404,
+                        name: "다용도 리빙 수납함 3종",
+                        price: "15,900",
+                        originalPrice: "22,000",
                         score: 86,
-                        img: "https://images.unsplash.com/photo-1449505278894-297fdb3edbc1?auto=format&fit=crop&q=80&w=600",
+                        img: "https://images.unsplash.com/photo-1616627547584-bf28cee262db?auto=format&fit=crop&q=80&w=600",
                         aiSummary: [
-                            "신입사원 시기 깔끔한 구두는 선배들에게 좋은 인상을 줍니다.",
-                            "주 1회 관리만으로 구두 수명을 크게 늘릴 수 있습니다.",
-                            "브러시와 크림이 세트라 따로 찾아 살 필요가 없습니다."
+                            "속옷, 양말, 소품을 분류해서 넣을 수 있는 수납함 세트입니다.",
+                            "서랍장 안이나 선반 위에 올려두고 쓰기 적합합니다.",
+                            "뚜껑이 있어 먼지 걱정 없이 깔끔하게 보관됩니다."
                         ],
-                        spec: { size: "브러시 2종 + 크림 1", feature: "가죽 구두 관리 올인원" }
+                        spec: { size: "대·중·소 각 1개", feature: "뚜껑형 패브릭 수납함" }
                     }
                 ]
             }

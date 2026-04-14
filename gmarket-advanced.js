@@ -2017,11 +2017,10 @@ function renderInfoView(intent) {
         infoTitle.innerHTML = trimmedQuery
             ? `
                 <span class="block">
-                    "<span class="inline-block max-w-[min(100%,16rem)] align-bottom truncate font-semibold text-slate-900 sm:max-w-[20rem] md:max-w-[24rem]">${trimmedQuery}</span>"에 딱 맞는 조건을 찾기 위해
+                    "<span class="inline-block max-w-[min(100%,16rem)] align-bottom truncate font-semibold text-slate-900 sm:max-w-[20rem] md:max-w-[24rem]">${trimmedQuery}</span>"에 딱 맞는 조건을 찾기 위해 몇 가지만 알려주세요
                 </span>
-                <span class="block">몇 가지만 알려주세요</span>
             `
-            : '환경에 "딱" 맞는 계획을 위해<br>몇 가지만 알려주세요';
+            : '환경에 딱 맞는 계획을 위해<br>몇 가지만 알려주세요';
     }
 
     const buildQ = (q) => {
