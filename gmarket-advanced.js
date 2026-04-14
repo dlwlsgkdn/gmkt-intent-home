@@ -16,7 +16,7 @@ const TIP_MESSAGES = [
     "💡 검색창에 상황을 그대로 적어보세요. 예: '캠핑 첫 입문자 장비 세트'",
     "💡 장바구니는 목적별로 여러 개 만들 수 있어요.",
     "💡 '일괄 결제하고 완수하기'로 선택한 상품을 한 번에 구매할 수 있어요.",
-    "💡 조건을 선택하면 AI가 상황에 꼭 맞는 상품만 골라드려요.",
+    "💡 조건을 선택하면 이 상황에 \"딱\" 맞는 상품만 골라드려요.",
     "💡 상품 카드를 클릭하면 상세 정보와 리뷰를 바로 확인할 수 있어요.",
     "💡 사이드바에서 진행 중인 장바구니를 언제든 다시 꺼내볼 수 있어요.",
     "💡 검색 태그(#커튼_달기 등)를 눌러 빠르게 탐색할 수 있어요.",
@@ -303,8 +303,8 @@ function buildSessionOrderItems(sessionId) {
                      alt="${selected.product.name}">
                 <div class="flex-1 min-w-0">
                     <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">${step.name}</p>
-                    <p class="text-sm font-bold text-slate-800 leading-tight truncate">${selected.product.name}</p>
-                    <p class="text-xs text-slate-400 font-bold mt-0.5">\uC218\uB7C9 1\uAC1C</p>
+                    <p class="text-sm font-medium text-slate-800 leading-tight truncate">${selected.product.name}</p>
+                    <p class="text-xs text-slate-400 font-normal mt-0.5">\uC218\uB7C9 1\uAC1C</p>
                 </div>
                 <p class="text-sm font-bold text-slate-800 flex-shrink-0">${selected.product.price}\uC6D0</p>
             </div>
@@ -583,10 +583,10 @@ function renderSearchHistory() {
                         <div class="min-w-0">
                             <div class="flex flex-wrap items-center gap-2 mb-2">
                                 <span class="history-item-intent inline-flex items-center rounded-full bg-gmarket-blue/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-gmarket-blue">${item.intent}</span>
-                                <span class="history-item-time text-[11px] text-slate-400 font-bold">${formatHistoryTimestamp(item.createdAt)}</span>
+                                <span class="history-item-time text-[11px] text-slate-400 font-normal">${formatHistoryTimestamp(item.createdAt)}</span>
                             </div>
-                            <p class="history-item-query text-[15px] text-slate-800 font-bold leading-snug break-words">${item.query}</p>
-                            <p class="history-item-summary text-xs text-slate-500 mt-2 font-bold leading-relaxed">${item.summary}</p>
+                            <p class="history-item-query text-[15px] text-slate-800 font-semibold leading-snug break-words">${item.query}</p>
+                            <p class="history-item-summary text-xs text-slate-500 mt-2 font-normal leading-relaxed">${item.summary}</p>
                         </div>
                         <span class="history-item-arrow flex-shrink-0 text-slate-300 transition-transform duration-300">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 5l7 7-7 7"></path></svg>
@@ -1020,9 +1020,9 @@ function renderCart() {
                             <button type="button" data-cart-clear="true" onclick="clearCartIntent('${sessionId}')" class="text-[10px] text-slate-300 hover:text-red-400 transition-colors font-bold">전체삭제</button>
                         </div>
                     </div>
-                    ${groupSummary ? `<p class="purpose-cart-summary-preview text-[11px] text-slate-500 font-bold mt-2 leading-relaxed">${groupSummary}</p>` : ""}
-                    <p class="text-[10px] text-slate-400 font-bold mt-2">\uB9C8\uC9C0\uB9C9 \uD398\uC774\uC988: <span class="text-slate-700">${phaseLabel}</span></p>
-                    ${hasEssentialMissing ? `<p class="text-[10px] text-amber-500 font-bold mt-1.5 flex items-center gap-1"><span>⚠</span> 미선택 필수 상품이 있어요</p>` : ""}
+                    ${groupSummary ? `<p class="purpose-cart-summary-preview text-[11px] text-slate-500 font-normal mt-2 leading-relaxed">${groupSummary}</p>` : ""}
+                    <p class="text-[10px] text-slate-400 font-normal mt-2">\uB9C8\uC9C0\uB9C9 \uD398\uC774\uC988: <span class="text-slate-700">${phaseLabel}</span></p>
+                    ${hasEssentialMissing ? `<p class="text-[10px] text-amber-500 font-medium mt-1.5 flex items-center gap-1"><span>⚠</span> 미선택 필수 상품이 있어요</p>` : ""}
                 </div>
                 <div class="purpose-cart-items px-4 py-3 space-y-2">
                     ${stepsHtml}
@@ -1142,8 +1142,8 @@ window.openOrderView = function openOrderView(sessionId) {
                      alt="${selected.product.name}">
                 <div class="flex-1 min-w-0">
                     <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">${step.name}</p>
-                    <p class="text-sm font-bold text-slate-800 leading-tight truncate">${selected.product.name}</p>
-                    <p class="text-xs text-slate-400 font-bold mt-0.5">수량 1개</p>
+                    <p class="text-sm font-medium text-slate-800 leading-tight truncate">${selected.product.name}</p>
+                    <p class="text-xs text-slate-400 font-normal mt-0.5">수량 1개</p>
                 </div>
                 <p class="text-sm font-bold text-slate-800 flex-shrink-0">${selected.product.price}원</p>
             </div>
@@ -1426,8 +1426,8 @@ function renderClaimStatusPanel(sessionId = state.currentSessionId) {
     if (detailsEl) {
         detailsEl.innerHTML = details.map(([label, value]) => `
             <div class="rounded-[22px] border border-slate-100 bg-slate-50 px-4 py-3">
-                <p class="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">${label}</p>
-                <p class="mt-1 text-sm font-bold text-slate-800 leading-relaxed break-words">${value || "-"}</p>
+                <p class="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400">${label}</p>
+                <p class="mt-1 text-sm font-medium text-slate-800 leading-relaxed break-words">${value || "-"}</p>
             </div>
         `).join("");
     }
@@ -1455,7 +1455,7 @@ function renderClaimStatusPanel(sessionId = state.currentSessionId) {
                     </div>
                     <div class="flex-1 pb-3">
                         <div class="flex items-center gap-2">
-                            <p class="text-sm font-bold ${titleClass}">${stage.label}</p>
+                            <p class="text-sm font-semibold ${titleClass}">${stage.label}</p>
                             <span class="inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold ${badgeClass}">${badge}</span>
                         </div>
                         <p class="mt-1 text-sm leading-relaxed ${textClass}">${stage.description}</p>
@@ -1751,7 +1751,7 @@ function showMissingEssentialToast(missingSteps, sessionId) {
                 <svg class="w-6 h-6 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
             </div>
             <div class="flex-1">
-                <p class="text-sm font-bold text-slate-900 mb-1">${intentKey === "캠핑" ? "이거 챙기지 않으면 캠핑 현장에서 곤란해요! ⛺" : intentKey === "데스크탑" ? "이 부품 빠지면 조립 전에 바로 막혀요! 🖥️" : intentKey === "이사" ? "이거 없으면 첫 출근 전날 곤란해요! 📦" : "이거 빠트리고 커튼 설치 할 뻔 했어요! 😅"}</p>
+                <p class="text-sm font-semibold text-slate-900 mb-1">${intentKey === "캠핑" ? "이거 챙기지 않으면 캠핑 현장에서 곤란해요! ⛺" : intentKey === "데스크탑" ? "이 부품 빠지면 조립 전에 바로 막혀요! 🖥️" : intentKey === "이사" ? "이거 없으면 첫 출근 전날 곤란해요! 📦" : "이거 빠트리고 커튼 설치 할 뻔 했어요! 😅"}</p>
                 <p class="text-xs text-slate-500 leading-relaxed">${stepNames} 상품을 아직 고르지 않으셨어요. 꼭 필요한 상품이에요!</p>
             </div>
             <button onclick="document.getElementById('missing-toast').remove()" class="text-slate-300 hover:text-slate-500 transition-colors flex-shrink-0">
@@ -2015,14 +2015,14 @@ function renderInfoView(intent) {
         const btnClass = "flex-shrink-0 info-card border-2 border-slate-100 rounded-2xl transition-all bg-slate-50 hover:border-gmarket-blue p-3 text-center flex flex-col items-center justify-center gap-1 min-w-[5rem]";
         const buttons = q.options.map(opt => {
             const buttonAttrs = `data-choice-category="${q.category}" data-choice-value="${opt.main}"`;
-            const sub = opt.sub ? `<span class="text-[11px] font-bold text-slate-400 whitespace-nowrap">${opt.sub}</span>` : "";
+            const sub = opt.sub ? `<span class="text-[11px] font-normal text-slate-400 whitespace-nowrap">${opt.sub}</span>` : "";
             return `<button ${buttonAttrs} onclick="selectChoice(this, '${q.category}')" class="${btnClass}">
-                <span class="text-sm font-bold text-slate-800 whitespace-nowrap">${opt.main}</span>
+                <span class="text-sm font-semibold text-slate-800 whitespace-nowrap">${opt.main}</span>
                 ${sub}
             </button>`;
         }).join("");
         return `<div>
-            <label class="text-sm font-bold text-slate-400 mb-3 block">${q.label}</label>
+            <label class="text-sm font-medium text-slate-400 mb-3 block">${q.label}</label>
             <div class="flex gap-2 overflow-x-auto scrollbar-hide pb-1 pt-2 -mt-2">${buttons}</div>
         </div>`;
     };
@@ -2074,7 +2074,7 @@ window.generatePlan = function generatePlan() {
     }
 
     saveSearchHistory();
-    withLoading("AI가 최적의 상품을 분석 중...", 3200, () => {
+    withLoading("\"딱\" 맞는 최적의 상품을 분석 중...", 3200, () => {
         solutionView?.classList.remove("hidden");
         renderSolution(state.currentIntent, state.rawQuery);
         scrollToSection(solutionView);
@@ -2135,7 +2135,7 @@ window.openPDP = function openPDP(stepIdx, prodIdx) {
         summaryList.innerHTML = "";
         product.aiSummary.forEach((text, index) => {
             const item = document.createElement("div");
-            item.className = "flex gap-3 items-start transition-all hover:translate-x-1 duration-300 text-left font-bold";
+            item.className = "flex gap-3 items-start transition-all hover:translate-x-1 duration-300 text-left font-normal";
             item.innerHTML = `
                 <div class="w-5 h-5 rounded-full bg-slate-900 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">${index + 1}</div>
                 <p class="text-sm sm:text-[16px] text-slate-600 leading-relaxed font-medium text-left" style="word-break:keep-all">${text}</p>
@@ -2233,11 +2233,11 @@ function renderDeliveryPanel() {
                         <img src="${item.product.img}" alt="${item.product.name}" class="w-14 h-14 rounded-2xl object-cover border border-slate-100 bg-white flex-shrink-0">
                         <div class="min-w-0 flex-1">
                             <div class="flex flex-wrap items-center gap-2 mb-1.5">
-                                <span class="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">${item.stepName}</span>
+                                <span class="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400">${item.stepName}</span>
                                 <span class="inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold ${itemStatus.badgeClass}">${itemStatus.label}</span>
                             </div>
-                            <p class="text-sm font-bold text-slate-800 truncate">${item.product.name}</p>
-                            <p class="mt-1 text-xs font-bold text-slate-400">\uB3C4\uCC29 \uC608\uC815 ${formatDeliveryDate(item.expectedDate)}</p>
+                            <p class="text-sm font-medium text-slate-800 truncate">${item.product.name}</p>
+                            <p class="mt-1 text-xs font-normal text-slate-400">\uB3C4\uCC29 \uC608\uC815 ${formatDeliveryDate(item.expectedDate)}</p>
                         </div>
                         <svg class="w-5 h-5 flex-shrink-0 ${isActive ? "text-gmarket-blue" : "text-slate-300"}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                     </div>
@@ -2268,7 +2268,7 @@ function renderDeliveryPanel() {
                     </div>
                     <div class="flex-1 pb-3">
                         <div class="flex items-center gap-2">
-                            <p class="text-sm font-bold ${titleClass}">${stage.label}</p>
+                            <p class="text-sm font-semibold ${titleClass}">${stage.label}</p>
                             <span class="inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold ${badgeClass}">${badge}</span>
                         </div>
                         <p class="mt-1 text-sm leading-relaxed ${textClass}">${stage.description}</p>
