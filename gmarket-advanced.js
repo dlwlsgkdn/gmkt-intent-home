@@ -2007,9 +2007,22 @@ const infoViewConfig = {
 
 function renderInfoView(intent) {
     const container = document.getElementById("questions-container");
+    const infoTitle = document.getElementById("info-title");
     if (!container) return;
     const cfg = infoViewConfig[intent];
     if (!cfg) return;
+
+    const trimmedQuery = state.rawQuery?.trim() || "";
+    if (infoTitle) {
+        infoTitle.innerHTML = trimmedQuery
+            ? `
+                <span class="block">
+                    "<span class="inline-block max-w-[min(100%,16rem)] align-bottom truncate font-semibold text-slate-900 sm:max-w-[20rem] md:max-w-[24rem]">${trimmedQuery}</span>"에 딱 맞는 조건을 찾기 위해
+                </span>
+                <span class="block">몇 가지만 알려주세요</span>
+            `
+            : '환경에 "딱" 맞는 계획을 위해<br>몇 가지만 알려주세요';
+    }
 
     const buildQ = (q) => {
         const btnClass = "flex-shrink-0 info-card border-2 border-slate-100 rounded-2xl transition-all bg-slate-50 hover:border-gmarket-blue p-3 text-center flex flex-col items-center justify-center gap-1 min-w-[5rem]";
@@ -2513,12 +2526,21 @@ function renderSolution(key, rawQuery) {
 
     if (!data || !planContainer || !intentTitle) return;
 
-    intentTitle.innerHTML = `
-        "<span class="font-bold text-slate-900">${rawQuery}</span>"에 대한<br />
-        <span class="font-bold text-gmarket-blue underline decoration-gmarket-yellow decoration-4 underline-offset-8">
-            지마켓 맞춤 계획
-        </span>입니다
-    `;
+    const trimmedQuery = rawQuery?.trim() || "";
+    intentTitle.innerHTML = trimmedQuery
+        ? `
+            <span class="block">
+                "<span class="inline-block max-w-[min(100%,16rem)] align-bottom truncate font-bold text-slate-900 sm:max-w-[20rem] md:max-w-[24rem]">${trimmedQuery}</span>"에 대한
+            </span>
+            <span class="inline-block font-bold text-gmarket-blue underline decoration-gmarket-yellow decoration-4 underline-offset-8">
+                지마켓 맞춤 계획
+            </span>
+            <span class="inline-block">입니다</span>
+        `
+        : `
+            <span class="block">지마켓 맞춤 계획</span>
+            <span class="block text-gmarket-blue underline decoration-gmarket-yellow decoration-4 underline-offset-8">상품 결과</span>
+        `;
 
     const stepCountLabel = document.getElementById("step-count-label");
     if (stepCountLabel) stepCountLabel.textContent = data.steps.length;

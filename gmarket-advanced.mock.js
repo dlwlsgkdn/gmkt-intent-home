@@ -972,25 +972,11 @@
                 description: "이사 첫날부터 잠자리가 확보되어야 출근에 지장이 없습니다. 원룸에 맞는 싱글 침구를 먼저 준비합니다.",
                 products: [
                     {
-                        id: 405,
-                        name: "접이식 토퍼 매트리스 (싱글)",
-                        price: "89,000",
-                        originalPrice: "129,000",
-                        score: 97,
-                        img: "https://images.unsplash.com/photo-1631049307264-da0ec9d70304?auto=format&fit=crop&q=80&w=600",
-                        aiSummary: [
-                            "침대 프레임 없이 바닥에 바로 깔 수 있어 원룸에 딱 맞습니다.",
-                            "접어서 세워두면 낮에는 공간을 넓게 쓸 수 있습니다.",
-                            "메모리폼 소재로 출근 전 수면 질을 확보하기 좋습니다."
-                        ],
-                        spec: { size: "100x200x8cm", feature: "3단 접이식 메모리폼" }
-                    },
-                    {
                         id: 406,
                         name: "사계절 이불 + 베개 세트",
                         price: "45,900",
                         originalPrice: "65,000",
-                        score: 95,
+                        score: 98,
                         img: "https://images.unsplash.com/photo-1584100936595-c0654b55a2e2?auto=format&fit=crop&q=80&w=600",
                         aiSummary: [
                             "이불과 베개를 한 번에 구매할 수 있어 따로 고를 필요가 없습니다.",
@@ -1000,18 +986,18 @@
                         spec: { size: "싱글 이불 + 베개 1", feature: "워셔블 사계절 침구 세트" }
                     },
                     {
-                        id: 407,
-                        name: "방수 매트리스 커버",
-                        price: "12,800",
-                        originalPrice: "18,000",
-                        score: 87,
-                        img: "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&q=80&w=600",
+                        id: 405,
+                        name: "접이식 토퍼 매트리스 (싱글)",
+                        price: "89,000",
+                        originalPrice: "129,000",
+                        score: 95,
+                        img: "https://images.unsplash.com/photo-1631049307264-da0ec9d70304?auto=format&fit=crop&q=80&w=600",
                         aiSummary: [
-                            "매트리스 오염 방지에 필수인 보호 커버입니다.",
-                            "원룸에서 커피나 음료를 흘려도 매트리스 본체가 보호됩니다.",
-                            "탈착이 쉬워 세탁 후 바로 씌울 수 있습니다."
+                            "침대 프레임 없이 바닥에 바로 깔 수 있어 원룸에 딱 맞습니다.",
+                            "접어서 세워두면 낮에는 공간을 넓게 쓸 수 있습니다.",
+                            "메모리폼 소재로 출근 전 수면 질을 확보하기 좋습니다."
                         ],
-                        spec: { size: "싱글 (100x200cm)", feature: "TPU 방수 코팅 커버" }
+                        spec: { size: "100x200x8cm", feature: "3단 접이식 메모리폼" }
                     },
                     {
                         id: 408,
@@ -1026,6 +1012,20 @@
                             "스마트폰 알람만으로 불안한 첫 출근 기간에 보험용으로 적합합니다."
                         ],
                         spec: { size: "10x10x5cm", feature: "진동 알람 + 선라이즈 조명" }
+                    },
+                    {
+                        id: 407,
+                        name: "방수 매트리스 커버",
+                        price: "12,800",
+                        originalPrice: "18,000",
+                        score: 87,
+                        img: "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "매트리스 오염 방지에 필수인 보호 커버입니다.",
+                            "원룸에서 커피나 음료를 흘려도 매트리스 본체가 보호됩니다.",
+                            "탈착이 쉬워 세탁 후 바로 씌울 수 있습니다."
+                        ],
+                        spec: { size: "싱글 (100x200cm)", feature: "TPU 방수 코팅 커버" }
                     }
                 ]
             },
@@ -1036,11 +1036,39 @@
                 description: "자취 첫 달은 외식비가 부담될 수 있으므로, 간단한 조리와 세탁이 가능한 기본 가전을 갖춰두면 생활비를 아낄 수 있습니다.",
                 products: [
                     {
+                        id: 422,
+                        name: "스테인리스 수저 세트 4인분",
+                        price: "8,900",
+                        originalPrice: "13,000",
+                        score: 97,
+                        img: "https://images.unsplash.com/photo-1590794056226-79ef3a8147e1?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "이사 첫날 밥을 해놓고 수저가 없으면 난감합니다.",
+                            "스테인리스 소재라 위생적이고 오래 사용할 수 있습니다.",
+                            "4인분 구성이지만 혼자 써도 여유 있게 돌려쓰기 좋습니다."
+                        ],
+                        spec: { size: "수저 4개 + 젓가락 4쌍", feature: "스테인리스 18-8 수저 세트" }
+                    },
+                    {
+                        id: 412,
+                        name: "무선 핸디 청소기",
+                        price: "59,800",
+                        originalPrice: "79,000",
+                        score: 95,
+                        img: "https://images.unsplash.com/photo-1558317374-067fb5f30001?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "원룸은 면적이 좁아 무선 핸디형이면 충분합니다.",
+                            "충전 거치대 포함이라 세워두면 보관 공간을 차지하지 않습니다.",
+                            "틈새 노즐로 좁은 원룸 구석구석 청소가 쉽습니다."
+                        ],
+                        spec: { size: "2.1kg", feature: "무선 경량 핸디 청소기" }
+                    },
+                    {
                         id: 409,
                         name: "미니 전기밥솥 3인용",
                         price: "39,800",
                         originalPrice: "55,000",
-                        score: 96,
+                        score: 93,
                         img: "https://images.unsplash.com/photo-1556909114-44e3e70034e2?auto=format&fit=crop&q=80&w=600",
                         aiSummary: [
                             "혼자 먹기 딱 좋은 1~3인용 소형 밥솥입니다.",
@@ -1054,7 +1082,7 @@
                         name: "1인 인덕션 + 냄비 세트",
                         price: "32,500",
                         originalPrice: "45,000",
-                        score: 93,
+                        score: 90,
                         img: "https://images.unsplash.com/photo-1584568694244-14fbdf83bd30?auto=format&fit=crop&q=80&w=600",
                         aiSummary: [
                             "가스레인지 없는 원룸에서 바로 요리할 수 있는 세트입니다.",
@@ -1068,7 +1096,7 @@
                         name: "보온보냉 도시락 + 가방 세트",
                         price: "21,500",
                         originalPrice: "29,000",
-                        score: 91,
+                        score: 88,
                         img: "https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?auto=format&fit=crop&q=80&w=600",
                         aiSummary: [
                             "점심 물가가 만만치 않아 도시락으로 식비를 크게 줄일 수 있습니다.",
@@ -1076,20 +1104,6 @@
                             "보온 가방 포함이라 출근길에 들고 가기 편합니다."
                         ],
                         spec: { size: "700ml 2단", feature: "스텐 도시락 + 보온가방" }
-                    },
-                    {
-                        id: 412,
-                        name: "무선 핸디 청소기",
-                        price: "59,800",
-                        originalPrice: "79,000",
-                        score: 92,
-                        img: "https://images.unsplash.com/photo-1558317374-067fb5f30001?auto=format&fit=crop&q=80&w=600",
-                        aiSummary: [
-                            "원룸은 면적이 좁아 무선 핸디형이면 충분합니다.",
-                            "충전 거치대 포함이라 세워두면 보관 공간을 차지하지 않습니다.",
-                            "틈새 노즐로 좁은 원룸 구석구석 청소가 쉽습니다."
-                        ],
-                        spec: { size: "2.1kg", feature: "무선 경량 핸디 청소기" }
                     }
                 ]
             },
