@@ -428,6 +428,7 @@ function hydrateSessionContext(sessionId) {
     if (searchInput) {
         searchInput.value = state.rawQuery;
         updateSearchUI(state.rawQuery);
+        autoResizeTextarea(searchInput);
     }
 }
 
@@ -483,7 +484,7 @@ function showSolutionThread(session) {
     solutionView.classList.remove("hidden");
 
     requestAnimationFrame(() => {
-        solutionView.scrollIntoView({ behavior: "smooth", block: "start" });
+        scrollToSection(solutionView);
     });
 }
 
@@ -514,7 +515,7 @@ function renderThreadBase(session, options = {}) {
 
     if (scrollIntoView) {
         requestAnimationFrame(() => {
-            solutionView.scrollIntoView({ behavior: "smooth", block: "start" });
+            scrollToSection(solutionView);
         });
     }
 
@@ -700,6 +701,7 @@ function applyHistoryEntry(index) {
     if (searchInput) {
         searchInput.value = entry.query;
         updateSearchUI(entry.query);
+        autoResizeTextarea(searchInput);
     }
 
     executeSearch(entry.query, { resetChoices: false });
@@ -1183,7 +1185,7 @@ window.openOrderView = function openOrderView(sessionId) {
         if (orderView) {
             orderView.classList.remove("hidden");
             orderView.classList.add("flex", "flex-col");
-            orderView.scrollIntoView({ behavior: "smooth", block: "start" });
+            scrollToSection(orderView);
         }
         hidePageLoading();
     }, 2000);
@@ -1200,7 +1202,7 @@ window.closeOrderView = function closeOrderView() {
     }
     // 솔루션 뷰로 스크롤백
     const solutionView = document.getElementById("solution-view");
-    solutionView?.scrollIntoView({ behavior: "smooth", block: "start" });
+    scrollToSection(solutionView);
     updateBottomCheckoutBar();
 };
 
@@ -1223,7 +1225,7 @@ window.goBackToSolution = function goBackToSolution() {
     closeDeliveryPanel();
     closeClaimStatusPanel();
     const solutionView = document.getElementById("solution-view");
-    solutionView?.scrollIntoView({ behavior: "smooth", block: "start" });
+    scrollToSection(solutionView);
 };
 
 function syncCompleteActionButtons(orderMeta = null) {
@@ -1575,7 +1577,7 @@ function renderClaimView(sessionId, options = {}) {
 
     if (scrollIntoView) {
         requestAnimationFrame(() => {
-            claimView.scrollIntoView({ behavior: "smooth", block: "start" });
+            scrollToSection(claimView);
         });
     }
 
@@ -1725,7 +1727,7 @@ window.submitOrder = function submitOrder() {
         if (completeView) {
             completeView.classList.remove("hidden");
             completeView.classList.add("flex", "flex-col");
-            completeView.scrollIntoView({ behavior: "smooth", block: "start" });
+            scrollToSection(completeView);
         }
         hidePageLoading();
     }, 2000);
@@ -1788,6 +1790,28 @@ function showMiniToast(message, type = "info") {
 
 /* ─── Search UI ─────────────────────────────────────────────── */
 
+function scrollToSection(el) {
+    if (!el) return;
+    const top = el.getBoundingClientRect().top + window.scrollY - 80;
+    window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+}
+
+function autoResizeTextarea(el) {
+    if (!el) return;
+    el.style.height = "auto";
+    const singleLineHeight = parseInt(getComputedStyle(el).lineHeight) + parseInt(getComputedStyle(el).paddingTop) + parseInt(getComputedStyle(el).paddingBottom);
+    el.style.height = el.scrollHeight + "px";
+
+    const submitBtn = document.getElementById("submitBtn");
+    if (submitBtn) {
+        const isMultiLine = el.scrollHeight > singleLineHeight + 4;
+        submitBtn.classList.toggle("top-1/2", !isMultiLine);
+        submitBtn.classList.toggle("-translate-y-1/2", !isMultiLine);
+        submitBtn.classList.toggle("bottom-2", isMultiLine);
+        submitBtn.classList.toggle("sm:bottom-3", isMultiLine);
+    }
+}
+
 function updateSearchUI(value) {
     const submitBtn = document.getElementById("submitBtn");
     if (!submitBtn) return;
@@ -1817,7 +1841,7 @@ function executeSearch(query, options = {}) {
             renderInfoView(intent);
             infoView?.classList.remove("hidden");
             infoView?.classList.add("flex");
-            infoView?.scrollIntoView({ behavior: "smooth" });
+            scrollToSection(infoView);
         });
     };
 
@@ -2053,7 +2077,7 @@ window.generatePlan = function generatePlan() {
     withLoading("AI가 최적의 상품을 분석 중...", 3200, () => {
         solutionView?.classList.remove("hidden");
         renderSolution(state.currentIntent, state.rawQuery);
-        solutionView?.scrollIntoView({ behavior: "smooth" });
+        scrollToSection(solutionView);
         updateBottomCheckoutBar();
     }, "book");
 };
@@ -2317,7 +2341,7 @@ function restoreOrderThread(sessionId, options = {}) {
         orderView.classList.remove("hidden");
         orderView.classList.add("flex", "flex-col");
         if (scrollIntoView) {
-            orderView.scrollIntoView({ behavior: "smooth", block: "start" });
+            scrollToSection(orderView);
         }
     }
 
@@ -2355,7 +2379,7 @@ function restoreCompleteThread(sessionId) {
     if (completeView) {
         completeView.classList.remove("hidden");
         completeView.classList.add("flex", "flex-col");
-        completeView.scrollIntoView({ behavior: "smooth", block: "start" });
+        scrollToSection(completeView);
     }
     if (claimView) {
         claimView.classList.add("hidden");
@@ -2416,7 +2440,7 @@ window.moveToCartThread = function moveToCartThread(sessionId) {
     renderCart();
     syncTransactionLocks(sessionId);
     const solutionView = document.getElementById("solution-view");
-    solutionView?.scrollIntoView({ behavior: "smooth", block: "start" });
+    scrollToSection(solutionView);
 };
 
 const originalOpenOrderView = window.openOrderView;
@@ -2617,8 +2641,28 @@ document.addEventListener("DOMContentLoaded", () => {
     // Initialise tab (cart is default)
     switchTab("cart");
 
+    // URL 파라미터로 전달된 검색어 자동 실행 (목업 홈 쓰레드 모드 진입)
+    const urlQuery = new URLSearchParams(window.location.search).get("q");
+    if (urlQuery) {
+        if (searchInput) {
+            searchInput.value = urlQuery;
+            autoResizeTextarea(searchInput);
+            updateSearchUI(urlQuery);
+        }
+        executeSearch(urlQuery);
+        window.history.replaceState({}, "", window.location.pathname);
+    }
+
     searchInput?.addEventListener("input", (event) => {
         updateSearchUI(event.target.value);
+        autoResizeTextarea(searchInput);
+    });
+
+    searchInput?.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            searchForm?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+        }
     });
 
     searchForm?.addEventListener("submit", (event) => {
@@ -2628,7 +2672,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     curtainTag?.addEventListener("click", () => {
         const value = "커튼 달기";
-        if (searchInput) searchInput.value = value;
+        if (searchInput) { searchInput.value = value; autoResizeTextarea(searchInput); }
         updateSearchUI(value);
         executeSearch(value);
     });
@@ -2636,7 +2680,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const campingTag = document.getElementById("campingTag");
     campingTag?.addEventListener("click", () => {
         const value = "캠핑 입문 준비";
-        if (searchInput) searchInput.value = value;
+        if (searchInput) { searchInput.value = value; autoResizeTextarea(searchInput); }
         updateSearchUI(value);
         executeSearch(value);
     });
@@ -2644,7 +2688,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const desktopTag = document.getElementById("desktopTag");
     desktopTag?.addEventListener("click", () => {
         const value = "데스크탑 조립 세팅";
-        if (searchInput) searchInput.value = value;
+        if (searchInput) { searchInput.value = value; autoResizeTextarea(searchInput); }
         updateSearchUI(value);
         executeSearch(value);
     });
@@ -2652,7 +2696,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const movingTag = document.getElementById("movingTag");
     movingTag?.addEventListener("click", () => {
         const value = "원룸 이사 준비";
-        if (searchInput) searchInput.value = value;
+        if (searchInput) { searchInput.value = value; autoResizeTextarea(searchInput); }
         updateSearchUI(value);
         executeSearch(value);
     });

@@ -12,9 +12,14 @@ body {
     z-index: 0;
 }
 
-.product-card:hover, .info-card:hover {
+.product-card:hover {
     transform: translateY(-8px);
     box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1);
+}
+
+.info-card:active {
+    transform: scale(0.94);
+    transition: transform 0.1s ease;
 }
 
 .scrollbar-hide::-webkit-scrollbar {
