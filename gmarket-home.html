@@ -1,0 +1,1235 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Gmarket</title>
+    <link rel="stylesheet" href="https://fonts.cdnfonts.com/css/gmarket-sans">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            font-family: 'Gmarket Sans', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+            background: #f5f5f5;
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        /* ── Phone Shell ── */
+        .phone {
+            width: 100%;
+            max-width: 390px;
+            min-height: 100vh;
+            background: #fff;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ── Header ── */
+        .header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: #fff;
+            border-bottom: 1px solid #e8e8e8;
+        }
+
+        .header-top {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+        }
+
+        .gmarket-logo {
+            width: 34px;
+            height: 34px;
+            flex-shrink: 0;
+        }
+
+        .search-bar-trigger {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border: 2px solid #00B853;
+            border-radius: 8px;
+            padding: 8px 12px;
+            cursor: pointer;
+            background: #fff;
+        }
+
+        .search-bar-trigger .placeholder-text {
+            flex: 1;
+            font-size: 13px;
+            color: #aaa;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .search-bar-trigger .search-icon {
+            color: #00B853;
+            flex-shrink: 0;
+        }
+
+        .cart-btn {
+            position: relative;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 4px;
+            color: #333;
+        }
+
+        .cart-badge {
+            position: absolute;
+            top: -2px;
+            right: -2px;
+            background: #ff4444;
+            color: #fff;
+            font-size: 9px;
+            font-weight: 700;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* ── Nav Tabs ── */
+        .nav-tabs {
+            display: flex;
+            overflow-x: auto;
+            scrollbar-width: none;
+            border-top: 1px solid #f0f0f0;
+            background: #fff;
+        }
+        .nav-tabs::-webkit-scrollbar { display: none; }
+
+        .nav-tab {
+            flex-shrink: 0;
+            padding: 10px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #666;
+            cursor: pointer;
+            white-space: nowrap;
+            position: relative;
+            border: none;
+            background: none;
+        }
+
+        .nav-tab.active {
+            color: #00B853;
+        }
+
+        .nav-tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 14px;
+            right: 14px;
+            height: 2px;
+            background: #00B853;
+            border-radius: 2px 2px 0 0;
+        }
+
+        .nav-tab .tab-badge {
+            font-size: 9px;
+            font-weight: 800;
+            color: #ff4444;
+            vertical-align: super;
+        }
+
+        .nav-tab .tab-lightning { color: #ff6600; }
+        .nav-tab .tab-emart { color: #0064C8; }
+        .nav-tab .tab-emart em { font-style: italic; color: #0064C8; }
+
+        /* ── Scrollable Content ── */
+        .content {
+            flex: 1;
+            overflow-y: auto;
+            scrollbar-width: none;
+        }
+        .content::-webkit-scrollbar { display: none; }
+
+        /* ── Banner ── */
+        .banner {
+            width: 100%;
+            aspect-ratio: 390 / 200;
+            background: linear-gradient(135deg, #000 0%, #1a1a1a 50%, #0a2a00 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .banner-inner {
+            display: flex;
+            height: 100%;
+        }
+
+        .banner-left {
+            width: 45%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .banner-kkoc {
+            font-size: 88px;
+            font-weight: 900;
+            color: #00FF55;
+            line-height: 1;
+            text-shadow: 0 0 30px rgba(0,255,85,0.5);
+            font-family: 'Arial Black', sans-serif;
+            transform: skewX(-5deg);
+        }
+
+        .banner-new-badge {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            background: linear-gradient(135deg, #00FF55, #00B853);
+            color: #000;
+            font-size: 9px;
+            font-weight: 900;
+            padding: 3px 7px;
+            border-radius: 4px;
+            letter-spacing: -0.3px;
+        }
+
+        .banner-percent {
+            position: absolute;
+            bottom: 14px;
+            left: 18px;
+            font-size: 38px;
+            font-weight: 900;
+            color: #00FF55;
+            font-family: 'Arial Black', sans-serif;
+            text-shadow: 0 0 20px rgba(0,255,85,0.6);
+        }
+
+        .banner-right {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 16px 16px 16px 4px;
+        }
+
+        .banner-logo-row {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin-bottom: 8px;
+        }
+
+        .banner-logo-icon {
+            width: 18px;
+            height: 18px;
+            background: #00B853;
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .banner-logo-text {
+            font-size: 11px;
+            font-weight: 700;
+            color: #aaa;
+        }
+
+        .banner-title {
+            font-size: 20px;
+            font-weight: 900;
+            color: #fff;
+            line-height: 1.3;
+            margin-bottom: 6px;
+        }
+
+        .banner-sub {
+            font-size: 11px;
+            color: #888;
+        }
+
+        .banner-counter {
+            position: absolute;
+            bottom: 12px;
+            right: 12px;
+            background: rgba(0,0,0,0.55);
+            color: #fff;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 9px;
+            border-radius: 12px;
+        }
+
+        /* ── Category Icons ── */
+        .categories {
+            background: #fff;
+            padding: 20px 0 8px;
+        }
+
+        .category-row {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 0;
+            padding: 0 4px;
+            margin-bottom: 4px;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+        .category-row::-webkit-scrollbar { display: none; }
+
+        .category-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            padding: 6px 2px 10px;
+            cursor: pointer;
+        }
+
+        .category-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: #e8f7ee;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            position: relative;
+        }
+
+        .category-icon.green { background: #00B853; }
+        .category-icon.yellow { background: #fff3cd; }
+
+        .category-icon svg {
+            width: 24px;
+            height: 24px;
+        }
+
+        .category-label {
+            font-size: 10.5px;
+            font-weight: 600;
+            color: #333;
+            text-align: center;
+            line-height: 1.3;
+            white-space: nowrap;
+        }
+
+        .category-dot-row {
+            display: flex;
+            justify-content: center;
+            gap: 4px;
+            padding: 6px 0 12px;
+        }
+
+        .category-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #ddd;
+        }
+        .category-dot.active { background: #00B853; width: 16px; border-radius: 3px; }
+
+        /* ── Ad Banner ── */
+        .ad-banner {
+            margin: 8px;
+            border-radius: 12px;
+            overflow: hidden;
+            background: linear-gradient(135deg, #3B27C4 0%, #6B4EFF 100%);
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: relative;
+        }
+
+        .ad-tag {
+            position: absolute;
+            top: 8px;
+            left: 10px;
+            font-size: 9px;
+            color: rgba(255,255,255,0.6);
+            font-weight: 600;
+        }
+
+        .ad-title {
+            font-size: 22px;
+            font-weight: 900;
+            color: #fff;
+            margin-top: 10px;
+        }
+
+        .ad-title span { color: #FFD200; }
+
+        .ad-products {
+            display: flex;
+            gap: 4px;
+        }
+
+        .ad-product-img {
+            width: 60px;
+            height: 70px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+        }
+
+        /* ── Section ── */
+        .section {
+            background: #fff;
+            margin-top: 8px;
+            padding: 20px 16px 16px;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 800;
+            color: #111;
+            margin-bottom: 14px;
+        }
+
+        .product-row {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            scrollbar-width: none;
+            padding-bottom: 4px;
+        }
+        .product-row::-webkit-scrollbar { display: none; }
+
+        .product-card {
+            flex-shrink: 0;
+            width: 130px;
+            cursor: pointer;
+        }
+
+        .product-thumb {
+            width: 130px;
+            height: 130px;
+            border-radius: 10px;
+            background: #f5f5f5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            margin-bottom: 7px;
+            overflow: hidden;
+        }
+
+        .product-name {
+            font-size: 12px;
+            color: #333;
+            font-weight: 500;
+            line-height: 1.4;
+            margin-bottom: 4px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .product-price {
+            font-size: 14px;
+            font-weight: 800;
+            color: #111;
+        }
+
+        .product-discount {
+            font-size: 13px;
+            font-weight: 700;
+            color: #ff4444;
+            margin-right: 4px;
+        }
+
+        /* ── Bottom Nav ── */
+        .bottom-nav {
+            position: sticky;
+            bottom: 0;
+            background: #fff;
+            border-top: 1px solid #e8e8e8;
+            display: flex;
+            z-index: 100;
+        }
+
+        .bottom-nav-btn {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 0;
+            border: none;
+            background: none;
+            cursor: pointer;
+            color: #999;
+            gap: 3px;
+        }
+
+        .bottom-nav-btn.active { color: #00B853; }
+
+        .bottom-nav-btn span {
+            font-size: 9px;
+            font-weight: 600;
+        }
+
+        /* ══════════════════════════════════
+           SEARCH OVERLAY
+        ══════════════════════════════════ */
+        .search-overlay {
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            max-width: 390px;
+            background: #fff;
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.18s ease;
+        }
+
+        .search-overlay.open {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .search-overlay-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .back-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 6px;
+            color: #333;
+            flex-shrink: 0;
+        }
+
+        .search-input-wrap {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border: 2px solid #00B853;
+            border-radius: 8px;
+            padding: 8px 12px;
+            background: #fff;
+        }
+
+        .search-input-wrap input {
+            flex: 1;
+            border: none;
+            outline: none;
+            font-size: 14px;
+            font-family: inherit;
+            font-weight: 500;
+            color: #111;
+            background: transparent;
+        }
+
+        .search-input-wrap input::placeholder { color: #bbb; }
+
+        .clear-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #aaa;
+            display: none;
+            padding: 2px;
+        }
+
+        .clear-btn.visible { display: flex; }
+
+        .search-submit-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #00B853;
+            flex-shrink: 0;
+        }
+
+        /* Suggestions */
+        .suggestions {
+            flex: 1;
+            overflow-y: auto;
+            scrollbar-width: none;
+        }
+        .suggestions::-webkit-scrollbar { display: none; }
+
+        .suggestions-section {
+            padding: 16px 0 0;
+        }
+
+        .suggestions-label {
+            font-size: 11px;
+            font-weight: 700;
+            color: #aaa;
+            padding: 0 16px 8px;
+            letter-spacing: 0.3px;
+        }
+
+        .suggestion-item {
+            display: flex;
+            align-items: center;
+            padding: 11px 16px;
+            cursor: pointer;
+            gap: 10px;
+            transition: background 0.1s;
+        }
+
+        .suggestion-item:active { background: #f8f8f8; }
+
+        .suggestion-item .icon {
+            color: #bbb;
+            flex-shrink: 0;
+        }
+
+        .suggestion-item .keyword {
+            flex: 1;
+            font-size: 14px;
+            color: #222;
+            font-weight: 500;
+        }
+
+        .suggestion-item .keyword em {
+            font-style: normal;
+            color: #00B853;
+            font-weight: 700;
+        }
+
+        .suggestion-item .arrow {
+            color: #ddd;
+            flex-shrink: 0;
+        }
+
+        /* ── 쓰레드 모드 버튼 ── */
+        .thread-mode-btn {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            background: linear-gradient(135deg, #00B853 0%, #007BFF 100%);
+            color: #fff;
+            border: none;
+            border-radius: 20px;
+            padding: 5px 11px 5px 8px;
+            font-size: 11.5px;
+            font-weight: 700;
+            font-family: inherit;
+            cursor: pointer;
+            white-space: nowrap;
+            flex-shrink: 0;
+            box-shadow: 0 2px 8px rgba(0,184,83,0.35);
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+
+        .thread-mode-btn:active {
+            transform: scale(0.95);
+            box-shadow: 0 1px 4px rgba(0,184,83,0.2);
+        }
+
+        .thread-mode-btn .btn-icon {
+            width: 16px;
+            height: 16px;
+            background: rgba(255,255,255,0.25);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* beta 뱃지 */
+        .beta-badge {
+            background: rgba(255,255,255,0.3);
+            color: #fff;
+            font-size: 8px;
+            font-weight: 800;
+            padding: 1px 4px;
+            border-radius: 3px;
+            letter-spacing: 0.5px;
+            margin-left: 2px;
+        }
+
+        .divider {
+            height: 1px;
+            background: #f0f0f0;
+            margin: 0 16px;
+        }
+
+        /* Popular keywords */
+        .popular-section {
+            padding: 20px 16px 0;
+        }
+
+        .popular-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .popular-title {
+            font-size: 14px;
+            font-weight: 800;
+            color: #111;
+        }
+
+        .popular-updated {
+            font-size: 10px;
+            color: #bbb;
+        }
+
+        .popular-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+        }
+
+        .popular-item {
+            display: flex;
+            align-items: center;
+            padding: 9px 0;
+            gap: 12px;
+            cursor: pointer;
+        }
+
+        .popular-rank {
+            font-size: 14px;
+            font-weight: 800;
+            color: #111;
+            width: 18px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .popular-rank.top3 { color: #00B853; }
+
+        .popular-keyword {
+            flex: 1;
+            font-size: 13px;
+            font-weight: 500;
+            color: #222;
+        }
+
+        .popular-change {
+            font-size: 10px;
+            font-weight: 700;
+        }
+
+        .popular-change.up { color: #ff4444; }
+        .popular-change.down { color: #4488ff; }
+        .popular-change.new { color: #ff6600; }
+        .popular-change.same { color: #ccc; }
+    </style>
+</head>
+<body>
+
+<div class="phone">
+
+    <!-- ── Header ── -->
+    <header class="header">
+        <div class="header-top">
+            <!-- G Logo -->
+            <img class="gmarket-logo" src="https://gds.gmarket.co.kr/_next/static/images/app-a381a063688da7518cd8fb58f645af25.svg" alt="Gmarket">
+
+            <!-- Search Bar Trigger -->
+            <div class="search-bar-trigger" id="searchTrigger">
+                <svg class="search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+                <span class="placeholder-text">숙박세일 최대8만할인 🪄</span>
+            </div>
+
+            <!-- Cart -->
+            <button class="cart-btn">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/>
+                </svg>
+                <span class="cart-badge">3</span>
+            </button>
+        </div>
+
+        <!-- Nav Tabs -->
+        <nav class="nav-tabs">
+            <button class="nav-tab active">홈</button>
+            <button class="nav-tab"><span class="tab-lightning">⚡</span>슈퍼딜</button>
+            <button class="nav-tab">이마트몰</button>
+            <button class="nav-tab">베스트</button>
+            <button class="nav-tab">숙박세일<span class="tab-badge">N</span></button>
+            <button class="nav-tab">스타배송</button>
+            <button class="nav-tab">브랜드</button>
+        </nav>
+    </header>
+
+    <!-- ── Content ── -->
+    <main class="content">
+
+        <!-- Banner -->
+        <div class="banner">
+            <div class="banner-inner">
+                <div class="banner-left">
+                    <span class="banner-new-badge">NEW 멤버십</span>
+                    <div class="banner-kkoc">꼭</div>
+                    <div class="banner-percent">5%</div>
+                </div>
+                <div class="banner-right">
+                    <div class="banner-logo-row">
+                        <div class="banner-logo-icon">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="white"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                        </div>
+                        <span class="banner-logo-text">꼭 멤버십</span>
+                    </div>
+                    <div class="banner-title">G마켓 꼭 멤버십<br>무료 사전 가입</div>
+                    <div class="banner-sub">1개월 무료 + 최대 1만원 쿠폰</div>
+                </div>
+            </div>
+            <div class="banner-counter">⏸ &nbsp;2/33 +</div>
+        </div>
+
+        <!-- Categories -->
+        <div class="categories">
+            <div class="category-row">
+                <div class="category-item">
+                    <div class="category-icon green">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>
+                    </div>
+                    <span class="category-label">쿠폰/출첵</span>
+                </div>
+                <div class="category-item">
+                    <div class="category-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#00B853" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+                    </div>
+                    <span class="category-label">이마트몰</span>
+                </div>
+                <div class="category-item">
+                    <div class="category-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#00B853" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                    </div>
+                    <span class="category-label">e쿠폰</span>
+                </div>
+                <div class="category-item">
+                    <div class="category-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#00B853" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+                    </div>
+                    <span class="category-label">라이브방송</span>
+                </div>
+                <div class="category-item">
+                    <div class="category-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#00B853" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                    </div>
+                    <span class="category-label">홈쇼핑</span>
+                </div>
+                <div class="category-item">
+                    <div class="category-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#00B853" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    </div>
+                    <span class="category-label">오늘의딜</span>
+                </div>
+            </div>
+
+            <div class="category-row">
+                <div class="category-item">
+                    <div class="category-icon green">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                    </div>
+                    <span class="category-label">꼭 멤버십</span>
+                </div>
+                <div class="category-item">
+                    <div class="category-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#00B853" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6A19.79 19.79 0 012.12 4.18 2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>
+                    </div>
+                    <span class="category-label">여행/항공</span>
+                </div>
+                <div class="category-item">
+                    <div class="category-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#00B853" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+                    </div>
+                    <span class="category-label">스마일복권</span>
+                </div>
+                <div class="category-item">
+                    <div class="category-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#00B853" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    </div>
+                    <span class="category-label">스타배송</span>
+                </div>
+                <div class="category-item">
+                    <div class="category-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#00B853" stroke-width="2"><path d="M18 8h1a4 4 0 010 8h-1"/><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+                    </div>
+                    <span class="category-label">스타벅스</span>
+                </div>
+                <div class="category-item">
+                    <div class="category-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#00B853" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="3"/><path d="M8 6h8M8 10h8M8 14h4"/></svg>
+                    </div>
+                    <span class="category-label">백화점</span>
+                </div>
+            </div>
+
+            <div class="category-dot-row">
+                <div class="category-dot active"></div>
+                <div class="category-dot"></div>
+                <div class="category-dot"></div>
+            </div>
+        </div>
+
+        <!-- Ad Banner -->
+        <div class="ad-banner">
+            <div class="ad-tag">AD</div>
+            <div class="ad-title">스타배송<span>✨</span></div>
+            <div class="ad-products">
+                <div class="ad-product-img">🥛</div>
+                <div class="ad-product-img">💊</div>
+            </div>
+        </div>
+
+        <!-- Section: 오늘의 특가 -->
+        <div class="section">
+            <div class="section-title">⚡ 오늘의 특가</div>
+            <div class="product-row">
+                <div class="product-card">
+                    <div class="product-thumb">🛋️</div>
+                    <div class="product-name">1인용 패브릭 소파 거실 인테리어</div>
+                    <div class="product-price"><span class="product-discount">34%</span>89,900원</div>
+                </div>
+                <div class="product-card">
+                    <div class="product-thumb">🍳</div>
+                    <div class="product-name">IH 전기레인지 인덕션 3구 세트</div>
+                    <div class="product-price"><span class="product-discount">28%</span>59,000원</div>
+                </div>
+                <div class="product-card">
+                    <div class="product-thumb">🪑</div>
+                    <div class="product-name">메쉬 의자 컴퓨터 사무용 게이밍</div>
+                    <div class="product-price"><span class="product-discount">41%</span>45,900원</div>
+                </div>
+                <div class="product-card">
+                    <div class="product-thumb">💡</div>
+                    <div class="product-name">LED 스탠드 조명 무선 터치 밝기조절</div>
+                    <div class="product-price"><span class="product-discount">19%</span>23,500원</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section: MD 추천 -->
+        <div class="section">
+            <div class="section-title">🏠 자취생 MD 추천</div>
+            <div class="product-row">
+                <div class="product-card">
+                    <div class="product-thumb">🍚</div>
+                    <div class="product-name">소형 전기밥솥 1~2인용 미니</div>
+                    <div class="product-price"><span class="product-discount">22%</span>32,800원</div>
+                </div>
+                <div class="product-card">
+                    <div class="product-thumb">🪥</div>
+                    <div class="product-name">욕실 수납 선반 스테인리스</div>
+                    <div class="product-price"><span class="product-discount">15%</span>14,900원</div>
+                </div>
+                <div class="product-card">
+                    <div class="product-thumb">🧺</div>
+                    <div class="product-name">세탁망 세탁기 보호 속옷 양말</div>
+                    <div class="product-price"><span class="product-discount">30%</span>8,500원</div>
+                </div>
+                <div class="product-card">
+                    <div class="product-thumb">🌿</div>
+                    <div class="product-name">공기정화 식물 화분 인테리어</div>
+                    <div class="product-price"><span class="product-discount">10%</span>18,000원</div>
+                </div>
+            </div>
+        </div>
+
+        <div style="height: 20px;"></div>
+    </main>
+
+    <!-- ── Bottom Nav ── -->
+    <nav class="bottom-nav">
+        <button class="bottom-nav-btn active">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+            <span>홈</span>
+        </button>
+        <button class="bottom-nav-btn">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <span>검색</span>
+        </button>
+        <button class="bottom-nav-btn">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+            <span>찜</span>
+        </button>
+        <button class="bottom-nav-btn">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span>최근본</span>
+        </button>
+    </nav>
+
+</div>
+
+<!-- ══════════════════════════════════
+     SEARCH OVERLAY
+══════════════════════════════════ -->
+<div class="search-overlay" id="searchOverlay">
+    <div class="search-overlay-header">
+        <button class="back-btn" id="backBtn">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="15 18 9 12 15 6"/>
+            </svg>
+        </button>
+        <div class="search-input-wrap">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00B853" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input type="text" id="searchInput" placeholder="검색어를 입력해주세요" autocomplete="off" />
+            <button class="clear-btn" id="clearBtn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <button class="search-submit-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+        </button>
+    </div>
+
+    <div class="suggestions" id="suggestions">
+        <!-- 자취 입력 시 자동완성 -->
+        <div id="autocompleteSection" style="display:none;">
+            <div class="suggestions-section">
+                <!-- 자취 + 쓰레드 모드 버튼 -->
+                <div class="suggestion-item" id="jadwiThreadItem">
+                    <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                    <span class="keyword" id="autocompleteKeyword0"></span>
+                    <button class="thread-mode-btn" id="threadModeBtn">
+                        <div class="btn-icon">
+                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+                            </svg>
+                        </div>
+                        쓰레드 모드
+                    </button>
+                </div>
+                <div class="divider"></div>
+                <div class="suggestion-item" data-keyword="">
+                    <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                    <span class="keyword" id="autocompleteKeyword1"></span>
+                    <svg class="arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                </div>
+                <div class="suggestion-item" data-keyword="">
+                    <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                    <span class="keyword" id="autocompleteKeyword2"></span>
+                    <svg class="arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                </div>
+                <div class="suggestion-item" data-keyword="">
+                    <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                    <span class="keyword" id="autocompleteKeyword3"></span>
+                    <svg class="arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                </div>
+                <div class="suggestion-item" data-keyword="">
+                    <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                    <span class="keyword" id="autocompleteKeyword4"></span>
+                    <svg class="arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                </div>
+                <div class="suggestion-item" data-keyword="">
+                    <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                    <span class="keyword" id="autocompleteKeyword5"></span>
+                    <svg class="arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- 기본 화면: 인기 검색어 -->
+        <div id="defaultSection">
+            <div class="popular-section">
+                <div class="popular-header">
+                    <span class="popular-title">인기 검색어</span>
+                    <span class="popular-updated">04.14 09:00 기준</span>
+                </div>
+                <div class="popular-list">
+                    <div class="popular-item"><span class="popular-rank top3">1</span><span class="popular-keyword">에어컨 청소</span><span class="popular-change up">▲ 3</span></div>
+                    <div class="popular-item"><span class="popular-rank top3">2</span><span class="popular-keyword">봄 침구 세트</span><span class="popular-change new">NEW</span></div>
+                    <div class="popular-item"><span class="popular-rank top3">3</span><span class="popular-keyword">자취 필수템</span><span class="popular-change up">▲ 1</span></div>
+                    <div class="popular-item"><span class="popular-rank">4</span><span class="popular-keyword">전기레인지</span><span class="popular-change same">—</span></div>
+                    <div class="popular-item"><span class="popular-rank">5</span><span class="popular-keyword">캠핑의자</span><span class="popular-change down">▼ 2</span></div>
+                    <div class="popular-item"><span class="popular-rank">6</span><span class="popular-keyword">무선청소기</span><span class="popular-change up">▲ 4</span></div>
+                    <div class="popular-item"><span class="popular-rank">7</span><span class="popular-keyword">원룸 이사 박스</span><span class="popular-change new">NEW</span></div>
+                    <div class="popular-item"><span class="popular-rank">8</span><span class="popular-keyword">스탠드 선풍기</span><span class="popular-change down">▼ 1</span></div>
+                    <div class="popular-item"><span class="popular-rank">9</span><span class="popular-keyword">데스크탑 조립</span><span class="popular-change same">—</span></div>
+                    <div class="popular-item"><span class="popular-rank">10</span><span class="popular-keyword">커튼 암막</span><span class="popular-change up">▲ 2</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 자취 관련 자동완성 데이터
+    // query → [기본키워드, 나머지 suggestions...]
+    const autoCompleteData = {
+        '자': ['자취', '자전거', '자동차 용품', '자외선 차단', '자연주의 화장품', '잡곡'],
+        '자취': ['자취', '자취방 필수템', '자취생 주방용품', '자취 생필품 추천', '자취방 꾸미기', '자취 가전 세트'],
+        '자취방': ['자취방', '자취방 필수템', '자취방 꾸미기 소품', '자취방 인테리어', '자취방 수납', '자취방 가전'],
+        '자취생': ['자취생', '자취생 주방용품', '자취생 필수 가전', '자취생 생필품', '자취생 청소용품', '자취생 식품'],
+    };
+
+    // "자취" 포함 여부 체크 (쓰레드 모드 버튼 표시 조건)
+    function isJadwiQuery(query) {
+        return query.includes('자취');
+    }
+
+    function getAutoComplete(query) {
+        if (!query) return null;
+        if (autoCompleteData[query]) return autoCompleteData[query];
+        // prefix match
+        for (const key of Object.keys(autoCompleteData).sort((a,b) => b.length - a.length)) {
+            if (query.startsWith(key) || key.startsWith(query)) {
+                return autoCompleteData[key];
+            }
+        }
+        // 자취 포함
+        if (isJadwiQuery(query)) {
+            return autoCompleteData['자취'];
+        }
+        return null;
+    }
+
+    function highlight(text, query) {
+        if (!query) return text;
+        const idx = text.indexOf(query);
+        if (idx === -1) return text;
+        return text.slice(0, idx) + '<em>' + text.slice(idx, idx + query.length) + '</em>' + text.slice(idx + query.length);
+    }
+
+    const overlay = document.getElementById('searchOverlay');
+    const searchInput = document.getElementById('searchInput');
+    const clearBtn = document.getElementById('clearBtn');
+    const backBtn = document.getElementById('backBtn');
+    const autocompleteSection = document.getElementById('autocompleteSection');
+    const defaultSection = document.getElementById('defaultSection');
+    const threadModeBtn = document.getElementById('threadModeBtn');
+    const searchTrigger = document.getElementById('searchTrigger');
+
+    function openOverlay() {
+        overlay.classList.add('open');
+        setTimeout(() => searchInput.focus(), 100);
+    }
+
+    function closeOverlay() {
+        overlay.classList.remove('open');
+        searchInput.value = '';
+        clearBtn.classList.remove('visible');
+        autocompleteSection.style.display = 'none';
+        defaultSection.style.display = 'block';
+    }
+
+    searchTrigger.addEventListener('click', openOverlay);
+    document.querySelector('.bottom-nav-btn:nth-child(2)').addEventListener('click', openOverlay);
+    backBtn.addEventListener('click', closeOverlay);
+
+    clearBtn.addEventListener('click', () => {
+        searchInput.value = '';
+        clearBtn.classList.remove('visible');
+        autocompleteSection.style.display = 'none';
+        defaultSection.style.display = 'block';
+        searchInput.focus();
+    });
+
+    searchInput.addEventListener('input', () => {
+        const query = searchInput.value.trim();
+
+        if (query.length === 0) {
+            clearBtn.classList.remove('visible');
+            autocompleteSection.style.display = 'none';
+            defaultSection.style.display = 'block';
+            return;
+        }
+
+        clearBtn.classList.add('visible');
+        defaultSection.style.display = 'none';
+
+        const suggestions = getAutoComplete(query);
+        const showThread = isJadwiQuery(query);
+
+        if (suggestions) {
+            autocompleteSection.style.display = 'block';
+
+            // 첫번째 항목 (쓰레드 모드 행)
+            document.getElementById('autocompleteKeyword0').innerHTML = highlight(suggestions[0], query);
+            threadModeBtn.style.display = showThread ? 'flex' : 'none';
+            document.getElementById('jadwiThreadItem').querySelector('.arrow') && (document.getElementById('jadwiThreadItem').querySelector('.arrow').style.display = showThread ? 'none' : 'flex');
+
+            // 나머지 항목들
+            for (let i = 1; i <= 5; i++) {
+                const el = document.getElementById('autocompleteKeyword' + i);
+                if (el) {
+                    if (suggestions[i]) {
+                        el.innerHTML = highlight(suggestions[i], query);
+                        el.closest('.suggestion-item').style.display = 'flex';
+                    } else {
+                        el.closest('.suggestion-item').style.display = 'none';
+                    }
+                }
+            }
+        } else {
+            // 자동완성 없을 때: 입력어만 보여주기
+            autocompleteSection.style.display = 'block';
+            document.getElementById('autocompleteKeyword0').innerHTML = highlight(query, query);
+            threadModeBtn.style.display = 'none';
+            for (let i = 1; i <= 5; i++) {
+                const el = document.getElementById('autocompleteKeyword' + i);
+                if (el) el.closest('.suggestion-item').style.display = 'none';
+            }
+        }
+    });
+
+    // 쓰레드 모드 버튼 → gmarket-advanced.html 이동
+    threadModeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const query = searchInput.value.trim();
+        window.location.href = 'gmarket-advanced.html?q=' + encodeURIComponent(query);
+    });
+
+    // 일반 suggestion 클릭
+    document.querySelectorAll('.suggestion-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+            if (e.target.closest('.thread-mode-btn')) return;
+            const kw = item.querySelector('.keyword');
+            if (kw) {
+                searchInput.value = kw.textContent;
+                searchInput.dispatchEvent(new Event('input'));
+            }
+        });
+    });
+</script>
+
+</body>
+</html>
