@@ -2612,6 +2612,67 @@ function renderSolution(key, rawQuery) {
             )
             .join("");
 
+        const comparisonTableHtml = key === "데스크탑" ? `
+            <div class="mt-6 bg-slate-50 rounded-2xl border border-slate-100 overflow-hidden">
+                <div class="px-5 py-4 border-b border-slate-100 bg-white flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                        <h4 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+                            <span class="inline-flex items-center justify-center w-6 h-6 rounded-md bg-gmarket-blue/10 text-gmarket-blue text-xs">📊</span>
+                            스펙 비교 & 추천 이유
+                        </h4>
+                        <p class="text-[11px] text-slate-400 mt-1 font-medium">이번 단계 추천 상품을 한눈에 비교해 보세요</p>
+                    </div>
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-100 px-2 py-1 rounded-md">AI 분석</span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-xs text-left border-collapse">
+                        <thead class="bg-white border-b border-slate-100">
+                            <tr>
+                                <th class="px-4 py-3 font-bold text-slate-500 whitespace-nowrap">상품</th>
+                                <th class="px-4 py-3 font-bold text-slate-500 whitespace-nowrap">매칭률</th>
+                                <th class="px-4 py-3 font-bold text-slate-500 whitespace-nowrap">가격</th>
+                                <th class="px-4 py-3 font-bold text-slate-500 whitespace-nowrap">주요 스펙</th>
+                                <th class="px-4 py-3 font-bold text-slate-500 whitespace-nowrap">특징</th>
+                                <th class="px-4 py-3 font-bold text-slate-500 min-w-[280px]">AI 추천 이유</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${visibleProducts.map(({ product, originalIndex }) => {
+                                const isInCart = selectedState?.productIdx === originalIndex;
+                                return `
+                                <tr class="border-b border-slate-100 last:border-b-0 hover:bg-white transition-colors ${isInCart ? "bg-gmarket-blue/5" : ""}">
+                                    <td class="px-4 py-3 align-top">
+                                        <div class="font-bold text-slate-800 leading-snug">${product.name}</div>
+                                        ${isInCart ? `<span class="inline-flex items-center mt-1.5 px-2 py-0.5 rounded-md bg-gmarket-blue/10 text-gmarket-blue text-[10px] font-bold">✓ 담음</span>` : ""}
+                                    </td>
+                                    <td class="px-4 py-3 align-top whitespace-nowrap">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-md bg-gmarket-blue/10 text-gmarket-blue text-[11px] font-bold">${product.score}%</span>
+                                    </td>
+                                    <td class="px-4 py-3 align-top whitespace-nowrap">
+                                        <div class="text-gmarket-blue font-bold text-sm">${product.price}<span class="text-slate-400 text-[10px] font-medium ml-0.5">원</span></div>
+                                        <div class="text-slate-300 text-[10px] line-through font-medium mt-0.5">${product.originalPrice}원</div>
+                                    </td>
+                                    <td class="px-4 py-3 text-slate-700 align-top whitespace-nowrap font-bold">${product.spec.size}</td>
+                                    <td class="px-4 py-3 text-slate-600 align-top font-medium">${product.spec.feature}</td>
+                                    <td class="px-4 py-3 align-top">
+                                        <ul class="space-y-1.5 text-slate-600 font-medium">
+                                            ${product.aiSummary.map((reason) => `
+                                                <li class="flex items-start gap-1.5 leading-relaxed">
+                                                    <span class="text-gmarket-blue mt-0.5 flex-shrink-0">·</span>
+                                                    <span>${reason}</span>
+                                                </li>
+                                            `).join("")}
+                                        </ul>
+                                    </td>
+                                </tr>
+                            `;
+                            }).join("")}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        ` : "";
+
         stepEl.innerHTML = `
             <div class="absolute -left-[20px] top-0 w-10 h-10 rounded-full bg-slate-900 shadow-xl flex items-center justify-center font-bold text-white z-20 border-4 border-slate-50">
                 ${stepIndex + 1}
@@ -2626,6 +2687,7 @@ function renderSolution(key, rawQuery) {
             <div class="flex gap-5 overflow-x-auto pb-8 -mx-2 px-2 scrollbar-hide text-left snap-x snap-mandatory">
                 ${productHtml}
             </div>
+            ${comparisonTableHtml}
         `;
 
         planContainer.appendChild(stepEl);
