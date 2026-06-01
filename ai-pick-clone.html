@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI PICK Clone</title>
+    <link rel="stylesheet" href="./ai-pick-clone.css" />
+  </head>
+  <body>
+    <div class="interest-shell">
+      <header class="interest-header">
+        <button class="interest-title" type="button" aria-expanded="false" aria-controls="interest-menu">
+          <span class="interest-title__emoji">💄</span>
+          <span class="interest-title__label">메이크업</span>
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </button>
+
+        <button class="interest-pill" type="button">
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+          </svg>
+          <span>9,281명</span>
+          <b>관심</b>
+        </button>
+      </header>
+
+      <div class="interest-menu" id="interest-menu" hidden>
+        <button class="interest-menu__backdrop" type="button" aria-label="메뉴 닫기"></button>
+        <div class="interest-menu__panel">
+          <button class="interest-menu__item" type="button">🏃 러닝</button>
+          <button class="interest-menu__item interest-menu__item--active" type="button">💄 메이크업</button>
+          <button class="interest-menu__item" type="button">👟 스니커즈</button>
+          <button class="interest-menu__item" type="button">☕ 카페</button>
+        </div>
+      </div>
+
+      <main class="interest-main">
+        <section class="contents-shell" aria-label="관심사 콘텐츠">
+          <nav class="contents-tabs" aria-label="콘텐츠 탭">
+            <a class="contents-tab contents-tab--active" href="#ai-pick" data-panel="ai-pick">AI PICK</a>
+            <a class="contents-tab" href="#shorts" data-panel="shorts"><em>Shorts</em></a>
+            <a class="contents-tab" href="#popular" data-panel="popular">🏆 인기글</a>
+            <a class="contents-tab" href="#commerce" data-panel="commerce">공동구매</a>
+          </nav>
+
+          <section class="ai-pick-feed content-panel" id="ai-pick-feed" data-panel-name="ai-pick" aria-label="AI PICK 카드 피드"></section>
+          <section class="shorts-feed content-panel" id="shorts-feed" data-panel-name="shorts" aria-label="메이크업 Shorts 피드" hidden>
+            <div class="shorts-feed__grid" id="shorts-grid"></div>
+          </section>
+          <section class="community-page content-panel" id="community-page" data-panel-name="popular" aria-label="메이크업 인기글" hidden>
+            <div class="community-hero">
+              <div>
+                <span class="community-hero__eyebrow">
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
+                    <polyline points="16 7 22 7 22 13"></polyline>
+                  </svg>
+                  지금 가장 뜨는 이야기
+                </span>
+                <h2>인기글</h2>
+                <p>관심사 멤버들이 많이 보고 댓글 단 글을 AI 추천과 함께 모았어요.</p>
+              </div>
+              <div class="community-hero__rank">
+                <strong>TOP</strong>
+                <span>5</span>
+              </div>
+            </div>
+            <div class="post-list" id="post-list"></div>
+          </section>
+          <section class="commerce-page content-panel" id="commerce-page" data-panel-name="commerce" aria-label="추천 공동구매" hidden>
+            <div class="commerce-heading">
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path>
+                <path d="M3 6h18"></path>
+                <path d="M16 10a4 4 0 0 1-8 0"></path>
+              </svg>
+              <h2>추천 공동구매</h2>
+            </div>
+            <div class="commerce-list" id="commerce-list"></div>
+          </section>
+        </section>
+      </main>
+
+      <nav class="bottom-nav" aria-label="하단 메뉴">
+        <a class="bottom-nav__item" href="#home" aria-label="홈">
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" />
+            <path d="M3 10a2 2 0 0 1 .71-1.53l7-6a2 2 0 0 1 2.58 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
+          </svg>
+        </a>
+        <a class="bottom-nav__item bottom-nav__item--active" href="#contents" aria-label="콘텐츠">
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <rect width="7" height="7" x="3" y="3" rx="1" />
+            <rect width="7" height="7" x="14" y="3" rx="1" />
+            <rect width="7" height="7" x="14" y="14" rx="1" />
+            <rect width="7" height="7" x="3" y="14" rx="1" />
+          </svg>
+        </a>
+        <a class="bottom-nav__item" href="#interest" aria-label="관심">
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+          </svg>
+        </a>
+        <a class="bottom-nav__item" href="#profile" aria-label="프로필">
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+        </a>
+      </nav>
+    </div>
+
+    <script src="./ai-pick-clone.js"></script>
+  </body>
+</html>
