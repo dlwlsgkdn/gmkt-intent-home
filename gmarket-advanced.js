@@ -147,7 +147,7 @@ const state = {
     currentIntent: "",
     currentSessionId: "",
     rawQuery: "",
-    choices: { size: "", wall: "", goal: "" },
+    choices: getEmptyChoices(),
     searchHistory: [],
     isHistoryPanelCollapsed: false,
     cartAccordionSessionId: "",
@@ -156,6 +156,10 @@ const state = {
     latestOrder: null,
     activeDeliveryItemIndex: 0
 };
+
+function getEmptyChoices() {
+    return { size: "", wall: "", goal: "", skin: "", mood: "", budget: "", occasion: "" };
+}
 
 /* ─── History persistence ───────────────────────────────────── */
 
@@ -1831,7 +1835,7 @@ function executeSearch(query, options = {}) {
 
     state.currentSessionId = "";
     if (resetChoices) {
-        state.choices = { size: "", wall: "", goal: "" };
+        state.choices = getEmptyChoices();
     }
 
     const goToInfoView = (intent) => {
@@ -1845,7 +1849,9 @@ function executeSearch(query, options = {}) {
         });
     };
 
-    if (query.includes("커튼") || query.includes("커텐") || query.includes("而ㅽ듉") || query.includes("而ㅽ뀗")) {
+    if (query.includes("메이크업") || query.includes("뷰티") || query.toLowerCase().includes("makeup")) {
+        goToInfoView("메이크업");
+    } else if (query.includes("커튼") || query.includes("커텐") || query.includes("而ㅽ듉") || query.includes("而ㅽ뀗")) {
         goToInfoView("커튼");
     } else if (query.includes("데스크탑") || query.includes("조립") || query.includes("pc") || query.includes("컴퓨터")) {
         goToInfoView("데스크탑");
@@ -2001,6 +2007,49 @@ const infoViewConfig = {
                 { main: "빠른 정착" }
             ],
             category: "goal"
+        }
+    },
+    "메이크업": {
+        q1: {
+            label: "1. 피부타입은 어떤 편인가요?",
+            layout: "grid grid-cols-2 gap-3",
+            options: [
+                { main: "건성", sub: "촉촉한 베이스 우선", row: true },
+                { main: "지성/복합성", sub: "지속력과 유분 조절", row: true },
+                { main: "민감성", sub: "저자극 성분 중심", row: true },
+                { main: "잘 모르겠어요", sub: "무난한 기본 조합", row: true }
+            ],
+            category: "skin"
+        },
+        q2: {
+            label: "2. 원하는 기본 메이크업 무드는요?",
+            layout: "grid grid-cols-3 gap-3",
+            options: [
+                { main: "내추럴", sub: "가볍고 자연스럽게", icon: true },
+                { main: "화사한 톤업", sub: "맑고 생기 있게", icon: true },
+                { main: "차분한 데일리", sub: "은은하고 단정하게", icon: true }
+            ],
+            category: "mood"
+        },
+        q3: {
+            label: "3. 첫 장바구니 예산은 어느 정도인가요?",
+            layout: "grid grid-cols-3 gap-3",
+            options: [
+                { main: "5만원 안쪽", sub: "최소 필수템", icon: true },
+                { main: "10만원 안쪽", sub: "균형 구성", icon: true },
+                { main: "15만원 이상도 가능", sub: "도구까지 넉넉히", icon: true }
+            ],
+            category: "budget"
+        },
+        q4: {
+            label: "4. 주로 언제 쓸 기본템인가요?",
+            layout: "grid grid-cols-3 gap-3",
+            options: [
+                { main: "출근/등교", sub: "지속력 중심", icon: true },
+                { main: "데일리 외출", sub: "간편한 루틴", icon: true },
+                { main: "약속/데이트", sub: "생기와 분위기", icon: true }
+            ],
+            category: "occasion"
         }
     }
 };
@@ -2694,6 +2743,54 @@ function renderSolution(key, rawQuery) {
     });
 }
 
+function startDdakCompletedPlan(urlParams, searchInput) {
+    const rawQuery = urlParams.get("q") || "나에게 맞는 메이크업 기본템 추천해줘";
+    state.currentIntent = "메이크업";
+    state.currentSessionId = "";
+    state.rawQuery = rawQuery;
+    state.choices = {
+        ...getEmptyChoices(),
+        skin: urlParams.get("skin") || "",
+        mood: urlParams.get("mood") || "",
+        budget: urlParams.get("budget") || "",
+        occasion: urlParams.get("occasion") || "",
+    };
+
+    if (searchInput) {
+        searchInput.value = rawQuery;
+        autoResizeTextarea(searchInput);
+        updateSearchUI(rawQuery);
+    }
+
+    const infoView = document.getElementById("info-view");
+    const solutionView = document.getElementById("solution-view");
+    renderInfoView("메이크업");
+    const infoTitle = document.getElementById("info-title");
+    if (infoTitle) {
+        infoTitle.innerHTML = `
+            <span class="block">DDAK에서 선택한 설문 답변을 반영했어요</span>
+            <span class="block mt-2 text-base md:text-lg text-slate-500 font-medium">답변을 확인하고 아래 맞춤 계획을 이어서 볼 수 있어요.</span>
+        `;
+    }
+    infoView?.classList.remove("hidden");
+    infoView?.classList.add("flex");
+    solutionView?.classList.remove("hidden");
+    renderSolution("메이크업", rawQuery);
+    saveSearchHistory();
+    updateBottomCheckoutBar();
+    const scrollToPlanStart = () => {
+        const top = solutionView ? solutionView.getBoundingClientRect().top + window.scrollY - 80 : 0;
+        const targetTop = Math.max(0, top);
+        document.documentElement.scrollTop = targetTop;
+        document.body.scrollTop = targetTop;
+        window.scrollTo({ top: targetTop, behavior: "auto" });
+    };
+
+    [120, 500, 1000].forEach((delay) => {
+        setTimeout(scrollToPlanStart, delay);
+    });
+}
+
 /* ─── DOM ready ─────────────────────────────────────────────── */
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -2725,14 +2822,19 @@ document.addEventListener("DOMContentLoaded", () => {
     switchTab("cart");
 
     // URL 파라미터로 전달된 검색어 자동 실행 (목업 홈 쓰레드 모드 진입)
-    const urlQuery = new URLSearchParams(window.location.search).get("q");
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlQuery = urlParams.get("q");
     if (urlQuery) {
-        if (searchInput) {
+        if (urlParams.get("ddak") === "makeup-basics" && urlParams.get("autoplan") === "1") {
+            startDdakCompletedPlan(urlParams, searchInput);
+        } else if (searchInput) {
             searchInput.value = urlQuery;
             autoResizeTextarea(searchInput);
             updateSearchUI(urlQuery);
+            executeSearch(urlQuery);
+        } else {
+            executeSearch(urlQuery);
         }
-        executeSearch(urlQuery);
         window.history.replaceState({}, "", window.location.pathname);
     }
 

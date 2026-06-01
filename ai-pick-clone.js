@@ -206,7 +206,46 @@ const commerceItems = [
   },
 ];
 
+const ddakThreads = [
+  {
+    label: "기본템 세트",
+    title: "베이스·아이·립·도구를 한 번에 구성",
+    description: "검색 의도에 맞춰 처음 사도 실패 적은 기본 조합부터 잡아요.",
+    query: "나에게 맞는 메이크업 기본템 베이스 아이 립 도구 추천",
+    imageUrl: "https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&w=400&q=80",
+  },
+  {
+    label: "내 조건 반영",
+    title: "피부타입과 톤에 맞춰 후보 좁히기",
+    description: "건성·지성·민감피부, 웜톤·쿨톤 기준으로 제품군을 다시 정리해요.",
+    query: "피부타입 피부톤에 맞는 메이크업 기본템 추천",
+    imageUrl: "https://images.unsplash.com/photo-1596462502278-27bfdc403348?auto=format&fit=crop&w=400&q=80",
+  },
+  {
+    label: "구매 계획",
+    title: "예산 안에서 우선순위 장바구니 만들기",
+    description: "먼저 살 것과 나중에 사도 되는 것을 나눠 과소비 없이 담아요.",
+    query: "10만원 안에서 메이크업 기본템 구매 우선순위 장바구니",
+    imageUrl: "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&w=400&q=80",
+  },
+];
+
 const feed = document.querySelector("#ai-pick-feed");
+const ddakSearch = document.querySelector("#ddak-search");
+const ddakQuery = document.querySelector("#ddak-query");
+const ddakThreadList = document.querySelector("#ddak-thread-list");
+const ddakChips = document.querySelectorAll("[data-ddak-query]");
+const ddakSurveyAnswers = document.querySelectorAll("[data-survey-question]");
+const ddakSurveyQuestions = document.querySelectorAll(".ddak-survey-question");
+const ddakSurveyQuestionsTrack = document.querySelector("#ddak-survey-questions");
+const ddakSurveyProgress = document.querySelector("#ddak-survey-progress");
+const ddakSurveyStatus = document.querySelector("#ddak-survey-status");
+const ddakSurveyThread = document.querySelector("#ddak-survey-thread");
+const ddakPhotoInput = document.querySelector("#ddak-photo-input");
+const ddakPhotoUpload = document.querySelector("#ddak-photo-upload");
+const ddakPhotoCard = document.querySelector("#ddak-photo-card");
+const ddakPhotoImage = document.querySelector("#ddak-photo-image");
+const ddakPhotoThread = document.querySelector("#ddak-photo-thread");
 const shortsGrid = document.querySelector("#shorts-grid");
 const postList = document.querySelector("#post-list");
 const commerceList = document.querySelector("#commerce-list");
@@ -247,6 +286,123 @@ function createCard(card) {
 function renderCards() {
   const repeatedCards = [...cards, ...cards];
   feed.replaceChildren(...repeatedCards.map(createCard));
+}
+
+function getDdakUrl(query) {
+  const cleanQuery = query.trim() || "나에게 맞는 메이크업 기본템 추천해줘";
+  return `gmarket-advanced.html?q=${encodeURIComponent(cleanQuery)}`;
+}
+
+function getDdakPlanUrl(query, params = {}) {
+  const searchParams = new URLSearchParams({
+    q: query.trim() || "나에게 맞는 메이크업 기본템 추천해줘",
+    ddak: "makeup-basics",
+    autoplan: "1",
+  });
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value) {
+      searchParams.set(key, value);
+    }
+  });
+
+  return `gmarket-advanced.html?${searchParams.toString()}`;
+}
+
+function getPhotoThreadQuery(fileName = "") {
+  const source = fileName ? `${fileName} 사진` : "업로드한 얼굴 사진";
+  return `${source} 기준으로 나에게 맞는 메이크업 기본템과 도구, 구매 계획 세워줘`;
+}
+
+function getSurveyThreadQuery() {
+  const answers = [...ddakSurveyAnswers]
+    .filter((answer) => answer.getAttribute("aria-pressed") === "true")
+    .map((answer) => `${answer.dataset.surveyQuestion}: ${answer.dataset.surveyAnswer}`);
+  const context = answers.length
+    ? `사전 설문 답변(${answers.join(", ")})을 반영해서`
+    : "피부타입, 원하는 분위기, 예산, 사용 상황을 먼저 질문하고";
+
+  return `나에게 맞는 메이크업 기본템 추천해줘 ${context} 베이스, 아이, 립, 도구 구매 계획 세워줘`;
+}
+
+function updateSurveyThreadLink() {
+  const answers = [...ddakSurveyAnswers]
+    .filter((answer) => answer.getAttribute("aria-pressed") === "true")
+    .reduce((result, answer) => {
+      const keyMap = {
+        "피부타입": "skin",
+        "무드": "mood",
+        "예산": "budget",
+        "사용 상황": "occasion",
+      };
+      const key = keyMap[answer.dataset.surveyQuestion];
+      if (key) {
+        result[key] = answer.dataset.surveyAnswer || "";
+      }
+      return result;
+    }, {});
+
+  ddakSurveyThread.href = getDdakPlanUrl(getSurveyThreadQuery(), answers);
+}
+
+function updateSurveyProgress(activeIndex = 0) {
+  const total = ddakSurveyQuestions.length || 1;
+  const safeIndex = Math.max(0, Math.min(activeIndex, total - 1));
+  const currentQuestion = ddakSurveyQuestions[safeIndex];
+  const legend = currentQuestion?.querySelector("legend")?.textContent?.trim() || "답변을 선택해 주세요";
+
+  if (ddakSurveyProgress) {
+    ddakSurveyProgress.textContent = `${safeIndex + 1}/${total}`;
+  }
+
+  if (ddakSurveyStatus) {
+    ddakSurveyStatus.textContent = legend;
+  }
+}
+
+function focusSurveyQuestion(index) {
+  const question = ddakSurveyQuestions[index];
+  if (!question) {
+    updateSurveyProgress(ddakSurveyQuestions.length - 1);
+    return;
+  }
+
+  if (ddakSurveyQuestionsTrack) {
+    ddakSurveyQuestionsTrack.scrollTo({
+      left: question.offsetLeft - ddakSurveyQuestionsTrack.offsetLeft,
+      behavior: "smooth",
+    });
+  }
+  updateSurveyProgress(index);
+}
+
+function createDdakThread(item) {
+  const link = document.createElement("a");
+  link.href = getDdakUrl(item.query);
+  link.className = "ddak-thread-card";
+  link.setAttribute("aria-label", `${item.title} 쇼핑쓰레드 시작`);
+  link.innerHTML = `
+    <div class="ddak-thread-card__media">
+      <img src="${item.imageUrl}" alt="" loading="lazy">
+    </div>
+    <div class="ddak-thread-card__body">
+      <span class="ddak-thread-card__label">${item.label}</span>
+      <h3>${item.title}</h3>
+      <p>${item.description}</p>
+      <span class="ddak-thread-card__cta">
+        쓰레드 이동
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M5 12h14"></path>
+          <path d="m13 6 6 6-6 6"></path>
+        </svg>
+      </span>
+    </div>
+  `;
+  return link;
+}
+
+function renderDdakThreads() {
+  ddakThreadList.replaceChildren(...ddakThreads.map(createDdakThread));
 }
 
 function createShort(short) {
@@ -413,6 +569,60 @@ backdrop.addEventListener("click", () => {
   setMenuOpen(false);
 });
 
+ddakSearch.addEventListener("submit", (event) => {
+  event.preventDefault();
+  window.location.href = getDdakUrl(ddakQuery.value);
+});
+
+ddakChips.forEach((chip) => {
+  chip.addEventListener("click", () => {
+    ddakQuery.value = chip.dataset.ddakQuery || "";
+    ddakQuery.focus();
+  });
+});
+
+ddakSurveyAnswers.forEach((answer) => {
+  answer.addEventListener("click", () => {
+    const group = answer.dataset.surveyQuestion;
+    const isPressed = answer.getAttribute("aria-pressed") === "true";
+    const currentQuestion = answer.closest(".ddak-survey-question");
+    const currentIndex = [...ddakSurveyQuestions].indexOf(currentQuestion);
+
+    ddakSurveyAnswers.forEach((item) => {
+      if (item.dataset.surveyQuestion === group) {
+        item.setAttribute("aria-pressed", "false");
+      }
+    });
+
+    answer.setAttribute("aria-pressed", String(!isPressed));
+    updateSurveyThreadLink();
+
+    if (!isPressed) {
+      const nextIndex = Math.min(currentIndex + 1, ddakSurveyQuestions.length - 1);
+      setTimeout(() => focusSurveyQuestion(nextIndex), 120);
+    } else {
+      updateSurveyProgress(currentIndex);
+    }
+  });
+});
+
+ddakPhotoUpload.addEventListener("click", () => {
+  ddakPhotoInput.click();
+});
+
+ddakPhotoInput.addEventListener("change", () => {
+  const file = ddakPhotoInput.files?.[0];
+
+  if (!file) {
+    return;
+  }
+
+  ddakPhotoImage.src = URL.createObjectURL(file);
+  ddakPhotoImage.hidden = false;
+  ddakPhotoCard.classList.add("ddak-photo-card--filled");
+  ddakPhotoThread.href = getDdakUrl(getPhotoThreadQuery(file.name));
+});
+
 tabs.forEach((tab) => {
   tab.addEventListener("click", (event) => {
     event.preventDefault();
@@ -448,6 +658,9 @@ document.addEventListener("keydown", (event) => {
 });
 
 renderCards();
+updateSurveyThreadLink();
+updateSurveyProgress(0);
+renderDdakThreads();
 renderShorts();
 renderCommunity();
 renderCommerce();

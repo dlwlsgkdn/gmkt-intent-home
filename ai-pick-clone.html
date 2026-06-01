@@ -39,13 +39,133 @@
       <main class="interest-main">
         <section class="contents-shell" aria-label="관심사 콘텐츠">
           <nav class="contents-tabs" aria-label="콘텐츠 탭">
-            <a class="contents-tab contents-tab--active" href="#ai-pick" data-panel="ai-pick">AI PICK</a>
+            <a class="contents-tab contents-tab--active" href="#ddak" data-panel="ddak">DDAK</a>
+            <a class="contents-tab" href="#ai-pick" data-panel="ai-pick">AI PICK</a>
             <a class="contents-tab" href="#shorts" data-panel="shorts"><em>Shorts</em></a>
             <a class="contents-tab" href="#popular" data-panel="popular">🏆 인기글</a>
             <a class="contents-tab" href="#commerce" data-panel="commerce">공동구매</a>
           </nav>
 
-          <section class="ai-pick-feed content-panel" id="ai-pick-feed" data-panel-name="ai-pick" aria-label="AI PICK 카드 피드"></section>
+          <section class="ddak-page content-panel" id="ddak-page" data-panel-name="ddak" aria-label="DDAK 쇼핑쓰레드">
+            <div class="ddak-hero">
+              <div class="ddak-hero__copy">
+                <span>SEARCH CONTEXT · 나에게 맞는 메이크업 기본템 추천해줘</span>
+                <h2>내 기본 메이크업 세트를<br />쓰레드로 완성하기</h2>
+                <p>베이스, 아이, 립, 도구를 한 번에 묶고 내 피부와 사용 상황에 맞춰 구매 순서를 잡아요.</p>
+              </div>
+              <div class="ddak-hero__badge">
+                <strong>AI</strong>
+                <span>THREAD</span>
+              </div>
+            </div>
+
+            <form class="ddak-search" id="ddak-search">
+              <label class="ddak-search__label" for="ddak-query">기본템 추천을 어떤 기준으로 좁힐까요?</label>
+              <div class="ddak-search__row">
+                <input id="ddak-query" type="search" placeholder="예: 나에게 맞는 메이크업 기본템 추천해줘" autocomplete="off" />
+                <button type="submit">시작</button>
+              </div>
+              <div class="ddak-chip-list" aria-label="추천 조건">
+                <button type="button" data-ddak-query="초보자용 메이크업 기본템 풀세트">초보자 기본템</button>
+                <button type="button" data-ddak-query="내 피부톤에 맞는 베이스 립 아이 기본템">피부톤 맞춤</button>
+                <button type="button" data-ddak-query="10만원 안에서 메이크업 기본템 장바구니 구성">예산 맞춤</button>
+              </div>
+            </form>
+
+            <article class="ddak-survey-card">
+              <div class="ddak-survey-card__head">
+                <span class="ddak-survey-card__icon">
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="M9 11 12 14 22 4"></path>
+                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                  </svg>
+                </span>
+                <div>
+                  <span class="ddak-survey-card__eyebrow">맞춤 계획 설문</span>
+                  <h3>3분 설문으로 기본템 구매 계획 세우기</h3>
+                  <p>피부타입, 원하는 분위기, 예산, 사용 상황을 답하면 베이스·아이·립·도구 구매 순서를 정리해요.</p>
+                </div>
+              </div>
+              <div class="ddak-survey-card__progress">
+                <span id="ddak-survey-progress">1/4</span>
+                <b id="ddak-survey-status">피부타입부터 선택해 주세요</b>
+              </div>
+              <div class="ddak-survey-card__questions" id="ddak-survey-questions" aria-label="기본템 계획 설문 질문">
+                <fieldset class="ddak-survey-question">
+                  <legend>피부타입은 어떤 편인가요?</legend>
+                  <div class="ddak-survey-options">
+                    <button type="button" aria-pressed="false" data-survey-question="피부타입" data-survey-answer="건성">건성</button>
+                    <button type="button" aria-pressed="false" data-survey-question="피부타입" data-survey-answer="지성/복합성">지성/복합성</button>
+                    <button type="button" aria-pressed="false" data-survey-question="피부타입" data-survey-answer="민감성">민감성</button>
+                    <button type="button" aria-pressed="false" data-survey-question="피부타입" data-survey-answer="잘 모르겠어요">잘 모르겠어요</button>
+                  </div>
+                </fieldset>
+                <fieldset class="ddak-survey-question">
+                  <legend>원하는 기본 메이크업 무드는요?</legend>
+                  <div class="ddak-survey-options">
+                    <button type="button" aria-pressed="false" data-survey-question="무드" data-survey-answer="내추럴">내추럴</button>
+                    <button type="button" aria-pressed="false" data-survey-question="무드" data-survey-answer="화사한 톤업">화사한 톤업</button>
+                    <button type="button" aria-pressed="false" data-survey-question="무드" data-survey-answer="차분한 데일리">차분한 데일리</button>
+                  </div>
+                </fieldset>
+                <fieldset class="ddak-survey-question">
+                  <legend>첫 장바구니 예산은 어느 정도인가요?</legend>
+                  <div class="ddak-survey-options">
+                    <button type="button" aria-pressed="false" data-survey-question="예산" data-survey-answer="5만원 안쪽">5만원 안쪽</button>
+                    <button type="button" aria-pressed="false" data-survey-question="예산" data-survey-answer="10만원 안쪽">10만원 안쪽</button>
+                    <button type="button" aria-pressed="false" data-survey-question="예산" data-survey-answer="15만원 이상도 가능">15만원 이상</button>
+                  </div>
+                </fieldset>
+                <fieldset class="ddak-survey-question">
+                  <legend>주로 언제 쓸 기본템인가요?</legend>
+                  <div class="ddak-survey-options">
+                    <button type="button" aria-pressed="false" data-survey-question="사용 상황" data-survey-answer="출근/등교">출근/등교</button>
+                    <button type="button" aria-pressed="false" data-survey-question="사용 상황" data-survey-answer="데일리 외출">데일리 외출</button>
+                    <button type="button" aria-pressed="false" data-survey-question="사용 상황" data-survey-answer="약속/데이트">약속/데이트</button>
+                  </div>
+                </fieldset>
+              </div>
+              <a class="ddak-survey-card__cta" id="ddak-survey-thread" href="gmarket-advanced.html?q=나에게 맞는 메이크업 기본템 추천해줘&ddak=makeup-basics&autoplan=1">
+                맞춤 설문 시작
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M5 12h14"></path>
+                  <path d="m13 6 6 6-6 6"></path>
+                </svg>
+              </a>
+            </article>
+
+            <article class="ddak-photo-card" id="ddak-photo-card">
+              <input class="ddak-photo-card__input" id="ddak-photo-input" type="file" accept="image/*" />
+              <button class="ddak-photo-card__upload" id="ddak-photo-upload" type="button" aria-controls="ddak-photo-input">
+                <span class="ddak-photo-card__placeholder">
+                  <img id="ddak-photo-image" alt="업로드한 메이크업 사진 미리보기" hidden />
+                  <span class="ddak-photo-card__empty">
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="M4 16.5V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2.5"></path>
+                      <path d="M16 8l-4-4-4 4"></path>
+                      <path d="M12 4v12"></path>
+                    </svg>
+                    <b>얼굴 사진 업로드</b>
+                  </span>
+                </span>
+                <span class="ddak-photo-card__copy">
+                  <strong>내 얼굴 기준으로 기본템 보정</strong>
+                  <b>얼굴 사진을 올리면 피부톤, 눈매, 립톤을 기준으로 기본템 후보와 도구를 다시 좁혀요.</b>
+                </span>
+              </button>
+
+              <a class="ddak-photo-card__cta" id="ddak-photo-thread" href="gmarket-advanced.html?q=%EB%A9%94%EC%9D%B4%ED%81%AC%EC%97%85%20%EC%96%BC%EA%B5%B4%20%EC%82%AC%EC%A7%84%20%ED%99%94%EC%9E%A5%ED%92%88%20%EB%8F%84%EA%B5%AC%20%EA%B5%AC%EB%A7%A4%20%EA%B3%84%ED%9A%8D">
+                내 얼굴 맞춤 쓰레드 시작
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M5 12h14"></path>
+                  <path d="m13 6 6 6-6 6"></path>
+                </svg>
+              </a>
+            </article>
+
+            <div class="ddak-thread-list" id="ddak-thread-list"></div>
+          </section>
+          <section class="ai-pick-feed content-panel" id="ai-pick-feed" data-panel-name="ai-pick" aria-label="AI PICK 카드 피드" hidden></section>
           <section class="shorts-feed content-panel" id="shorts-feed" data-panel-name="shorts" aria-label="메이크업 Shorts 피드" hidden>
             <div class="shorts-feed__grid" id="shorts-grid"></div>
           </section>

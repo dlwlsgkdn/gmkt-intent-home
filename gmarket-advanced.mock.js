@@ -1222,5 +1222,211 @@
                 ]
             }
         ]
+    },
+    "메이크업": {
+        title: "메이크업 기본템 맞춤 제안",
+        intentReason: "나에게 맞는 메이크업 기본템을 처음 장바구니로 구성하는 목적",
+        steps: [
+            {
+                step: 1,
+                name: "피부 표현 베이스",
+                essential: true,
+                description: "피부타입과 사용 상황에 맞는 선크림, 프라이머, 쿠션을 먼저 잡으면 기본 메이크업의 지속력과 완성도가 안정됩니다.",
+                products: [
+                    {
+                        id: 501,
+                        name: "수분 밀착 톤업 선크림",
+                        price: "18,900",
+                        originalPrice: "26,000",
+                        score: 96,
+                        img: "https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "기본템 첫 단계로 쓰기 좋은 선케어와 톤 보정 기능을 함께 갖췄습니다.",
+                            "건조하게 뜨는 베이스를 줄이고 자연스러운 피부 표현에 맞습니다.",
+                            "출근이나 등교처럼 매일 쓰는 루틴에 부담이 적습니다."
+                        ],
+                        spec: { size: "50ml", feature: "SPF50+ 톤업 수분 베이스" }
+                    },
+                    {
+                        id: 502,
+                        name: "세미매트 커버 쿠션",
+                        price: "27,500",
+                        originalPrice: "39,000",
+                        score: 94,
+                        img: "https://images.unsplash.com/photo-1596462502278-27bfdc403348?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "처음 기본템을 맞출 때 가장 활용도가 높은 베이스 제품입니다.",
+                            "적당한 커버력과 지속력으로 데일리 메이크업에 잘 맞습니다.",
+                            "수정 화장까지 고려하면 휴대성이 좋은 쿠션 타입이 유리합니다."
+                        ],
+                        spec: { size: "15g", feature: "세미매트 커버 쿠션" }
+                    },
+                    {
+                        id: 503,
+                        name: "모공 블러 프라이머",
+                        price: "15,900",
+                        originalPrice: "22,000",
+                        score: 88,
+                        img: "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "베이스가 쉽게 무너지는 피부라면 쿠션 전 단계에 더해볼 만합니다.",
+                            "코 주변과 볼 모공을 매끈하게 정리해 기본 메이크업 완성도를 높입니다.",
+                            "소량만 쓰는 제품이라 첫 장바구니에서도 효율이 좋습니다."
+                        ],
+                        spec: { size: "30ml", feature: "모공 보정 프라이머" }
+                    }
+                ]
+            },
+            {
+                step: 2,
+                name: "아이 메이크업 기본",
+                essential: true,
+                description: "아이섀도우, 아이라이너, 마스카라는 분위기를 크게 바꾸는 핵심 기본템이라 쉬운 컬러와 번짐 적은 제형부터 고르는 것이 좋습니다.",
+                products: [
+                    {
+                        id: 601,
+                        name: "데일리 브라운 아이 팔레트",
+                        price: "24,900",
+                        originalPrice: "34,000",
+                        score: 95,
+                        img: "https://images.unsplash.com/photo-1512496015851-a90fb38ba796?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "초보자도 실패하기 적은 브라운 계열 기본 팔레트입니다.",
+                            "음영, 포인트, 애교살 컬러를 한 번에 해결할 수 있습니다.",
+                            "내추럴부터 차분한 데일리 무드까지 활용 폭이 넓습니다."
+                        ],
+                        spec: { size: "6색", feature: "브라운 음영 팔레트" }
+                    },
+                    {
+                        id: 602,
+                        name: "번짐 방지 슬림 아이라이너",
+                        price: "9,900",
+                        originalPrice: "14,000",
+                        score: 91,
+                        img: "https://images.unsplash.com/photo-1586495777744-4413f21062fa?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "얇게 그리기 쉬워 기본 메이크업에서 눈매만 자연스럽게 보정할 수 있습니다.",
+                            "출근이나 등교처럼 오래 유지해야 하는 상황에 유리합니다.",
+                            "브라운 컬러는 초보자도 부담 없이 쓰기 좋습니다."
+                        ],
+                        spec: { size: "0.12g", feature: "워터프루프 브라운 라이너" }
+                    },
+                    {
+                        id: 603,
+                        name: "컬링 픽싱 마스카라",
+                        price: "13,900",
+                        originalPrice: "19,000",
+                        score: 89,
+                        img: "https://images.unsplash.com/photo-1567721913486-6585f069b332?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "아이 메이크업을 많이 하지 않아도 또렷한 인상을 만드는 기본템입니다.",
+                            "처짐이 고민인 속눈썹에 컬 고정력이 중요합니다.",
+                            "뭉침 적은 브러시라 데일리 룩에 잘 맞습니다."
+                        ],
+                        spec: { size: "7g", feature: "컬링 픽싱 브러시" }
+                    }
+                ]
+            },
+            {
+                step: 3,
+                name: "립과 블러셔 톤 맞추기",
+                essential: true,
+                description: "립과 블러셔는 전체 인상을 정하는 단계라 피부톤과 원하는 무드에 맞는 컬러군을 함께 잡는 것이 좋습니다.",
+                products: [
+                    {
+                        id: 701,
+                        name: "로즈 베이지 립 틴트",
+                        price: "12,900",
+                        originalPrice: "18,000",
+                        score: 96,
+                        img: "https://images.unsplash.com/photo-1586495777744-4413f21062fa?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "데일리 기본템으로 가장 손이 자주 가는 차분한 로즈 베이지 컬러입니다.",
+                            "아이 메이크업이 강하지 않아도 얼굴에 생기를 더합니다.",
+                            "출근, 등교, 약속 모두 무난하게 이어가기 좋습니다."
+                        ],
+                        spec: { size: "4g", feature: "로즈 베이지 MLBB 틴트" }
+                    },
+                    {
+                        id: 702,
+                        name: "맑은 코랄 크림 블러셔",
+                        price: "14,500",
+                        originalPrice: "21,000",
+                        score: 90,
+                        img: "https://images.unsplash.com/photo-1612817288484-6f916006741a?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "기본 베이스 위에 생기를 더하는 빠른 보정템입니다.",
+                            "손으로도 바르기 쉬워 초보자 루틴에 잘 맞습니다.",
+                            "립 컬러와 톤을 맞추면 전체 메이크업이 자연스럽게 이어집니다."
+                        ],
+                        spec: { size: "5g", feature: "크림 타입 코랄 블러셔" }
+                    },
+                    {
+                        id: 703,
+                        name: "차분한 모브 립밤",
+                        price: "10,900",
+                        originalPrice: "16,000",
+                        score: 87,
+                        img: "https://images.unsplash.com/photo-1556228453-efd6c1ff04f6?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "건조한 입술에도 부담 없이 쓰기 좋은 컬러 립밤입니다.",
+                            "진한 립이 부담스러운 사용자에게 기본템으로 적합합니다.",
+                            "차분한 데일리 무드와 잘 맞는 모브 컬러입니다."
+                        ],
+                        spec: { size: "3.5g", feature: "보습 컬러 립밤" }
+                    }
+                ]
+            },
+            {
+                step: 4,
+                name: "필수 도구와 클렌징",
+                essential: false,
+                description: "메이크업 제품만큼 도구와 클렌징도 중요합니다. 스펀지, 브러시, 리무버를 함께 구성하면 완성도와 지속 사용성이 올라갑니다.",
+                products: [
+                    {
+                        id: 801,
+                        name: "물방울 메이크업 스펀지 3개",
+                        price: "8,900",
+                        originalPrice: "12,000",
+                        score: 93,
+                        img: "https://images.unsplash.com/photo-1596462502278-27bfdc403348?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "쿠션이나 파운데이션 밀착을 쉽게 도와주는 기본 도구입니다.",
+                            "여러 개 세트라 세척과 교체 주기를 관리하기 좋습니다.",
+                            "초보자도 베이스 뭉침을 줄이는 데 도움이 됩니다."
+                        ],
+                        spec: { size: "3개입", feature: "라텍스 프리 메이크업 스펀지" }
+                    },
+                    {
+                        id: 802,
+                        name: "초보자 브러시 5종 세트",
+                        price: "19,900",
+                        originalPrice: "29,000",
+                        score: 90,
+                        img: "https://images.unsplash.com/photo-1522338242992-e1a54906a8da?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "아이섀도우와 블러셔를 자연스럽게 바르기 위한 기본 도구입니다.",
+                            "필수 브러시만 묶여 있어 처음 구매에 과하지 않습니다.",
+                            "파우치 포함 구성이라 보관과 휴대가 쉽습니다."
+                        ],
+                        spec: { size: "5종", feature: "아이·치크 기본 브러시" }
+                    },
+                    {
+                        id: 803,
+                        name: "저자극 립앤아이 리무버",
+                        price: "11,500",
+                        originalPrice: "17,000",
+                        score: 92,
+                        img: "https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "아이라이너와 마스카라까지 깔끔하게 지우는 필수 클렌징템입니다.",
+                            "민감한 눈가에 쓰기 쉬운 저자극 타입입니다.",
+                            "메이크업 기본템을 시작할 때 함께 준비하면 루틴이 완성됩니다."
+                        ],
+                        spec: { size: "120ml", feature: "저자극 포인트 리무버" }
+                    }
+                ]
+            }
+        ]
     }
 };

@@ -291,6 +291,602 @@ svg {
   display: none;
 }
 
+.ddak-page {
+  padding: 0.35rem 1rem calc(6rem + env(safe-area-inset-bottom));
+  color: #101828;
+}
+
+.ddak-hero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 11.8rem;
+  padding: 1.18rem;
+  overflow: hidden;
+  border-radius: 1.2rem;
+  background:
+    linear-gradient(140deg, rgba(15, 23, 42, 0.96), rgba(35, 47, 71, 0.94) 58%, rgba(20, 83, 91, 0.92)),
+    url("https://images.unsplash.com/photo-1596462502278-27bfdc403348?auto=format&fit=crop&w=900&q=80");
+  background-blend-mode: multiply;
+  background-position: center;
+  background-size: cover;
+  color: #fff;
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.2);
+}
+
+.ddak-hero__copy {
+  min-width: 0;
+}
+
+.ddak-hero__copy span {
+  display: block;
+  max-width: 14.6rem;
+  color: #7dd3fc;
+  letter-spacing: 0.08em;
+  font-size: 0.68rem;
+  font-weight: 950;
+  line-height: 1.25;
+}
+
+.ddak-hero__copy h2 {
+  max-width: 15.5rem;
+  margin: 0.48rem 0 0;
+  letter-spacing: 0;
+  font-size: 1.42rem;
+  font-weight: 950;
+  line-height: 1.16;
+}
+
+.ddak-hero__copy p {
+  max-width: 16.5rem;
+  margin: 0.62rem 0 0;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.42;
+}
+
+.ddak-hero__badge {
+  display: grid;
+  flex: none;
+  width: 4.15rem;
+  height: 4.15rem;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 1rem;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(12px);
+}
+
+.ddak-hero__badge strong,
+.ddak-hero__badge span {
+  line-height: 1;
+}
+
+.ddak-hero__badge strong {
+  align-self: end;
+  color: #bbf7d0;
+  font-size: 1.22rem;
+  font-weight: 950;
+}
+
+.ddak-hero__badge span {
+  align-self: start;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.54rem;
+  font-weight: 950;
+}
+
+.ddak-search {
+  margin-top: 0.9rem;
+  padding: 0.92rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 1.08rem;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 12px 26px rgba(43, 52, 81, 0.1);
+}
+
+.ddak-search__label {
+  display: block;
+  margin-bottom: 0.52rem;
+  color: #334155;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.ddak-search__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 4.1rem;
+  gap: 0.5rem;
+}
+
+.ddak-search__row input {
+  min-width: 0;
+  height: 2.9rem;
+  padding: 0 0.9rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.82rem;
+  outline: 0;
+  background: #f8fafc;
+  color: #111827;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 750;
+}
+
+.ddak-search__row input:focus {
+  border-color: #38bdf8;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.18);
+}
+
+.ddak-search__row button,
+.ddak-chip-list button,
+.ddak-thread-card__cta {
+  border: 0;
+  font: inherit;
+  font-weight: 900;
+}
+
+.ddak-search__row button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 2.9rem;
+  border-radius: 0.82rem;
+  background: #0f172a;
+  color: #fff;
+  font-size: 0.92rem;
+}
+
+.ddak-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.42rem;
+  margin-top: 0.7rem;
+}
+
+.ddak-chip-list button {
+  min-height: 2.15rem;
+  padding: 0.48rem 0.68rem;
+  border-radius: 999px;
+  background: #e0f2fe;
+  color: #075985;
+  font-size: 0.78rem;
+}
+
+.ddak-survey-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.78rem;
+  margin-top: 0.9rem;
+  padding: 0.9rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 1.08rem;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(255, 247, 251, 0.94)),
+    linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(236, 72, 153, 0.12));
+  box-shadow: 0 12px 26px rgba(43, 52, 81, 0.1);
+}
+
+.ddak-survey-card__head {
+  display: grid;
+  grid-template-columns: 3.2rem 1fr;
+  align-items: start;
+  gap: 0.78rem;
+}
+
+.ddak-survey-card__icon {
+  display: grid;
+  width: 3.2rem;
+  height: 3.2rem;
+  border-radius: 0.9rem;
+  place-items: center;
+  background: #fff0f6;
+  color: #be185d;
+  box-shadow: inset 0 0 0 1px rgba(190, 24, 93, 0.08);
+}
+
+.ddak-survey-card__icon svg {
+  width: 1.42rem;
+  height: 1.42rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.3;
+}
+
+.ddak-survey-card__head div {
+  min-width: 0;
+}
+
+.ddak-survey-card__eyebrow {
+  display: block;
+  color: #0891b2;
+  font-size: 0.68rem;
+  font-weight: 950;
+}
+
+.ddak-survey-card h3 {
+  margin: 0.22rem 0 0;
+  color: #0f172a;
+  letter-spacing: 0;
+  font-size: 1rem;
+  font-weight: 950;
+  line-height: 1.26;
+}
+
+.ddak-survey-card p {
+  margin: 0.36rem 0 0;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 750;
+  line-height: 1.36;
+}
+
+.ddak-survey-card__progress {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 0.8rem;
+  background: rgba(15, 23, 42, 0.05);
+}
+
+.ddak-survey-card__progress span {
+  flex: none;
+  color: #2563eb;
+  font-size: 0.74rem;
+  font-weight: 950;
+}
+
+.ddak-survey-card__progress b {
+  min-width: 0;
+  overflow: hidden;
+  color: #475569;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.74rem;
+  font-weight: 850;
+}
+
+.ddak-survey-card__questions {
+  display: flex;
+  gap: 0.65rem;
+  margin: 0 -0.2rem;
+  padding: 0 0.2rem 0.25rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+
+.ddak-survey-card__questions::-webkit-scrollbar {
+  display: none;
+}
+
+.ddak-survey-question {
+  flex: 0 0 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0.78rem;
+  border: 1px solid rgba(15, 23, 42, 0.07);
+  border-radius: 0.92rem;
+  background: rgba(255, 255, 255, 0.72);
+  scroll-snap-align: start;
+}
+
+.ddak-survey-question legend {
+  margin-bottom: 0.4rem;
+  padding: 0;
+  color: #334155;
+  font-size: 0.78rem;
+  font-weight: 950;
+  line-height: 1.3;
+}
+
+.ddak-survey-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.ddak-survey-options button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0.42rem 0.62rem;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.06);
+  color: #334155;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 900;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ddak-survey-options button:active {
+  transform: scale(0.96);
+}
+
+.ddak-survey-options button[aria-pressed="true"] {
+  background: #0f172a;
+  color: #fff;
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.18);
+}
+
+.ddak-survey-card__cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.34rem;
+  min-height: 2.68rem;
+  border-radius: 0.86rem;
+  background: linear-gradient(135deg, #be185d, #2563eb);
+  color: #fff;
+  font-size: 0.88rem;
+  font-weight: 950;
+  box-shadow: 0 12px 22px rgba(79, 70, 229, 0.18);
+}
+
+.ddak-survey-card__cta svg {
+  width: 0.9rem;
+  height: 0.9rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.5;
+}
+
+.ddak-photo-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.78rem;
+  margin-top: 0.9rem;
+  padding: 0.9rem;
+  border: 1px solid rgba(14, 116, 144, 0.18);
+  border-radius: 1.08rem;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(240, 249, 255, 0.94)),
+    linear-gradient(135deg, rgba(14, 165, 233, 0.12), rgba(236, 72, 153, 0.1));
+  box-shadow: 0 12px 26px rgba(43, 52, 81, 0.1);
+}
+
+.ddak-photo-card__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.ddak-photo-card__upload {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.8rem;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: center;
+}
+
+.ddak-photo-card__placeholder {
+  display: grid;
+  position: relative;
+  width: min(100%, 13.5rem);
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 1px dashed rgba(14, 116, 144, 0.34);
+  border-radius: 1.18rem;
+  place-items: center;
+  background:
+    linear-gradient(135deg, rgba(224, 242, 254, 0.84), rgba(253, 242, 248, 0.92)),
+    #f8fafc;
+  color: #0f172a;
+  box-shadow: inset 0 0 0 0.45rem rgba(255, 255, 255, 0.46);
+}
+
+.ddak-photo-card--filled .ddak-photo-card__placeholder {
+  border-style: solid;
+  border-color: rgba(14, 116, 144, 0.18);
+  background: #e2e8f0;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.14);
+}
+
+.ddak-photo-card__placeholder img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ddak-photo-card__placeholder img[hidden] {
+  display: none;
+}
+
+.ddak-photo-card__empty {
+  display: grid;
+  gap: 0.54rem;
+  place-items: center;
+  color: #075985;
+}
+
+.ddak-photo-card--filled .ddak-photo-card__empty {
+  display: none;
+}
+
+.ddak-photo-card__empty svg {
+  width: 2.2rem;
+  height: 2.2rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.2;
+}
+
+.ddak-photo-card__empty b {
+  display: block;
+  color: #0f172a;
+  font-size: 0.9rem;
+  font-weight: 950;
+}
+
+.ddak-photo-card__copy {
+  min-width: 0;
+  width: min(100%, 18.5rem);
+}
+
+.ddak-photo-card__copy strong,
+.ddak-photo-card__copy b {
+  display: block;
+}
+
+.ddak-photo-card__copy strong {
+  color: #0f172a;
+  font-size: 1rem;
+  font-weight: 950;
+  line-height: 1.24;
+}
+
+.ddak-photo-card__copy b {
+  margin-top: 0.28rem;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 750;
+  line-height: 1.34;
+}
+
+.ddak-photo-card__cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.34rem;
+  min-height: 2.68rem;
+  border-radius: 0.86rem;
+  background: linear-gradient(135deg, #0f172a, #164e63);
+  color: #fff;
+  font-size: 0.88rem;
+  font-weight: 950;
+  box-shadow: 0 12px 22px rgba(15, 23, 42, 0.18);
+}
+
+.ddak-photo-card__cta svg {
+  width: 0.9rem;
+  height: 0.9rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.5;
+}
+
+.ddak-thread-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.78rem;
+  margin-top: 0.9rem;
+}
+
+.ddak-thread-card {
+  display: grid;
+  grid-template-columns: 4.7rem 1fr;
+  gap: 0.82rem;
+  padding: 0.82rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 1.08rem;
+  background: #fff;
+  box-shadow: 0 10px 22px rgba(43, 52, 81, 0.08);
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.ddak-thread-card:active {
+  transform: scale(0.99);
+}
+
+.ddak-thread-card__media {
+  position: relative;
+  width: 4.7rem;
+  height: 4.7rem;
+  overflow: hidden;
+  border-radius: 0.88rem;
+  background: #e2e8f0;
+}
+
+.ddak-thread-card__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ddak-thread-card__body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.ddak-thread-card__label {
+  color: #0891b2;
+  font-size: 0.68rem;
+  font-weight: 950;
+}
+
+.ddak-thread-card h3 {
+  display: -webkit-box;
+  margin: 0.22rem 0 0;
+  overflow: hidden;
+  color: #0f172a;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  letter-spacing: 0;
+  font-size: 0.98rem;
+  font-weight: 950;
+  line-height: 1.28;
+}
+
+.ddak-thread-card p {
+  display: -webkit-box;
+  margin: 0.36rem 0 0;
+  overflow: hidden;
+  color: #64748b;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.34;
+}
+
+.ddak-thread-card__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.26rem;
+  width: fit-content;
+  margin-top: 0.56rem;
+  color: #2563eb;
+  font-size: 0.78rem;
+}
+
+.ddak-thread-card__cta svg {
+  width: 0.86rem;
+  height: 0.86rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.5;
+}
+
 .pick-card {
   isolation: isolate;
   display: flex;
@@ -1096,6 +1692,34 @@ svg {
     min-height: 2.58rem;
     padding: 0.58rem 1.26rem;
     font-size: 0.98rem;
+  }
+
+  .ddak-page {
+    padding: 0.28rem 0.78rem calc(6rem + env(safe-area-inset-bottom));
+  }
+
+  .ddak-hero {
+    min-height: 10.8rem;
+    padding: 1rem;
+  }
+
+  .ddak-hero__copy h2 {
+    font-size: 1.24rem;
+  }
+
+  .ddak-hero__badge {
+    width: 3.62rem;
+    height: 3.62rem;
+    border-radius: 0.86rem;
+  }
+
+  .ddak-thread-card {
+    grid-template-columns: 4.25rem 1fr;
+  }
+
+  .ddak-thread-card__media {
+    width: 4.25rem;
+    height: 4.25rem;
   }
 
   .shorts-feed {
