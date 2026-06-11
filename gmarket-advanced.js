@@ -720,9 +720,12 @@ function openHistorySidebar() {
     const backdrop = document.getElementById("history-sidebar-backdrop");
     if (!sidebar || !backdrop) return;
 
+    sidebar.classList.remove("-translate-x-full");
     sidebar.classList.add("history-sidebar-open");
+    sidebar.style.setProperty("transform", "translateX(0)", "important");
     backdrop.classList.remove("hidden");
     document.body.classList.add("history-sidebar-active");
+    syncHistorySidebarToggleState(true);
 }
 
 function closeHistorySidebar() {
@@ -731,8 +734,31 @@ function closeHistorySidebar() {
     if (!sidebar || !backdrop) return;
 
     sidebar.classList.remove("history-sidebar-open");
+    sidebar.classList.add("-translate-x-full");
+    sidebar.style.setProperty("transform", "translateX(-100%)", "important");
     backdrop.classList.add("hidden");
     document.body.classList.remove("history-sidebar-active");
+    syncHistorySidebarToggleState(false);
+}
+
+function toggleHistorySidebar() {
+    const sidebar = document.getElementById("history-panel");
+    if (!sidebar) return;
+
+    if (sidebar.classList.contains("history-sidebar-open")) {
+        closeHistorySidebar();
+    } else {
+        openHistorySidebar();
+    }
+}
+
+function syncHistorySidebarToggleState(isOpen) {
+    const toggleBtn = document.getElementById("historySidebarToggle");
+    if (!toggleBtn) return;
+
+    toggleBtn.setAttribute("aria-expanded", String(isOpen));
+    toggleBtn.setAttribute("aria-label", isOpen ? "쇼핑 쓰레드 닫기" : "쇼핑 쓰레드 열기");
+    toggleBtn.classList.toggle("history-sidebar-toggle-active", isOpen);
 }
 
 function toggleHistoryPanelCollapse() {
@@ -1845,7 +1871,22 @@ function executeSearch(query, options = {}) {
             renderInfoView(intent);
             infoView?.classList.remove("hidden");
             infoView?.classList.add("flex");
+            if (document.body.classList.contains("clean-home-page")) {
+                document.body.classList.add("clean-survey-active");
+                document.body.classList.remove("clean-solution-active");
+            }
             scrollToSection(infoView);
+            const scrollToInfoStart = () => {
+                if (!infoView) return;
+                const top = infoView.getBoundingClientRect().top + window.scrollY - 80;
+                const targetTop = Math.max(0, top);
+                document.documentElement.scrollTop = targetTop;
+                document.body.scrollTop = targetTop;
+                window.scrollTo({ top: targetTop, behavior: "auto" });
+            };
+            [120, 420, 900].forEach((delay) => {
+                setTimeout(scrollToInfoStart, delay);
+            });
         });
     };
 
@@ -2137,6 +2178,10 @@ window.generatePlan = function generatePlan() {
     saveSearchHistory();
     withLoading("\"딱\" 맞는 최적의 상품을 분석 중...", 3200, () => {
         solutionView?.classList.remove("hidden");
+        if (document.body.classList.contains("clean-home-page")) {
+            document.body.classList.remove("clean-survey-active");
+            document.body.classList.add("clean-solution-active");
+        }
         renderSolution(state.currentIntent, state.rawQuery);
         scrollToSection(solutionView);
         updateBottomCheckoutBar();
@@ -2856,7 +2901,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     curtainTag?.addEventListener("click", () => {
-        const value = "커튼 달기";
+        const value = curtainTag.dataset.query || "커튼 달기";
         if (searchInput) { searchInput.value = value; autoResizeTextarea(searchInput); }
         updateSearchUI(value);
         executeSearch(value);
@@ -2864,7 +2909,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const campingTag = document.getElementById("campingTag");
     campingTag?.addEventListener("click", () => {
-        const value = "캠핑 입문 준비";
+        const value = campingTag.dataset.query || "캠핑 입문 준비";
         if (searchInput) { searchInput.value = value; autoResizeTextarea(searchInput); }
         updateSearchUI(value);
         executeSearch(value);
@@ -2872,7 +2917,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const desktopTag = document.getElementById("desktopTag");
     desktopTag?.addEventListener("click", () => {
-        const value = "데스크탑 조립 세팅";
+        const value = desktopTag.dataset.query || "데스크탑 조립 세팅";
         if (searchInput) { searchInput.value = value; autoResizeTextarea(searchInput); }
         updateSearchUI(value);
         executeSearch(value);
@@ -2880,7 +2925,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const movingTag = document.getElementById("movingTag");
     movingTag?.addEventListener("click", () => {
-        const value = "원룸 이사 준비";
+        const value = movingTag.dataset.query || "원룸 이사 준비";
         if (searchInput) { searchInput.value = value; autoResizeTextarea(searchInput); }
         updateSearchUI(value);
         executeSearch(value);
@@ -2904,7 +2949,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // 초기 하단 바 상태 반영
     updateBottomCheckoutBar();
 
-    historySidebarToggle?.addEventListener("click", openHistorySidebar);
+    historySidebarToggle?.addEventListener("click", toggleHistorySidebar);
     closeHistorySidebarBtn?.addEventListener("click", closeHistorySidebar);
     historySidebarBackdrop?.addEventListener("click", closeHistorySidebar);
     collapseHistorySidebarBtn?.addEventListener("click", toggleHistoryPanelCollapse);
