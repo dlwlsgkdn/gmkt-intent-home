@@ -7,7 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="./gmarket-advanced.tailwind.js"></script>
     <link rel="stylesheet" href="./gmarket-advanced.css">
-    <link rel="stylesheet" href="./gmarket-advanced-clean-home.css?v=survey-clean-v12">
+    <link rel="stylesheet" href="./gmarket-advanced-clean-home.css?v=plan-reference-content-v22">
 </head>
 <body class="clean-home-page bg-slate-50 font-sans min-h-screen text-slate-900 overflow-x-hidden">
 
@@ -211,6 +211,32 @@
 
     <div id="history-sidebar-backdrop" class="history-sidebar-backdrop fixed left-0 right-0 bottom-0 top-16 z-[125] hidden bg-slate-950/35 backdrop-blur-sm lg:hidden"></div>
 
+    <nav id="thread-stepper" class="thread-stepper hidden" aria-label="쇼핑 쓰레드 단계 이동">
+        <button type="button" class="thread-stepper__step" data-thread-step="survey" onclick="goThreadPhase('survey')">
+            <span class="thread-stepper__dot">1</span>
+            <span class="thread-stepper__label">설문</span>
+        </button>
+        <span class="thread-stepper__line" aria-hidden="true"></span>
+        <button type="button" class="thread-stepper__step" data-thread-step="solution" onclick="goThreadPhase('solution')">
+            <span class="thread-stepper__dot">2</span>
+            <span class="thread-stepper__label">계획</span>
+        </button>
+    </nav>
+
+    <div id="survey-edit-confirm-modal" class="survey-confirm-modal hidden" role="dialog" aria-modal="true" aria-labelledby="survey-edit-confirm-title" aria-describedby="survey-edit-confirm-desc">
+        <div class="survey-confirm-modal__backdrop" data-survey-confirm-cancel="true"></div>
+        <div class="survey-confirm-modal__panel">
+            <div class="survey-confirm-modal__body">
+                <h3 id="survey-edit-confirm-title">설문을 수정하시겠어요?</h3>
+                <p id="survey-edit-confirm-desc">설문을 수정하면 새로운 쓰레드가 생성됩니다.</p>
+            </div>
+            <div class="survey-confirm-modal__actions">
+                <button type="button" id="survey-edit-cancel-btn" class="survey-confirm-modal__btn survey-confirm-modal__btn--ghost">취소</button>
+                <button type="button" id="survey-edit-confirm-btn" class="survey-confirm-modal__btn survey-confirm-modal__btn--primary">수정하기</button>
+            </div>
+        </div>
+    </div>
+
     <div class="fixed top-[-10%] left-[-10%] w-[60%] h-[60%] rounded-full bg-gmarket-blue bg-blob"></div>
     <div class="fixed bottom-[-10%] right-[-10%] w-[60%] h-[60%] rounded-full bg-gmarket bg-blob"></div>
 
@@ -279,9 +305,23 @@
                 <p>피부 타입, 무드, 예산을 가볍게 고르면 지금 목적에 맞는 뷰티 플랜을 정리해드려요.</p>
             </div>
 
+            <div class="clean-survey-progress" aria-label="설문 진행률">
+                <div class="clean-survey-progress__meta">
+                    <span id="survey-progress-label">1 / 1</span>
+                </div>
+                <div class="clean-survey-progress__track">
+                    <div id="survey-progress-fill" class="clean-survey-progress__fill"></div>
+                </div>
+            </div>
+
             <div id="questions-container" class="clean-question-list"></div>
 
-            <button type="button" onclick="generatePlan()" class="clean-plan-submit">맞춤 브리프 확인하기</button>
+            <div class="clean-survey-nav">
+                <button type="button" id="survey-prev-btn" class="clean-survey-nav-btn clean-survey-nav-btn--ghost" onclick="moveSurveyStep(-1)">이전</button>
+                <button type="button" id="survey-next-btn" class="clean-survey-nav-btn" onclick="moveSurveyStep(1)">다음</button>
+                <button type="button" id="survey-submit-btn" onclick="generatePlan()" class="clean-plan-submit">맞춤 브리프 확인하기</button>
+                <button type="button" id="survey-edit-btn" onclick="confirmSurveyEdit()" class="clean-plan-submit hidden">설문 수정하기</button>
+            </div>
         </div>
     </section>
 
@@ -295,6 +335,7 @@
                 </div>
             </div>
 
+            <div id="survey-lock-summary" class="clean-survey-lock hidden"></div>
             <div id="plan-container" class="space-y-24 text-left"></div>
             <div id="solution-checkout-cta" class="hidden mt-10 rounded-[32px] border border-slate-200 bg-white/90 p-6 shadow-sm">
                 <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -914,7 +955,7 @@
     </script>
 
     <script src="./gmarket-advanced.mock.js"></script>
-    <script src="./gmarket-advanced.js?v=clean-survey-page-v11"></script>
+    <script src="./gmarket-advanced.js?v=plan-reference-content-v22"></script>
     <script src="./gmarket-thread-navigation.js"></script>
 
 </body>

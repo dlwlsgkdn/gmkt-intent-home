@@ -148,6 +148,8 @@ const state = {
     currentSessionId: "",
     rawQuery: "",
     choices: getEmptyChoices(),
+    surveyStepIndex: 0,
+    isSurveyReviewMode: false,
     searchHistory: [],
     isHistoryPanelCollapsed: false,
     cartAccordionSessionId: "",
@@ -422,11 +424,8 @@ function hydrateSessionContext(sessionId) {
     state.currentSessionId = sessionId;
     state.currentIntent = session.intentKey;
     state.rawQuery = session.rawQuery || "";
-    state.choices = {
-        size: session.choices?.size || "",
-        wall: session.choices?.wall || "",
-        goal: session.choices?.goal || ""
-    };
+    state.choices = { ...getEmptyChoices(), ...(session.choices || {}) };
+    state.surveyStepIndex = 0;
 
     const searchInput = document.getElementById("searchInput");
     if (searchInput) {
@@ -445,6 +444,49 @@ function getCurrentVisibleThreadView() {
     if (!document.getElementById("order-view")?.classList.contains("hidden")) return "order";
     if (!document.getElementById("solution-view")?.classList.contains("hidden")) return "solution";
     return "info";
+}
+
+function getRequiredSurveyCategories(intent = state.currentIntent) {
+    const cfg = infoViewConfig[intent];
+    return cfg ? Object.keys(cfg).filter(k => k.startsWith("q")).map(k => cfg[k].category) : ["size", "wall", "goal"];
+}
+
+function isSurveyComplete(intent = state.currentIntent) {
+    if (!intent) return false;
+    return getRequiredSurveyCategories(intent).every((category) => Boolean(state.choices[category]));
+}
+
+function getCleanThreadPhase() {
+    if (document.body.classList.contains("clean-solution-active")) return "solution";
+    if (document.body.classList.contains("clean-survey-active")) return "survey";
+    return "home";
+}
+
+function updateThreadStepper() {
+    const stepper = document.getElementById("thread-stepper");
+    if (!stepper) return;
+
+    const phase = getCleanThreadPhase();
+    const shouldShow = document.body.classList.contains("clean-home-page")
+        && phase !== "home"
+        && Boolean(state.currentIntent || state.rawQuery || state.currentSessionId);
+    stepper.classList.toggle("hidden", !shouldShow);
+    if (!shouldShow) return;
+
+    const canSurvey = Boolean(state.currentIntent && infoViewConfig[state.currentIntent]);
+    const canSolution = canSurvey && isSurveyComplete(state.currentIntent);
+
+    stepper.querySelectorAll("[data-thread-step]").forEach((button) => {
+        const target = button.dataset.threadStep;
+        const disabled = (target === "survey" && !canSurvey) || (target === "solution" && !canSolution);
+        button.disabled = disabled;
+        button.classList.toggle("is-active", target === phase);
+        if (target === phase) {
+            button.setAttribute("aria-current", "step");
+        } else {
+            button.removeAttribute("aria-current");
+        }
+    });
 }
 
 function hideThreadViews() {
@@ -467,6 +509,64 @@ function hideThreadViews() {
     closeClaimStatusPanel();
 }
 
+function goThreadPhase(phase) {
+    const homeView = document.getElementById("home-view");
+    const infoView = document.getElementById("info-view");
+    const solutionView = document.getElementById("solution-view");
+
+    if (phase === "home") {
+        hideThreadViews();
+        document.body.classList.remove("clean-survey-active", "clean-solution-active");
+        state.isSurveyReviewMode = false;
+        updateThreadStepper();
+        requestAnimationFrame(() => scrollToSection(homeView));
+        return;
+    }
+
+    if (phase === "survey") {
+        if (!state.currentIntent || !infoViewConfig[state.currentIntent]) return;
+        const session = getCartSession(state.currentSessionId);
+        const effectiveView = getSessionEffectiveThreadView(session);
+        state.isSurveyReviewMode = Boolean(session && effectiveView !== "info");
+        hideThreadViews();
+        renderInfoView(state.currentIntent);
+        infoView?.classList.remove("hidden");
+        infoView?.classList.add("flex");
+        if (document.body.classList.contains("clean-home-page")) {
+            document.body.classList.add("clean-survey-active");
+            document.body.classList.remove("clean-solution-active");
+        }
+        updateThreadStepper();
+        requestAnimationFrame(() => scrollToSection(infoView));
+        return;
+    }
+
+    if (phase === "solution") {
+        if (!state.currentIntent || !isSurveyComplete(state.currentIntent)) return;
+        state.isSurveyReviewMode = false;
+        ensureSurveyResultSession();
+        hideThreadViews();
+        renderInfoView(state.currentIntent);
+        renderSolution(state.currentIntent, state.rawQuery || state.currentIntent);
+        updateProductCardCartState(state.currentIntent);
+        updateBottomCheckoutBar();
+        solutionView?.classList.remove("hidden");
+        if (document.body.classList.contains("clean-home-page")) {
+            document.body.classList.remove("clean-survey-active");
+            document.body.classList.add("clean-solution-active");
+        }
+        setSessionThreadView(state.currentSessionId, "solution");
+        persistCart();
+        renderCart();
+        syncTransactionLocks(state.currentSessionId);
+        updateThreadStepper();
+        requestAnimationFrame(() => scrollToSection(solutionView));
+    }
+}
+
+window.goThreadPhase = goThreadPhase;
+globalThis.goThreadPhase = goThreadPhase;
+
 function showSolutionThread(session) {
     const solutionView = document.getElementById("solution-view");
     if (!session || !solutionView) return;
@@ -486,6 +586,11 @@ function showSolutionThread(session) {
     syncTransactionLocks(state.currentSessionId);
 
     solutionView.classList.remove("hidden");
+    if (document.body.classList.contains("clean-home-page")) {
+        document.body.classList.remove("clean-survey-active");
+        document.body.classList.add("clean-solution-active");
+    }
+    updateThreadStepper();
 
     requestAnimationFrame(() => {
         scrollToSection(solutionView);
@@ -510,6 +615,11 @@ function renderThreadBase(session, options = {}) {
     syncTransactionLocks(state.currentSessionId);
 
     solutionView.classList.remove("hidden");
+    if (document.body.classList.contains("clean-home-page")) {
+        document.body.classList.remove("clean-survey-active");
+        document.body.classList.add("clean-solution-active");
+    }
+    updateThreadStepper();
 
     if (persistView) {
         setSessionThreadView(state.currentSessionId, "solution");
@@ -603,7 +713,7 @@ function renderSearchHistory() {
 }
 
 function buildHistorySummary() {
-    return [state.choices.size, state.choices.wall, state.choices.goal].filter(Boolean).join(" / ");
+    return Object.values(state.choices).filter(Boolean).join(" / ");
 }
 
 function buildCartGroupSummary(cartGroup, intentData) {
@@ -774,6 +884,7 @@ window.switchTab = function switchTab(tab) {
 
     const cartPanel = document.getElementById("cart-tab-panel");
     const cartTabBtn = document.getElementById("cartTabBtn");
+    const threadStepper = document.getElementById("thread-stepper");
 
     cartPanel?.classList.remove("hidden");
     cartTabBtn?.classList.add("sidebar-tab-active");
@@ -978,6 +1089,7 @@ function renderCart() {
         const { count: selectedCount, price: subtotal } = calculateSessionTotals(cartGroup);
         const effectiveThreadView = getSessionEffectiveThreadView(cartGroup);
         const phaseLabelMap = {
+            info: "\uC124\uBB38 \uC218\uC815 \uC911",
             solution: "\uC0C1\uD488 \uBE44\uAD50 \uC911",
             order: "\uC8FC\uBB38\uC11C \uC791\uC131 \uC911",
             complete: "\uC8FC\uBB38 \uC644\uB8CC",
@@ -1863,6 +1975,8 @@ function executeSearch(query, options = {}) {
     if (resetChoices) {
         state.choices = getEmptyChoices();
     }
+    state.surveyStepIndex = 0;
+    state.isSurveyReviewMode = false;
 
     const goToInfoView = (intent) => {
         state.currentIntent = intent;
@@ -1875,6 +1989,7 @@ function executeSearch(query, options = {}) {
                 document.body.classList.add("clean-survey-active");
                 document.body.classList.remove("clean-solution-active");
             }
+            updateThreadStepper();
             scrollToSection(infoView);
             const scrollToInfoStart = () => {
                 if (!infoView) return;
@@ -2095,12 +2210,158 @@ const infoViewConfig = {
     }
 };
 
+function getSurveyQuestions(intent) {
+    const cfg = infoViewConfig[intent];
+    if (!cfg) return [];
+    return Object.keys(cfg)
+        .filter((key) => key.startsWith("q"))
+        .sort()
+        .map((key) => ({ key, ...cfg[key] }));
+}
+
+function clampSurveyStepIndex(questions) {
+    const maxIndex = Math.max(questions.length - 1, 0);
+    state.surveyStepIndex = Math.max(0, Math.min(state.surveyStepIndex || 0, maxIndex));
+}
+
+function getQuestionLabelText(label) {
+    return String(label || "").replace(/^\s*\d+\.\s*/, "").trim();
+}
+
+function escapeHtml(value) {
+    return String(value || "").replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+    }[char]));
+}
+
+function updateSurveyProgress(questions = getSurveyQuestions(state.currentIntent)) {
+    const total = questions.length || 1;
+    clampSurveyStepIndex(questions);
+
+    const current = Math.min(state.surveyStepIndex + 1, total);
+    const currentQuestion = questions[state.surveyStepIndex];
+    const isLast = current >= total;
+    const isCurrentAnswered = currentQuestion ? Boolean(state.choices[currentQuestion.category]) : false;
+
+    const label = document.getElementById("survey-progress-label");
+    const fill = document.getElementById("survey-progress-fill");
+    const prevBtn = document.getElementById("survey-prev-btn");
+    const nextBtn = document.getElementById("survey-next-btn");
+    const submitBtn = document.getElementById("survey-submit-btn");
+    const editBtn = document.getElementById("survey-edit-btn");
+
+    if (label) label.textContent = `${current} / ${total}`;
+    if (fill) fill.style.width = `${(current / total) * 100}%`;
+
+    if (prevBtn) {
+        prevBtn.disabled = state.surveyStepIndex === 0;
+        prevBtn.classList.toggle("hidden", total <= 1);
+    }
+    if (nextBtn) {
+        nextBtn.disabled = !isCurrentAnswered;
+        nextBtn.classList.toggle("hidden", isLast);
+    }
+    if (submitBtn) {
+        submitBtn.disabled = !isCurrentAnswered;
+        submitBtn.classList.toggle("hidden", !isLast);
+        if (state.isSurveyReviewMode) {
+            submitBtn.disabled = true;
+            submitBtn.classList.add("hidden");
+        }
+    }
+    if (editBtn) {
+        editBtn.classList.toggle("hidden", !state.isSurveyReviewMode);
+    }
+}
+
+function applySurveyReviewMode() {
+    const container = document.getElementById("questions-container");
+    if (!container) return;
+
+    container.querySelectorAll(".info-card").forEach((button) => {
+        button.disabled = state.isSurveyReviewMode;
+        button.classList.toggle("clean-review-locked", state.isSurveyReviewMode);
+    });
+}
+
+function ensureSurveyResultSession() {
+    if (!state.currentIntent) return null;
+
+    let sessionId = state.currentSessionId;
+    let session = getCartSession(sessionId);
+
+    if (!session || session.intentKey !== state.currentIntent) {
+        const nextSession = createCartSession(state.currentIntent);
+        sessionId = nextSession.id;
+        session = nextSession.data;
+        state.currentSessionId = sessionId;
+        state.purposeCart[sessionId] = session;
+    }
+
+    session.rawQuery = state.rawQuery;
+    session.selectionSummary = buildHistorySummary();
+    session.recommendationSummary = solutionData[state.currentIntent]?.intentReason || "";
+    session.choices = { ...state.choices };
+    session.threadView = "solution";
+    session.updatedAt = new Date().toISOString();
+    persistCart();
+    renderCart();
+
+    return session;
+}
+
+function renderSurveyLockSummary() {
+    const container = document.getElementById("survey-lock-summary");
+    if (!container) return;
+
+    const questions = getSurveyQuestions(state.currentIntent);
+    if (!questions.length) {
+        container.classList.add("hidden");
+        container.innerHTML = "";
+        return;
+    }
+
+    const items = questions
+        .map((question) => {
+            const value = state.choices[question.category];
+            if (!value) return "";
+            return `
+                <div class="clean-survey-lock__item" aria-readonly="true">
+                    <span class="clean-survey-lock__label">${escapeHtml(getQuestionLabelText(question.label))}</span>
+                    <span class="clean-survey-lock__value">${escapeHtml(value)}</span>
+                </div>
+            `;
+        })
+        .filter(Boolean)
+        .join("");
+
+    if (!items) {
+        container.classList.add("hidden");
+        container.innerHTML = "";
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="clean-survey-lock__head">
+            <p class="clean-survey-lock__title">설문 요약</p>
+        </div>
+        <div class="clean-survey-lock__items">${items}</div>
+    `;
+    container.classList.remove("hidden");
+}
+
 function renderInfoView(intent) {
     const container = document.getElementById("questions-container");
     const infoTitle = document.getElementById("info-title");
     if (!container) return;
     const cfg = infoViewConfig[intent];
     if (!cfg) return;
+    const surveyQuestions = getSurveyQuestions(intent);
+    clampSurveyStepIndex(surveyQuestions);
 
     const trimmedQuery = state.rawQuery?.trim() || "";
     if (infoTitle) {
@@ -2129,7 +2390,8 @@ function renderInfoView(intent) {
         </div>`;
     };
 
-    container.innerHTML = Object.keys(cfg).filter(k => k.startsWith("q")).sort().map(k => buildQ(cfg[k])).join("");
+    const activeQuestion = surveyQuestions[state.surveyStepIndex];
+    container.innerHTML = activeQuestion ? buildQ(activeQuestion) : "";
 
     container.querySelectorAll(".info-card").forEach(btn => {
         btn.addEventListener("pointerdown", () => {
@@ -2147,33 +2409,106 @@ function renderInfoView(intent) {
         });
         selectedButton?.classList.add("active-card", "ring-4", "ring-blue-100");
     });
+
+    updateSurveyProgress(surveyQuestions);
+    applySurveyReviewMode();
+    updateThreadStepper();
 }
 
 window.selectChoice = function selectChoice(btn, category) {
+    if (state.isSurveyReviewMode) return;
     const buttons = btn.parentElement.querySelectorAll("button");
     buttons.forEach((button) => button.classList.remove("active-card", "ring-4", "ring-blue-100"));
     btn.classList.add("active-card", "ring-4", "ring-blue-100");
     state.choices[category] = btn.dataset.choiceValue || btn.innerText.trim();
+    updateSurveyProgress();
+    updateThreadStepper();
+};
+
+window.moveSurveyStep = function moveSurveyStep(delta) {
+    const questions = getSurveyQuestions(state.currentIntent);
+    if (!questions.length) return;
+
+    const currentQuestion = questions[state.surveyStepIndex];
+    if (delta > 0 && currentQuestion && !state.choices[currentQuestion.category]) {
+        updateSurveyProgress(questions);
+        return;
+    }
+
+    state.surveyStepIndex += delta;
+    clampSurveyStepIndex(questions);
+    renderInfoView(state.currentIntent);
+};
+
+function applySurveyEditConfirm() {
+    const previousChoices = { ...state.choices };
+    const nextSession = createCartSession(state.currentIntent);
+    nextSession.data.choices = { ...previousChoices };
+    nextSession.data.selectionSummary = buildHistorySummary();
+    nextSession.data.threadView = "info";
+    nextSession.data.selectedItems = {};
+
+    state.currentSessionId = nextSession.id;
+    state.purposeCart[nextSession.id] = nextSession.data;
+    state.choices = { ...getEmptyChoices(), ...previousChoices };
+    state.surveyStepIndex = 0;
+    state.isSurveyReviewMode = false;
+    persistCart();
+    renderCart();
+
+    const infoView = document.getElementById("info-view");
+    const solutionView = document.getElementById("solution-view");
+    solutionView?.classList.add("hidden");
+    infoView?.classList.remove("hidden");
+    infoView?.classList.add("flex");
+    if (document.body.classList.contains("clean-home-page")) {
+        document.body.classList.add("clean-survey-active");
+        document.body.classList.remove("clean-solution-active");
+    }
+    renderInfoView(state.currentIntent);
+    updateThreadStepper();
+    scrollToSection(infoView);
+}
+
+function closeSurveyEditConfirmModal() {
+    const modal = document.getElementById("survey-edit-confirm-modal");
+    if (!modal) return;
+    modal.classList.add("hidden");
+    document.body.classList.remove("survey-confirm-active");
+}
+
+window.confirmSurveyEdit = function confirmSurveyEdit() {
+    const modal = document.getElementById("survey-edit-confirm-modal");
+    if (!modal) {
+        applySurveyEditConfirm();
+        return;
+    }
+
+    modal.classList.remove("hidden");
+    document.body.classList.add("survey-confirm-active");
+    requestAnimationFrame(() => {
+        document.getElementById("survey-edit-confirm-btn")?.focus();
+    });
 };
 
 window.generatePlan = function generatePlan() {
     const solutionView = document.getElementById("solution-view");
     const cfg = infoViewConfig[state.currentIntent];
     const requiredCategories = cfg ? Object.keys(cfg).filter(k => k.startsWith("q")).map(k => cfg[k].category) : ["size", "wall", "goal"];
-    if (requiredCategories.some(cat => !state.choices[cat])) return;
+    const missingCategory = requiredCategories.find(cat => !state.choices[cat]);
+    if (missingCategory) {
+        const missingIndex = getSurveyQuestions(state.currentIntent).findIndex((question) => question.category === missingCategory);
+        if (missingIndex >= 0) {
+            state.surveyStepIndex = missingIndex;
+            renderInfoView(state.currentIntent);
+        }
+        return;
+    }
     if (!state.currentIntent) state.currentIntent = "커튼";
     if (!state.rawQuery) state.rawQuery = "커튼 설치";
 
-    const activeSession = getCartSession(state.currentSessionId);
-    if (activeSession && activeSession.intentKey === state.currentIntent) {
-        activeSession.rawQuery = state.rawQuery;
-        activeSession.selectionSummary = buildHistorySummary();
-        activeSession.choices = { ...state.choices };
-        activeSession.threadView = "solution";
-        activeSession.updatedAt = new Date().toISOString();
-        persistCart();
-        renderCart();
-    }
+    state.isSurveyReviewMode = false;
+    ensureSurveyResultSession();
 
     saveSearchHistory();
     withLoading("\"딱\" 맞는 최적의 상품을 분석 중...", 3200, () => {
@@ -2183,6 +2518,7 @@ window.generatePlan = function generatePlan() {
             document.body.classList.add("clean-solution-active");
         }
         renderSolution(state.currentIntent, state.rawQuery);
+        updateThreadStepper();
         scrollToSection(solutionView);
         updateBottomCheckoutBar();
     }, "book");
@@ -2610,6 +2946,53 @@ window.continueCartSession = function continueCartSession(sessionId) {
     window.moveToCartThread(sessionId);
 };
 
+const planReferenceContent = {
+    "메이크업": [
+        [
+            { type: "영상", source: "Beauty Tutorial", title: "건조한 피부에 베이스가 뜨지 않게 쌓는 순서", summary: "스킨케어 흡수 시간, 선크림 양, 프라이머 위치를 먼저 점검해요.", query: "건성 피부 베이스 메이크업 뜨지 않는 법" },
+            { type: "아티클", source: "Makeup Notes", title: "톤업 선크림과 파운데이션을 같이 쓸 때의 기준", summary: "커버보다 밀착을 우선할 때 어떤 제형을 골라야 하는지 정리했어요.", query: "톤업 선크림 파운데이션 같이 바르는 법" }
+        ],
+        [
+            { type: "룩북", source: "Color Mood", title: "내추럴 메이크업에서 색조를 덜어내는 방법", summary: "립과 블러셔 채도를 맞추면 빠르게 정돈된 인상을 만들 수 있어요.", query: "내추럴 메이크업 색조 조합" },
+            { type: "체크리스트", source: "Daily Routine", title: "출근 전 10분 메이크업 체크 포인트", summary: "베이스, 눈썹, 립 순서로 시간을 줄이는 루틴을 참고해요.", query: "출근 전 10분 메이크업 루틴" }
+        ],
+        [
+            { type: "가이드", source: "Budget Edit", title: "첫 장바구니를 5만원대로 구성하는 법", summary: "겹치는 기능을 줄이고 매일 쓰는 품목부터 우선순위를 잡아요.", query: "메이크업 기본템 5만원 구성" },
+            { type: "리뷰", source: "Review Digest", title: "쿠션·프라이머·립 제품 리뷰에서 먼저 볼 항목", summary: "지속력, 들뜸, 색상 재현처럼 실패를 줄이는 키워드를 확인해요.", query: "쿠션 프라이머 립 리뷰 보는 법" }
+        ],
+        [
+            { type: "영상", source: "Wear Test", title: "마스크와 출근길에서도 무너지지 않는 마무리", summary: "픽서보다 파우더 위치와 양이 더 중요한 경우가 많아요.", query: "출근 메이크업 지속력 높이는 법" },
+            { type: "아티클", source: "Pouch Guide", title: "수정 화장 파우치에 꼭 남길 제품", summary: "휴대용 파우더, 립, 미스트를 상황별로 나누어 봐요.", query: "수정 화장 파우치 필수템" }
+        ]
+    ]
+};
+
+function getPlanReferenceContent(key, stepIndex, step) {
+    const byIntent = planReferenceContent[key]?.[stepIndex];
+    if (byIntent?.length) return byIntent;
+
+    return [
+        {
+            type: "가이드",
+            source: "Buying Guide",
+            title: `${step.name} 전에 확인할 기준`,
+            summary: "상품을 고르기 전에 크기, 사용 환경, 유지 비용을 함께 점검해요.",
+            query: `${step.name} 구매 가이드`
+        },
+        {
+            type: "체크리스트",
+            source: "How-to Note",
+            title: `${step.name} 실패를 줄이는 체크리스트`,
+            summary: "후기에서 반복되는 장점과 불편 포인트를 먼저 비교해보세요.",
+            query: `${step.name} 체크리스트 후기`
+        }
+    ];
+}
+
+function buildReferenceHref(query) {
+    return `https://search.naver.com/search.naver?query=${encodeURIComponent(query || "")}`;
+};
+
 /* ─── Solution rendering ────────────────────────────────────── */
 
 function renderSolution(key, rawQuery) {
@@ -2637,6 +3020,8 @@ function renderSolution(key, rawQuery) {
 
     const stepCountLabel = document.getElementById("step-count-label");
     if (stepCountLabel) stepCountLabel.textContent = data.steps.length;
+
+    renderSurveyLockSummary();
 
     planContainer.innerHTML = "";
 
@@ -2767,6 +3152,30 @@ function renderSolution(key, rawQuery) {
             </div>
         ` : "";
 
+        const referenceContentHtml = `
+            <div class="plan-reference-panel">
+                <div class="plan-reference-panel__head">
+                    <p>함께 참고할 콘텐츠</p>
+                    <span>영상 · 글 · 체크리스트</span>
+                </div>
+                <div class="plan-reference-list">
+                    ${getPlanReferenceContent(key, stepIndex, step).map((content) => `
+                        <a
+                            class="plan-reference-card"
+                            href="${buildReferenceHref(content.query)}"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            <span class="plan-reference-card__type">${escapeHtml(content.type)}</span>
+                            <strong>${escapeHtml(content.title)}</strong>
+                            <small>${escapeHtml(content.source)}</small>
+                            <p>${escapeHtml(content.summary)}</p>
+                        </a>
+                    `).join("")}
+                </div>
+            </div>
+        `;
+
         stepEl.innerHTML = `
             <div class="absolute -left-[20px] top-0 w-10 h-10 rounded-full bg-slate-900 shadow-xl flex items-center justify-center font-bold text-white z-20 border-4 border-slate-50">
                 ${stepIndex + 1}
@@ -2781,6 +3190,7 @@ function renderSolution(key, rawQuery) {
             <div class="flex gap-5 overflow-x-auto pb-8 -mx-2 px-2 scrollbar-hide text-left snap-x snap-mandatory">
                 ${productHtml}
             </div>
+            ${referenceContentHtml}
             ${comparisonTableHtml}
         `;
 
@@ -2820,9 +3230,16 @@ function startDdakCompletedPlan(urlParams, searchInput) {
     infoView?.classList.remove("hidden");
     infoView?.classList.add("flex");
     solutionView?.classList.remove("hidden");
+    if (document.body.classList.contains("clean-home-page")) {
+        document.body.classList.remove("clean-survey-active");
+        document.body.classList.add("clean-solution-active");
+    }
+    state.isSurveyReviewMode = false;
+    ensureSurveyResultSession();
     renderSolution("메이크업", rawQuery);
     saveSearchHistory();
     updateBottomCheckoutBar();
+    updateThreadStepper();
     const scrollToPlanStart = () => {
         const top = solutionView ? solutionView.getBoundingClientRect().top + window.scrollY - 80 : 0;
         const targetTop = Math.max(0, top);
@@ -2849,6 +3266,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const historySidebarBackdrop = document.getElementById("history-sidebar-backdrop");
     const collapseHistorySidebarBtn = document.getElementById("collapseHistorySidebar");
     const cartTabBtn = document.getElementById("cartTabBtn");
+    const threadStepper = document.getElementById("thread-stepper");
+    const surveyEditConfirmModal = document.getElementById("survey-edit-confirm-modal");
+    const surveyEditConfirmBtn = document.getElementById("survey-edit-confirm-btn");
+    const surveyEditCancelBtn = document.getElementById("survey-edit-cancel-btn");
 
     generateEqualizerRays();
 
@@ -2862,9 +3283,34 @@ document.addEventListener("DOMContentLoaded", () => {
     renderCart();
     updateCartBadge();
     updateSearchUI(searchInput?.value || "");
+    updateThreadStepper();
 
     // Initialise tab (cart is default)
     switchTab("cart");
+
+    threadStepper?.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-thread-step]");
+        if (!button || button.disabled) return;
+        goThreadPhase(button.dataset.threadStep);
+    });
+
+    surveyEditConfirmBtn?.addEventListener("click", () => {
+        closeSurveyEditConfirmModal();
+        applySurveyEditConfirm();
+    });
+
+    surveyEditCancelBtn?.addEventListener("click", closeSurveyEditConfirmModal);
+    surveyEditConfirmModal?.addEventListener("click", (event) => {
+        if (event.target.closest("[data-survey-confirm-cancel='true']")) {
+            closeSurveyEditConfirmModal();
+        }
+    });
+
+    document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !surveyEditConfirmModal?.classList.contains("hidden")) {
+            closeSurveyEditConfirmModal();
+        }
+    });
 
     // URL 파라미터로 전달된 검색어 자동 실행 (목업 홈 쓰레드 모드 진입)
     const urlParams = new URLSearchParams(window.location.search);
