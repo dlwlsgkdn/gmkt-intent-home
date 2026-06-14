@@ -991,10 +991,17 @@ body.clean-home-page.clean-solution-active #solution-view {
 }
 
 .clean-survey-nav {
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
     display: grid;
     grid-template-columns: 120px minmax(0, 1fr);
     gap: 10px;
     margin-top: 26px;
+    padding: 12px 0 0;
+    background:
+        linear-gradient(180deg, rgba(246, 248, 250, 0), rgba(246, 248, 250, 0.98) 28%),
+        var(--beauty-paper);
 }
 
 .clean-survey-nav-btn,
@@ -1095,6 +1102,111 @@ body.clean-home-page.clean-solution-active #solution-view {
     word-break: keep-all;
 }
 
+.clean-photo-question .clean-photo-upload {
+    width: 100%;
+}
+
+.clean-photo-upload__input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+}
+
+.clean-photo-upload__drop {
+    display: grid;
+    grid-template-columns: minmax(180px, 0.76fr) minmax(0, 1fr);
+    gap: 16px;
+    align-items: stretch;
+    min-height: 280px;
+    padding: 14px;
+    border: 1px solid rgba(52, 70, 90, 0.16);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.66);
+    cursor: pointer;
+    transition: border-color 0.16s ease, background-color 0.16s ease;
+}
+
+.clean-photo-upload.has-photo .clean-photo-upload__drop {
+    grid-template-columns: 150px minmax(0, 1fr);
+    min-height: 170px;
+}
+
+.clean-photo-upload__drop:hover {
+    border-color: rgba(52, 70, 90, 0.34);
+    background: #ffffff;
+}
+
+.clean-photo-upload__preview {
+    display: grid;
+    place-items: center;
+    min-height: 250px;
+    overflow: hidden;
+    border-radius: 6px;
+    background: rgba(246, 248, 250, 0.86);
+    color: var(--beauty-muted);
+    font-size: 13px;
+    font-weight: 320;
+}
+
+.clean-photo-upload.has-photo .clean-photo-upload__preview {
+    min-height: 140px;
+}
+
+.clean-photo-upload__preview img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.clean-photo-upload__body {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 8px;
+    color: var(--beauty-ink);
+}
+
+.clean-photo-upload__body strong {
+    font-size: clamp(20px, 2.5vw, 30px);
+    font-weight: 310;
+    line-height: 1.34;
+    word-break: keep-all;
+}
+
+.clean-photo-upload__body small {
+    max-width: 420px;
+    color: var(--beauty-muted);
+    font-size: 13px;
+    font-weight: 300;
+    line-height: 1.62;
+    word-break: keep-all;
+}
+
+.clean-photo-upload__sample {
+    width: max-content;
+    max-width: 100%;
+    min-height: 34px;
+    margin-top: 10px;
+    padding: 0 11px;
+    border: 1px solid rgba(52, 70, 90, 0.18);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.78);
+    color: var(--beauty-ink);
+    font-size: 12px;
+    font-weight: 330;
+    line-height: 1.2;
+    text-align: center;
+    transition: border-color 0.16s ease, background-color 0.16s ease;
+}
+
+.clean-photo-upload__sample:hover {
+    border-color: rgba(52, 70, 90, 0.34);
+    background: #ffffff;
+}
+
 .clean-plan-submit {
     width: 100%;
     margin-top: 0;
@@ -1110,8 +1222,8 @@ body.clean-home-page.clean-solution-active #solution-view {
 }
 
 .clean-survey-lock {
-    margin: -24px 0 38px;
-    padding: 16px;
+    margin: -18px 0 26px;
+    padding: 11px 12px;
     border: 1px solid rgba(52, 70, 90, 0.12);
     border-radius: 6px;
     background: rgba(255, 255, 255, 0.72);
@@ -1121,14 +1233,14 @@ body.clean-home-page.clean-solution-active #solution-view {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
-    margin-bottom: 12px;
+    gap: 12px;
+    margin-bottom: 8px;
 }
 
 .clean-survey-lock__title {
     margin: 0;
     color: var(--beauty-ink);
-    font-size: 15px;
+    font-size: 13px;
     font-weight: 330;
     line-height: 1.35;
 }
@@ -1148,15 +1260,15 @@ body.clean-home-page.clean-solution-active #solution-view {
 .clean-survey-lock__items {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 5px;
 }
 
 .clean-survey-lock__item {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    min-height: 30px;
-    padding: 6px 9px;
+    gap: 5px;
+    min-height: 24px;
+    padding: 4px 7px;
     border: 1px solid rgba(52, 70, 90, 0.1);
     border-radius: 999px;
     background: rgba(246, 248, 250, 0.78);
@@ -1166,7 +1278,7 @@ body.clean-home-page.clean-solution-active #solution-view {
     display: inline;
     margin: 0;
     color: var(--beauty-muted);
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 300;
     line-height: 1.25;
     word-break: keep-all;
@@ -1178,7 +1290,7 @@ body.clean-home-page.clean-solution-active #solution-view {
 
 .clean-survey-lock__value {
     color: var(--beauty-ink);
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 330;
     line-height: 1.25;
     word-break: keep-all;
@@ -1195,7 +1307,7 @@ body.clean-home-page.clean-solution-active #solution-view {
 }
 
 body.clean-home-page.clean-solution-active #solution-view > .max-w-4xl {
-    width: min(900px, calc(100% - 48px));
+    width: min(1240px, calc(100% - 48px));
     max-width: none !important;
 }
 
@@ -1243,9 +1355,18 @@ body.clean-home-page.clean-solution-active #solution-view .flex.items-start.text
 body.clean-home-page #plan-container {
     display: grid;
     gap: 0 !important;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+    box-sizing: border-box;
 }
 
 body.clean-home-page #plan-container > div {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
     padding: 36px 0 40px !important;
     border-left: 0 !important;
     border-top: 1px solid rgba(52, 70, 90, 0.12);
@@ -1418,95 +1539,604 @@ body.clean-home-page #plan-container .product-card .cart-add-btn.in-cart {
     color: #ffffff !important;
 }
 
-body.clean-home-page .plan-reference-panel {
-    margin: 2px 0 30px;
-    padding: 16px;
-    border: 1px solid rgba(52, 70, 90, 0.12);
-    border-radius: 6px;
-    background: rgba(255, 255, 255, 0.64);
+body.clean-home-page .plan-step-insight {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    align-items: stretch;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    margin: -6px 0 26px;
 }
 
-body.clean-home-page .plan-reference-panel__head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 12px;
+body.clean-home-page .beauty-ai-outcome,
+body.clean-home-page .beauty-lipstick-outcome,
+body.clean-home-page .beauty-scenario-note {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    margin: 0 0 34px;
+    border-top: 1px solid rgba(52, 70, 90, 0.12);
+    border-bottom: 1px solid rgba(52, 70, 90, 0.12);
 }
 
-body.clean-home-page .plan-reference-panel__head p {
-    margin: 0;
+body.clean-home-page .beauty-ai-outcome,
+body.clean-home-page .beauty-lipstick-outcome {
+    display: grid;
+    grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.22fr);
+    gap: 20px;
+    align-items: stretch;
+    padding: 26px 0;
+}
+
+body.clean-home-page .beauty-ai-outcome__copy,
+body.clean-home-page .beauty-lipstick-outcome__copy,
+body.clean-home-page .beauty-scenario-note {
     color: var(--beauty-ink);
-    font-size: 14px;
-    font-weight: 330;
-    line-height: 1.35;
 }
 
-body.clean-home-page .plan-reference-panel__head span {
+body.clean-home-page .beauty-ai-outcome__copy,
+body.clean-home-page .beauty-lipstick-outcome__copy {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+body.clean-home-page .beauty-ai-outcome__copy span,
+body.clean-home-page .beauty-lipstick-outcome__copy span,
+body.clean-home-page .beauty-scenario-note span {
+    color: var(--beauty-plum);
+    font-size: 10px;
+    font-weight: 340;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+body.clean-home-page .beauty-ai-outcome__copy h3,
+body.clean-home-page .beauty-lipstick-outcome__copy h3 {
+    margin: 12px 0 0;
+    font-size: clamp(24px, 3.1vw, 38px);
+    font-weight: 310;
+    line-height: 1.24;
+    word-break: keep-all;
+}
+
+body.clean-home-page .beauty-ai-outcome__copy p,
+body.clean-home-page .beauty-lipstick-outcome__copy p,
+body.clean-home-page .beauty-scenario-note p {
+    margin: 14px 0 0;
     color: var(--beauty-muted);
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 300;
-    line-height: 1.35;
+    line-height: 1.72;
+    word-break: keep-all;
+}
+
+body.clean-home-page .beauty-lipstick-swatch {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+body.clean-home-page .beauty-lipstick-swatch__example {
+    position: relative;
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid rgba(52, 70, 90, 0.12);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.54);
+    box-sizing: border-box;
+}
+
+body.clean-home-page .beauty-lipstick-swatch__example img {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    object-position: center;
+}
+
+body.clean-home-page .beauty-lipstick-swatch__example span {
+    position: absolute;
+    left: 10px;
+    bottom: 10px;
+    padding: 5px 8px;
+    border-radius: 999px;
+    background: rgba(31, 41, 51, 0.72);
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 330;
+    letter-spacing: 0.04em;
+}
+
+body.clean-home-page .beauty-lipstick-swatch__legend {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+    align-content: start;
+    min-width: 0;
+}
+
+body.clean-home-page .beauty-lipstick-swatch__chip {
+    display: grid;
+    grid-template-columns: 13px minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    column-gap: 5px;
+    align-items: center;
+    min-width: 0;
+    padding: 6px;
+    border: 1px solid rgba(52, 70, 90, 0.1);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.54);
+}
+
+body.clean-home-page .beauty-lipstick-swatch__chip i {
+    grid-row: 1 / span 2;
+    width: 13px;
+    height: 13px;
+    border-radius: 999px;
+    box-shadow: inset 0 -4px 8px rgba(0, 0, 0, 0.16);
+}
+
+body.clean-home-page .beauty-lipstick-swatch__chip strong {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--beauty-ink);
+    font-size: 11px;
+    font-weight: 420;
+    line-height: 1.18;
+    text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-body.clean-home-page .plan-reference-list {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
+body.clean-home-page .beauty-lipstick-swatch__chip small {
+    color: var(--beauty-muted);
+    font-size: 9px;
+    font-weight: 330;
+    line-height: 1.1;
 }
 
-body.clean-home-page .plan-reference-card {
+body.clean-home-page .beauty-before-after {
+    --split: 52%;
     display: grid;
-    gap: 6px;
-    min-height: 132px;
-    padding: 13px;
-    border: 1px solid rgba(52, 70, 90, 0.1);
+    gap: 12px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+body.clean-home-page .beauty-before-after__stage {
+    position: relative;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 360px;
+    aspect-ratio: 4 / 3;
+    overflow: hidden;
     border-radius: 6px;
-    background: rgba(246, 248, 250, 0.62);
-    color: var(--beauty-ink);
-    text-decoration: none;
-    transition: border-color 0.16s ease, background-color 0.16s ease;
+    background: var(--beauty-blush);
+    box-sizing: border-box;
 }
 
-body.clean-home-page .plan-reference-card:hover {
-    border-color: rgba(52, 70, 90, 0.3);
-    background: #ffffff;
+body.clean-home-page .beauty-before-after__image,
+body.clean-home-page .beauty-before-after__after {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
 }
 
-body.clean-home-page .plan-reference-card__type {
-    width: max-content;
-    padding: 3px 7px;
-    border: 1px solid rgba(52, 70, 90, 0.12);
+body.clean-home-page .beauty-before-after__image {
+    display: block;
+    object-fit: cover;
+    object-position: center 28%;
+    image-rendering: auto;
+    backface-visibility: hidden;
+    transform: translateZ(0);
+}
+
+body.clean-home-page .beauty-before-after__after {
+    overflow: hidden;
+    clip-path: inset(0 calc(100% - var(--split)) 0 0);
+}
+
+body.clean-home-page .beauty-before-after__after img {
+    filter: saturate(1.16) contrast(1.04) brightness(1.05);
+}
+
+body.clean-home-page .beauty-before-after__makeup-glow {
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(circle at 50% 58%, rgba(255, 120, 120, 0.22), transparent 18%),
+        radial-gradient(circle at 43% 44%, rgba(255, 170, 150, 0.2), transparent 10%),
+        linear-gradient(180deg, rgba(255, 223, 214, 0.08), rgba(137, 87, 102, 0.18));
+    mix-blend-mode: soft-light;
+    pointer-events: none;
+}
+
+body.clean-home-page .beauty-before-after__handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: var(--split);
+    width: 2px;
+    transform: translateX(-1px);
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 0 0 1px rgba(31, 41, 51, 0.16), 0 16px 36px rgba(31, 41, 51, 0.24);
+    pointer-events: none;
+}
+
+body.clean-home-page .beauty-before-after__handle::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 34px;
+    height: 34px;
+    transform: translate(-50%, -50%);
+    border: 1px solid rgba(31, 41, 51, 0.18);
     border-radius: 999px;
-    color: var(--beauty-plum);
+    background:
+        linear-gradient(90deg, transparent 39%, var(--beauty-ink) 39% 43%, transparent 43% 57%, var(--beauty-ink) 57% 61%, transparent 61%),
+        rgba(255, 255, 255, 0.92);
+}
+
+body.clean-home-page .beauty-before-after__label {
+    position: absolute;
+    bottom: 12px;
+    z-index: 2;
+    padding: 5px 8px;
+    border-radius: 999px;
+    background: rgba(31, 41, 51, 0.68);
+    color: #ffffff;
     font-size: 10px;
     font-weight: 330;
-    line-height: 1;
+    letter-spacing: 0.06em;
 }
 
-body.clean-home-page .plan-reference-card strong {
+body.clean-home-page .beauty-before-after__label--before {
+    left: 12px;
+}
+
+body.clean-home-page .beauty-before-after__label--after {
+    right: 12px;
+}
+
+body.clean-home-page .beauty-before-after__range {
+    width: 100%;
+    accent-color: var(--beauty-ink);
+}
+
+body.clean-home-page .beauty-scenario-note {
+    padding: 20px 0;
+}
+
+body.clean-home-page .beauty-scenario-note strong {
+    display: block;
+    margin-top: 8px;
+    font-size: clamp(20px, 2.4vw, 30px);
+    font-weight: 310;
+    line-height: 1.32;
+    word-break: keep-all;
+}
+
+body.clean-home-page .plan-step-insight__copy {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    width: min(760px, 100%);
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}
+
+body.clean-home-page .plan-step-insight--media-right .plan-step-insight__copy,
+body.clean-home-page .plan-step-insight--media-wide .plan-step-insight__copy {
+    justify-self: end;
+}
+
+body.clean-home-page .plan-step-insight--media-top .plan-step-insight__copy {
+    width: min(920px, 100%);
+}
+
+body.clean-home-page .plan-step-insight__label {
+    display: inline-flex;
+    width: max-content;
+    max-width: 100%;
+    margin-bottom: 12px;
+    padding: 5px 8px;
+    border: 1px solid rgba(52, 70, 90, 0.12);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.64);
+    color: var(--beauty-plum);
+    font-size: 10px;
+    font-weight: 340;
+    letter-spacing: 0.08em;
+    line-height: 1.1;
+    word-break: keep-all;
+}
+
+body.clean-home-page .plan-step-insight__headline {
+    margin: 0;
     color: var(--beauty-ink);
-    font-size: 14px;
-    font-weight: 330;
+    font-size: clamp(19px, 2.2vw, 27px);
+    font-weight: 310;
     line-height: 1.42;
     word-break: keep-all;
 }
 
-body.clean-home-page .plan-reference-card small {
+body.clean-home-page .plan-step-insight__description {
+    margin: 12px 0 0;
     color: var(--beauty-muted);
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 300;
-    line-height: 1.2;
+    line-height: 1.68;
+    word-break: keep-all;
 }
 
-body.clean-home-page .plan-reference-card p {
-    margin: 0;
+body.clean-home-page .plan-step-insight__points {
+    display: grid;
+    gap: 7px;
+    margin: 16px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+body.clean-home-page .plan-step-insight__points li {
+    position: relative;
+    padding-left: 13px;
     color: var(--beauty-muted);
     font-size: 12px;
     font-weight: 300;
-    line-height: 1.55;
+    line-height: 1.62;
     word-break: keep-all;
+}
+
+body.clean-home-page .plan-step-insight__points li::before {
+    content: "";
+    position: absolute;
+    top: 0.72em;
+    left: 0;
+    width: 4px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--beauty-plum);
+}
+
+body.clean-home-page .plan-step-media-stage {
+    display: grid;
+    gap: 12px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+body.clean-home-page .plan-step-media-stage *,
+body.clean-home-page .beauty-ai-outcome *,
+body.clean-home-page .plan-step-insight * {
+    box-sizing: border-box;
+    min-width: 0;
+}
+
+body.clean-home-page #plan-container img {
+    max-width: 100%;
+}
+
+body.clean-home-page .plan-step-feature-media {
+    position: relative;
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 300px;
+    aspect-ratio: 21 / 8;
+    box-sizing: border-box;
+    overflow: hidden;
+    border: 1px solid rgba(52, 70, 90, 0.12);
+    border-radius: 6px;
+    background: var(--beauty-blush);
+    color: #ffffff;
+    text-decoration: none;
+}
+
+body.clean-home-page .plan-step-feature-media img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.35s ease;
+}
+
+body.clean-home-page .plan-step-feature-media:hover img {
+    transform: scale(1.025);
+}
+
+body.clean-home-page .plan-step-feature-media__caption {
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+    left: 16px;
+    display: grid;
+    gap: 5px;
+    max-width: 460px;
+    padding: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    border-radius: 6px;
+    background: rgba(31, 41, 51, 0.58);
+    backdrop-filter: blur(12px);
+}
+
+body.clean-home-page .plan-step-feature-media__caption span,
+body.clean-home-page .plan-video-card__body span {
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 10px;
+    font-weight: 340;
+    letter-spacing: 0.08em;
+    line-height: 1;
+    text-transform: uppercase;
+}
+
+body.clean-home-page .plan-step-feature-media__caption strong,
+body.clean-home-page .plan-video-card__body strong {
+    color: #ffffff;
+    font-size: 15px;
+    font-weight: 330;
+    line-height: 1.38;
+    word-break: keep-all;
+}
+
+body.clean-home-page .plan-step-feature-media__caption small,
+body.clean-home-page .plan-video-card__body small {
+    color: rgba(255, 255, 255, 0.76);
+    font-size: 11px;
+    font-weight: 300;
+    line-height: 1.45;
+    word-break: keep-all;
+}
+
+body.clean-home-page .plan-video-card-grid {
+    display: flex;
+    gap: 12px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    padding: 0 0 10px;
+    box-sizing: border-box;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+}
+
+body.clean-home-page .plan-video-card-grid::-webkit-scrollbar {
+    display: none;
+}
+
+body.clean-home-page .plan-video-card {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    flex: 0 0 190px;
+    width: 190px;
+    max-width: 190px;
+    min-width: 190px;
+    box-sizing: border-box;
+    overflow: hidden;
+    border: 1px solid rgba(52, 70, 90, 0.13);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.76);
+    color: var(--beauty-ink);
+    text-decoration: none;
+    scroll-snap-align: start;
+    transition: border-color 0.16s ease, background-color 0.16s ease, transform 0.16s ease;
+}
+
+body.clean-home-page .plan-video-card:hover {
+    border-color: rgba(52, 70, 90, 0.34);
+    background: #ffffff;
+    transform: translateY(-2px);
+}
+
+body.clean-home-page .plan-video-card__thumb {
+    position: relative;
+    display: block;
+    width: 100%;
+    height: 176px;
+    aspect-ratio: auto;
+    overflow: hidden;
+    background: var(--beauty-blush);
+}
+
+body.clean-home-page .plan-video-card__thumb img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.35s ease;
+}
+
+body.clean-home-page .plan-video-card:hover .plan-video-card__thumb img {
+    transform: scale(1.04);
+}
+
+body.clean-home-page .plan-step-media__play {
+    position: absolute;
+    inset: 50% auto auto 50%;
+    width: 52px;
+    height: 38px;
+    transform: translate(-50%, -50%);
+    border-radius: 11px;
+    background: rgba(204, 0, 0, 0.9);
+    box-shadow: 0 16px 34px rgba(31, 41, 51, 0.26);
+}
+
+body.clean-home-page .plan-step-media__play::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 52%;
+    transform: translate(-50%, -50%);
+    border-top: 8px solid transparent;
+    border-bottom: 8px solid transparent;
+    border-left: 13px solid #ffffff;
+}
+
+body.clean-home-page .plan-video-card__body {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+    padding: 14px;
+    background: var(--beauty-ink);
+}
+
+body.clean-home-page .plan-citations {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin: -10px 0 20px;
+}
+
+body.clean-home-page .plan-citations span,
+body.clean-home-page .plan-citations a {
+    min-height: 24px;
+    padding: 5px 8px;
+    border: 1px solid rgba(52, 70, 90, 0.1);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.58);
+    color: var(--beauty-muted);
+    font-size: 10px;
+    font-weight: 300;
+    line-height: 1.2;
+    text-decoration: none;
+}
+
+body.clean-home-page .plan-citations span {
+    color: var(--beauty-ink);
+    font-weight: 330;
+}
+
+body.clean-home-page .plan-citations a:hover {
+    border-color: rgba(52, 70, 90, 0.3);
+    color: var(--beauty-ink);
+    background: #ffffff;
 }
 
 body.clean-home-page #solution-checkout-cta {
@@ -1578,6 +2208,19 @@ body.clean-home-page #solution-checkout-cta button {
         grid-template-columns: 1fr;
         gap: 14px;
         padding: 18px 0;
+    }
+
+    body.clean-home-page .beauty-ai-outcome,
+    body.clean-home-page .beauty-lipstick-outcome {
+        grid-template-columns: 1fr;
+    }
+
+    body.clean-home-page .beauty-lipstick-swatch {
+        grid-template-columns: 1fr;
+    }
+
+    body.clean-home-page .beauty-before-after__stage {
+        min-height: 320px;
     }
 }
 
@@ -1675,6 +2318,29 @@ body.clean-home-page #solution-checkout-cta button {
         grid-template-columns: 1fr;
     }
 
+    .clean-photo-upload__drop {
+        grid-template-columns: 1fr;
+        min-height: 0;
+        padding: 12px;
+    }
+
+    .clean-photo-upload.has-photo .clean-photo-upload__drop {
+        grid-template-columns: 96px minmax(0, 1fr);
+        min-height: 118px;
+    }
+
+    .clean-photo-upload__preview {
+        min-height: 220px;
+    }
+
+    .clean-photo-upload.has-photo .clean-photo-upload__preview {
+        min-height: 96px;
+    }
+
+    .clean-photo-upload__body {
+        padding: 4px 2px 2px;
+    }
+
     .clean-home-page .info-card {
         min-height: 70px;
     }
@@ -1706,21 +2372,78 @@ body.clean-home-page #solution-checkout-cta button {
         width: 10px;
     }
 
-    body.clean-home-page .plan-reference-panel {
+    body.clean-home-page .plan-step-insight {
+        grid-template-columns: 1fr;
+        gap: 10px;
+        margin: -4px 0 20px;
+    }
+
+    body.clean-home-page .beauty-ai-outcome,
+    body.clean-home-page .beauty-lipstick-outcome {
+        grid-template-columns: 1fr;
+        gap: 16px;
+        padding: 20px 0;
+    }
+
+    body.clean-home-page .beauty-lipstick-swatch__legend {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    body.clean-home-page .beauty-before-after__stage {
+        min-height: 280px;
+        aspect-ratio: 3 / 4;
+    }
+
+    body.clean-home-page .beauty-scenario-note {
+        padding: 17px 0;
+    }
+
+    body.clean-home-page .plan-step-insight__copy {
+        width: 100%;
+        min-height: 0;
+        padding: 0;
+    }
+
+    body.clean-home-page .plan-step-insight__headline {
+        font-size: 18px;
+    }
+
+    body.clean-home-page .plan-step-insight__description {
+        font-size: 12px;
+        line-height: 1.62;
+    }
+
+    body.clean-home-page .plan-step-feature-media {
+        width: 100%;
+        max-width: 100%;
+        min-height: 230px;
+        aspect-ratio: 4 / 3;
+    }
+
+    body.clean-home-page .plan-step-feature-media__caption {
+        right: 10px;
+        bottom: 10px;
+        left: 10px;
+        max-width: none;
+        padding: 12px;
+    }
+
+    body.clean-home-page .plan-video-card-grid {
+        gap: 10px;
+        overflow-x: auto;
+    }
+
+    body.clean-home-page .plan-video-card__thumb {
+        height: 176px;
+        min-height: 0;
+        aspect-ratio: auto;
+    }
+
+    body.clean-home-page .plan-video-card__body {
         padding: 13px;
     }
 
-    body.clean-home-page .plan-reference-panel__head {
-        align-items: flex-start;
-        flex-direction: column;
-        gap: 4px;
-    }
-
-    body.clean-home-page .plan-reference-list {
-        grid-template-columns: 1fr;
-    }
-
-    body.clean-home-page .plan-reference-card {
-        min-height: 0;
+    body.clean-home-page .plan-citations {
+        margin: -7px 0 18px;
     }
 }

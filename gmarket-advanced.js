@@ -145,6 +145,7 @@ const HISTORY_LIMIT = 6;
 
 const state = {
     currentIntent: "",
+    currentScenarioId: "",
     currentSessionId: "",
     rawQuery: "",
     choices: getEmptyChoices(),
@@ -160,7 +161,300 @@ const state = {
 };
 
 function getEmptyChoices() {
-    return { size: "", wall: "", goal: "", skin: "", mood: "", budget: "", occasion: "" };
+    return { size: "", wall: "", goal: "", skin: "", mood: "", budget: "", occasion: "", experience: "", finish: "", intensity: "", photo: "", photoName: "" };
+}
+
+const BEAUTY_SCENARIOS = {
+    "출근 10분룩": {
+        id: "출근 10분룩",
+        baseIntent: "메이크업",
+        title: "출근 10분룩 맞춤 제안",
+        reason: "짧은 아침 시간에 무너지지 않는 데일리 메이크업을 완성하는 목적",
+        skipSurvey: false,
+        match: ["출근", "10분", "등교", "데일리"]
+    },
+    "AI 페이스 메이크오버": {
+        id: "AI 페이스 메이크오버",
+        baseIntent: "메이크업",
+        title: "AI 페이스 메이크오버 제안",
+        reason: "얼굴 사진에 원하는 메이크업 무드를 입혀보고 같은 룩을 구현하는 목적",
+        skipSurvey: false,
+        hasPhotoUpload: true,
+        match: ["사진", "얼굴", "ai", "AI", "시뮬레이션", "메이크오버"]
+    },
+    "립스틱 전색발색": {
+        id: "립스틱 전색발색",
+        baseIntent: "메이크업",
+        title: "립스틱 전색 발색 비교",
+        reason: "한 립스틱 라인의 모든 색상을 팔목에 발라 피부톤별 발색과 색상 차이를 비교하는 목적",
+        skipSurvey: true,
+        defaultChoices: { skin: "웜/쿨 비교", mood: "립스틱 전색 발색", budget: "컬러 비교 우선", occasion: "팔목 발색" },
+        match: ["립스틱", "립스팁", "립", "전색", "전색발색", "발색", "팔목", "손목", "스와치", "컬러비교", "색상별"]
+    },
+    "성분 궁합 체크": {
+        id: "성분 궁합 체크",
+        baseIntent: "메이크업",
+        title: "성분 궁합 체크 제안",
+        reason: "민감 피부가 바로 확인할 수 있는 저자극 성분과 기본템 조합을 찾는 목적",
+        skipSurvey: true,
+        defaultChoices: { skin: "민감성", mood: "저자극 데일리", budget: "10만원 안쪽", occasion: "성분 체크" },
+        match: ["성분", "민감", "트러블", "저자극", "궁합"]
+    },
+    "여행 파우치": {
+        id: "여행 파우치",
+        baseIntent: "메이크업",
+        title: "여행 파우치 뷰티 구성",
+        reason: "주말 여행에 필요한 최소 뷰티 파우치를 빠르게 구성하는 목적",
+        skipSurvey: true,
+        defaultChoices: { skin: "잘 모르겠어요", mood: "간편한 데일리", budget: "5만원 안쪽", occasion: "여행" },
+        match: ["여행", "파우치", "1박", "출장", "휴대"]
+    }
+};
+
+const SAMPLE_FACE_PHOTO = "./makeup-clone-assets/1cebcb36604d1166.avif";
+const LIPSTICK_SWATCH_EXAMPLE_URL = "https://unpa.me/tip/detail/50a73d0b-81dd-4d11-b952-6045da3a71be";
+const LIPSTICK_SWATCH_EXAMPLE_IMAGE = "https://d33ur1yh5ph6b5.cloudfront.net/2ed3f6d9-cf79-41af-bd8b-6e434d972fc2-mid";
+
+function getLipstickSwatchSolutionData() {
+    return {
+        title: "립스틱 전색 발색 비교",
+        intentReason: "팔목 발색 이미지 기준으로 웜톤 립 컬러와 제형을 비교하고 구매 후보를 좁히는 목적",
+        steps: [
+            {
+                step: 1,
+                name: "팔목 발색 기준 컬러",
+                essential: true,
+                description: "이미지 속 6개 컬러를 기준으로 누드, 코랄, 브릭, 글로스 계열을 먼저 나눠 비교합니다.",
+                products: [
+                    {
+                        id: 9101,
+                        name: "롬앤 제로매트 립스틱 쉘누드",
+                        price: "9,900",
+                        originalPrice: "13,000",
+                        score: 97,
+                        img: "https://images.unsplash.com/photo-1586495777744-4413f21062fa?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "이미지의 쉘누드처럼 베이스로 깔기 좋은 누드 코랄 계열입니다.",
+                            "다른 립을 겹쳐 바를 때 색을 부드럽게 정돈하는 역할이 좋습니다.",
+                            "흰기가 있는 누드가 피부 위에서 뜨는지 확인하기 좋은 기준 컬러입니다."
+                        ],
+                        spec: { size: "3.5g", feature: "누드 코랄 매트 립스틱" }
+                    },
+                    {
+                        id: 9102,
+                        name: "페리페라 잉크 무드 매트 립스틱 로즈픽션",
+                        price: "10,800",
+                        originalPrice: "15,000",
+                        score: 94,
+                        img: "https://images.unsplash.com/photo-1599305090598-fe179d501227?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "김여주집합처럼 핑크 레드 계열을 비교할 때 기준으로 삼기 좋습니다.",
+                            "코랄보다 로즈기가 올라오는 컬러가 피부를 밝히는지 볼 수 있습니다.",
+                            "매트하지만 너무 건조해 보이지 않는 중간 채도의 후보입니다."
+                        ],
+                        spec: { size: "3g", feature: "핑크 레드 매트 립스틱" }
+                    },
+                    {
+                        id: 9103,
+                        name: "웨이크메이크 워터 블러링 틴트 소프트브릭",
+                        price: "12,600",
+                        originalPrice: "18,000",
+                        score: 96,
+                        img: "https://images.unsplash.com/photo-1631730486572-226d1f595b68?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "이미지의 소프트브릭처럼 웜톤에서 얼굴을 또렷하게 잡는 브릭 레드 계열입니다.",
+                            "코랄보다 깊고 레드보다 부드러운 색을 찾을 때 우선 비교할 만합니다.",
+                            "착색과 지속력을 함께 보는 전색발색 시나리오에 잘 맞습니다."
+                        ],
+                        spec: { size: "3.5g", feature: "브릭 레드 블러 틴트" }
+                    }
+                ]
+            },
+            {
+                step: 2,
+                name: "코랄과 피치 후보",
+                essential: true,
+                description: "월간코랄, 퍼지코랄처럼 화사한 웜톤 컬러를 실제 피부 위에서 밝기와 채도 중심으로 비교합니다.",
+                products: [
+                    {
+                        id: 9201,
+                        name: "페리페라 잉크 무드 매트 틴트 스모키코랄",
+                        price: "8,900",
+                        originalPrice: "12,000",
+                        score: 95,
+                        img: "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "월간코랄처럼 핑크가 섞인 코랄 후보를 비교하기 좋습니다.",
+                            "너무 형광으로 올라오지 않는지 팔목 발색에서 먼저 확인할 수 있습니다.",
+                            "봄웜 데일리 립 후보로 장바구니 우선순위가 높습니다."
+                        ],
+                        spec: { size: "4g", feature: "핑크 코랄 매트 틴트" }
+                    },
+                    {
+                        id: 9202,
+                        name: "하킷 레이어 퍼지 틴트 퍼지코랄",
+                        price: "13,200",
+                        originalPrice: "19,000",
+                        score: 92,
+                        img: "https://images.unsplash.com/photo-1615397349754-cfa2066a298e?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "퍼지코랄처럼 따뜻한 피치 코랄 계열을 확인하기 좋은 후보입니다.",
+                            "베이스 립 위에 얹었을 때 생기가 더해지는지 보기 좋습니다.",
+                            "묻어남과 밀착감을 함께 확인해야 하는 제형이라 비교 구매에 적합합니다."
+                        ],
+                        spec: { size: "4.2g", feature: "피치 코랄 퍼지 틴트" }
+                    },
+                    {
+                        id: 9203,
+                        name: "데이지크 무드 글로우 립스틱 핑크베리",
+                        price: "15,900",
+                        originalPrice: "22,000",
+                        score: 88,
+                        img: "https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "코랄보다 맑은 핑크기가 필요한 경우 비교할 수 있는 글로우 후보입니다.",
+                            "팔목에서 투명하게 올라오는지, 입술에서 탁해지는지 확인하기 좋습니다.",
+                            "매트 립이 부담스러운 사용자에게 대안이 됩니다."
+                        ],
+                        spec: { size: "3g", feature: "글로우 핑크 베리 립스틱" }
+                    }
+                ]
+            },
+            {
+                step: 3,
+                name: "글로스와 레이어링",
+                essential: false,
+                description: "나이트마린처럼 단독 색보다 광택과 펄감으로 립 컬러를 바꾸는 제품을 레이어링 후보로 봅니다.",
+                products: [
+                    {
+                        id: 9301,
+                        name: "롬앤 글래스팅 워터 글로스 나이트마린",
+                        price: "8,900",
+                        originalPrice: "12,000",
+                        score: 93,
+                        img: "https://images.unsplash.com/photo-1556228453-efd6c1ff04f6?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "이미지 속 나이트마린처럼 컬러보다 투명 광택과 펄감을 확인하는 제품입니다.",
+                            "매트 립 위에 얹어 색을 부드럽게 풀어주는 용도로 좋습니다.",
+                            "팔목 발색에서는 투명도와 반짝임이 과하지 않은지 보기 쉽습니다."
+                        ],
+                        spec: { size: "4.5g", feature: "투명 펄 워터 글로스" }
+                    },
+                    {
+                        id: 9302,
+                        name: "코랄 립 베이스 밤",
+                        price: "7,900",
+                        originalPrice: "11,000",
+                        score: 87,
+                        img: "https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "쉘누드나 퍼지코랄 아래에 깔아 입술 바탕색을 정돈하기 좋습니다.",
+                            "립스틱 전색 비교 전 입술 컨디션을 맞춰 실패를 줄입니다.",
+                            "색이 강한 제품을 부담스럽지 않게 희석하는 역할을 합니다."
+                        ],
+                        spec: { size: "3.8g", feature: "코랄 보정 컬러 립밤" }
+                    },
+                    {
+                        id: 9303,
+                        name: "립 프라이머 스무딩 밤",
+                        price: "9,500",
+                        originalPrice: "14,000",
+                        score: 84,
+                        img: "https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "매트 립의 주름 부각을 줄이고 실제 발색을 더 고르게 보여줍니다.",
+                            "팔목 발색은 예쁜데 입술에서 뭉치는 제품을 걸러내는 데 도움이 됩니다.",
+                            "립 비교를 자주 하는 사용자에게 보조템으로 적합합니다."
+                        ],
+                        spec: { size: "3g", feature: "립결 보정 프라이머" }
+                    }
+                ]
+            },
+            {
+                step: 4,
+                name: "발색 확인 도구",
+                essential: false,
+                description: "전색발색은 같은 조명, 같은 양, 같은 순서로 비교해야 차이가 정확히 보이므로 보조 도구를 함께 구성합니다.",
+                products: [
+                    {
+                        id: 9401,
+                        name: "실리콘 립 브러시 2종 세트",
+                        price: "6,900",
+                        originalPrice: "9,900",
+                        score: 91,
+                        img: "https://images.unsplash.com/photo-1522338242992-e1a54906a8da?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "색상별 발색량을 일정하게 맞추기 쉬운 도구입니다.",
+                            "팔목에 직사각형으로 펴 바를 때 경계가 깔끔하게 잡힙니다.",
+                            "여러 립을 비교할 때 위생적으로 닦아가며 쓰기 좋습니다."
+                        ],
+                        spec: { size: "2종", feature: "실리콘 팁 립 브러시" }
+                    },
+                    {
+                        id: 9402,
+                        name: "포인트 메이크업 리무버 패드",
+                        price: "7,500",
+                        originalPrice: "10,000",
+                        score: 89,
+                        img: "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "전색발색 후 팔목에 남는 착색을 확인하고 깔끔하게 지울 수 있습니다.",
+                            "착색이 강한 틴트와 립스틱 비교에 특히 필요합니다.",
+                            "리뷰용 발색을 반복할 때 피부 자극을 줄이는 선택입니다."
+                        ],
+                        spec: { size: "30매", feature: "립앤아이 리무버 패드" }
+                    },
+                    {
+                        id: 9403,
+                        name: "휴대용 자연광 LED 미러",
+                        price: "18,900",
+                        originalPrice: "27,000",
+                        score: 86,
+                        img: "https://images.unsplash.com/photo-1516975080664-ed2fc6a32937?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "조명 차이로 립 컬러가 다르게 보이는 문제를 줄여줍니다.",
+                            "발색 이미지를 찍거나 실제 입술 위 색을 확인할 때 유용합니다.",
+                            "온라인 구매 전 비교 기준을 일정하게 만드는 보조 도구입니다."
+                        ],
+                        spec: { size: "휴대형", feature: "3단 밝기 LED 미러" }
+                    }
+                ]
+            }
+        ]
+    };
+}
+
+function ensureBeautyScenarioSolutionData() {
+    Object.values(BEAUTY_SCENARIOS).forEach((scenario) => {
+        if (scenario.id === "립스틱 전색발색") {
+            solutionData[scenario.id] = getLipstickSwatchSolutionData();
+            return;
+        }
+        const baseData = solutionData[scenario.baseIntent];
+        if (baseData && !solutionData[scenario.id]) {
+            solutionData[scenario.id] = {
+                ...baseData,
+                title: scenario.title,
+                intentReason: scenario.reason
+            };
+        }
+    });
+}
+
+ensureBeautyScenarioSolutionData();
+
+function getBeautyScenario(intentOrQuery = "") {
+    const value = String(intentOrQuery || "");
+    if (BEAUTY_SCENARIOS[value]) return BEAUTY_SCENARIOS[value];
+
+    const lowered = value.toLowerCase();
+    return Object.values(BEAUTY_SCENARIOS).find((scenario) => (
+        scenario.match.some((keyword) => lowered.includes(String(keyword).toLowerCase()))
+    )) || null;
+}
+
+function isSurveySkipped(intent = state.currentIntent) {
+    return Boolean(getBeautyScenario(intent)?.skipSurvey);
 }
 
 /* ─── History persistence ───────────────────────────────────── */
@@ -243,6 +537,7 @@ function createCartSession(intentKey) {
         id: `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         data: {
             intentKey,
+            scenarioId: state.currentScenarioId || intentKey,
             intentLabel: solutionData[intentKey]?.title || intentKey,
             rawQuery: state.rawQuery,
             selectionSummary: buildHistorySummary(),
@@ -423,6 +718,7 @@ function hydrateSessionContext(sessionId) {
 
     state.currentSessionId = sessionId;
     state.currentIntent = session.intentKey;
+    state.currentScenarioId = session.scenarioId || session.intentKey;
     state.rawQuery = session.rawQuery || "";
     state.choices = { ...getEmptyChoices(), ...(session.choices || {}) };
     state.surveyStepIndex = 0;
@@ -453,7 +749,8 @@ function getRequiredSurveyCategories(intent = state.currentIntent) {
 
 function isSurveyComplete(intent = state.currentIntent) {
     if (!intent) return false;
-    return getRequiredSurveyCategories(intent).every((category) => Boolean(state.choices[category]));
+    if (isSurveySkipped(intent)) return true;
+    return getSurveyQuestions(intent).every((question) => isQuestionAnswered(question));
 }
 
 function getCleanThreadPhase() {
@@ -473,8 +770,8 @@ function updateThreadStepper() {
     stepper.classList.toggle("hidden", !shouldShow);
     if (!shouldShow) return;
 
-    const canSurvey = Boolean(state.currentIntent && infoViewConfig[state.currentIntent]);
-    const canSolution = canSurvey && isSurveyComplete(state.currentIntent);
+    const canSurvey = Boolean(state.currentIntent && infoViewConfig[state.currentIntent] && !isSurveySkipped(state.currentIntent));
+    const canSolution = Boolean(state.currentIntent) && (isSurveySkipped(state.currentIntent) || isSurveyComplete(state.currentIntent));
 
     stepper.querySelectorAll("[data-thread-step]").forEach((button) => {
         const target = button.dataset.threadStep;
@@ -524,7 +821,7 @@ function goThreadPhase(phase) {
     }
 
     if (phase === "survey") {
-        if (!state.currentIntent || !infoViewConfig[state.currentIntent]) return;
+        if (!state.currentIntent || !infoViewConfig[state.currentIntent] || isSurveySkipped(state.currentIntent)) return;
         const session = getCartSession(state.currentSessionId);
         const effectiveView = getSessionEffectiveThreadView(session);
         state.isSurveyReviewMode = Boolean(session && effectiveView !== "info");
@@ -542,7 +839,7 @@ function goThreadPhase(phase) {
     }
 
     if (phase === "solution") {
-        if (!state.currentIntent || !isSurveyComplete(state.currentIntent)) return;
+        if (!state.currentIntent || (!isSurveySkipped(state.currentIntent) && !isSurveyComplete(state.currentIntent))) return;
         state.isSurveyReviewMode = false;
         ensureSurveyResultSession();
         hideThreadViews();
@@ -713,7 +1010,10 @@ function renderSearchHistory() {
 }
 
 function buildHistorySummary() {
-    return Object.values(state.choices).filter(Boolean).join(" / ");
+    return Object.entries(state.choices)
+        .filter(([key, value]) => Boolean(value) && key !== "photo" && key !== "photoName")
+        .map(([, value]) => value)
+        .join(" / ");
 }
 
 function buildCartGroupSummary(cartGroup, intentData) {
@@ -783,12 +1083,14 @@ function syncTransactionLocks(sessionId = state.currentSessionId) {
 function saveSearchHistory() {
     const query = state.rawQuery?.trim();
     if (!query || !state.currentIntent) return;
+    const historyChoices = { ...state.choices };
+    if (historyChoices.photo) historyChoices.photo = "";
 
     const nextEntry = {
         query,
         intent: state.currentIntent,
         summary: buildHistorySummary(),
-        choices: { ...state.choices },
+        choices: historyChoices,
         createdAt: new Date().toISOString()
     };
 
@@ -1968,6 +2270,7 @@ function updateSearchUI(value) {
 
 function executeSearch(query, options = {}) {
     const infoView = document.getElementById("info-view");
+    const solutionView = document.getElementById("solution-view");
     if (!query) return;
     const { resetChoices = true } = options;
 
@@ -1978,8 +2281,35 @@ function executeSearch(query, options = {}) {
     state.surveyStepIndex = 0;
     state.isSurveyReviewMode = false;
 
+    const goToSolutionView = (intent, scenario) => {
+        state.currentIntent = intent;
+        state.currentScenarioId = scenario?.id || intent;
+        state.rawQuery = query;
+        state.choices = {
+            ...getEmptyChoices(),
+            ...(scenario?.defaultChoices || {})
+        };
+        withLoading("설문 없이 바로 뷰티 계획을 구성하는 중...", 2200, () => {
+            state.isSurveyReviewMode = false;
+            ensureSurveyResultSession();
+            saveSearchHistory();
+            hideThreadViews();
+            renderSolution(intent, query);
+            updateProductCardCartState(intent);
+            updateBottomCheckoutBar();
+            solutionView?.classList.remove("hidden");
+            if (document.body.classList.contains("clean-home-page")) {
+                document.body.classList.remove("clean-survey-active");
+                document.body.classList.add("clean-solution-active");
+            }
+            updateThreadStepper();
+            scrollToSection(solutionView);
+        }, "book");
+    };
+
     const goToInfoView = (intent) => {
         state.currentIntent = intent;
+        state.currentScenarioId = intent;
         state.rawQuery = query;
         withLoading("맞춤 조건을 불러오는 중...", 2500, () => {
             renderInfoView(intent);
@@ -2005,8 +2335,14 @@ function executeSearch(query, options = {}) {
         });
     };
 
-    if (query.includes("메이크업") || query.includes("뷰티") || query.toLowerCase().includes("makeup")) {
-        goToInfoView("메이크업");
+    const beautyScenario = getBeautyScenario(query);
+    if (beautyScenario || query.includes("메이크업") || query.includes("뷰티") || query.toLowerCase().includes("makeup")) {
+        const scenario = beautyScenario || BEAUTY_SCENARIOS["출근 10분룩"];
+        if (scenario.skipSurvey) {
+            goToSolutionView(scenario.id, scenario);
+        } else {
+            goToInfoView(scenario.id);
+        }
     } else if (query.includes("커튼") || query.includes("커텐") || query.includes("而ㅽ듉") || query.includes("而ㅽ뀗")) {
         goToInfoView("커튼");
     } else if (query.includes("데스크탑") || query.includes("조립") || query.includes("pc") || query.includes("컴퓨터")) {
@@ -2210,6 +2546,77 @@ const infoViewConfig = {
     }
 };
 
+infoViewConfig["출근 10분룩"] = {
+    q1: {
+        label: "1. 아침 메이크업에 쓸 수 있는 시간은요?",
+        layout: "grid grid-cols-3 gap-3",
+        options: [
+            { main: "5분", sub: "최소 루틴", icon: true },
+            { main: "10분", sub: "균형 루틴", icon: true },
+            { main: "15분", sub: "조금 더 정교하게", icon: true }
+        ],
+        category: "occasion"
+    },
+    q2: {
+        label: "2. 가장 잘 무너지는 부위는 어디인가요?",
+        layout: "grid grid-cols-3 gap-3",
+        options: [
+            { main: "코/나비존", sub: "유분과 모공", icon: true },
+            { main: "볼/턱", sub: "건조와 들뜸", icon: true },
+            { main: "눈가", sub: "번짐과 주름", icon: true }
+        ],
+        category: "skin"
+    },
+    q3: {
+        label: "3. 출근룩의 원하는 인상은요?",
+        layout: "grid grid-cols-3 gap-3",
+        options: [
+            { main: "단정함", sub: "회의/오피스", icon: true },
+            { main: "화사함", sub: "생기 중심", icon: true },
+            { main: "차분함", sub: "톤다운 데일리", icon: true }
+        ],
+        category: "mood"
+    }
+};
+
+infoViewConfig["AI 페이스 메이크오버"] = {
+    q1: {
+        label: "1. 얼굴 사진을 올려주세요",
+        type: "photo",
+        category: "photo"
+    },
+    q2: {
+        label: "2. 입혀보고 싶은 메이크업 무드는요?",
+        layout: "grid grid-cols-3 gap-3",
+        options: [
+            { main: "코랄 생기", sub: "따뜻하고 맑게", icon: true },
+            { main: "뮤트 로즈", sub: "차분하고 우아하게", icon: true },
+            { main: "글로우 누드", sub: "피부결 중심", icon: true }
+        ],
+        category: "mood"
+    },
+    q3: {
+        label: "3. 어느 정도 진하게 표현할까요?",
+        layout: "grid grid-cols-3 gap-3",
+        options: [
+            { main: "아주 자연스럽게", sub: "거의 티 안 나게", icon: true },
+            { main: "데일리 정도", sub: "은은한 완성감", icon: true },
+            { main: "확실한 변화", sub: "전후 차이 있게", icon: true }
+        ],
+        category: "intensity"
+    },
+    q4: {
+        label: "4. 피부 표현은 어떤 쪽이 좋아요?",
+        layout: "grid grid-cols-3 gap-3",
+        options: [
+            { main: "촉촉한 광", sub: "결광 베이스", icon: true },
+            { main: "보송한 세미매트", sub: "지속력 중심", icon: true },
+            { main: "내 피부처럼", sub: "얇은 커버", icon: true }
+        ],
+        category: "finish"
+    }
+};
+
 function getSurveyQuestions(intent) {
     const cfg = infoViewConfig[intent];
     if (!cfg) return [];
@@ -2217,6 +2624,18 @@ function getSurveyQuestions(intent) {
         .filter((key) => key.startsWith("q"))
         .sort()
         .map((key) => ({ key, ...cfg[key] }));
+}
+
+function isQuestionAnswered(question) {
+    if (!question) return false;
+    if (question.type === "photo") {
+        return Boolean(state.choices[question.category] && state.choices.photoName);
+    }
+    return Boolean(state.choices[question.category]);
+}
+
+function getFirstMissingSurveyQuestion(intent = state.currentIntent) {
+    return getSurveyQuestions(intent).find((question) => !isQuestionAnswered(question)) || null;
 }
 
 function clampSurveyStepIndex(questions) {
@@ -2245,7 +2664,7 @@ function updateSurveyProgress(questions = getSurveyQuestions(state.currentIntent
     const current = Math.min(state.surveyStepIndex + 1, total);
     const currentQuestion = questions[state.surveyStepIndex];
     const isLast = current >= total;
-    const isCurrentAnswered = currentQuestion ? Boolean(state.choices[currentQuestion.category]) : false;
+    const isCurrentAnswered = isQuestionAnswered(currentQuestion);
 
     const label = document.getElementById("survey-progress-label");
     const fill = document.getElementById("survey-progress-fill");
@@ -2329,10 +2748,11 @@ function renderSurveyLockSummary() {
         .map((question) => {
             const value = state.choices[question.category];
             if (!value) return "";
+            const displayValue = question.type === "photo" ? (state.choices.photoName || "사진 업로드됨") : value;
             return `
                 <div class="clean-survey-lock__item" aria-readonly="true">
                     <span class="clean-survey-lock__label">${escapeHtml(getQuestionLabelText(question.label))}</span>
-                    <span class="clean-survey-lock__value">${escapeHtml(value)}</span>
+                    <span class="clean-survey-lock__value">${escapeHtml(displayValue)}</span>
                 </div>
             `;
         })
@@ -2375,6 +2795,31 @@ function renderInfoView(intent) {
     }
 
     const buildQ = (q) => {
+        if (q.type === "photo") {
+            const hasPhoto = Boolean(state.choices[q.category]);
+            return `<div class="clean-photo-question">
+                <label class="text-sm font-medium text-slate-400 mb-3 block">${q.label}</label>
+                <div class="clean-photo-upload ${hasPhoto ? "has-photo" : ""}">
+                    <input id="beauty-photo-input" type="file" accept="image/*" class="clean-photo-upload__input" onchange="handleBeautyPhotoUpload(this, '${q.category}')">
+                    <label for="beauty-photo-input" class="clean-photo-upload__drop">
+                        <span class="clean-photo-upload__preview">
+                            ${hasPhoto
+                                ? `<img src="${escapeHtml(state.choices[q.category])}" alt="업로드한 얼굴 사진">`
+                                : `<span>얼굴 사진 업로드</span>`
+                            }
+                        </span>
+                        <span class="clean-photo-upload__body">
+                            <strong>${hasPhoto ? "사진이 준비됐어요" : "정면 얼굴 사진을 선택해주세요"}</strong>
+                            <small>${hasPhoto ? escapeHtml(state.choices.photoName || "업로드한 사진") : "AI 메이크업 결과 미리보기와 구현 플랜에 사용됩니다."}</small>
+                        </span>
+                    </label>
+                    <button type="button" class="clean-photo-upload__sample" onclick="useSampleBeautyPhoto('${q.category}')">
+                        샘플 얼굴로 진행하기
+                    </button>
+                </div>
+            </div>`;
+        }
+
         const btnClass = "flex-shrink-0 info-card border-2 border-slate-100 rounded-2xl transition-all bg-slate-50 hover:border-gmarket-blue p-3 text-center flex flex-col items-center justify-center gap-1 min-w-[5rem]";
         const buttons = q.options.map(opt => {
             const buttonAttrs = `data-choice-category="${q.category}" data-choice-value="${opt.main}"`;
@@ -2425,12 +2870,43 @@ window.selectChoice = function selectChoice(btn, category) {
     updateThreadStepper();
 };
 
+window.handleBeautyPhotoUpload = function handleBeautyPhotoUpload(input, category) {
+    if (state.isSurveyReviewMode) return;
+    const file = input?.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+        state.choices[category] = String(reader.result || "");
+        state.choices.photoName = file.name || "업로드한 사진";
+        renderInfoView(state.currentIntent);
+        updateSurveyProgress();
+        updateThreadStepper();
+    };
+    reader.readAsDataURL(file);
+};
+
+window.useSampleBeautyPhoto = function useSampleBeautyPhoto(category = "photo") {
+    if (state.isSurveyReviewMode) return;
+    state.choices[category] = SAMPLE_FACE_PHOTO;
+    state.choices.photoName = "샘플 얼굴";
+    const questions = getSurveyQuestions(state.currentIntent);
+    const currentQuestion = questions[state.surveyStepIndex];
+    const isCurrentPhotoQuestion = currentQuestion?.type === "photo" && currentQuestion.category === category;
+    if (isCurrentPhotoQuestion && state.surveyStepIndex < questions.length - 1) {
+        state.surveyStepIndex += 1;
+    }
+    renderInfoView(state.currentIntent);
+    updateSurveyProgress();
+    updateThreadStepper();
+};
+
 window.moveSurveyStep = function moveSurveyStep(delta) {
     const questions = getSurveyQuestions(state.currentIntent);
     if (!questions.length) return;
 
     const currentQuestion = questions[state.surveyStepIndex];
-    if (delta > 0 && currentQuestion && !state.choices[currentQuestion.category]) {
+    if (delta > 0 && currentQuestion && !isQuestionAnswered(currentQuestion)) {
         updateSurveyProgress(questions);
         return;
     }
@@ -2493,34 +2969,44 @@ window.confirmSurveyEdit = function confirmSurveyEdit() {
 
 window.generatePlan = function generatePlan() {
     const solutionView = document.getElementById("solution-view");
-    const cfg = infoViewConfig[state.currentIntent];
-    const requiredCategories = cfg ? Object.keys(cfg).filter(k => k.startsWith("q")).map(k => cfg[k].category) : ["size", "wall", "goal"];
-    const missingCategory = requiredCategories.find(cat => !state.choices[cat]);
-    if (missingCategory) {
-        const missingIndex = getSurveyQuestions(state.currentIntent).findIndex((question) => question.category === missingCategory);
+    ensureBeautyScenarioSolutionData();
+    if (!state.currentIntent) state.currentIntent = "메이크업";
+    if (!state.rawQuery) state.rawQuery = state.currentIntent;
+
+    const missingQuestion = getFirstMissingSurveyQuestion(state.currentIntent);
+    if (missingQuestion) {
+        const missingIndex = getSurveyQuestions(state.currentIntent).findIndex((question) => question.key === missingQuestion.key);
         if (missingIndex >= 0) {
             state.surveyStepIndex = missingIndex;
             renderInfoView(state.currentIntent);
         }
+        updateSurveyProgress();
         return;
     }
-    if (!state.currentIntent) state.currentIntent = "커튼";
-    if (!state.rawQuery) state.rawQuery = "커튼 설치";
 
     state.isSurveyReviewMode = false;
     ensureSurveyResultSession();
 
     saveSearchHistory();
-    withLoading("\"딱\" 맞는 최적의 상품을 분석 중...", 3200, () => {
-        solutionView?.classList.remove("hidden");
-        if (document.body.classList.contains("clean-home-page")) {
-            document.body.classList.remove("clean-survey-active");
-            document.body.classList.add("clean-solution-active");
+    const showGeneratedPlan = () => {
+        try {
+            renderSolution(state.currentIntent, state.rawQuery);
+            solutionView?.classList.remove("hidden");
+            if (document.body.classList.contains("clean-home-page")) {
+                document.body.classList.remove("clean-survey-active");
+                document.body.classList.add("clean-solution-active");
+            }
+            updateThreadStepper();
+            scrollToSection(solutionView);
+            updateBottomCheckoutBar();
+        } catch (error) {
+            console.error("Failed to render generated plan", error);
+            showToast("브리프를 여는 중 문제가 생겼어요. 다시 시도해주세요.");
         }
-        renderSolution(state.currentIntent, state.rawQuery);
-        updateThreadStepper();
-        scrollToSection(solutionView);
-        updateBottomCheckoutBar();
+    };
+
+    withLoading("\"딱\" 맞는 최적의 상품을 분석 중...", 900, () => {
+        showGeneratedPlan();
     }, "book");
 };
 
@@ -2946,57 +3432,517 @@ window.continueCartSession = function continueCartSession(sessionId) {
     window.moveToCartThread(sessionId);
 };
 
-const planReferenceContent = {
+const planIntegratedContent = {
     "메이크업": [
-        [
-            { type: "영상", source: "Beauty Tutorial", title: "건조한 피부에 베이스가 뜨지 않게 쌓는 순서", summary: "스킨케어 흡수 시간, 선크림 양, 프라이머 위치를 먼저 점검해요.", query: "건성 피부 베이스 메이크업 뜨지 않는 법" },
-            { type: "아티클", source: "Makeup Notes", title: "톤업 선크림과 파운데이션을 같이 쓸 때의 기준", summary: "커버보다 밀착을 우선할 때 어떤 제형을 골라야 하는지 정리했어요.", query: "톤업 선크림 파운데이션 같이 바르는 법" }
-        ],
-        [
-            { type: "룩북", source: "Color Mood", title: "내추럴 메이크업에서 색조를 덜어내는 방법", summary: "립과 블러셔 채도를 맞추면 빠르게 정돈된 인상을 만들 수 있어요.", query: "내추럴 메이크업 색조 조합" },
-            { type: "체크리스트", source: "Daily Routine", title: "출근 전 10분 메이크업 체크 포인트", summary: "베이스, 눈썹, 립 순서로 시간을 줄이는 루틴을 참고해요.", query: "출근 전 10분 메이크업 루틴" }
-        ],
-        [
-            { type: "가이드", source: "Budget Edit", title: "첫 장바구니를 5만원대로 구성하는 법", summary: "겹치는 기능을 줄이고 매일 쓰는 품목부터 우선순위를 잡아요.", query: "메이크업 기본템 5만원 구성" },
-            { type: "리뷰", source: "Review Digest", title: "쿠션·프라이머·립 제품 리뷰에서 먼저 볼 항목", summary: "지속력, 들뜸, 색상 재현처럼 실패를 줄이는 키워드를 확인해요.", query: "쿠션 프라이머 립 리뷰 보는 법" }
-        ],
-        [
-            { type: "영상", source: "Wear Test", title: "마스크와 출근길에서도 무너지지 않는 마무리", summary: "픽서보다 파우더 위치와 양이 더 중요한 경우가 많아요.", query: "출근 메이크업 지속력 높이는 법" },
-            { type: "아티클", source: "Pouch Guide", title: "수정 화장 파우치에 꼭 남길 제품", summary: "휴대용 파우더, 립, 미스트를 상황별로 나누어 봐요.", query: "수정 화장 파우치 필수템" }
-        ]
+        {
+            layout: "media-left",
+            label: "베이스가 들뜨지 않도록",
+            headline: "얇게 쌓는 순서를 먼저 잡고, 상품은 그 순서를 받쳐주는 쪽으로 골랐어요.",
+            description: "건조함이 있는 피부는 커버력을 한 번에 올리기보다 흡수 시간과 밀착감을 확보하는 편이 결과가 안정적이에요.",
+            points: [
+                "스킨케어가 충분히 흡수된 뒤 얇은 베이스를 겹치는 방향으로 잡았어요.",
+                "건성이라면 매트 고정력보다 수분감과 밀착을 먼저 보는 편이 좋아요."
+            ],
+            media: {
+                type: "YouTube",
+                title: "건성 베이스 메이크업 튜토리얼",
+                summary: "선크림, 프라이머, 쿠션을 얇게 쌓는 순서를 영상으로 확인",
+                thumbnail: "./makeup-clone-assets/d9b261330f3ffccf.avif",
+                url: buildYoutubeSearchHref("건성 베이스 메이크업 튜토리얼")
+            },
+            mediaItems: [
+                {
+                    type: "YouTube",
+                    title: "건성 베이스 메이크업 튜토리얼",
+                    summary: "선크림, 프라이머, 쿠션을 얇게 쌓는 순서",
+                    thumbnail: "./makeup-clone-assets/d9b261330f3ffccf.avif",
+                    url: buildYoutubeSearchHref("건성 베이스 메이크업 튜토리얼")
+                },
+                {
+                    type: "YouTube",
+                    title: "쿠션이 뜨지 않는 밀착 베이스",
+                    summary: "수분 베이스와 퍼프 터치 강도를 확인",
+                    thumbnail: "./makeup-clone-assets/1cebcb36604d1166.avif",
+                    url: buildYoutubeSearchHref("쿠션 뜨지 않는 베이스 메이크업")
+                }
+            ],
+            citations: [
+                { label: "YouTube", title: "건성 베이스 메이크업 튜토리얼 검색", url: buildYoutubeSearchHref("건성 베이스 메이크업 튜토리얼") },
+                { label: "Byrdie", title: "건성 피부 메이크업 적용 팁", url: "https://www.byrdie.com/how-to-apply-makeup-to-dry-skin-8730959" }
+            ]
+        },
+        {
+            layout: "media-right",
+            label: "색조는 빠르게 정돈되도록",
+            headline: "색을 많이 쓰기보다 눈썹, 치크, 립의 톤을 맞춰 빠르게 완성되는 루틴으로 정리했어요.",
+            description: "출근 전처럼 시간이 짧은 상황에서는 제품 수보다 순서가 중요해서, 손이 많이 가는 단계는 덜어내고 인상 정돈에 필요한 항목만 남겼어요.",
+            points: [
+                "눈썹, 치크, 립을 같은 채도 안에서 맞춰 짧은 시간에도 완성도가 나도록 구성했어요.",
+                "출근 전 루틴이라면 색 수를 줄이고 지속력 있는 립 제품을 마지막에 두는 흐름이 편해요."
+            ],
+            media: {
+                type: "YouTube",
+                title: "10분 데일리 메이크업 루틴",
+                summary: "베이스 이후 눈썹과 립을 빠르게 연결하는 루틴 참고",
+                thumbnail: "./makeup-clone-assets/917e7113fa1d687a.avif",
+                url: buildYoutubeSearchHref("10분 데일리 메이크업 루틴")
+            },
+            mediaItems: [
+                {
+                    type: "YouTube",
+                    title: "10분 데일리 메이크업 루틴",
+                    summary: "눈썹, 치크, 립을 빠르게 연결하는 흐름",
+                    thumbnail: "./makeup-clone-assets/917e7113fa1d687a.avif",
+                    url: buildYoutubeSearchHref("10분 데일리 메이크업 루틴")
+                },
+                {
+                    type: "YouTube",
+                    title: "출근 전 내추럴 색조 루틴",
+                    summary: "색 수를 줄이고 인상을 정돈하는 루틴",
+                    thumbnail: "./makeup-clone-assets/8e01e19fb7cf7c96.avif",
+                    url: buildYoutubeSearchHref("출근 전 내추럴 메이크업 루틴")
+                },
+                {
+                    type: "YouTube",
+                    title: "립과 치크 톤 맞추기",
+                    summary: "채도와 온도를 맞춰 실패를 줄이는 방법",
+                    thumbnail: "./makeup-clone-assets/f8759723f25da79a.avif",
+                    url: buildYoutubeSearchHref("립 치크 톤 맞추는 메이크업")
+                }
+            ],
+            citations: [
+                { label: "YouTube", title: "10분 데일리 메이크업 루틴 검색", url: buildYoutubeSearchHref("10분 데일리 메이크업 루틴") },
+                { label: "Allure", title: "메이크업 적용 팁 모음", url: "https://www.allure.com/story/best-makeup-tips" }
+            ]
+        },
+        {
+            layout: "media-top",
+            label: "예산은 겹치는 기능을 줄이도록",
+            headline: "처음 사는 기본템은 '매일 쓰는가'를 기준으로 압축했어요.",
+            description: "비슷한 역할의 제품이 겹치면 장바구니 금액은 빠르게 커지지만 실제 사용 빈도는 낮아져요. 그래서 베이스와 립처럼 반복 사용되는 축을 먼저 잡았습니다.",
+            points: [
+                "첫 장바구니는 베이스와 립처럼 매일 쓰는 품목에 비중을 두고, 포인트 제품은 하나만 남겼어요.",
+                "후기에서는 들뜸, 지속력, 색상 재현처럼 실패 비용을 줄이는 단어를 먼저 보도록 했어요."
+            ],
+            media: {
+                type: "이미지",
+                title: "기본템 장바구니 구성",
+                summary: "쿠션, 프라이머, 립처럼 사용 빈도가 높은 품목부터 압축",
+                thumbnail: "./makeup-clone-assets/8fc2c65adff714e4.avif",
+                url: buildSearchHref("메이크업 기본템 장바구니 구성")
+            },
+            mediaItems: [
+                {
+                    type: "이미지",
+                    title: "기본템 장바구니 구성",
+                    summary: "쿠션, 프라이머, 립처럼 사용 빈도가 높은 품목부터 압축",
+                    thumbnail: "./makeup-clone-assets/8fc2c65adff714e4.avif",
+                    url: buildSearchHref("메이크업 기본템 장바구니 구성")
+                }
+            ],
+            citations: [
+                { label: "Naver", title: "메이크업 기본템 구성 검색", url: buildSearchHref("메이크업 기본템 장바구니 구성") },
+                { label: "Allure", title: "파운데이션 타입별 적용법", url: "https://www.allure.com/story/how-to-apply-every-kind-of-foundation" }
+            ]
+        },
+        {
+            layout: "media-wide",
+            label: "마무리는 오래 버티도록",
+            headline: "지속력은 제품을 더하는 것보다 무너지는 위치를 관리하는 쪽으로 설계했어요.",
+            description: "픽서나 파우더를 무조건 많이 쓰기보다 코 옆, 턱, 마스크가 닿는 부위처럼 실제로 지워지는 지점을 좁혀 관리하는 흐름입니다.",
+            points: [
+                "수정 화장을 줄이기 위해 파우더를 얼굴 전체가 아니라 무너지는 부위 위주로 배치했어요.",
+                "휴대 파우치에는 파우더, 립, 미스트처럼 바로 복구되는 제품만 남기는 쪽으로 정리했어요."
+            ],
+            media: {
+                type: "YouTube",
+                title: "지속력 높은 출근 메이크업",
+                summary: "파우더 위치와 픽싱 단계로 무너짐을 줄이는 영상 참고",
+                thumbnail: "./makeup-clone-assets/42072b0ad4be9333.avif",
+                url: buildYoutubeSearchHref("지속력 높은 출근 메이크업")
+            },
+            mediaItems: [
+                {
+                    type: "YouTube",
+                    title: "지속력 높은 출근 메이크업",
+                    summary: "파우더 위치와 픽싱 단계로 무너짐 줄이기",
+                    thumbnail: "./makeup-clone-assets/42072b0ad4be9333.avif",
+                    url: buildYoutubeSearchHref("지속력 높은 출근 메이크업")
+                },
+                {
+                    type: "YouTube",
+                    title: "수정 화장 파우치 정리",
+                    summary: "파우더, 립, 미스트만 남기는 휴대 루틴",
+                    thumbnail: "./makeup-clone-assets/59fb086cee4f8a82.avif",
+                    url: buildYoutubeSearchHref("수정 화장 파우치 필수템")
+                }
+            ],
+            citations: [
+                { label: "YouTube", title: "지속력 높은 출근 메이크업 검색", url: buildYoutubeSearchHref("지속력 높은 출근 메이크업") },
+                { label: "Byrdie", title: "파운데이션 들뜸과 뭉침 방지 팁", url: "https://www.byrdie.com/why-does-my-foundation-look-patchy-and-dry-5216658" }
+            ]
+        }
     ]
 };
 
-function getPlanReferenceContent(key, stepIndex, step) {
-    const byIntent = planReferenceContent[key]?.[stepIndex];
-    if (byIntent?.length) return byIntent;
-
-    return [
-        {
-            type: "가이드",
-            source: "Buying Guide",
-            title: `${step.name} 전에 확인할 기준`,
-            summary: "상품을 고르기 전에 크기, 사용 환경, 유지 비용을 함께 점검해요.",
-            query: `${step.name} 구매 가이드`
+planIntegratedContent["립스틱 전색발색"] = [
+    {
+        layout: "media-left",
+        label: "팔목 발색 기준 컬러",
+        headline: "이미지 속 쉘누드, 김여주집합, 소프트브릭을 기준 컬러로 먼저 잡았어요.",
+        description: "전색발색은 예쁜 컬러를 많이 보는 단계가 아니라, 비슷해 보이는 색을 피부 위에서 구분하는 단계예요. 누드, 핑크 레드, 브릭을 먼저 잡으면 나머지 컬러 판단이 쉬워집니다.",
+        points: [
+            "쉘누드는 베이스 립, 김여주집합은 핑크 레드, 소프트브릭은 브릭 레드 기준으로 봐요.",
+            "팔목에서 탁해 보이는 색은 입술 위에서도 칙칙해질 가능성이 높아 우선순위를 낮췄어요."
+        ],
+        media: {
+            type: "이미지",
+            title: "국내 립 팔목 발색 비교",
+            summary: "한국어 라벨이 있는 웜톤 립 발색 예시",
+            thumbnail: "./makeup-clone-assets/8e01e19fb7cf7c96.avif",
+            url: LIPSTICK_SWATCH_EXAMPLE_URL
         },
-        {
-            type: "체크리스트",
-            source: "How-to Note",
-            title: `${step.name} 실패를 줄이는 체크리스트`,
-            summary: "후기에서 반복되는 장점과 불편 포인트를 먼저 비교해보세요.",
-            query: `${step.name} 체크리스트 후기`
-        }
-    ];
+        mediaItems: [
+            {
+                type: "이미지",
+                title: "국내 립 팔목 발색 비교",
+                summary: "한국어 라벨이 있는 웜톤 립 발색 예시",
+                thumbnail: "./makeup-clone-assets/8e01e19fb7cf7c96.avif",
+                url: LIPSTICK_SWATCH_EXAMPLE_URL
+            },
+            {
+                type: "YouTube",
+                title: "웜톤 립 발색 비교 리뷰",
+                summary: "누드, 코랄, 브릭 컬러를 비교하는 영상",
+                thumbnail: "./makeup-clone-assets/f8759723f25da79a.avif",
+                url: buildYoutubeSearchHref("웜톤 립 발색 비교 리뷰")
+            }
+        ],
+        citations: [
+            { label: "언니의파우치", title: "웜톤 추천 립 팔목 발색", url: LIPSTICK_SWATCH_EXAMPLE_URL },
+            { label: "YouTube", title: "웜톤 립 발색 비교 리뷰 검색", url: buildYoutubeSearchHref("웜톤 립 발색 비교 리뷰") }
+        ]
+    },
+    {
+        layout: "media-right",
+        label: "코랄과 피치 후보",
+        headline: "월간코랄과 퍼지코랄처럼 화사한 후보는 밝기와 형광기를 따로 봤어요.",
+        description: "웜톤 코랄은 예뻐 보여도 피부 위에서 형광으로 튀거나 오렌지기가 과해질 수 있어요. 팔목 발색에서는 채도가 얼굴을 밝히는지, 색만 동동 뜨는지를 먼저 확인합니다.",
+        points: [
+            "월간코랄은 핑크 코랄, 퍼지코랄은 피치 코랄 기준으로 비교해요.",
+            "데일리용은 채도가 낮은 쪽, 포인트용은 생기가 강한 쪽으로 나누면 선택이 쉬워요."
+        ],
+        media: {
+            type: "YouTube",
+            title: "봄웜 코랄 립 비교",
+            summary: "피치, 핑크 코랄 계열을 비교하는 영상",
+            thumbnail: "./makeup-clone-assets/1cebcb36604d1166.avif",
+            url: buildYoutubeSearchHref("봄웜 코랄 립 비교")
+        },
+        mediaItems: [
+            {
+                type: "YouTube",
+                title: "봄웜 코랄 립 비교",
+                summary: "피치와 핑크 코랄의 차이",
+                thumbnail: "./makeup-clone-assets/d9b261330f3ffccf.avif",
+                url: buildYoutubeSearchHref("봄웜 코랄 립 비교")
+            },
+            {
+                type: "YouTube",
+                title: "웜톤 브릭 코랄 립 추천",
+                summary: "브릭과 코랄 사이 채도 고르기",
+                thumbnail: "./makeup-clone-assets/8e01e19fb7cf7c96.avif",
+                url: buildYoutubeSearchHref("웜톤 브릭 코랄 립 추천")
+            }
+        ],
+        citations: [
+            { label: "YouTube", title: "봄웜 코랄 립 비교 검색", url: buildYoutubeSearchHref("봄웜 코랄 립 비교") },
+            { label: "Naver", title: "웜톤 코랄 립 발색 비교 검색", url: buildSearchHref("웜톤 코랄 립 발색 비교") }
+        ]
+    },
+    {
+        layout: "media-top",
+        label: "글로스와 레이어링",
+        headline: "나이트마린처럼 투명한 글로스는 색상보다 얹었을 때의 광택 변화를 봐야 해요.",
+        description: "전색발색 이미지에서 글로스 계열은 색이 거의 없거나 아주 옅게 보입니다. 이런 제품은 단독 발색보다 매트 립 위에 얹었을 때 색을 얼마나 부드럽게 바꾸는지가 중요합니다.",
+        points: [
+            "매트 립 위에 얹을 글로스는 펄감과 끈적임을 같이 봐요.",
+            "립 베이스와 프라이머는 전색발색의 색 차이를 더 고르게 보여주는 보조템입니다."
+        ],
+        media: {
+            type: "이미지",
+            title: "립 글로스 레이어링",
+            summary: "매트 립 위 광택과 펄감 변화 확인",
+            thumbnail: "./makeup-clone-assets/917e7113fa1d687a.avif",
+            url: buildSearchHref("립 글로스 레이어링 발색")
+        },
+        mediaItems: [
+            {
+                type: "이미지",
+                title: "립 글로스 레이어링",
+                summary: "매트 립 위 광택과 펄감 변화 확인",
+                thumbnail: "./makeup-clone-assets/917e7113fa1d687a.avif",
+                url: buildSearchHref("립 글로스 레이어링 발색")
+            }
+        ],
+        citations: [
+            { label: "Naver", title: "립 글로스 레이어링 발색 검색", url: buildSearchHref("립 글로스 레이어링 발색") }
+        ]
+    },
+    {
+        layout: "media-wide",
+        label: "발색 확인 도구",
+        headline: "전색발색은 제품만큼 같은 조명과 같은 양을 맞추는 도구가 중요해요.",
+        description: "팔목 발색 비교는 작은 차이를 보는 작업이라 조명, 브러시, 지우는 방식이 달라지면 색 판단이 흔들립니다. 그래서 구매 후보와 함께 비교 도구를 추천했어요.",
+        points: [
+            "립 브러시는 발색 면적과 두께를 일정하게 맞추는 데 도움이 됩니다.",
+            "리무버 패드와 자연광 미러는 착색과 조명 차이를 확인하는 데 필요합니다."
+        ],
+        media: {
+            type: "YouTube",
+            title: "립 발색 리뷰 촬영과 비교법",
+            summary: "같은 조명과 같은 양으로 컬러 비교하기",
+            thumbnail: "./makeup-clone-assets/42072b0ad4be9333.avif",
+            url: buildYoutubeSearchHref("립 발색 리뷰 촬영 비교법")
+        },
+        mediaItems: [
+            {
+                type: "YouTube",
+                title: "립 발색 리뷰 촬영과 비교법",
+                summary: "같은 조명과 같은 양으로 컬러 비교하기",
+                thumbnail: "./makeup-clone-assets/42072b0ad4be9333.avif",
+                url: buildYoutubeSearchHref("립 발색 리뷰 촬영 비교법")
+            },
+            {
+                type: "YouTube",
+                title: "립 착색 지우는 법",
+                summary: "전색발색 후 착색과 클렌징 확인",
+                thumbnail: "./makeup-clone-assets/59fb086cee4f8a82.avif",
+                url: buildYoutubeSearchHref("립 틴트 착색 지우는 법")
+            }
+        ],
+        citations: [
+            { label: "YouTube", title: "립 발색 리뷰 촬영 비교법 검색", url: buildYoutubeSearchHref("립 발색 리뷰 촬영 비교법") },
+            { label: "Naver", title: "립 틴트 착색 지우는 법 검색", url: buildSearchHref("립 틴트 착색 지우는 법") }
+        ]
+    }
+];
+
+Object.keys(BEAUTY_SCENARIOS).forEach((scenarioId) => {
+    if (!planIntegratedContent[scenarioId] && planIntegratedContent["메이크업"]) {
+        planIntegratedContent[scenarioId] = planIntegratedContent["메이크업"];
+    }
+});
+
+function buildSearchHref(query) {
+    return `https://search.naver.com/search.naver?query=${encodeURIComponent(query || "")}`;
 }
 
-function buildReferenceHref(query) {
-    return `https://search.naver.com/search.naver?query=${encodeURIComponent(query || "")}`;
+function buildYoutubeSearchHref(query) {
+    return `https://www.youtube.com/results?search_query=${encodeURIComponent(query || "")}`;
+}
+
+function getPlanIntegratedContent(key, stepIndex, step) {
+    const byIntent = planIntegratedContent[key]?.[stepIndex];
+    if (byIntent) return byIntent;
+
+    return {
+        layout: "media-left",
+        label: `${step.name} 선택 기준`,
+        headline: `${step.name} 단계는 사용 환경에 맞는 기준을 먼저 정했어요.`,
+        description: "추천 상품을 보기 전에 어떤 상황에서 쓰는지, 유지 비용이 얼마나 드는지, 후기가 어느 지점에서 갈리는지를 함께 반영했어요.",
+        points: [
+            "추천 상품을 고르기 전에 사용 환경과 유지 비용을 먼저 맞춰봤어요.",
+            "후기에서 반복되는 장점과 불편 포인트를 함께 비교하면 실패 가능성이 줄어요."
+        ],
+        media: {
+            type: "이미지",
+            title: `${step.name} 구매 가이드`,
+            summary: "구매 전 확인할 조건을 한 번 더 점검",
+            thumbnail: "./makeup-clone-assets/ae9ddc7a5906fcf9.avif",
+            url: buildSearchHref(`${step.name} 구매 가이드`)
+        },
+        mediaItems: [
+            {
+                type: "이미지",
+                title: `${step.name} 구매 가이드`,
+                summary: "구매 전 확인할 조건을 한 번 더 점검",
+                thumbnail: "./makeup-clone-assets/ae9ddc7a5906fcf9.avif",
+                url: buildSearchHref(`${step.name} 구매 가이드`)
+            }
+        ],
+        citations: [
+            { label: "Naver", title: `${step.name} 구매 가이드 검색`, url: buildSearchHref(`${step.name} 구매 가이드`) }
+        ]
+    };
+}
+
+function renderPlanIntegratedContent(key, stepIndex, step) {
+    const content = getPlanIntegratedContent(key, stepIndex, step);
+    const layoutClass = `plan-step-insight--${content.layout || "media-left"}`;
+    const mediaItems = Array.isArray(content.mediaItems) && content.mediaItems.length
+        ? content.mediaItems
+        : (content.media ? [content.media] : []);
+    const youtubeItems = mediaItems.filter((media) => media.type === "YouTube");
+    const imageItems = mediaItems.filter((media) => media.type !== "YouTube");
+
+    const imageFeatureHtml = imageItems.length ? `
+        <a class="plan-step-feature-media" href="${escapeHtml(imageItems[0].url)}" target="_blank" rel="noopener noreferrer">
+            <img src="${escapeHtml(imageItems[0].thumbnail)}" alt="${escapeHtml(imageItems[0].title)}">
+            <span class="plan-step-feature-media__caption">
+                <span>${escapeHtml(imageItems[0].type)}</span>
+                <strong>${escapeHtml(imageItems[0].title)}</strong>
+                <small>${escapeHtml(imageItems[0].summary)}</small>
+            </span>
+        </a>
+    ` : "";
+
+    const videoCardsHtml = youtubeItems.length ? `
+        <div class="plan-video-card-grid" aria-label="추천 영상">
+            ${youtubeItems.map((media) => `
+                <a class="plan-video-card" href="${escapeHtml(media.url)}" target="_blank" rel="noopener noreferrer">
+                    <span class="plan-video-card__thumb">
+                        <img src="${escapeHtml(media.thumbnail)}" alt="${escapeHtml(media.title)}">
+                        <span class="plan-step-media__play" aria-hidden="true"></span>
+                    </span>
+                    <span class="plan-video-card__body">
+                        <span>YouTube</span>
+                        <strong>${escapeHtml(media.title)}</strong>
+                        <small>${escapeHtml(media.summary)}</small>
+                    </span>
+                </a>
+            `).join("")}
+        </div>
+    ` : "";
+
+    const mediaHtml = mediaItems.length ? `
+        <div class="plan-step-media-stage">
+            ${imageFeatureHtml}
+            ${videoCardsHtml}
+        </div>
+    ` : "";
+
+    return `
+        <div class="plan-step-insight ${layoutClass}">
+            <div class="plan-step-insight__copy">
+                <span class="plan-step-insight__label">${escapeHtml(content.label)}</span>
+                <p class="plan-step-insight__headline">${escapeHtml(content.headline || content.label)}</p>
+                <p class="plan-step-insight__description">${escapeHtml(content.description || "")}</p>
+                <ul class="plan-step-insight__points">
+                    ${content.points.map((point) => `<li>${escapeHtml(point)}</li>`).join("")}
+                </ul>
+            </div>
+            ${mediaHtml}
+        </div>
+        <div class="plan-citations" aria-label="참고 출처">
+            <span>출처</span>
+            ${content.citations.map((source, index) => `
+                <a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">
+                    [${index + 1}] ${escapeHtml(source.label)} · ${escapeHtml(source.title)}
+                </a>
+            `).join("")}
+        </div>
+    `;
+}
+
+function renderLipstickSwatchOutcome() {
+    const shades = [
+        { name: "김여주집합", tone: "핑크 레드", color: "#a84d4d" },
+        { name: "쉘누드", tone: "누드 코랄", color: "#ca755d" },
+        { name: "나이트마린", tone: "클리어 글로스", color: "#e6d5c3" },
+        { name: "소프트브릭", tone: "브릭 레드", color: "#b75a45" },
+        { name: "월간코랄", tone: "핑크 코랄", color: "#d06c61" },
+        { name: "퍼지코랄", tone: "피치 코랄", color: "#df7d5f" }
+    ];
+
+    return `
+        <section class="beauty-lipstick-outcome" aria-label="립스틱 전색 팔목 발색 결과">
+            <div class="beauty-lipstick-outcome__copy">
+                <span>Arm Swatch Review</span>
+                <h3>한 립스틱의 전 색상을 팔목 위에서 비교했어요</h3>
+                <p>같은 조명과 같은 피부톤 위에 모든 색상을 나란히 올려 명도, 채도, 흰기, 브라운기 차이가 바로 보이도록 정리했어요. 아래 계획은 피부톤별로 어떤 색을 먼저 볼지와 실제 구매 전 체크 순서를 함께 안내합니다.</p>
+            </div>
+            <div class="beauty-lipstick-swatch" aria-label="팔목 발색 비교표">
+                <a class="beauty-lipstick-swatch__example" href="${escapeHtml(LIPSTICK_SWATCH_EXAMPLE_URL)}" target="_blank" rel="noopener noreferrer">
+                    <img src="${escapeHtml(LIPSTICK_SWATCH_EXAMPLE_IMAGE)}" alt="립스틱 팔목 발색 예시 이미지" loading="eager" decoding="async" fetchpriority="high">
+                    <span>웹 예시 이미지 · 언니의파우치</span>
+                </a>
+                <div class="beauty-lipstick-swatch__legend" aria-label="색상 요약">
+                    ${shades.map((shade) => `
+                        <span class="beauty-lipstick-swatch__chip">
+                            <i style="background:${escapeHtml(shade.color)}"></i>
+                            <strong>${escapeHtml(shade.name)}</strong>
+                            <small>${escapeHtml(shade.tone)}</small>
+                        </span>
+                    `).join("")}
+                </div>
+            </div>
+        </section>
+    `;
+}
+
+function renderBeautyScenarioOutcome(key) {
+    const scenario = getBeautyScenario(key);
+    if (!scenario) return "";
+
+    if (scenario.id === "립스틱 전색발색") {
+        return renderLipstickSwatchOutcome();
+    }
+
+    if (scenario.hasPhotoUpload && state.choices.photo) {
+        const mood = state.choices.mood || "원하는 무드";
+        const intensity = state.choices.intensity || "데일리 정도";
+        const finish = state.choices.finish || "내 피부처럼";
+        return `
+            <section class="beauty-ai-outcome" aria-label="AI 메이크업 이미지 결과">
+                <div class="beauty-ai-outcome__copy">
+                    <span>AI Image Result</span>
+                    <h3>${escapeHtml(mood)} 메이크업을 입힌 결과</h3>
+                    <p>${escapeHtml(intensity)}의 표현 강도와 ${escapeHtml(finish)} 피부 표현을 기준으로, 업로드한 얼굴 사진 위에 적용될 메이크업 방향을 시각화했어요. 아래 플랜은 이 결과에 가까워지기 위한 단계별 제품과 방법입니다.</p>
+                </div>
+                <div class="beauty-before-after" style="--split: 52%" data-before-after>
+                    <div class="beauty-before-after__stage">
+                        <img class="beauty-before-after__image beauty-before-after__image--before" src="${escapeHtml(state.choices.photo)}" alt="업로드한 얼굴 사진" loading="eager" decoding="async" fetchpriority="high">
+                        <div class="beauty-before-after__after" aria-hidden="true">
+                            <img class="beauty-before-after__image" src="${escapeHtml(state.choices.photo)}" alt="" loading="eager" decoding="async" fetchpriority="high">
+                            <span class="beauty-before-after__makeup-glow"></span>
+                        </div>
+                        <span class="beauty-before-after__label beauty-before-after__label--before">Before</span>
+                        <span class="beauty-before-after__label beauty-before-after__label--after">AI ${escapeHtml(mood)}</span>
+                        <span class="beauty-before-after__handle" aria-hidden="true"></span>
+                    </div>
+                    <input class="beauty-before-after__range" type="range" min="0" max="100" value="52" aria-label="비포 애프터 비교 슬라이더" oninput="updateBeforeAfterSlider(this)">
+                </div>
+            </section>
+        `;
+    }
+
+    if (scenario.skipSurvey) {
+        return `
+            <section class="beauty-scenario-note" aria-label="설문 스킵 시나리오">
+                <span>Quick Scenario</span>
+                <strong>${escapeHtml(scenario.title)}</strong>
+                <p>이 키워드는 추가 설문 없이도 의도가 명확해서 바로 계획을 구성했어요. 필요한 기본 조건은 자동으로 적용했고, 아래에서 상품과 실행 순서를 바로 확인할 수 있습니다.</p>
+            </section>
+        `;
+    }
+
+    return "";
+}
+
+window.updateBeforeAfterSlider = function updateBeforeAfterSlider(input) {
+    const root = input?.closest("[data-before-after]");
+    if (!root) return;
+    const value = Math.max(0, Math.min(Number(input.value) || 0, 100));
+    root.style.setProperty("--split", `${value}%`);
 };
 
 /* ─── Solution rendering ────────────────────────────────────── */
 
 function renderSolution(key, rawQuery) {
-    const data = solutionData[key];
+    ensureBeautyScenarioSolutionData();
+    const scenario = getBeautyScenario(key);
+    const data = solutionData[key] || solutionData[scenario?.baseIntent];
     const planContainer = document.getElementById("plan-container");
     const intentTitle = document.getElementById("intent-title");
 
@@ -3024,6 +3970,10 @@ function renderSolution(key, rawQuery) {
     renderSurveyLockSummary();
 
     planContainer.innerHTML = "";
+    const scenarioOutcomeHtml = renderBeautyScenarioOutcome(key);
+    if (scenarioOutcomeHtml) {
+        planContainer.insertAdjacentHTML("beforeend", scenarioOutcomeHtml);
+    }
 
     data.steps.forEach((step, stepIndex) => {
         const stepEl = document.createElement("div");
@@ -3152,29 +4102,7 @@ function renderSolution(key, rawQuery) {
             </div>
         ` : "";
 
-        const referenceContentHtml = `
-            <div class="plan-reference-panel">
-                <div class="plan-reference-panel__head">
-                    <p>함께 참고할 콘텐츠</p>
-                    <span>영상 · 글 · 체크리스트</span>
-                </div>
-                <div class="plan-reference-list">
-                    ${getPlanReferenceContent(key, stepIndex, step).map((content) => `
-                        <a
-                            class="plan-reference-card"
-                            href="${buildReferenceHref(content.query)}"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                        >
-                            <span class="plan-reference-card__type">${escapeHtml(content.type)}</span>
-                            <strong>${escapeHtml(content.title)}</strong>
-                            <small>${escapeHtml(content.source)}</small>
-                            <p>${escapeHtml(content.summary)}</p>
-                        </a>
-                    `).join("")}
-                </div>
-            </div>
-        `;
+        const integratedContentHtml = renderPlanIntegratedContent(key, stepIndex, step);
 
         stepEl.innerHTML = `
             <div class="absolute -left-[20px] top-0 w-10 h-10 rounded-full bg-slate-900 shadow-xl flex items-center justify-center font-bold text-white z-20 border-4 border-slate-50">
@@ -3184,13 +4112,13 @@ function renderSolution(key, rawQuery) {
                 <h3 class="text-2xl font-bold text-slate-800 mb-3 flex items-center flex-wrap gap-1">${step.name}${essentialBadge}</h3>
                 <p class="text-slate-500 text-sm leading-relaxed">${step.description || "지마켓 AI가 제안하는 단계별 상품입니다."}</p>
             </div>
+            ${integratedContentHtml}
             <div class="flex items-center justify-between gap-3 mb-4">
                 <p class="text-xs font-bold text-slate-400">좌우로 넘겨 더 많은 상품을 볼 수 있어요</p>
             </div>
             <div class="flex gap-5 overflow-x-auto pb-8 -mx-2 px-2 scrollbar-hide text-left snap-x snap-mandatory">
                 ${productHtml}
             </div>
-            ${referenceContentHtml}
             ${comparisonTableHtml}
         `;
 
@@ -3344,6 +4272,15 @@ document.addEventListener("DOMContentLoaded", () => {
     searchForm?.addEventListener("submit", (event) => {
         event.preventDefault();
         executeSearch(searchInput?.value.trim() || "");
+    });
+
+    document.querySelectorAll(".suggestion-tag").forEach((tagButton) => {
+        tagButton.addEventListener("click", () => {
+            const value = tagButton.dataset.query || tagButton.textContent.trim();
+            if (searchInput) { searchInput.value = value; autoResizeTextarea(searchInput); }
+            updateSearchUI(value);
+            executeSearch(value);
+        });
     });
 
     curtainTag?.addEventListener("click", () => {
