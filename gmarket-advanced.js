@@ -208,12 +208,41 @@ const BEAUTY_SCENARIOS = {
         skipSurvey: true,
         defaultChoices: { skin: "잘 모르겠어요", mood: "간편한 데일리", budget: "5만원 안쪽", occasion: "여행" },
         match: ["여행", "파우치", "1박", "출장", "휴대"]
+    },
+    "20대 남자 피부과 고민 해결": {
+        id: "20대 남자 피부과 고민 해결",
+        baseIntent: "메이크업",
+        title: "20대 남자 피부과 고민 해결 루틴",
+        reason: "피부과 방문 전후로 여드름, 붉은기, 장벽 손상을 관리하는 남성 스킨케어 목적",
+        skipSurvey: false,
+        match: ["20대", "남자", "남성", "피부과", "여드름", "트러블", "붉은기", "피부고민"]
+    },
+    "작품 속 화장품 추천": {
+        id: "작품 속 화장품 추천",
+        baseIntent: "메이크업",
+        title: "기사·드라마 속 화장품 추천",
+        reason: "기사나 드라마 장면에 나온 메이크업 이미지를 참고해 비슷한 제품 조합을 찾는 목적",
+        skipSurvey: true,
+        defaultChoices: { skin: "화면 속 피부표현", mood: "드라마 장면 재현", budget: "비슷한 무드 우선", occasion: "스크린샷 참고" },
+        match: ["드라마", "영화", "기사", "스크린샷", "화장품 추천", "작품", "배우", "여신강림", "편의점 샛별이"]
+    },
+    "30대 남자 스킨케어 성분 비교": {
+        id: "30대 남자 스킨케어 성분 비교",
+        baseIntent: "메이크업",
+        title: "30대 남자 스킨케어 성분 비교",
+        reason: "30대 남성 피부의 유분, 면도 자극, 탄력 고민을 성분 기준으로 비교하는 목적",
+        skipSurvey: true,
+        defaultChoices: { skin: "면도 후 민감/복합성", mood: "저자극 기능성", budget: "10만원 안쪽", occasion: "성분 비교" },
+        match: ["30대", "남자 스킨케어", "남성 스킨케어", "성분 비교", "위험 성분", "스킨케어 화장품"]
     }
 };
 
 const SAMPLE_FACE_PHOTO = "./makeup-clone-assets/1cebcb36604d1166.avif";
 const LIPSTICK_SWATCH_EXAMPLE_URL = "https://unpa.me/tip/detail/50a73d0b-81dd-4d11-b952-6045da3a71be";
 const LIPSTICK_SWATCH_EXAMPLE_IMAGE = "https://d33ur1yh5ph6b5.cloudfront.net/2ed3f6d9-cf79-41af-bd8b-6e434d972fc2-mid";
+const DRAMA_MAKEUP_SOURCE_URL = "https://unpa.me/tip/detail/3771243e-9ab7-4ba4-9c81-b74c878bc012";
+const DRAMA_MAKEUP_SCREENSHOT_IMAGE = "https://d33ur1yh5ph6b5.cloudfront.net/3771243e-9ab7-4ba4-9c81-b74c878bc012-mid";
+const TRUE_BEAUTY_SOURCE_URL = "https://www.elle.com/tw/beauty/make-up/g35087420/true-beauty-cosmetics/";
 
 function getLipstickSwatchSolutionData() {
     return {
@@ -424,6 +453,492 @@ function getLipstickSwatchSolutionData() {
     };
 }
 
+function getMaleDermConcernSolutionData() {
+    return {
+        title: "20대 남자 피부과 고민 해결 루틴",
+        intentReason: "여드름, 붉은기, 장벽 손상처럼 피부과 상담 전후에 흔한 20대 남성 피부 고민을 관리하는 목적",
+        steps: [
+            {
+                step: 1,
+                name: "피지와 트러블 진정 클렌징",
+                essential: true,
+                description: "운동, 마스크, 면도 후 남는 피지와 자극을 줄이기 위해 약산성 클렌저와 진정 토너를 먼저 잡습니다.",
+                products: [
+                    {
+                        id: 11001,
+                        name: "약산성 시카 젤 클렌저",
+                        price: "16,900",
+                        originalPrice: "23,000",
+                        score: 96,
+                        img: "https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "피부과 압출이나 레이저 전후처럼 자극이 있는 날에도 부담이 적은 약산성 타입입니다.",
+                            "면도 후 당김과 붉은기를 줄이는 진정 성분 중심으로 골랐습니다.",
+                            "과한 세정으로 장벽이 더 무너지는 상황을 피하는 첫 단계입니다."
+                        ],
+                        spec: { size: "150ml", feature: "약산성 시카 젤 클렌저" }
+                    },
+                    {
+                        id: 11002,
+                        name: "어성초 밸런싱 토너",
+                        price: "18,500",
+                        originalPrice: "26,000",
+                        score: 93,
+                        img: "https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "피지와 붉은기가 함께 고민인 20대 남성 피부에 맞춘 가벼운 토너입니다.",
+                            "화장솜으로 문지르기보다 손으로 눌러 바르는 루틴에 적합합니다.",
+                            "향이 강한 토너보다 피부과 시술 전후 루틴에 넣기 쉽습니다."
+                        ],
+                        spec: { size: "200ml", feature: "어성초 진정 토너" }
+                    },
+                    {
+                        id: 11003,
+                        name: "BHA 저자극 모공 패드",
+                        price: "21,900",
+                        originalPrice: "31,000",
+                        score: 88,
+                        img: "https://images.unsplash.com/photo-1611930022073-b7a4ba5fcccd?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "코와 턱 피지가 반복되는 경우 주 2~3회 보조로 쓰기 좋습니다.",
+                            "매일 쓰는 각질 패드보다 빈도를 조절하는 것이 안전합니다.",
+                            "피부과 치료제와 병행할 때는 자극 여부를 먼저 확인해야 합니다."
+                        ],
+                        spec: { size: "60매", feature: "저자극 BHA 모공 패드" }
+                    }
+                ]
+            },
+            {
+                step: 2,
+                name: "붉은기와 장벽 회복",
+                essential: true,
+                description: "피부과 고민은 진정만으로 끝나지 않아서 판테놀, 세라마이드, 시카처럼 장벽을 복구하는 보습 축이 필요합니다.",
+                products: [
+                    {
+                        id: 11101,
+                        name: "판테놀 장벽 앰플",
+                        price: "24,900",
+                        originalPrice: "34,000",
+                        score: 97,
+                        img: "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "피부과 압출 후 붉은기가 오래 남는 피부에 장벽 보조 역할을 합니다.",
+                            "끈적임이 적은 앰플이라 남성 데일리 루틴에 넣기 쉽습니다.",
+                            "치료제 사용 중 건조해지는 부위를 눌러주는 단계로 적합합니다."
+                        ],
+                        spec: { size: "30ml", feature: "판테놀 5% 장벽 앰플" }
+                    },
+                    {
+                        id: 11102,
+                        name: "세라마이드 리페어 크림",
+                        price: "27,500",
+                        originalPrice: "39,000",
+                        score: 94,
+                        img: "https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "건조한 볼과 유분 많은 T존이 함께 있는 복합성 피부에 얇게 쓰기 좋습니다.",
+                            "면도 후 따가운 느낌이 남는 부위에 보호막을 만들어줍니다.",
+                            "여드름 피부라도 장벽 보습은 필수라 필수 단계에 포함했습니다."
+                        ],
+                        spec: { size: "60ml", feature: "세라마이드 장벽 크림" }
+                    },
+                    {
+                        id: 11103,
+                        name: "시카 스팟 진정 젤",
+                        price: "12,900",
+                        originalPrice: "18,000",
+                        score: 89,
+                        img: "https://images.unsplash.com/photo-1556228578-8c89e6adf883?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "턱, 볼, 인중처럼 면도와 트러블이 겹치는 부위에 국소적으로 쓰기 좋습니다.",
+                            "전체 얼굴에 두껍게 바르기보다 붉은 부위만 얇게 올리는 방식입니다.",
+                            "피부과 처방 연고와 함께 쓸 때는 사용 순서를 분리하는 편이 좋습니다."
+                        ],
+                        spec: { size: "20ml", feature: "국소 진정 시카 젤" }
+                    }
+                ]
+            },
+            {
+                step: 3,
+                name: "흔적과 자외선 방어",
+                essential: true,
+                description: "여드름 흔적은 자외선에 더 진해질 수 있어 낮 루틴에서는 무기자차 또는 저자극 선케어를 고정합니다.",
+                products: [
+                    {
+                        id: 11201,
+                        name: "논코메도 저자극 선크림",
+                        price: "19,900",
+                        originalPrice: "28,000",
+                        score: 98,
+                        img: "https://images.unsplash.com/photo-1598662972299-5408ddb8a3dc?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "트러블성 피부가 매일 쓰기 좋도록 논코메도 기준을 강조한 선케어입니다.",
+                            "여드름 자국과 붉은기가 진해지는 것을 막는 낮 루틴 핵심입니다.",
+                            "백탁과 번들거림을 줄여 남성 데일리 사용성이 좋습니다."
+                        ],
+                        spec: { size: "50ml", feature: "SPF50+ 논코메도 선크림" }
+                    },
+                    {
+                        id: 11202,
+                        name: "나이아신아마이드 흔적 세럼",
+                        price: "22,900",
+                        originalPrice: "32,000",
+                        score: 91,
+                        img: "https://images.unsplash.com/photo-1617897903246-719242758050?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "붉은 자국과 칙칙한 흔적이 남는 피부에 보조로 쓰기 좋습니다.",
+                            "고함량 미백 제품보다 데일리 지속 사용성을 우선했습니다.",
+                            "선크림과 함께 써야 흔적 관리 효과를 기대하기 쉽습니다."
+                        ],
+                        spec: { size: "30ml", feature: "나이아신아마이드 5% 세럼" }
+                    },
+                    {
+                        id: 11203,
+                        name: "오일 컨트롤 선스틱",
+                        price: "17,500",
+                        originalPrice: "25,000",
+                        score: 86,
+                        img: "https://images.unsplash.com/photo-1612817288484-6f916006741a?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "야외 활동이나 운동 후 선크림 덧바름이 어려운 남성에게 편합니다.",
+                            "이마와 코 번들거림을 눌러주는 보송한 마감 후보입니다.",
+                            "트러블 부위에는 세게 문지르지 않고 가볍게 터치하는 방식이 좋습니다."
+                        ],
+                        spec: { size: "18g", feature: "휴대용 보송 선스틱" }
+                    }
+                ]
+            }
+        ]
+    };
+}
+
+function getDramaMakeupSolutionData() {
+    return {
+        title: "기사·드라마 속 화장품 추천",
+        intentReason: "드라마 장면이나 기사 속 메이크업 이미지를 참고해 같은 무드의 베이스, 립, 아이 제품을 고르는 목적",
+        steps: [
+            {
+                step: 1,
+                name: "스크린샷 속 피부표현",
+                essential: true,
+                description: "드라마 스크린샷에서 가장 먼저 보이는 것은 피부의 광, 커버, 지속감이라 쿠션과 톤업 베이스를 중심으로 비교합니다.",
+                products: [
+                    {
+                        id: 12001,
+                        name: "광채 커버 쿠션 21N",
+                        price: "29,900",
+                        originalPrice: "42,000",
+                        score: 96,
+                        img: DRAMA_MAKEUP_SCREENSHOT_IMAGE,
+                        aiSummary: [
+                            "드라마 장면처럼 조명 아래에서도 피부결이 정돈되어 보이는 쿠션 후보입니다.",
+                            "기사에서 자주 언급되는 쿠션 메이크업 무드를 재현하기 좋습니다.",
+                            "붉은기와 잡티를 빠르게 누르는 커버력을 우선했습니다."
+                        ],
+                        spec: { size: "15g", feature: "광채 커버 쿠션" }
+                    },
+                    {
+                        id: 12002,
+                        name: "로지 톤업 베이스",
+                        price: "18,900",
+                        originalPrice: "27,000",
+                        score: 90,
+                        img: "https://images.unsplash.com/photo-1596462502278-27bfdc403348?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "스크린샷 속 맑은 피부 톤을 만들기 위한 베이스 보정템입니다.",
+                            "쿠션 전 단계에서 붉은기와 칙칙함을 부드럽게 낮춥니다.",
+                            "두껍게 커버하기보다 화면 속 투명감을 살리는 후보입니다."
+                        ],
+                        spec: { size: "40ml", feature: "로지 톤업 크림" }
+                    },
+                    {
+                        id: 12003,
+                        name: "픽싱 글로우 파우더",
+                        price: "16,500",
+                        originalPrice: "24,000",
+                        score: 87,
+                        img: "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "촬영 조명에서 과한 번들거림만 눌러주는 마무리 파우더입니다.",
+                            "쿠션의 광은 남기고 코 주변 유분만 정리하는 데 적합합니다.",
+                            "드라마 속 오래 유지되는 피부표현을 보조합니다."
+                        ],
+                        spec: { size: "8g", feature: "글로우 픽싱 파우더" }
+                    }
+                ]
+            },
+            {
+                step: 2,
+                name: "장면을 닮은 립 컬러",
+                essential: true,
+                description: "기사 속 배우 메이크업은 립 컬러가 기억에 남는 경우가 많아 코랄, 로즈, 레드 계열을 스크린샷 톤에 맞춰 고릅니다.",
+                products: [
+                    {
+                        id: 12101,
+                        name: "레이어링 코랄 립바",
+                        price: "14,900",
+                        originalPrice: "22,000",
+                        score: 95,
+                        img: "https://images.unsplash.com/photo-1586495777744-4413f21062fa?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "드라마 기사 속 자연스러운 코랄 립을 따라 하기 쉬운 제품입니다.",
+                            "한 번 바르면 데일리, 여러 번 바르면 장면 속 포인트 컬러에 가깝습니다.",
+                            "베이스가 맑을 때 얼굴 전체 생기를 가장 빨리 올립니다."
+                        ],
+                        spec: { size: "2g", feature: "코랄 레이어링 립" }
+                    },
+                    {
+                        id: 12102,
+                        name: "글로시 로즈 틴트",
+                        price: "13,500",
+                        originalPrice: "19,000",
+                        score: 91,
+                        img: "https://images.unsplash.com/photo-1599305090598-fe179d501227?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "화면에서 입술이 마르지 않고 맑게 보이는 글로시 로즈 후보입니다.",
+                            "청순한 드라마 장면이나 기사 컷을 참고한 룩에 잘 맞습니다.",
+                            "착색보다 투명감과 반사광을 우선한 선택입니다."
+                        ],
+                        spec: { size: "4g", feature: "로즈 글로우 틴트" }
+                    },
+                    {
+                        id: 12103,
+                        name: "맑은 레드 스틱",
+                        price: "15,900",
+                        originalPrice: "23,000",
+                        score: 88,
+                        img: "https://images.unsplash.com/photo-1631730486572-226d1f595b68?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "액션 장면이나 밤 장면처럼 립이 선명하게 보이는 컷을 재현하기 좋습니다.",
+                            "붉은기가 과하지 않도록 맑은 레드 계열로 잡았습니다.",
+                            "입술 중심에만 바르고 경계를 풀면 실제 데일리에서도 부담이 줄어듭니다."
+                        ],
+                        spec: { size: "3.2g", feature: "맑은 레드 립스틱" }
+                    }
+                ]
+            },
+            {
+                step: 3,
+                name: "드라마식 눈매와 분위기",
+                essential: false,
+                description: "화면 속 메이크업은 눈매가 과하지 않아도 또렷하게 보이므로 브라운 음영과 애교살 포인트를 중심으로 보조합니다.",
+                products: [
+                    {
+                        id: 12201,
+                        name: "피치 브라운 멀티 팔레트",
+                        price: "25,900",
+                        originalPrice: "36,000",
+                        score: 93,
+                        img: "https://images.unsplash.com/photo-1512496015851-a90fb38ba796?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "스크린샷 속 자연스러운 눈매를 만들기 좋은 피치 브라운 팔레트입니다.",
+                            "아이, 치크, 음영을 한 번에 맞출 수 있어 작품 속 무드 재현에 효율적입니다.",
+                            "강한 스모키보다 맑은 화면 톤에 잘 어울립니다."
+                        ],
+                        spec: { size: "6색", feature: "피치 브라운 멀티 팔레트" }
+                    },
+                    {
+                        id: 12202,
+                        name: "밀크 글리터 섀도우",
+                        price: "10,900",
+                        originalPrice: "16,000",
+                        score: 89,
+                        img: "https://images.unsplash.com/photo-1567721913486-6585f069b332?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "눈 밑과 눈앞머리에 작은 반짝임을 더해 화면 속 촉촉한 눈매를 만듭니다.",
+                            "입자가 큰 글리터보다 은은한 펄감을 우선했습니다.",
+                            "드라마 속 클로즈업 메이크업을 참고한 보조템입니다."
+                        ],
+                        spec: { size: "3g", feature: "애교살 글리터 섀도우" }
+                    },
+                    {
+                        id: 12203,
+                        name: "내추럴 브라운 젤라이너",
+                        price: "9,900",
+                        originalPrice: "14,000",
+                        score: 86,
+                        img: "https://images.unsplash.com/photo-1522338242992-e1a54906a8da?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "화면에서 눈매가 또렷하지만 과하지 않은 브라운 라인을 만들기 좋습니다.",
+                            "초보자도 짧게 끊어 그리기 쉬운 젤 펜슬 타입입니다.",
+                            "코랄 립과 함께 쓰면 부드러운 드라마식 인상이 납니다."
+                        ],
+                        spec: { size: "0.1g", feature: "브라운 젤 아이라이너" }
+                    }
+                ]
+            }
+        ]
+    };
+}
+
+function getMaleSkincareIngredientSolutionData() {
+    return {
+        title: "30대 남자 스킨케어 성분 비교",
+        intentReason: "면도 자극, 유분, 탄력 저하가 함께 오는 30대 남성 피부를 성분 기준으로 비교하는 목적",
+        steps: [
+            {
+                step: 1,
+                name: "면도 후 진정 토너",
+                essential: true,
+                description: "면도 후 따가움과 유분을 동시에 잡기 위해 알코올감이 강한 애프터셰이브보다 진정 토너를 우선합니다.",
+                products: [
+                    {
+                        id: 13001,
+                        name: "무알코올 시카 애프터 토너",
+                        price: "18,900",
+                        originalPrice: "27,000",
+                        score: 97,
+                        img: "https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "면도 후 따가움이 있는 30대 남성에게 알코올 없는 진정 루틴을 제안합니다.",
+                            "시카와 판테놀 중심이라 향 강한 애프터셰이브보다 부담이 적습니다.",
+                            "유분이 있어도 수분 부족이 함께 오는 피부에 맞습니다."
+                        ],
+                        spec: { size: "180ml", feature: "무알코올 시카 토너" },
+                        ingredientFlags: ["에탄올 무첨가", "향료 낮음", "판테놀"]
+                    },
+                    {
+                        id: 13002,
+                        name: "모공 밸런스 토너",
+                        price: "16,500",
+                        originalPrice: "24,000",
+                        score: 89,
+                        img: "https://images.unsplash.com/photo-1556228578-8c89e6adf883?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "번들거림이 큰 T존을 가볍게 정리하는 수분 토너입니다.",
+                            "피부가 두껍고 피지가 많은 남성에게 산뜻한 사용감이 좋습니다.",
+                            "민감한 날에는 각질 성분과 병행 빈도를 줄여야 합니다."
+                        ],
+                        spec: { size: "200ml", feature: "모공 밸런스 토너" },
+                        ingredientFlags: ["살리실산 저함량", "향료 주의", "무거운 오일 없음"]
+                    },
+                    {
+                        id: 13003,
+                        name: "올인원 수분 에센스",
+                        price: "22,900",
+                        originalPrice: "31,000",
+                        score: 85,
+                        img: "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "단계를 줄이고 싶은 남성에게 토너와 에센스 역할을 겸하는 후보입니다.",
+                            "단, 향료와 쿨링감이 강한 제품은 면도 후 따가울 수 있어 주의가 필요합니다.",
+                            "피부가 둔감하고 빠른 루틴을 원할 때 보조 선택지입니다."
+                        ],
+                        spec: { size: "150ml", feature: "올인원 수분 에센스" },
+                        ingredientFlags: ["멘톨 주의", "향료 주의", "히알루론산"]
+                    }
+                ]
+            },
+            {
+                step: 2,
+                name: "탄력과 장벽 세럼",
+                essential: true,
+                description: "30대부터는 유분 조절만으로 부족해서 나이아신아마이드, 펩타이드, 세라마이드처럼 기능과 장벽을 함께 봅니다.",
+                products: [
+                    {
+                        id: 13101,
+                        name: "나이아신아마이드 포어 세럼",
+                        price: "24,900",
+                        originalPrice: "35,000",
+                        score: 95,
+                        img: "https://images.unsplash.com/photo-1617897903246-719242758050?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "모공과 칙칙함을 함께 보는 30대 남성 피부에 맞춘 성분 후보입니다.",
+                            "고함량보다 매일 쓰기 쉬운 5% 안팎의 균형을 우선했습니다.",
+                            "면도 후 바로 바르기보다 토너로 진정한 뒤 쓰는 흐름이 좋습니다."
+                        ],
+                        spec: { size: "30ml", feature: "나이아신아마이드 5% 세럼" },
+                        ingredientFlags: ["나이아신아마이드", "무향", "고함량 산 성분 없음"]
+                    },
+                    {
+                        id: 13102,
+                        name: "펩타이드 탄력 앰플",
+                        price: "29,900",
+                        originalPrice: "42,000",
+                        score: 91,
+                        img: "https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "눈가와 팔자 주변 탄력 저하가 보이기 시작한 남성에게 적합합니다.",
+                            "레티놀보다 자극 부담이 낮아 입문 기능성으로 넣기 좋습니다.",
+                            "끈적임이 적은 앰플 타입이라 아침 루틴에도 부담이 적습니다."
+                        ],
+                        spec: { size: "30ml", feature: "펩타이드 탄력 앰플" },
+                        ingredientFlags: ["펩타이드", "아데노신", "향료 낮음"]
+                    },
+                    {
+                        id: 13103,
+                        name: "레티날 나이트 세럼",
+                        price: "31,500",
+                        originalPrice: "45,000",
+                        score: 87,
+                        img: "https://images.unsplash.com/photo-1598662972299-5408ddb8a3dc?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "탄력과 모공을 강하게 관리하고 싶을 때 밤 루틴으로만 추천합니다.",
+                            "면도 직후나 피부가 따가운 날에는 쉬어야 하는 성분입니다.",
+                            "자외선 차단을 함께 지키는 사용자에게만 우선순위가 높습니다."
+                        ],
+                        spec: { size: "20ml", feature: "저농도 레티날 나이트 세럼" },
+                        ingredientFlags: ["레티날 주의", "야간 전용", "자외선 차단 필수"]
+                    }
+                ]
+            },
+            {
+                step: 3,
+                name: "데일리 선케어와 성분 체크",
+                essential: true,
+                description: "기능성 성분을 쓰는 30대 남성 루틴은 선케어가 빠지면 흔적과 자극 관리가 흔들리므로 성분표까지 비교합니다.",
+                products: [
+                    {
+                        id: 13201,
+                        name: "저자극 데일리 선 플루이드",
+                        price: "21,900",
+                        originalPrice: "31,000",
+                        score: 96,
+                        img: "https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "끈적임을 싫어하는 남성도 매일 바르기 쉬운 플루이드 타입입니다.",
+                            "레티날이나 나이아신아마이드 루틴과 함께 쓰기 위한 필수 단계입니다.",
+                            "눈 시림과 향료 부담을 낮춘 후보를 우선했습니다."
+                        ],
+                        spec: { size: "50ml", feature: "SPF50+ 저자극 선 플루이드" },
+                        ingredientFlags: ["향료 낮음", "눈시림 낮음", "무거운 오일 없음"]
+                    },
+                    {
+                        id: 13202,
+                        name: "수분 장벽 선크림",
+                        price: "19,500",
+                        originalPrice: "28,000",
+                        score: 90,
+                        img: "https://images.unsplash.com/photo-1596462502278-27bfdc403348?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "건조한 볼과 번들거리는 T존이 함께 있는 복합성 피부에 맞춘 후보입니다.",
+                            "세라마이드 보습막이 있어 면도 후 당김을 줄이는 데 유리합니다.",
+                            "다만 여름에는 양 조절이 필요할 수 있습니다."
+                        ],
+                        spec: { size: "50ml", feature: "세라마이드 수분 선크림" },
+                        ingredientFlags: ["세라마이드", "오일감 주의", "무기/유기 혼합"]
+                    },
+                    {
+                        id: 13203,
+                        name: "톤보정 매트 선스틱",
+                        price: "17,900",
+                        originalPrice: "25,000",
+                        score: 84,
+                        img: "https://images.unsplash.com/photo-1611930022073-b7a4ba5fcccd?auto=format&fit=crop&q=80&w=600",
+                        aiSummary: [
+                            "오후에 번들거림을 눌러주는 휴대용 보조 선케어입니다.",
+                            "스틱 타입은 트러블 부위에 마찰이 생길 수 있어 덧바를 때 주의가 필요합니다.",
+                            "외근이나 운동이 있는 날 보조 제품으로 적합합니다."
+                        ],
+                        spec: { size: "18g", feature: "매트 톤보정 선스틱" },
+                        ingredientFlags: ["마찰 주의", "파우더 성분", "향료 낮음"]
+                    }
+                ]
+            }
+        ]
+    };
+}
+
 const beautyScenarioStepOverrides = {
     "출근 10분룩": [
         {
@@ -534,6 +1049,18 @@ function ensureBeautyScenarioSolutionData() {
             solutionData[scenario.id] = getLipstickSwatchSolutionData();
             return;
         }
+        if (scenario.id === "20대 남자 피부과 고민 해결") {
+            solutionData[scenario.id] = getMaleDermConcernSolutionData();
+            return;
+        }
+        if (scenario.id === "작품 속 화장품 추천") {
+            solutionData[scenario.id] = getDramaMakeupSolutionData();
+            return;
+        }
+        if (scenario.id === "30대 남자 스킨케어 성분 비교") {
+            solutionData[scenario.id] = getMaleSkincareIngredientSolutionData();
+            return;
+        }
         const baseData = solutionData[scenario.baseIntent];
         if (baseData) {
             solutionData[scenario.id] = buildBeautyScenarioSolutionData(scenario, baseData);
@@ -548,9 +1075,18 @@ function getBeautyScenario(intentOrQuery = "") {
     if (BEAUTY_SCENARIOS[value]) return BEAUTY_SCENARIOS[value];
 
     const lowered = value.toLowerCase();
-    return Object.values(BEAUTY_SCENARIOS).find((scenario) => (
-        scenario.match.some((keyword) => lowered.includes(String(keyword).toLowerCase()))
-    )) || null;
+    const matchedScenario = Object.values(BEAUTY_SCENARIOS)
+        .map((scenario) => {
+            const score = scenario.match.reduce((sum, keyword) => {
+                const match = String(keyword).toLowerCase();
+                if (!match || !lowered.includes(match)) return sum;
+                return sum + Math.max(match.length, 1);
+            }, 0);
+            return { scenario, score };
+        })
+        .filter((entry) => entry.score > 0)
+        .sort((a, b) => b.score - a.score)[0];
+    return matchedScenario ? matchedScenario.scenario : null;
 }
 
 function isSurveySkipped(intent = state.currentIntent) {
@@ -905,6 +1441,40 @@ function hideThreadViews() {
     closeDeliveryPanel();
     closeClaimStatusPanel();
 }
+
+function startNewShoppingThread() {
+    const homeView = document.getElementById("home-view");
+    const searchInput = document.getElementById("searchInput");
+
+    state.currentIntent = "";
+    state.currentScenarioId = "";
+    state.currentSessionId = "";
+    state.rawQuery = "";
+    state.choices = getEmptyChoices();
+    state.surveyStepIndex = 0;
+    state.isSurveyReviewMode = false;
+    state.latestOrder = null;
+    state.activeDeliveryItemIndex = 0;
+
+    if (searchInput) {
+        searchInput.value = "";
+        updateSearchUI("");
+        autoResizeTextarea(searchInput);
+    }
+
+    hideThreadViews();
+    document.body.classList.remove("clean-survey-active", "clean-solution-active");
+    closeKeywordDetailCard();
+    closeIngredientRiskModal();
+    updateThreadStepper();
+    renderCart();
+    updateBottomCheckoutBar();
+    closeHistorySidebar();
+    requestAnimationFrame(() => scrollToSection(homeView));
+    showMiniToast("새 쇼핑 쓰레드를 시작할게요", "success");
+}
+
+window.startNewShoppingThread = startNewShoppingThread;
 
 function goThreadPhase(phase) {
     const homeView = document.getElementById("home-view");
@@ -2717,6 +3287,39 @@ infoViewConfig["AI 페이스 메이크오버"] = {
     }
 };
 
+infoViewConfig["20대 남자 피부과 고민 해결"] = {
+    q1: {
+        label: "1. 지금 가장 신경 쓰이는 피부 고민은요?",
+        layout: "grid grid-cols-3 gap-3",
+        options: [
+            { main: "여드름/피지", sub: "트러블 반복", icon: true },
+            { main: "붉은기", sub: "압출·면도 자극", icon: true },
+            { main: "피부 장벽", sub: "건조와 따가움", icon: true }
+        ],
+        category: "goal"
+    },
+    q2: {
+        label: "2. 피부과 관리는 어떤 상태인가요?",
+        layout: "grid grid-cols-3 gap-3",
+        options: [
+            { main: "방문 전", sub: "셀프 관리 중", icon: true },
+            { main: "압출/관리 후", sub: "진정 우선", icon: true },
+            { main: "처방 병행", sub: "자극 최소화", icon: true }
+        ],
+        category: "occasion"
+    },
+    q3: {
+        label: "3. 원하는 루틴 강도는요?",
+        layout: "grid grid-cols-3 gap-3",
+        options: [
+            { main: "최소 3단계", sub: "빠르게", icon: true },
+            { main: "균형 루틴", sub: "아침/저녁", icon: true },
+            { main: "집중 관리", sub: "흔적까지", icon: true }
+        ],
+        category: "budget"
+    }
+};
+
 function getSurveyQuestions(intent) {
     const cfg = infoViewConfig[intent];
     if (!cfg) return [];
@@ -2953,6 +3556,85 @@ function closeKeywordDetailCard() {
 
 window.openKeywordDetailCard = openKeywordDetailCard;
 window.closeKeywordDetailCard = closeKeywordDetailCard;
+
+const ingredientRiskRows = [
+    {
+        ingredient: "에탄올/변성알코올",
+        level: "high",
+        levelLabel: "높음",
+        reason: "면도 직후 따가움과 건조감을 키울 수 있어 민감한 날에는 피하는 편이 좋습니다.",
+        check: "애프터셰이브, 토너 앞쪽 성분표"
+    },
+    {
+        ingredient: "멘톨/강한 쿨링 성분",
+        level: "medium",
+        levelLabel: "주의",
+        reason: "시원한 사용감은 좋지만 장벽이 약한 피부에는 열감과 따가움으로 느껴질 수 있습니다.",
+        check: "올인원, 모공 토너, 남성 전용 라인"
+    },
+    {
+        ingredient: "고함량 산 성분 AHA/BHA",
+        level: "medium",
+        levelLabel: "주의",
+        reason: "피지 관리에는 도움이 되지만 레티날, 면도 자극과 겹치면 과각질 제거가 될 수 있습니다.",
+        check: "패드, 필링 토너, 모공 세럼"
+    },
+    {
+        ingredient: "향료/알러젠 향 성분",
+        level: "medium",
+        levelLabel: "주의",
+        reason: "매일 쓰는 스킨케어에서는 향보다 반복 사용 안정성이 중요합니다.",
+        check: "Fragrance, Limonene, Linalool"
+    },
+    {
+        ingredient: "판테놀/세라마이드/시카",
+        level: "low",
+        levelLabel: "낮음",
+        reason: "면도 후 장벽 회복과 붉은기 완화 루틴에서 우선 확인하면 좋은 성분입니다.",
+        check: "진정 토너, 장벽 크림, 선크림"
+    }
+];
+
+function renderIngredientRiskTable() {
+    return `
+        <table class="ingredient-risk-table">
+            <thead>
+                <tr>
+                    <th>성분</th>
+                    <th>위험도</th>
+                    <th>왜 확인하나요?</th>
+                    <th>어디서 보나요?</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${ingredientRiskRows.map((row) => `
+                    <tr>
+                        <td>${escapeHtml(row.ingredient)}</td>
+                        <td><span class="ingredient-risk-level ingredient-risk-level--${escapeHtml(row.level)}">${escapeHtml(row.levelLabel)}</span></td>
+                        <td>${escapeHtml(row.reason)}</td>
+                        <td>${escapeHtml(row.check)}</td>
+                    </tr>
+                `).join("")}
+            </tbody>
+        </table>
+    `;
+}
+
+function openIngredientRiskModal() {
+    const modal = document.getElementById("ingredient-risk-modal");
+    const table = document.getElementById("ingredient-risk-table");
+    if (!modal || !table) return;
+    table.innerHTML = renderIngredientRiskTable();
+    modal.classList.remove("hidden");
+    requestAnimationFrame(() => document.getElementById("ingredient-risk-close")?.focus());
+}
+
+function closeIngredientRiskModal() {
+    document.getElementById("ingredient-risk-modal")?.classList.add("hidden");
+}
+
+window.openIngredientRiskModal = openIngredientRiskModal;
+window.closeIngredientRiskModal = closeIngredientRiskModal;
 
 function updateSurveyProgress(questions = getSurveyQuestions(state.currentIntent)) {
     const total = questions.length || 1;
@@ -4448,12 +5130,89 @@ function renderLipstickSwatchOutcome() {
     `;
 }
 
+function renderDramaMakeupReferenceOutcome() {
+    return `
+        <section class="beauty-scenario-note beauty-scenario-note--media" aria-label="기사와 드라마 스크린샷 참고">
+            <span>Screen Reference</span>
+            <strong>기사·드라마 장면의 메이크업 무드를 기준으로 잡았어요</strong>
+            <div class="beauty-reference-card">
+                <a class="beauty-reference-card__media" href="${escapeHtml(DRAMA_MAKEUP_SOURCE_URL)}" target="_blank" rel="noopener noreferrer">
+                    <img src="${escapeHtml(DRAMA_MAKEUP_SCREENSHOT_IMAGE)}" alt="드라마 화장품 기사 스크린샷 참고 이미지" loading="eager" decoding="async" fetchpriority="high" onerror="this.src='./makeup-clone-assets/8e01e19fb7cf7c96.avif'">
+                </a>
+                <div class="beauty-reference-card__body">
+                    <p>웹에서 확인한 드라마 화장품 소개 기사 이미지를 참고해 쿠션, 립, 아이 포인트를 분리했습니다. 실제 화면 속 제품과 완전히 같은 상품만 찾기보다, 화면에서 보이는 피부표현과 립 컬러를 재현하기 쉬운 후보로 구성했어요.</p>
+                    <div class="beauty-reference-card__links">
+                        <a href="${escapeHtml(DRAMA_MAKEUP_SOURCE_URL)}" target="_blank" rel="noopener noreferrer">언니의파우치 기사</a>
+                        <a href="${escapeHtml(TRUE_BEAUTY_SOURCE_URL)}" target="_blank" rel="noopener noreferrer">ELLE True Beauty 기사</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+    `;
+}
+
+function renderIngredientComparisonOutcome() {
+    const data = solutionData["30대 남자 스킨케어 성분 비교"];
+    const rows = (data?.steps || []).map((step) => {
+        const main = step.products?.[0];
+        const compare = step.products?.[1];
+        if (!main || !compare) return "";
+        return `
+            <tr>
+                <td>${escapeHtml(step.name)}</td>
+                <td>
+                    <strong>${escapeHtml(main.name)}</strong>
+                    <span>${escapeHtml((main.ingredientFlags || []).join(" · "))}</span>
+                </td>
+                <td>
+                    <strong>${escapeHtml(compare.name)}</strong>
+                    <span>${escapeHtml((compare.ingredientFlags || []).join(" · "))}</span>
+                </td>
+                <td>${escapeHtml(step.description)}</td>
+            </tr>
+        `;
+    }).join("");
+
+    return `
+        <section class="ingredient-comparison-panel" aria-label="30대 남자 스킨케어 성분 비교표">
+            <div class="ingredient-comparison-panel__head">
+                <div>
+                    <span>Ingredient Compare</span>
+                    <h3>성분표를 먼저 보고 남성 스킨케어 후보를 좁혔어요</h3>
+                </div>
+                <button type="button" onclick="openIngredientRiskModal()">위험 성분 알림 표</button>
+            </div>
+            <div class="ingredient-comparison-table-wrap">
+                <table class="ingredient-comparison-table">
+                    <thead>
+                        <tr>
+                            <th>단계</th>
+                            <th>1순위 후보</th>
+                            <th>비교 후보</th>
+                            <th>판단 기준</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+        </section>
+    `;
+}
+
 function renderBeautyScenarioOutcome(key) {
     const scenario = getBeautyScenario(key);
     if (!scenario) return "";
 
     if (scenario.id === "립스틱 전색발색") {
         return renderLipstickSwatchOutcome();
+    }
+
+    if (scenario.id === "작품 속 화장품 추천") {
+        return renderDramaMakeupReferenceOutcome();
+    }
+
+    if (scenario.id === "30대 남자 스킨케어 성분 비교") {
+        return renderIngredientComparisonOutcome();
     }
 
     if (scenario.hasPhotoUpload && state.choices.photo) {
@@ -4763,6 +5522,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const closeHistorySidebarBtn = document.getElementById("closeHistorySidebar");
     const historySidebarBackdrop = document.getElementById("history-sidebar-backdrop");
     const collapseHistorySidebarBtn = document.getElementById("collapseHistorySidebar");
+    const newThreadBtn = document.getElementById("newThreadBtn");
     const cartTabBtn = document.getElementById("cartTabBtn");
     const threadStepper = document.getElementById("thread-stepper");
     const surveyEditConfirmModal = document.getElementById("survey-edit-confirm-modal");
@@ -4824,12 +5584,21 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
+    document.getElementById("ingredient-risk-modal")?.addEventListener("click", (event) => {
+        if (event.target.closest("[data-ingredient-risk-close='true']")) {
+            closeIngredientRiskModal();
+        }
+    });
+
     document.addEventListener("keydown", (event) => {
         if (event.key === "Escape" && !surveyEditConfirmModal?.classList.contains("hidden")) {
             closeSurveyEditConfirmModal();
         }
         if (event.key === "Escape" && !document.getElementById("keyword-detail-modal")?.classList.contains("hidden")) {
             closeKeywordDetailCard();
+        }
+        if (event.key === "Escape" && !document.getElementById("ingredient-risk-modal")?.classList.contains("hidden")) {
+            closeIngredientRiskModal();
         }
     });
 
@@ -4921,6 +5690,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Tab buttons
     cartTabBtn?.addEventListener("click", () => switchTab("cart"));
+    newThreadBtn?.addEventListener("click", startNewShoppingThread);
 
     // 초기 하단 바 상태 반영
     updateBottomCheckoutBar();

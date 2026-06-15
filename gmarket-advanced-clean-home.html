@@ -7,7 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="./gmarket-advanced.tailwind.js"></script>
     <link rel="stylesheet" href="./gmarket-advanced.css">
-    <link rel="stylesheet" href="./gmarket-advanced-clean-home.css?v=keyword-detail-v42">
+    <link rel="stylesheet" href="./gmarket-advanced-clean-home.css?v=men-scenarios-v43">
 </head>
 <body class="clean-home-page bg-slate-50 font-sans min-h-screen text-slate-900 overflow-x-hidden">
 
@@ -187,6 +187,9 @@
                         <span class="sidebar-tab-label">쇼핑 쓰레드</span>
                         <span id="cartBadge" class="hidden sidebar-tab-badge sidebar-tab-cart-badge bg-gmarket-blue text-white text-[10px] rounded-full min-w-[16px] h-4 px-1 font-bold">0</span>
                     </button>
+                    <button type="button" id="newThreadBtn" class="new-thread-btn" aria-label="새 쇼핑 쓰레드 만들기">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M12 5v14M5 12h14"></path></svg>
+                    </button>
                     <button type="button" id="collapseHistorySidebar" class="hidden lg:inline-flex shrink-0 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-slate-500 transition-colors">
                         <svg id="collapseHistorySidebarIcon" class="w-4 h-4 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M15 19l-7-7 7-7"></path></svg>
                     </button>
@@ -252,6 +255,21 @@
         </article>
     </div>
 
+    <div id="ingredient-risk-modal" class="ingredient-risk-modal hidden" role="dialog" aria-modal="true" aria-labelledby="ingredient-risk-title" aria-describedby="ingredient-risk-desc">
+        <button type="button" class="ingredient-risk-modal__backdrop" data-ingredient-risk-close="true" aria-label="위험 성분 표 닫기"></button>
+        <article class="ingredient-risk-card">
+            <div class="ingredient-risk-card__head">
+                <span>Ingredient Alert</span>
+                <button type="button" id="ingredient-risk-close" class="ingredient-risk-card__close" data-ingredient-risk-close="true" aria-label="위험 성분 표 닫기">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <h3 id="ingredient-risk-title">위험 성분 알림</h3>
+            <p id="ingredient-risk-desc">30대 남성 스킨케어 후보에서 민감 피부가 먼저 확인하면 좋은 성분만 따로 모았어요.</p>
+            <div id="ingredient-risk-table" class="ingredient-risk-table-wrap"></div>
+        </article>
+    </div>
+
     <div class="fixed top-[-10%] left-[-10%] w-[60%] h-[60%] rounded-full bg-gmarket-blue bg-blob"></div>
     <div class="fixed bottom-[-10%] right-[-10%] w-[60%] h-[60%] rounded-full bg-gmarket bg-blob"></div>
 
@@ -277,6 +295,9 @@
                     <button type="button" class="suggestion-tag" data-query="립스틱 한 제품의 전 색상을 팔목 발색으로 비교해줘">#립스틱_전색발색</button>
                     <button type="button" class="suggestion-tag" data-query="민감 피부를 위한 성분 궁합 체크">#성분_궁합체크</button>
                     <button type="button" class="suggestion-tag" data-query="주말 여행 파우치 뷰티 구성">#여행파우치</button>
+                    <button type="button" class="suggestion-tag" data-query="20대 남자 피부과 고민 해결 루틴">#20대남자_피부고민</button>
+                    <button type="button" class="suggestion-tag" data-query="드라마 기사 속 화장품 스크린샷 기반 추천">#작품속_화장품</button>
+                    <button type="button" class="suggestion-tag" data-query="30대 남자 스킨케어 화장품 성분 비교">#30대남자_성분비교</button>
                 </div>
             </div>
 
@@ -967,7 +988,7 @@
     </script>
 
     <script src="./gmarket-advanced.mock.js"></script>
-    <script src="./gmarket-advanced.js?v=keyword-detail-v42"></script>
+    <script src="./gmarket-advanced.js?v=men-scenarios-v43"></script>
     <script src="./gmarket-thread-navigation.js"></script>
 
 </body>

@@ -176,6 +176,33 @@ body.clean-home-page #history-panel.history-sidebar.history-sidebar-open {
     color: var(--beauty-ink) !important;
 }
 
+.clean-home-page .new-thread-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 1px solid rgba(52, 70, 90, 0.14);
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.7);
+    color: var(--beauty-plum);
+    box-shadow: none;
+    transition: border-color 0.16s ease, background-color 0.16s ease, color 0.16s ease, transform 0.16s ease;
+}
+
+.clean-home-page .new-thread-btn:hover,
+.clean-home-page .new-thread-btn:focus-visible {
+    border-color: rgba(52, 70, 90, 0.32);
+    background: #ffffff;
+    color: var(--beauty-ink);
+}
+
+.clean-home-page .new-thread-btn:active {
+    transform: translateY(1px);
+}
+
 .clean-home-page #history-panel .flex-1.overflow-y-auto {
     padding: 14px !important;
 }
@@ -425,13 +452,14 @@ body.clean-home-page #history-panel.history-sidebar.history-sidebar-collapsed {
 
 .thread-stepper {
     position: relative;
-    z-index: 20;
-    display: inline-flex;
+    z-index: 145;
+    display: flex;
     align-items: center;
+    justify-content: center;
     gap: 8px;
     width: max-content;
     min-height: 48px;
-    margin: 76px auto 0;
+    margin: 18px auto 0;
     padding: 7px 10px;
     border: 1px solid rgba(52, 70, 90, 0.14);
     border-radius: 999px;
@@ -710,6 +738,146 @@ body.clean-home-page #history-panel.history-sidebar.history-sidebar-collapsed {
     height: 4px;
     border-radius: 50%;
     background: var(--beauty-rose);
+}
+
+.ingredient-risk-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 235;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 18px;
+}
+
+.ingredient-risk-modal.hidden {
+    display: none !important;
+}
+
+.ingredient-risk-modal__backdrop {
+    position: absolute;
+    inset: 0;
+    border: 0;
+    background: rgba(31, 41, 51, 0.24);
+    backdrop-filter: blur(5px);
+}
+
+.ingredient-risk-card {
+    position: relative;
+    width: min(760px, 100%);
+    max-height: min(68vh, 640px);
+    overflow-y: auto;
+    padding: 20px;
+    border: 1px solid rgba(52, 70, 90, 0.16);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.98);
+    color: var(--beauty-ink);
+    box-shadow: 0 22px 70px -46px rgba(31, 41, 51, 0.38);
+}
+
+.ingredient-risk-card__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.ingredient-risk-card__head span {
+    color: var(--beauty-muted);
+    font-size: 11px;
+    font-weight: 340;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+}
+
+.ingredient-risk-card__close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid rgba(52, 70, 90, 0.14);
+    border-radius: 50%;
+    background: rgba(246, 248, 250, 0.78);
+    color: var(--beauty-muted);
+}
+
+.ingredient-risk-card h3 {
+    margin: 0;
+    color: var(--beauty-ink);
+    font-size: clamp(22px, 4vw, 30px);
+    font-weight: 320;
+    line-height: 1.3;
+}
+
+.ingredient-risk-card p {
+    margin: 12px 0 0;
+    color: var(--beauty-muted);
+    font-size: 14px;
+    font-weight: 300;
+    line-height: 1.72;
+    word-break: keep-all;
+}
+
+.ingredient-risk-table-wrap {
+    margin-top: 16px;
+    overflow-x: auto;
+}
+
+.ingredient-risk-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 620px;
+    font-size: 12px;
+}
+
+.ingredient-risk-table th,
+.ingredient-risk-table td {
+    padding: 12px 10px;
+    border-bottom: 1px solid rgba(52, 70, 90, 0.12);
+    text-align: left;
+    vertical-align: top;
+    word-break: keep-all;
+}
+
+.ingredient-risk-table th {
+    color: var(--beauty-plum);
+    font-size: 11px;
+    font-weight: 340;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.ingredient-risk-table td {
+    color: var(--beauty-muted);
+    font-weight: 300;
+    line-height: 1.55;
+}
+
+.ingredient-risk-level {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 0 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 340;
+}
+
+.ingredient-risk-level--high {
+    background: rgba(239, 68, 68, 0.1);
+    color: #b91c1c;
+}
+
+.ingredient-risk-level--medium {
+    background: rgba(245, 158, 11, 0.12);
+    color: #92400e;
+}
+
+.ingredient-risk-level--low {
+    background: rgba(52, 70, 90, 0.08);
+    color: var(--beauty-plum);
 }
 
 body.clean-home-page.clean-survey-active #home-view,
@@ -1764,6 +1932,165 @@ body.clean-home-page .beauty-scenario-note p {
     word-break: keep-all;
 }
 
+body.clean-home-page .beauty-scenario-note--media {
+    padding: 22px 0;
+}
+
+body.clean-home-page .beauty-reference-card {
+    display: grid;
+    grid-template-columns: minmax(180px, 0.62fr) minmax(0, 1fr);
+    gap: 16px;
+    align-items: stretch;
+    margin-top: 16px;
+}
+
+body.clean-home-page .beauty-reference-card__media {
+    display: block;
+    min-height: 240px;
+    overflow: hidden;
+    border-radius: 6px;
+    background: var(--beauty-blush);
+}
+
+body.clean-home-page .beauty-reference-card__media img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+}
+
+body.clean-home-page .beauty-reference-card__body {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+}
+
+body.clean-home-page .beauty-reference-card__body p {
+    margin: 0;
+    color: var(--beauty-muted);
+    font-size: 14px;
+    font-weight: 300;
+    line-height: 1.72;
+    word-break: keep-all;
+}
+
+body.clean-home-page .beauty-reference-card__links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+body.clean-home-page .beauty-reference-card__links a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 30px;
+    padding: 0 10px;
+    border: 1px solid rgba(52, 70, 90, 0.14);
+    border-radius: 999px;
+    color: var(--beauty-plum);
+    font-size: 12px;
+    font-weight: 320;
+    text-decoration: none;
+}
+
+body.clean-home-page .ingredient-comparison-panel {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    margin: 0 0 34px;
+    padding: 22px 0;
+    border-top: 1px solid rgba(52, 70, 90, 0.12);
+    border-bottom: 1px solid rgba(52, 70, 90, 0.12);
+}
+
+body.clean-home-page .ingredient-comparison-panel__head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 16px;
+}
+
+body.clean-home-page .ingredient-comparison-panel__head span {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--beauty-muted);
+    font-size: 11px;
+    font-weight: 340;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+}
+
+body.clean-home-page .ingredient-comparison-panel__head h3 {
+    margin: 0 !important;
+    color: var(--beauty-ink) !important;
+    font-size: clamp(20px, 2.5vw, 28px) !important;
+    font-weight: 310 !important;
+    line-height: 1.34 !important;
+}
+
+body.clean-home-page .ingredient-comparison-panel__head button {
+    flex: 0 0 auto;
+    min-height: 36px;
+    padding: 0 12px;
+    border: 1px solid rgba(31, 41, 51, 0.82);
+    border-radius: 6px;
+    background: var(--beauty-ink);
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 330;
+}
+
+body.clean-home-page .ingredient-comparison-table-wrap {
+    overflow-x: auto;
+}
+
+body.clean-home-page .ingredient-comparison-table {
+    width: 100%;
+    min-width: 720px;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+body.clean-home-page .ingredient-comparison-table th,
+body.clean-home-page .ingredient-comparison-table td {
+    padding: 13px 10px;
+    border-bottom: 1px solid rgba(52, 70, 90, 0.12);
+    text-align: left;
+    vertical-align: top;
+}
+
+body.clean-home-page .ingredient-comparison-table th {
+    color: var(--beauty-plum);
+    font-size: 11px;
+    font-weight: 340;
+    letter-spacing: 0.08em;
+}
+
+body.clean-home-page .ingredient-comparison-table td {
+    color: var(--beauty-muted);
+    font-weight: 300;
+    line-height: 1.58;
+    word-break: keep-all;
+}
+
+body.clean-home-page .ingredient-comparison-table strong {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--beauty-ink);
+    font-weight: 340;
+}
+
+body.clean-home-page .ingredient-comparison-table span {
+    display: block;
+    color: var(--beauty-muted);
+    font-size: 11px;
+    font-weight: 300;
+}
+
 body.clean-home-page .beauty-lipstick-swatch {
     display: grid;
     grid-template-columns: 1fr;
@@ -2496,7 +2823,8 @@ body.clean-home-page #solution-checkout-cta button {
 
     .thread-stepper {
         width: calc(100% - 24px);
-        margin-top: 66px;
+        max-width: 360px;
+        margin: 12px auto 0;
         justify-content: center;
         gap: 5px;
         padding: 6px;
@@ -2545,6 +2873,23 @@ body.clean-home-page #solution-checkout-cta button {
 
     body.clean-home-page .beauty-scenario-note {
         padding: 17px 0;
+    }
+
+    body.clean-home-page .beauty-reference-card {
+        grid-template-columns: 1fr;
+    }
+
+    body.clean-home-page .beauty-reference-card__media {
+        min-height: 220px;
+    }
+
+    body.clean-home-page .ingredient-comparison-panel__head {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    body.clean-home-page .ingredient-comparison-panel__head button {
+        width: 100%;
     }
 
     body.clean-home-page .plan-step-insight__copy {
