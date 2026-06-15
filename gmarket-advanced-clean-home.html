@@ -7,7 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="./gmarket-advanced.tailwind.js"></script>
     <link rel="stylesheet" href="./gmarket-advanced.css">
-    <link rel="stylesheet" href="./gmarket-advanced-clean-home.css?v=lipstick-plan-products-v40">
+    <link rel="stylesheet" href="./gmarket-advanced-clean-home.css?v=keyword-detail-v42">
 </head>
 <body class="clean-home-page bg-slate-50 font-sans min-h-screen text-slate-900 overflow-x-hidden">
 
@@ -235,6 +235,21 @@
                 <button type="button" id="survey-edit-confirm-btn" class="survey-confirm-modal__btn survey-confirm-modal__btn--primary">수정하기</button>
             </div>
         </div>
+    </div>
+
+    <div id="keyword-detail-modal" class="keyword-detail-modal hidden" role="dialog" aria-modal="true" aria-labelledby="keyword-detail-title" aria-describedby="keyword-detail-desc">
+        <button type="button" class="keyword-detail-modal__backdrop" data-keyword-detail-close="true" aria-label="키워드 설명 닫기"></button>
+        <article class="keyword-detail-card">
+            <div class="keyword-detail-card__head">
+                <span id="keyword-detail-eyebrow">Keyword</span>
+                <button type="button" id="keyword-detail-close" class="keyword-detail-card__close" data-keyword-detail-close="true" aria-label="키워드 설명 닫기">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <h3 id="keyword-detail-title">키워드 설명</h3>
+            <p id="keyword-detail-desc"></p>
+            <ul id="keyword-detail-points"></ul>
+        </article>
     </div>
 
     <div class="fixed top-[-10%] left-[-10%] w-[60%] h-[60%] rounded-full bg-gmarket-blue bg-blob"></div>
@@ -952,7 +967,7 @@
     </script>
 
     <script src="./gmarket-advanced.mock.js"></script>
-    <script src="./gmarket-advanced.js?v=lipstick-plan-products-v40"></script>
+    <script src="./gmarket-advanced.js?v=keyword-detail-v42"></script>
     <script src="./gmarket-thread-navigation.js"></script>
 
 </body>

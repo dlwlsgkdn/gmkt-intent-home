@@ -424,6 +424,110 @@ function getLipstickSwatchSolutionData() {
     };
 }
 
+const beautyScenarioStepOverrides = {
+    "출근 10분룩": [
+        {
+            name: "무너지기 쉬운 부위 선제 정리",
+            essential: true,
+            description: "아침 시간이 짧을수록 전체 커버보다 코, 나비존, 턱처럼 먼저 지워지는 부위를 얇게 고정하는 구성이 중요합니다."
+        },
+        {
+            name: "눈매는 한 번에 또렷하게",
+            essential: true,
+            description: "출근 룩에서는 섀도우 색을 늘리기보다 브라운 음영, 얇은 라이너, 컬 고정으로 피곤해 보이는 인상을 빠르게 정리합니다."
+        },
+        {
+            name: "회의까지 버티는 생기 컬러",
+            essential: true,
+            description: "립과 치크는 수정 횟수를 줄일 수 있도록 착색, 채도, 마스크 묻어남을 함께 보고 단정한 생기를 남기는 쪽으로 고릅니다."
+        },
+        {
+            name: "책상 위 수정 파우치",
+            essential: false,
+            description: "외출용 풀 파우치가 아니라 점심 이후 바로 복구되는 파우더, 립, 스펀지처럼 작고 빠른 도구만 보조로 더합니다."
+        }
+    ],
+    "AI 페이스 메이크오버": [
+        {
+            name: "사진 속 피부결 맞춤 베이스",
+            essential: true,
+            description: "업로드한 얼굴 사진의 피부 밝기와 결을 기준으로, 필터처럼 뜨지 않고 실제 얼굴에 이어지는 베이스 표현을 먼저 맞춥니다."
+        },
+        {
+            name: "가상 룩과 닮은 눈매 구현",
+            essential: true,
+            description: "AI 미리보기에서 달라 보이는 핵심은 눈매의 깊이와 선명도라서, 컬러보다 음영 위치와 번짐 적은 제품을 우선합니다."
+        },
+        {
+            name: "시뮬레이션 컬러 현실화",
+            essential: true,
+            description: "화면에서 예쁜 코랄, 로즈, 누드가 실제 피부에서 과하거나 탁해지지 않도록 립과 치크의 온도감을 맞춥니다."
+        },
+        {
+            name: "전후 비교용 마무리 도구",
+            essential: false,
+            description: "AI 룩을 따라 한 뒤에도 사진에서 균일하게 보이도록 스펀지, 브러시, 포인트 리무버 같은 보정 도구를 함께 둡니다."
+        }
+    ],
+    "성분 궁합 체크": [
+        {
+            name: "민감 피부 베이스 필터",
+            essential: true,
+            description: "처음 닿는 선케어와 쿠션은 향, 알코올감, 과한 보송함처럼 자극으로 이어질 수 있는 조건을 먼저 걸러냅니다."
+        },
+        {
+            name: "눈가 자극 낮은 포인트",
+            essential: true,
+            description: "눈가는 성분 반응과 번짐이 동시에 생기기 쉬워, 강한 펄이나 워터프루프 제거 부담보다 저자극 사용감을 우선합니다."
+        },
+        {
+            name: "입술과 볼의 컬러 궁합",
+            essential: true,
+            description: "립과 블러셔는 자주 덧바르는 제품이라 보습감, 착색 강도, 피부 열감에 어울리는 제형을 함께 비교합니다."
+        },
+        {
+            name: "클렌징까지 이어지는 안전망",
+            essential: true,
+            description: "저자극 메이크업은 지우는 단계까지 맞아야 완성되므로, 포인트 리무버와 세척 도구를 필수 루틴으로 포함합니다."
+        }
+    ],
+    "여행 파우치": [
+        {
+            name: "기내와 숙소를 버티는 베이스",
+            essential: true,
+            description: "여행에서는 건조한 이동 시간과 일정 변화를 고려해 선케어, 톤 보정, 수정이 한 번에 되는 제품을 먼저 압축합니다."
+        },
+        {
+            name: "사진에 또렷한 아이 포인트",
+            essential: true,
+            description: "많은 도구를 챙기기 어렵기 때문에 팔레트 하나와 번짐 적은 마스카라처럼 사진에서 인상만 살리는 구성을 고릅니다."
+        },
+        {
+            name: "낮과 밤을 넘기는 멀티 컬러",
+            essential: true,
+            description: "립과 치크를 따로 많이 챙기기보다 낮에는 생기 있게, 밤에는 분위기 있게 조절되는 멀티 컬러를 중심으로 담습니다."
+        },
+        {
+            name: "새지 않고 가벼운 클렌징",
+            essential: false,
+            description: "파우치에서는 용량과 누수 위험이 만족도를 좌우하므로 미니 리무버, 휴대 브러시, 교체 쉬운 스펀지만 남깁니다."
+        }
+    ]
+};
+
+function buildBeautyScenarioSolutionData(scenario, baseData) {
+    const overrides = beautyScenarioStepOverrides[scenario.id] || [];
+    return {
+        ...baseData,
+        title: scenario.title,
+        intentReason: scenario.reason,
+        steps: baseData.steps.map((step, index) => ({
+            ...step,
+            ...(overrides[index] || {})
+        }))
+    };
+}
+
 function ensureBeautyScenarioSolutionData() {
     Object.values(BEAUTY_SCENARIOS).forEach((scenario) => {
         if (scenario.id === "립스틱 전색발색") {
@@ -431,12 +535,8 @@ function ensureBeautyScenarioSolutionData() {
             return;
         }
         const baseData = solutionData[scenario.baseIntent];
-        if (baseData && !solutionData[scenario.id]) {
-            solutionData[scenario.id] = {
-                ...baseData,
-                title: scenario.title,
-                intentReason: scenario.reason
-            };
+        if (baseData) {
+            solutionData[scenario.id] = buildBeautyScenarioSolutionData(scenario, baseData);
         }
     });
 }
@@ -2657,6 +2757,203 @@ function escapeHtml(value) {
     }[char]));
 }
 
+const keywordDetailData = {
+    "출근 10분룩": {
+        eyebrow: "Scenario",
+        title: "출근 10분룩",
+        description: "아침 시간이 짧은 사용자를 위해 베이스, 눈매, 립을 모두 완성형으로 꾸미기보다 무너짐이 적고 빠르게 복구되는 루틴으로 압축한 키워드입니다.",
+        points: ["제품 수를 줄이고 순서를 단순하게 잡습니다.", "코와 눈가처럼 먼저 무너지는 부위를 기준으로 고정력을 봅니다."]
+    },
+    "AI 페이스 메이크오버": {
+        eyebrow: "Scenario",
+        title: "AI 페이스 메이크오버",
+        description: "얼굴 사진에 원하는 메이크업 무드를 입혀본 뒤, 화면 속 결과와 비슷한 실제 제품 조합을 찾는 흐름입니다.",
+        points: ["사진 속 피부 밝기와 이목구비 대비를 기준으로 봅니다.", "가상 결과가 실제 얼굴에서 과해지지 않도록 채도와 제형을 조절합니다."]
+    },
+    "립스틱 전색발색": {
+        eyebrow: "Scenario",
+        title: "립스틱 전색발색",
+        description: "한 립 라인의 여러 색상을 같은 팔목, 같은 조명, 같은 양으로 비교해 미세한 톤 차이를 판단하는 키워드입니다.",
+        points: ["누드, 코랄, 브릭, 글로스처럼 컬러군을 먼저 나눕니다.", "입술 위에서 탁해질 색과 화사해질 색을 팔목 발색으로 예측합니다."]
+    },
+    "성분 궁합 체크": {
+        eyebrow: "Scenario",
+        title: "성분 궁합 체크",
+        description: "민감하거나 트러블이 잦은 피부가 메이크업 제품을 고를 때 성분, 제형, 클렌징 부담을 함께 확인하는 키워드입니다.",
+        points: ["처음 닿는 베이스와 자주 덧바르는 립을 우선 확인합니다.", "지우는 단계까지 자극이 낮은지 같이 봅니다."]
+    },
+    "여행 파우치": {
+        eyebrow: "Scenario",
+        title: "여행 파우치",
+        description: "여행지에서 부피는 줄이고 활용도는 높이기 위해 멀티 제품, 미니 용량, 누수 위험이 낮은 제품 위주로 구성하는 키워드입니다.",
+        points: ["낮과 밤에 모두 쓰는 컬러를 먼저 고릅니다.", "기내, 숙소, 야외 일정에서 모두 버틸 수 있는 휴대성을 봅니다."]
+    },
+    "5분": {
+        eyebrow: "Survey Keyword",
+        title: "5분 루틴",
+        description: "선케어, 쿠션, 립처럼 손이 가장 적게 가는 단계만 남긴 최소 루틴입니다.",
+        points: ["새로운 색조 시도보다 정돈감을 우선합니다.", "도구가 많이 필요한 제품은 뒤로 미룹니다."]
+    },
+    "10분": {
+        eyebrow: "Survey Keyword",
+        title: "10분 루틴",
+        description: "베이스와 색조를 모두 챙기되, 단계마다 한 제품씩만 쓰는 균형형 출근 루틴입니다.",
+        points: ["눈썹, 치크, 립의 톤을 빠르게 맞춥니다.", "무너짐 방지 제품을 한 단계만 넣습니다."]
+    },
+    "15분": {
+        eyebrow: "Survey Keyword",
+        title: "15분 루틴",
+        description: "베이스 밀착 시간과 눈매 정돈까지 조금 더 확보해 완성도를 올리는 루틴입니다.",
+        points: ["프라이머나 브러시처럼 마감 품질을 높이는 도구를 쓸 수 있습니다.", "색조 레이어링을 한 번 더 넣을 여유가 있습니다."]
+    },
+    "코/나비존": {
+        eyebrow: "Survey Keyword",
+        title: "코/나비존",
+        description: "유분, 모공, 마스크 마찰 때문에 베이스가 가장 먼저 지워지기 쉬운 얼굴 중앙 부위입니다.",
+        points: ["프라이머와 소량 파우더가 효과적인 편입니다.", "두껍게 바르면 오히려 끼임이 커질 수 있습니다."]
+    },
+    "볼/턱": {
+        eyebrow: "Survey Keyword",
+        title: "볼/턱",
+        description: "건조함, 각질, 마찰 때문에 베이스가 들뜨거나 얼룩져 보이기 쉬운 부위입니다.",
+        points: ["수분감과 얇은 커버를 먼저 봅니다.", "매트한 고정 제품은 필요한 부위에만 쓰는 편이 좋습니다."]
+    },
+    "눈가": {
+        eyebrow: "Survey Keyword",
+        title: "눈가",
+        description: "주름, 유분, 눈물 때문에 섀도우와 라이너가 번지거나 끼기 쉬운 부위입니다.",
+        points: ["번짐 방지와 쉬운 클렌징을 같이 봅니다.", "두꺼운 컨실러보다 얇은 고정이 안정적입니다."]
+    },
+    "코랄 생기": {
+        eyebrow: "Survey Keyword",
+        title: "코랄 생기",
+        description: "따뜻하고 맑은 인상을 만드는 코랄 계열 무드입니다. 피부톤에 따라 피치, 핑크, 오렌지 비중을 조절합니다.",
+        points: ["형광기로 뜨지 않는 채도를 확인합니다.", "립과 치크를 같은 온도감으로 맞추면 자연스럽습니다."]
+    },
+    "뮤트 로즈": {
+        eyebrow: "Survey Keyword",
+        title: "뮤트 로즈",
+        description: "채도를 낮춘 로즈 계열로 차분하고 부드러운 인상을 만드는 무드입니다.",
+        points: ["회색기가 과하면 피곤해 보일 수 있습니다.", "브라운 음영과 함께 쓰면 안정적입니다."]
+    },
+    "글로우 누드": {
+        eyebrow: "Survey Keyword",
+        title: "글로우 누드",
+        description: "색보다 피부결과 광을 먼저 보이게 하는 누드 계열 메이크업 무드입니다.",
+        points: ["입술 색을 완전히 지우지 않는 누드가 데일리에 쉽습니다.", "베이스 광과 립 광택의 균형을 맞춥니다."]
+    },
+    "촉촉한 광": {
+        eyebrow: "Survey Keyword",
+        title: "촉촉한 광",
+        description: "피부결이 맑고 생기 있어 보이도록 수분감과 반사광을 살리는 표현입니다.",
+        points: ["건성 피부에 잘 맞지만 유분 부위는 따로 눌러야 합니다.", "파우더는 얼굴 전체보다 필요한 곳에만 씁니다."]
+    },
+    "보송한 세미매트": {
+        eyebrow: "Survey Keyword",
+        title: "보송한 세미매트",
+        description: "완전 매트보다 자연스럽고, 글로우보다 오래 버티는 중간 마감입니다.",
+        points: ["출근이나 장시간 외출에 안정적입니다.", "건조 부위에는 얇게 올리는 것이 좋습니다."]
+    },
+    "내 피부처럼": {
+        eyebrow: "Survey Keyword",
+        title: "내 피부처럼",
+        description: "커버감을 크게 올리기보다 실제 피부결을 살리면서 톤만 정리하는 표현입니다.",
+        points: ["얇은 쿠션이나 톤업 베이스가 어울립니다.", "잡티는 전체 커버보다 부분 보정으로 처리합니다."]
+    }
+};
+
+function normalizeKeywordDetailKey(keyword = "") {
+    const value = String(keyword || "").trim();
+    const aliases = {
+        "#출근_10분룩": "출근 10분룩",
+        "#AI_페이스룩": "AI 페이스 메이크오버",
+        "#립스틱_전색발색": "립스틱 전색발색",
+        "#성분_궁합체크": "성분 궁합 체크",
+        "#여행파우치": "여행 파우치",
+        "출근 전 10분 안에 완성하는 지속력 데일리 메이크업": "출근 10분룩",
+        "내 얼굴 사진으로 코랄 메이크업 AI 시뮬레이션": "AI 페이스 메이크오버",
+        "립스틱 한 제품의 전 색상을 팔목 발색으로 비교해줘": "립스틱 전색발색",
+        "민감 피부를 위한 성분 궁합 체크": "성분 궁합 체크",
+        "주말 여행 파우치 뷰티 구성": "여행 파우치"
+    };
+    return aliases[value] || value;
+}
+
+function getKeywordDetail(keyword = "") {
+    const normalized = normalizeKeywordDetailKey(keyword);
+    if (keywordDetailData[normalized]) return keywordDetailData[normalized];
+
+    const planStep = Object.values(solutionData)
+        .flatMap((data) => data?.steps || [])
+        .find((step) => step?.name === normalized);
+
+    if (planStep) {
+        return {
+            eyebrow: "Plan Step",
+            title: planStep.name,
+            description: planStep.description || "이 단계에서 상품을 고르기 전에 확인할 기준을 정리한 키워드입니다.",
+            points: [
+                planStep.essential ? "이 시나리오에서 꼭 챙겨야 하는 단계입니다." : "상황에 따라 더하면 완성도가 올라가는 보조 단계입니다.",
+                "상품 추천은 이 기준에 맞춰 매칭률과 역할이 다른 후보로 나뉩니다."
+            ]
+        };
+    }
+
+    return {
+        eyebrow: "Keyword",
+        title: normalized,
+        description: "이 키워드는 현재 브리프에서 상품 추천 기준을 좁히기 위해 쓰는 조건입니다.",
+        points: ["선택한 목적과 피부 조건에 맞춰 추천 우선순위에 반영됩니다."]
+    };
+}
+
+function renderKeywordDetailText(keyword, className = "") {
+    return `
+        <span
+            class="keyword-detail-text ${escapeHtml(className)}"
+            data-keyword-detail="${escapeHtml(keyword)}"
+            role="button"
+            tabindex="0"
+            aria-label="${escapeHtml(keyword)} 설명 보기"
+        >${escapeHtml(keyword)}</span>
+    `;
+}
+
+function openKeywordDetailCard(keyword) {
+    const modal = document.getElementById("keyword-detail-modal");
+    if (!modal) return;
+    const detail = getKeywordDetail(keyword);
+    const eyebrowEl = document.getElementById("keyword-detail-eyebrow");
+    const titleEl = document.getElementById("keyword-detail-title");
+    const descEl = document.getElementById("keyword-detail-desc");
+    const pointsEl = document.getElementById("keyword-detail-points");
+
+    if (eyebrowEl) eyebrowEl.textContent = detail.eyebrow || "Keyword";
+    if (titleEl) titleEl.textContent = detail.title || normalizeKeywordDetailKey(keyword);
+    if (descEl) descEl.textContent = detail.description || "";
+    if (pointsEl) {
+        const points = Array.isArray(detail.points) ? detail.points : [];
+        pointsEl.innerHTML = points.map((point) => `<li>${escapeHtml(point)}</li>`).join("");
+        pointsEl.classList.toggle("hidden", points.length === 0);
+    }
+
+    modal.classList.remove("hidden");
+    document.body.classList.add("keyword-detail-active");
+    requestAnimationFrame(() => {
+        document.getElementById("keyword-detail-close")?.focus();
+    });
+}
+
+function closeKeywordDetailCard() {
+    const modal = document.getElementById("keyword-detail-modal");
+    if (!modal) return;
+    modal.classList.add("hidden");
+    document.body.classList.remove("keyword-detail-active");
+}
+
+window.openKeywordDetailCard = openKeywordDetailCard;
+window.closeKeywordDetailCard = closeKeywordDetailCard;
+
 function updateSurveyProgress(questions = getSurveyQuestions(state.currentIntent)) {
     const total = questions.length || 1;
     clampSurveyStepIndex(questions);
@@ -2825,9 +3122,9 @@ function renderInfoView(intent) {
             const buttonAttrs = `data-choice-category="${q.category}" data-choice-value="${opt.main}"`;
             const sub = opt.sub ? `<span class="text-[11px] font-normal text-slate-400 whitespace-nowrap">${opt.sub}</span>` : "";
             return `<button ${buttonAttrs} onclick="selectChoice(this, '${q.category}')" class="${btnClass}">
-                <span class="text-sm font-semibold text-slate-800 whitespace-nowrap">${opt.main}</span>
-                ${sub}
-            </button>`;
+                    ${renderKeywordDetailText(opt.main, "text-sm font-semibold text-slate-800 whitespace-nowrap")}
+                    ${sub}
+                </button>`;
         }).join("");
         return `<div>
             <label class="text-sm font-medium text-slate-400 mb-3 block">${q.label}</label>
@@ -3728,6 +4025,276 @@ planIntegratedContent["립스틱 전색발색"] = [
     }
 ];
 
+planIntegratedContent["출근 10분룩"] = [
+    {
+        layout: "media-left",
+        label: "아침 루틴 압축",
+        headline: "출근 전에는 많이 바르는 것보다 먼저 무너지는 곳을 얇게 잡는 편이 안정적이에요.",
+        description: "코, 나비존, 턱처럼 유분과 마찰이 생기는 부위를 기준으로 베이스 제품을 골라야 점심 이후 수정 시간이 줄어듭니다.",
+        points: [
+            "프라이머는 얼굴 전체가 아니라 코 주변처럼 필요한 곳에만 쓰는 흐름으로 잡았어요.",
+            "쿠션은 커버력보다 얇게 덧바를 때 뭉치지 않는지를 우선했어요."
+        ],
+        mediaItems: [
+            { type: "YouTube", title: "출근 전 베이스 10분 루틴", summary: "무너지는 부위만 빠르게 고정하는 방법", thumbnail: "./makeup-clone-assets/d9b261330f3ffccf.avif", url: buildYoutubeSearchHref("출근 전 베이스 10분 루틴") },
+            { type: "이미지", title: "나비존 프라이머 사용법", summary: "코 주변 모공과 유분을 부분 관리", thumbnail: "./makeup-clone-assets/8fc2c65adff714e4.avif", url: buildSearchHref("나비존 프라이머 사용법") }
+        ],
+        citations: [
+            { label: "YouTube", title: "출근 전 베이스 10분 루틴 검색", url: buildYoutubeSearchHref("출근 전 베이스 10분 루틴") },
+            { label: "Naver", title: "나비존 프라이머 사용법 검색", url: buildSearchHref("나비존 프라이머 사용법") }
+        ]
+    },
+    {
+        layout: "media-right",
+        label: "눈매 시간 절약",
+        headline: "아이 메이크업은 색을 늘리지 않고 음영, 라인, 컬을 한 번에 정리하는 쪽으로 골랐어요.",
+        description: "회의나 출근길에서는 과한 색보다 피곤해 보이지 않는 선명도가 중요해서 브라운 계열과 번짐 방지 제형을 우선했습니다.",
+        points: [
+            "브라운 팔레트는 음영과 애교살을 한 제품 안에서 해결할 수 있어요.",
+            "라이너와 마스카라는 퇴근 전 번짐을 줄이는 고정력을 기준으로 봤어요."
+        ],
+        mediaItems: [
+            { type: "YouTube", title: "오피스 브라운 아이 메이크업", summary: "색 수를 줄이고 또렷하게 만드는 루틴", thumbnail: "./makeup-clone-assets/917e7113fa1d687a.avif", url: buildYoutubeSearchHref("오피스 브라운 아이 메이크업") }
+        ],
+        citations: [
+            { label: "YouTube", title: "오피스 브라운 아이 메이크업 검색", url: buildYoutubeSearchHref("오피스 브라운 아이 메이크업") }
+        ]
+    },
+    {
+        layout: "media-top",
+        label: "수정 적은 생기",
+        headline: "립과 치크는 단정한 생기를 남기되, 컵과 마스크에 묻어나는 부담을 줄이는 쪽으로 봤어요.",
+        description: "출근 룩의 컬러는 예쁜 색 하나보다 오래 남는 인상이 중요합니다. 채도를 낮춘 로즈나 코랄 계열을 중심으로 맞췄습니다.",
+        points: [
+            "립은 착색과 보습 균형이 있는 제품을 우선했어요.",
+            "치크는 손으로 빠르게 바를 수 있는 크림 타입을 보조 후보로 뒀어요."
+        ],
+        mediaItems: [
+            { type: "이미지", title: "오피스 립 치크 톤 맞추기", summary: "차분한 생기 컬러 조합", thumbnail: "./makeup-clone-assets/8e01e19fb7cf7c96.avif", url: buildSearchHref("오피스 립 치크 톤 맞추기") }
+        ],
+        citations: [
+            { label: "Naver", title: "오피스 립 치크 톤 맞추기 검색", url: buildSearchHref("오피스 립 치크 톤 맞추기") }
+        ]
+    },
+    {
+        layout: "media-wide",
+        label: "책상 위 복구템",
+        headline: "휴대 파우치는 많이 넣는 대신 오후에 바로 복구되는 품목만 남겼어요.",
+        description: "출근 후에는 처음부터 다시 화장하기 어렵기 때문에 파우더, 립, 스펀지처럼 짧은 시간에 티가 나는 제품이 유리합니다.",
+        points: [
+            "스펀지는 베이스 뭉침을 눌러 정리하는 용도예요.",
+            "포인트 리무버는 번진 눈가만 빠르게 지우는 보험 역할을 합니다."
+        ],
+        mediaItems: [
+            { type: "YouTube", title: "회사 책상 수정 화장 파우치", summary: "오후 무너짐을 빠르게 복구하는 구성", thumbnail: "./makeup-clone-assets/42072b0ad4be9333.avif", url: buildYoutubeSearchHref("회사 책상 수정 화장 파우치") }
+        ],
+        citations: [
+            { label: "YouTube", title: "회사 책상 수정 화장 파우치 검색", url: buildYoutubeSearchHref("회사 책상 수정 화장 파우치") }
+        ]
+    }
+];
+
+planIntegratedContent["AI 페이스 메이크오버"] = [
+    {
+        layout: "media-left",
+        label: "사진 기준 베이스",
+        headline: "AI 결과와 실제 얼굴 사이의 차이를 줄이려면 피부 밝기보다 결 표현을 먼저 맞춰야 해요.",
+        description: "사진 속 메이크업은 조명과 보정의 영향을 받기 때문에, 실제 제품은 얇게 쌓아도 균일한 베이스 위주로 골랐습니다.",
+        points: [
+            "톤업 선크림은 얼굴과 목의 경계를 덜 만들 수 있는 제품을 우선해요.",
+            "쿠션은 사진에서 번들거리지 않으면서 피부결을 살리는 마감을 봤어요."
+        ],
+        mediaItems: [
+            { type: "YouTube", title: "사진 잘 받는 베이스 메이크업", summary: "카메라 앞에서 뜨지 않는 피부 표현", thumbnail: "./makeup-clone-assets/1cebcb36604d1166.avif", url: buildYoutubeSearchHref("사진 잘 받는 베이스 메이크업") }
+        ],
+        citations: [
+            { label: "YouTube", title: "사진 잘 받는 베이스 메이크업 검색", url: buildYoutubeSearchHref("사진 잘 받는 베이스 메이크업") }
+        ]
+    },
+    {
+        layout: "media-right",
+        label: "가상 룩 눈매 구현",
+        headline: "시뮬레이션에서 달라 보이는 핵심은 눈매 깊이라서, 색보다 위치와 번짐 방지를 먼저 봤어요.",
+        description: "AI 이미지처럼 또렷해 보이려면 섀도우는 음영 위치를 잡고, 라인과 속눈썹은 오래 유지되는 제품으로 연결하는 편이 좋습니다.",
+        points: [
+            "팔레트는 한 톤 안에서 음영을 조절할 수 있는 구성을 봤어요.",
+            "아이라이너는 사진에서 선이 번져 보이지 않는 워터프루프 후보를 우선했어요."
+        ],
+        mediaItems: [
+            { type: "YouTube", title: "사진 속 또렷한 눈매 메이크업", summary: "음영 위치와 컬 고정 루틴", thumbnail: "./makeup-clone-assets/917e7113fa1d687a.avif", url: buildYoutubeSearchHref("사진 속 또렷한 눈매 메이크업") }
+        ],
+        citations: [
+            { label: "YouTube", title: "사진 속 또렷한 눈매 메이크업 검색", url: buildYoutubeSearchHref("사진 속 또렷한 눈매 메이크업") }
+        ]
+    },
+    {
+        layout: "media-top",
+        label: "컬러 현실화",
+        headline: "화면에서 예쁜 코랄과 로즈가 실제 피부에서 뜨지 않도록 온도감을 조절했어요.",
+        description: "AI 미리보기의 색은 화면 밝기에 따라 달라 보일 수 있어요. 립과 치크는 피부 위에서 자연스럽게 이어지는 채도를 기준으로 추천했습니다.",
+        points: [
+            "코랄은 형광기가 강하지 않은 맑은 계열을 우선했어요.",
+            "로즈는 눈매 음영과 충돌하지 않는 뮤트한 후보를 함께 봤어요."
+        ],
+        mediaItems: [
+            { type: "이미지", title: "코랄 로즈 컬러 비교", summary: "피부톤별 립과 치크 온도감", thumbnail: "./makeup-clone-assets/8e01e19fb7cf7c96.avif", url: buildSearchHref("코랄 로즈 메이크업 컬러 비교") }
+        ],
+        citations: [
+            { label: "Naver", title: "코랄 로즈 메이크업 컬러 비교 검색", url: buildSearchHref("코랄 로즈 메이크업 컬러 비교") }
+        ]
+    },
+    {
+        layout: "media-wide",
+        label: "전후 비교 마감",
+        headline: "가상 룩을 따라 한 뒤에는 사진에서 얼룩이 덜 보이는 도구가 완성도를 좌우해요.",
+        description: "스펀지와 브러시는 제품을 더 사는 단계라기보다, AI 결과처럼 균일하게 보이도록 경계를 지우는 보정 도구입니다.",
+        points: [
+            "스펀지는 베이스 경계와 뭉침을 눌러 사진 균일도를 높여요.",
+            "포인트 리무버는 수정 과정에서 눈가 번짐을 깔끔하게 정리합니다."
+        ],
+        mediaItems: [
+            { type: "YouTube", title: "메이크업 전후 사진 보정 없이 잘 찍는 법", summary: "조명과 피부결 정리 팁", thumbnail: "./makeup-clone-assets/42072b0ad4be9333.avif", url: buildYoutubeSearchHref("메이크업 전후 사진 잘 찍는 법") }
+        ],
+        citations: [
+            { label: "YouTube", title: "메이크업 전후 사진 잘 찍는 법 검색", url: buildYoutubeSearchHref("메이크업 전후 사진 잘 찍는 법") }
+        ]
+    }
+];
+
+planIntegratedContent["성분 궁합 체크"] = [
+    {
+        layout: "media-left",
+        label: "첫 접촉 성분",
+        headline: "민감 피부는 처음 닿는 선케어와 베이스에서 자극 가능성을 가장 먼저 줄였어요.",
+        description: "향, 알코올감, 과한 피지 컨트롤처럼 매일 쓰면 부담이 되는 조건을 피하고, 얇고 편안한 사용감을 중심으로 봤습니다.",
+        points: [
+            "선크림과 쿠션은 오래 닿는 제품이라 성분 체크 우선순위가 높아요.",
+            "프라이머는 필요한 부위에만 쓰는 후보로 낮춰 잡았어요."
+        ],
+        mediaItems: [
+            { type: "이미지", title: "민감 피부 베이스 성분 체크", summary: "베이스 제품 고를 때 확인할 성분 기준", thumbnail: "./makeup-clone-assets/ae9ddc7a5906fcf9.avif", url: buildSearchHref("민감 피부 베이스 성분 체크") }
+        ],
+        citations: [
+            { label: "Naver", title: "민감 피부 베이스 성분 체크 검색", url: buildSearchHref("민감 피부 베이스 성분 체크") }
+        ]
+    },
+    {
+        layout: "media-right",
+        label: "눈가 저자극",
+        headline: "눈가는 제품 자극과 클렌징 자극이 겹치기 쉬워, 강한 고정보다 편한 제거를 같이 봤어요.",
+        description: "번짐 방지 제품이 필요하더라도 지우기 어려우면 민감한 눈가에 부담이 됩니다. 그래서 지속력과 세정 부담의 균형을 맞췄습니다.",
+        points: [
+            "펄이 큰 섀도우보다 데일리 음영 위주로 정리했어요.",
+            "마스카라는 고정력뿐 아니라 리무버와 함께 쓸 때 부담을 봤어요."
+        ],
+        mediaItems: [
+            { type: "YouTube", title: "민감한 눈가 아이메이크업", summary: "번짐과 자극을 줄이는 제품 선택", thumbnail: "./makeup-clone-assets/917e7113fa1d687a.avif", url: buildYoutubeSearchHref("민감한 눈가 아이메이크업") }
+        ],
+        citations: [
+            { label: "YouTube", title: "민감한 눈가 아이메이크업 검색", url: buildYoutubeSearchHref("민감한 눈가 아이메이크업") }
+        ]
+    },
+    {
+        layout: "media-top",
+        label: "덧바름 궁합",
+        headline: "립과 치크는 자주 덧바르는 만큼 보습감과 착색 강도를 함께 비교했어요.",
+        description: "입술과 볼은 건조함과 열감이 드러나기 쉬워서, 색이 예쁜지보다 반복 사용해도 편한지에 더 무게를 뒀습니다.",
+        points: [
+            "립은 보습감이 있는 제형과 착색이 과하지 않은 후보를 함께 봤어요.",
+            "크림 블러셔는 손 사용이 잦으므로 위생과 밀림도 고려했어요."
+        ],
+        mediaItems: [
+            { type: "이미지", title: "민감 피부 립 치크 고르기", summary: "보습감과 착색 강도 비교", thumbnail: "./makeup-clone-assets/8e01e19fb7cf7c96.avif", url: buildSearchHref("민감 피부 립 치크 고르기") }
+        ],
+        citations: [
+            { label: "Naver", title: "민감 피부 립 치크 고르기 검색", url: buildSearchHref("민감 피부 립 치크 고르기") }
+        ]
+    },
+    {
+        layout: "media-wide",
+        label: "클렌징 안전망",
+        headline: "성분 궁합은 바르는 제품만이 아니라 지우는 제품까지 이어져야 완성돼요.",
+        description: "강하게 문질러야 지워지는 제품은 저자극 메이크업의 장점을 줄일 수 있어요. 그래서 리무버와 도구를 필수 단계로 올렸습니다.",
+        points: [
+            "립앤아이 리무버는 눈가와 입술의 반복 마찰을 줄이는 역할이에요.",
+            "브러시와 스펀지는 세척과 교체 주기가 쉬운 구성을 우선했어요."
+        ],
+        mediaItems: [
+            { type: "YouTube", title: "민감 피부 메이크업 클렌징", summary: "눈가와 입술 자극 줄이는 제거 루틴", thumbnail: "./makeup-clone-assets/42072b0ad4be9333.avif", url: buildYoutubeSearchHref("민감 피부 메이크업 클렌징") }
+        ],
+        citations: [
+            { label: "YouTube", title: "민감 피부 메이크업 클렌징 검색", url: buildYoutubeSearchHref("민감 피부 메이크업 클렌징") }
+        ]
+    }
+];
+
+planIntegratedContent["여행 파우치"] = [
+    {
+        layout: "media-left",
+        label: "이동 중 베이스",
+        headline: "여행 베이스는 예쁘게 시작하는 것보다 이동 중에도 다시 얇게 올릴 수 있는지가 중요해요.",
+        description: "기내, 버스, 야외 일정에서는 피부가 건조해지거나 유분이 올라오기 쉬워서 선케어와 톤 보정, 수정 편의성을 함께 봤습니다.",
+        points: [
+            "톤업 선크림은 선케어와 가벼운 보정을 한 번에 해결해요.",
+            "쿠션은 거울과 퍼프가 있어 여행 중 수정이 쉬운 후보입니다."
+        ],
+        mediaItems: [
+            { type: "이미지", title: "여행 베이스 파우치", summary: "선케어와 수정이 쉬운 베이스 구성", thumbnail: "./makeup-clone-assets/42072b0ad4be9333.avif", url: buildSearchHref("여행 베이스 파우치 구성") }
+        ],
+        citations: [
+            { label: "Naver", title: "여행 베이스 파우치 구성 검색", url: buildSearchHref("여행 베이스 파우치 구성") }
+        ]
+    },
+    {
+        layout: "media-right",
+        label: "사진용 아이 포인트",
+        headline: "여행 사진에서는 눈매가 흐려 보이기 쉬워, 적은 제품으로 또렷함을 만드는 구성을 골랐어요.",
+        description: "팔레트 하나로 음영과 포인트를 해결하고, 마스카라와 라이너는 땀과 이동에도 번짐이 덜한 제품을 우선했습니다.",
+        points: [
+            "브라운 팔레트는 낮 일정과 저녁 일정 모두 쓰기 좋아요.",
+            "라이너는 짧은 수정 시간에도 자연스럽게 보이는 슬림 타입을 봤어요."
+        ],
+        mediaItems: [
+            { type: "YouTube", title: "여행 사진 아이 메이크업", summary: "사진에서 또렷한 눈매 만드는 간단 루틴", thumbnail: "./makeup-clone-assets/917e7113fa1d687a.avif", url: buildYoutubeSearchHref("여행 사진 아이 메이크업") }
+        ],
+        citations: [
+            { label: "YouTube", title: "여행 사진 아이 메이크업 검색", url: buildYoutubeSearchHref("여행 사진 아이 메이크업") }
+        ]
+    },
+    {
+        layout: "media-top",
+        label: "멀티 컬러",
+        headline: "립과 치크는 낮에는 생기, 밤에는 분위기를 낼 수 있는 겸용 컬러로 압축했어요.",
+        description: "여행 파우치에서는 색을 많이 가져가기보다 사진, 식사, 이동 후에도 손쉽게 다시 바를 수 있는 컬러가 더 실용적입니다.",
+        points: [
+            "로즈 베이지는 장소가 바뀌어도 튀지 않는 안전한 기본 컬러예요.",
+            "코랄 크림 치크는 립 톤과 맞춰 얼굴에 생기를 빨리 더합니다."
+        ],
+        mediaItems: [
+            { type: "이미지", title: "여행 립 치크 멀티템", summary: "낮과 밤에 모두 쓰는 컬러 조합", thumbnail: "./makeup-clone-assets/8e01e19fb7cf7c96.avif", url: buildSearchHref("여행 립 치크 멀티템") }
+        ],
+        citations: [
+            { label: "Naver", title: "여행 립 치크 멀티템 검색", url: buildSearchHref("여행 립 치크 멀티템") }
+        ]
+    },
+    {
+        layout: "media-wide",
+        label: "누수 없는 정리",
+        headline: "마지막 단계는 용량보다 누수, 위생, 교체 편의성을 기준으로 정리했어요.",
+        description: "여행 중에는 클렌징과 도구 관리가 느슨해지기 쉬워서, 미니 리무버와 세척이 쉬운 도구를 중심으로 구성했습니다.",
+        points: [
+            "스펀지는 여러 개입을 챙기면 교체가 쉬워 위생 부담이 줄어요.",
+            "포인트 리무버는 작은 용량으로도 눈가와 립을 빠르게 정리합니다."
+        ],
+        mediaItems: [
+            { type: "YouTube", title: "여행 메이크업 파우치 싸는 법", summary: "새지 않고 가볍게 챙기는 도구 구성", thumbnail: "./makeup-clone-assets/59fb086cee4f8a82.avif", url: buildYoutubeSearchHref("여행 메이크업 파우치 싸는 법") }
+        ],
+        citations: [
+            { label: "YouTube", title: "여행 메이크업 파우치 싸는 법 검색", url: buildYoutubeSearchHref("여행 메이크업 파우치 싸는 법") }
+        ]
+    }
+];
+
 Object.keys(BEAUTY_SCENARIOS).forEach((scenarioId) => {
     if (!planIntegratedContent[scenarioId] && planIntegratedContent["메이크업"]) {
         planIntegratedContent[scenarioId] = planIntegratedContent["메이크업"];
@@ -4109,7 +4676,10 @@ function renderSolution(key, rawQuery) {
                 ${stepIndex + 1}
             </div>
             <div class="mb-8 text-left">
-                <h3 class="text-2xl font-bold text-slate-800 mb-3 flex items-center flex-wrap gap-1">${step.name}${essentialBadge}</h3>
+                <h3 class="text-2xl font-bold text-slate-800 mb-3 flex items-center flex-wrap gap-1">
+                    ${renderKeywordDetailText(step.name, "plan-step-title-text")}
+                    ${essentialBadge}
+                </h3>
                 <p class="text-slate-500 text-sm leading-relaxed">${step.description || "지마켓 AI가 제안하는 단계별 상품입니다."}</p>
             </div>
             ${integratedContentHtml}
@@ -4234,9 +4804,32 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
+    const handleKeywordDetailTrigger = (event) => {
+        const keywordButton = event.target.closest("[data-keyword-detail]");
+        if (!keywordButton) return;
+        event.preventDefault();
+        event.stopPropagation();
+        openKeywordDetailCard(keywordButton.dataset.keywordDetail || keywordButton.textContent);
+    };
+
+    document.addEventListener("click", handleKeywordDetailTrigger, true);
+    document.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        handleKeywordDetailTrigger(event);
+    }, true);
+
+    document.getElementById("keyword-detail-modal")?.addEventListener("click", (event) => {
+        if (event.target.closest("[data-keyword-detail-close='true']")) {
+            closeKeywordDetailCard();
+        }
+    });
+
     document.addEventListener("keydown", (event) => {
         if (event.key === "Escape" && !surveyEditConfirmModal?.classList.contains("hidden")) {
             closeSurveyEditConfirmModal();
+        }
+        if (event.key === "Escape" && !document.getElementById("keyword-detail-modal")?.classList.contains("hidden")) {
+            closeKeywordDetailCard();
         }
     });
 
