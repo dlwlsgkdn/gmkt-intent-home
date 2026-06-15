@@ -1796,6 +1796,77 @@ body.clean-home-page #plan-container .product-card .absolute.top-3 {
     box-shadow: none !important;
 }
 
+body.clean-home-page #plan-container .product-card-marketplace {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 21;
+    display: flex;
+    justify-content: flex-end;
+    max-width: calc(100% - 92px);
+}
+
+body.clean-home-page .gmarket-logo-tag,
+body.clean-home-page .marketplace-muted-tag {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    min-height: 22px;
+    padding: 0 7px;
+    border: 1px solid rgba(52, 70, 90, 0.14);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.92);
+    color: var(--beauty-ink);
+    font-size: 10px;
+    font-weight: 520;
+    line-height: 1;
+    letter-spacing: 0;
+    white-space: nowrap;
+}
+
+body.clean-home-page .gmarket-logo-tag__mark {
+    display: block;
+    width: 15px;
+    height: 15px;
+    flex: 0 0 15px;
+    color: #ffffff;
+}
+
+body.clean-home-page .gmarket-logo-tag__word {
+    color: var(--beauty-ink);
+    font-size: 10px;
+    font-weight: 700;
+}
+
+body.clean-home-page .gmarket-logo-tag--inline {
+    min-height: 20px;
+    padding: 0 7px;
+    background: rgba(255, 255, 255, 0.82);
+}
+
+body.clean-home-page .gmarket-logo-tag--mini {
+    min-height: 17px;
+    padding: 0 5px;
+    font-size: 9px;
+    vertical-align: middle;
+}
+
+body.clean-home-page .gmarket-logo-tag--mini .gmarket-logo-tag__mark {
+    width: 12px;
+    height: 12px;
+    flex-basis: 12px;
+}
+
+body.clean-home-page .gmarket-logo-tag--mini .gmarket-logo-tag__word {
+    font-size: 9px;
+}
+
+body.clean-home-page .marketplace-muted-tag {
+    color: var(--beauty-muted);
+    background: rgba(255, 255, 255, 0.72);
+}
+
 body.clean-home-page #plan-container .product-card .h-44 {
     height: 176px !important;
     background: var(--beauty-blush) !important;
@@ -1854,6 +1925,19 @@ body.clean-home-page #plan-container .product-card .cart-add-btn {
 body.clean-home-page #plan-container .product-card .cart-add-btn.in-cart {
     background: var(--beauty-ink) !important;
     color: #ffffff !important;
+}
+
+body.clean-home-page #plan-container .product-card .cart-add-btn.cart-add-btn--disabled,
+body.clean-home-page .cart-add-btn.cart-add-btn--disabled,
+body.clean-home-page .cart-add-btn:disabled {
+    cursor: not-allowed !important;
+    border-color: rgba(52, 70, 90, 0.1) !important;
+    background: rgba(52, 70, 90, 0.06) !important;
+    color: rgba(52, 70, 90, 0.36) !important;
+}
+
+body.clean-home-page #plan-container .product-card.is-external-product {
+    background: rgba(255, 255, 255, 0.56) !important;
 }
 
 body.clean-home-page .plan-step-insight {

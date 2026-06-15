@@ -243,6 +243,41 @@ const LIPSTICK_SWATCH_EXAMPLE_IMAGE = "https://d33ur1yh5ph6b5.cloudfront.net/2ed
 const DRAMA_MAKEUP_SOURCE_URL = "https://unpa.me/tip/detail/3771243e-9ab7-4ba4-9c81-b74c878bc012";
 const DRAMA_MAKEUP_SCREENSHOT_IMAGE = "https://d33ur1yh5ph6b5.cloudfront.net/3771243e-9ab7-4ba4-9c81-b74c878bc012-mid";
 const TRUE_BEAUTY_SOURCE_URL = "https://www.elle.com/tw/beauty/make-up/g35087420/true-beauty-cosmetics/";
+const PLAN_MEDIA_FALLBACK_THUMBNAIL = "./makeup-clone-assets/8e01e19fb7cf7c96.avif";
+const WEB_SCENARIO_THUMBNAILS = {
+    officeBase: "https://images.unsplash.com/photo-1529139574466-a303027c1d8b?auto=format&fit=crop&w=1100&q=85",
+    officeEye: "https://images.unsplash.com/photo-1512496015851-a90fb38ba796?auto=format&fit=crop&w=1100&q=85",
+    officeLip: "https://images.unsplash.com/photo-1586495777744-4413f21062fa?auto=format&fit=crop&w=1100&q=85",
+    officePouch: "https://images.unsplash.com/photo-1514355315815-2b64b0216b14?auto=format&fit=crop&w=1100&q=85",
+    aiFace: "https://images.unsplash.com/photo-1487412947147-5cebf100ffc2?auto=format&fit=crop&w=1100&q=85",
+    aiEye: "https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?auto=format&fit=crop&w=1100&q=85",
+    aiColor: "https://images.unsplash.com/photo-1522338242992-e1a54906a8da?auto=format&fit=crop&w=1100&q=85",
+    aiTools: "https://images.unsplash.com/photo-1596462502278-27bfdc403348?auto=format&fit=crop&w=1100&q=85",
+    lipstickSwatch: LIPSTICK_SWATCH_EXAMPLE_IMAGE,
+    lipstickCoral: "https://images.unsplash.com/photo-1556228453-efd6c1ff04f6?auto=format&fit=crop&w=1100&q=85",
+    lipstickGloss: "https://images.unsplash.com/photo-1612817288484-6f916006741a?auto=format&fit=crop&w=1100&q=85",
+    lipstickTools: "https://images.unsplash.com/photo-1522338242992-e1a54906a8da?auto=format&fit=crop&w=1100&q=85",
+    ingredientSafe: "https://images.unsplash.com/photo-1556228578-8c89e6adf883?auto=format&fit=crop&w=1100&q=85",
+    ingredientActive: "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=1100&q=85",
+    ingredientColor: "https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?auto=format&fit=crop&w=1100&q=85",
+    ingredientCleanse: "https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&w=1100&q=85",
+    travelPouch: "https://images.unsplash.com/photo-1514355315815-2b64b0216b14?auto=format&fit=crop&w=1100&q=85",
+    travelMakeup: "https://images.unsplash.com/photo-1542996966-2e31c00bae31?auto=format&fit=crop&w=1100&q=85",
+    travelMini: "https://images.unsplash.com/photo-1596462502278-27bfdc403348?auto=format&fit=crop&w=1100&q=85",
+    travelAftercare: "https://images.unsplash.com/photo-1522338242992-e1a54906a8da?auto=format&fit=crop&w=1100&q=85",
+    maleAcne: "https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&w=1100&q=85",
+    maleRoutine: "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=1100&q=85",
+    maleRepair: "https://images.unsplash.com/photo-1556228578-8c89e6adf883?auto=format&fit=crop&w=1100&q=85",
+    maleDerm: "https://images.unsplash.com/photo-1611930022073-b7a4ba5fcccd?auto=format&fit=crop&w=1100&q=85",
+    dramaMakeup: DRAMA_MAKEUP_SCREENSHOT_IMAGE,
+    dramaPalette: "https://images.unsplash.com/photo-1512496015851-a90fb38ba796?auto=format&fit=crop&w=1100&q=85",
+    dramaLip: "https://images.unsplash.com/photo-1586495777744-4413f21062fa?auto=format&fit=crop&w=1100&q=85",
+    dramaTools: "https://images.unsplash.com/photo-1596462502278-27bfdc403348?auto=format&fit=crop&w=1100&q=85",
+    maleIngredients: "https://images.unsplash.com/photo-1556228578-8c89e6adf883?auto=format&fit=crop&w=1100&q=85",
+    maleSerum: "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=1100&q=85",
+    maleRisk: "https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?auto=format&fit=crop&w=1100&q=85",
+    maleFinish: "https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&w=1100&q=85"
+};
 
 function getLipstickSwatchSolutionData() {
     return {
@@ -1070,6 +1105,113 @@ function ensureBeautyScenarioSolutionData() {
 
 ensureBeautyScenarioSolutionData();
 
+const GMARKET_MARKETPLACE = "Gmarket";
+const GMARKET_ORDER_URL = "https://cart.gmarket.co.kr/ko/pc/cart";
+
+function decorateGmarketProducts() {
+    Object.values(solutionData).forEach((intentData) => {
+        if (!intentData?.steps) return;
+
+        intentData.steps.forEach((step, stepIndex) => {
+            if (!Array.isArray(step.products)) return;
+
+            step.products = step.products.map((product, productIndex) => {
+                if (!product || typeof product !== "object") return product;
+
+                const explicitlyGmarket = product.isGmarket === true || product.marketplace === GMARKET_MARKETPLACE;
+                const explicitlyExternal = product.isGmarket === false;
+                const isGmarket = explicitlyExternal ? false : (explicitlyGmarket || productIndex % 3 !== 1);
+                const marketplace = isGmarket
+                    ? GMARKET_MARKETPLACE
+                    : (product.marketplace || (productIndex % 2 ? "브랜드몰" : "외부몰"));
+
+                return {
+                    ...product,
+                    isGmarket,
+                    marketplace,
+                    gmarketItemNo: isGmarket ? (product.gmarketItemNo || `GM${String(product.id || `${stepIndex}${productIndex}`).padStart(6, "0")}`) : "",
+                    purchaseUrl: isGmarket
+                        ? (product.purchaseUrl || `https://browse.gmarket.co.kr/search?keyword=${encodeURIComponent(product.name || "")}`)
+                        : (product.purchaseUrl || "")
+                };
+            });
+        });
+    });
+}
+
+decorateGmarketProducts();
+
+function isGmarketProduct(product) {
+    if (!product) return false;
+    if (product.isGmarket === true || product.marketplace === GMARKET_MARKETPLACE) return true;
+
+    const numericId = Number(String(product.id || "").replace(/\D/g, ""));
+    return Number.isFinite(numericId) && numericId % 3 !== 1;
+}
+
+function canAddProductToThreadCart(product) {
+    return isGmarketProduct(product);
+}
+
+function getIntentProduct(intentKey, stepIdx, productIdx) {
+    return solutionData[intentKey]?.steps?.[Number(stepIdx)]?.products?.[Number(productIdx)] || null;
+}
+
+function getSelectedProductForCart(session, stepIdx) {
+    const selected = session?.selectedItems?.[stepIdx];
+    if (!selected) return null;
+
+    const canonical = getIntentProduct(session.intentKey, stepIdx, selected.productIdx) || selected.product;
+    return isGmarketProduct(canonical) ? canonical : null;
+}
+
+function getGmarketSelectedEntries(session) {
+    return Object.entries(session?.selectedItems || {})
+        .map(([stepIdx, selected]) => ({
+            stepIdx,
+            productIdx: selected?.productIdx,
+            product: getSelectedProductForCart(session, stepIdx)
+        }))
+        .filter((entry) => entry.product);
+}
+
+function normalizeSelectedItemsForCart(intentKey, selectedItems = {}) {
+    if (!selectedItems || typeof selectedItems !== "object") return {};
+
+    return Object.entries(selectedItems).reduce((acc, [stepIdx, selected]) => {
+        if (!selected || typeof selected !== "object") return acc;
+        const productIdx = Number(selected.productIdx);
+        const product = getIntentProduct(intentKey, stepIdx, productIdx) || selected.product;
+        if (!isGmarketProduct(product)) return acc;
+
+        acc[stepIdx] = {
+            productIdx,
+            product
+        };
+        return acc;
+    }, {});
+}
+
+function renderGmarketLogoTag(product, extraClass = "") {
+    if (!isGmarketProduct(product)) return "";
+    return `
+        <span class="gmarket-logo-tag ${extraClass}" aria-label="지마켓 상품">
+            <svg class="gmarket-logo-tag__mark" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+                <circle cx="24" cy="24" r="23.5" fill="currentColor" stroke="#E0E0E0"/>
+                <path fill-rule="evenodd" clip-rule="evenodd" d="M24.6048 36.6653C17.6544 36.6653 12 30.984 12 24C12 17.017 17.6544 11.3347 24.6048 11.3347C27.5395 11.3347 30.3792 12.3562 32.6016 14.2128C33.1699 14.6861 33.551 15.4531 33.551 16.1213C33.551 16.7568 33.3043 17.3539 32.8579 17.8022C32.4106 18.2515 31.8163 18.4992 31.1846 18.4992C30.6442 18.4992 30.1046 18.3014 29.665 17.9424C28.2643 16.8 26.3251 16.0906 24.6058 16.0906C20.2646 16.0906 16.7338 19.6397 16.7338 24.001C16.7338 28.3622 20.2646 31.9094 24.6058 31.9094C28.6282 31.9094 31.1069 29.0218 31.1069 26.3779H24.743V21.7507H33.5942C34.8259 21.7507 35.8464 22.68 35.951 23.9126C35.9875 24.3504 36 24.6806 36 24.9859C36 28.081 35.1619 30.9974 32.9923 33.1968C30.7853 35.4336 28.1434 36.6653 24.6048 36.6653Z" fill="#00C400"/>
+                <path fill-rule="evenodd" clip-rule="evenodd" d="M27.0451 24.0643C27.0451 25.3421 26.0151 26.3779 24.7431 26.3779C23.4711 26.3779 22.441 25.3421 22.441 24.0643C22.441 22.7866 23.4711 21.7507 24.7431 21.7507C26.0151 21.7507 27.0451 22.7866 27.0451 24.0643Z" fill="#082DA9"/>
+            </svg>
+            <span class="gmarket-logo-tag__word">Gmarket</span>
+        </span>
+    `;
+}
+
+function renderMarketplaceLabel(product) {
+    return isGmarketProduct(product)
+        ? renderGmarketLogoTag(product, "gmarket-logo-tag--inline")
+        : `<span class="marketplace-muted-tag">${product?.marketplace || "외부몰"}</span>`;
+}
+
 function getBeautyScenario(intentOrQuery = "") {
     const value = String(intentOrQuery || "");
     if (BEAUTY_SCENARIOS[value]) return BEAUTY_SCENARIOS[value];
@@ -1157,7 +1299,7 @@ function normalizeCartData(cartData) {
             selectionSummary: value.selectionSummary || "",
             recommendationSummary: value.recommendationSummary || "",
             choices: value.choices || { size: "", wall: "", goal: "" },
-            selectedItems: value.selectedItems || {},
+            selectedItems: normalizeSelectedItemsForCart(hasSessionShape ? value.intentKey : key, value.selectedItems || {}),
             threadView: value.threadView || "solution",
             orderMeta: value.orderMeta || null,
             createdAt: value.createdAt || new Date().toISOString(),
@@ -1226,24 +1368,24 @@ function buildSessionOrderItems(sessionId) {
     let itemsHtml = "";
 
     intentData.steps.forEach((step, stepIdx) => {
-        const selected = session.selectedItems[stepIdx];
-        if (!selected) return;
+        const product = getSelectedProductForCart(session, stepIdx);
+        if (!product) return;
 
-        const priceNum = parseInt(selected.product.price.replace(/,/g, ""), 10) || 0;
+        const priceNum = parseInt(product.price.replace(/,/g, ""), 10) || 0;
         subtotal += priceNum;
         itemCount += 1;
 
         itemsHtml += `
             <div class="flex items-center gap-4 py-3 border-b border-slate-100 last:border-0">
-                <img src="${selected.product.img}" class="w-14 h-14 rounded-2xl object-cover flex-shrink-0 border border-slate-100"
+                <img src="${product.img}" class="w-14 h-14 rounded-2xl object-cover flex-shrink-0 border border-slate-100"
                      onerror="this.src='https://images.unsplash.com/photo-1560393464-5c69a73c5770?auto=format&fit=crop&q=80&w=100'"
-                     alt="${selected.product.name}">
+                     alt="${product.name}">
                 <div class="flex-1 min-w-0">
                     <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">${step.name}</p>
-                    <p class="text-sm font-medium text-slate-800 leading-tight truncate">${selected.product.name}</p>
-                    <p class="text-xs text-slate-400 font-normal mt-0.5">\uC218\uB7C9 1\uAC1C</p>
+                    <p class="text-sm font-medium text-slate-800 leading-tight truncate">${product.name}</p>
+                    <p class="text-xs text-slate-400 font-normal mt-0.5">\uC218\uB7C9 1\uAC1C · ${renderGmarketLogoTag(product, "gmarket-logo-tag--mini")}</p>
                 </div>
-                <p class="text-sm font-bold text-slate-800 flex-shrink-0">${selected.product.price}\uC6D0</p>
+                <p class="text-sm font-bold text-slate-800 flex-shrink-0">${product.price}\uC6D0</p>
             </div>
         `;
     });
@@ -1252,8 +1394,10 @@ function buildSessionOrderItems(sessionId) {
 }
 
 function calculateSessionTotals(session) {
-    return Object.values(session?.selectedItems || {}).reduce(
-        (acc, { product }) => {
+    return Object.entries(session?.selectedItems || {}).reduce(
+        (acc, [stepIdx]) => {
+            const product = getSelectedProductForCart(session, stepIdx);
+            if (!product) return acc;
             acc.count += 1;
             acc.price += parseInt(product.price.replace(/,/g, ""), 10) || 0;
             return acc;
@@ -1317,15 +1461,15 @@ function buildLatestOrderData(sessionId, orderNumber) {
     if (!session || !intentData) return null;
 
     const now = new Date();
-    const selectedEntries = Object.entries(session.selectedItems || {})
-        .sort((a, b) => Number(a[0]) - Number(b[0]));
+    const selectedEntries = getGmarketSelectedEntries(session)
+        .sort((a, b) => Number(a.stepIdx) - Number(b.stepIdx));
 
-    const items = selectedEntries.map(([stepIdx, selected], index) => {
+    const items = selectedEntries.map(({ stepIdx, product }, index) => {
         const step = intentData.steps[stepIdx];
         const expectedDate = new Date(now.getTime() + (index % 2 === 0 ? 2 : 3) * 24 * 60 * 60 * 1000);
         return {
             stepName: step?.name || `Step ${Number(stepIdx) + 1}`,
-            product: selected.product,
+            product,
             expectedDate: expectedDate.toISOString(),
             courier: "\uC2A4\uB9C8\uC77C\uBC30\uC1A1",
             trackingNumber: `${orderNumber}-${String(index + 1).padStart(2, "0")}`,
@@ -1871,6 +2015,10 @@ window.addToCart = function addToCart(intentKey, stepIdx, productIdx) {
 
     const product = intentData.steps[stepIdx]?.products[productIdx];
     if (!product) return;
+    if (!canAddProductToThreadCart(product)) {
+        showMiniToast("지마켓 상품만 쓰레드 장바구니에 담을 수 있어요.");
+        return;
+    }
 
     let sessionId = state.currentSessionId;
     let cartSession = getCartSession(sessionId);
@@ -1978,7 +2126,7 @@ window.clearCartIntent = function clearCartIntent(sessionId) {
 
 function getCartItemCount() {
     return Object.values(state.purposeCart).reduce(
-        (sum, group) => sum + Object.keys(group.selectedItems).length, 0
+        (sum, group) => sum + calculateSessionTotals(group).count, 0
     );
 }
 
@@ -2010,11 +2158,18 @@ function updateProductCardCartState(intentKey) {
             const btnEl = document.querySelector(`[data-cart-btn="${intentKey}-${stepIdx}-${productIdx}"]`);
 
             const isInCart = cartGroup?.selectedItems[stepIdx]?.productIdx === productIdx;
+            const isCartEligible = canAddProductToThreadCart(product);
 
-            if (cardEl) cardEl.classList.toggle("in-cart", isInCart);
+            if (cardEl) {
+                cardEl.classList.toggle("in-cart", isInCart);
+                cardEl.classList.toggle("is-gmarket-product", isCartEligible);
+                cardEl.classList.toggle("is-external-product", !isCartEligible);
+            }
             if (btnEl) {
                 btnEl.classList.toggle("in-cart", isInCart);
-                btnEl.textContent = isInCart ? "✓ 담았어요" : "담기";
+                btnEl.classList.toggle("cart-add-btn--disabled", !isCartEligible);
+                btnEl.disabled = !isCartEligible;
+                btnEl.textContent = !isCartEligible ? "담기불가" : (isInCart ? "✓ 담았어요" : "담기");
             }
         });
     });
@@ -2075,15 +2230,16 @@ function renderCart() {
 
         const stepsHtml = intentData.steps.map((step, stepIdx) => {
             const selected = cartGroup.selectedItems[stepIdx];
+            const selectedProduct = getSelectedProductForCart(cartGroup, stepIdx);
 
-            if (selected) {
+            if (selectedProduct) {
                 return `
                     <div class="cart-item flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-100 cart-item-enter">
-                        <img src="${selected.product.img}" class="w-10 h-10 rounded-lg object-cover flex-shrink-0" onerror="this.src='https://images.unsplash.com/photo-1560393464-5c69a73c5770?auto=format&fit=crop&q=80&w=100'" alt="${selected.product.name}">
+                        <img src="${selectedProduct.img}" class="w-10 h-10 rounded-lg object-cover flex-shrink-0" onerror="this.src='https://images.unsplash.com/photo-1560393464-5c69a73c5770?auto=format&fit=crop&q=80&w=100'" alt="${selectedProduct.name}">
                         <div class="flex-1 min-w-0">
                             <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider truncate">${step.name}</p>
-                            <p class="text-xs font-bold text-slate-800 truncate leading-tight">${selected.product.name}</p>
-                            <p class="text-xs font-bold text-gmarket-blue">${selected.product.price}원</p>
+                            <p class="text-xs font-bold text-slate-800 truncate leading-tight">${selectedProduct.name}</p>
+                            <p class="text-xs font-bold text-gmarket-blue">${selectedProduct.price}원 ${renderGmarketLogoTag(selectedProduct, "gmarket-logo-tag--mini")}</p>
                         </div>
                         <button onclick="removeFromCart('${cartGroup.intentKey}', ${stepIdx}, '${sessionId}')" class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-slate-300 hover:text-red-400 transition-colors rounded-full hover:bg-red-50" title="제거">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
@@ -2213,8 +2369,14 @@ window.checkoutCart = function checkoutCart(sessionId) {
     const intentData = solutionData[cartGroup?.intentKey];
     if (!intentData || !cartGroup) return;
 
+    const gmarketSelections = getGmarketSelectedEntries(cartGroup);
+    if (!gmarketSelections.length) {
+        showMiniToast("지마켓 상품을 먼저 담아야 주문서로 이동할 수 있어요.");
+        return;
+    }
+
     const missingEssentials = intentData.steps.filter(
-        (step, idx) => step.essential && !cartGroup.selectedItems[idx]
+        (step, idx) => step.essential && !getSelectedProductForCart(cartGroup, idx)
     );
 
     if (missingEssentials.length > 0) {
@@ -2243,23 +2405,24 @@ window.openOrderView = function openOrderView(sessionId) {
 
     intentData.steps.forEach((step, stepIdx) => {
         const selected = cartGroup.selectedItems[stepIdx];
-        if (!selected) return;
+        const product = getSelectedProductForCart(cartGroup, stepIdx);
+        if (!product) return;
 
-        const priceNum = parseInt(selected.product.price.replace(/,/g, ""), 10) || 0;
+        const priceNum = parseInt(product.price.replace(/,/g, ""), 10) || 0;
         subtotal += priceNum;
         itemCount += 1;
 
         itemsHtml += `
             <div class="flex items-center gap-4 py-3 border-b border-slate-100 last:border-0">
-                <img src="${selected.product.img}" class="w-14 h-14 rounded-2xl object-cover flex-shrink-0 border border-slate-100"
+                <img src="${product.img}" class="w-14 h-14 rounded-2xl object-cover flex-shrink-0 border border-slate-100"
                      onerror="this.src='https://images.unsplash.com/photo-1560393464-5c69a73c5770?auto=format&fit=crop&q=80&w=100'"
-                     alt="${selected.product.name}">
+                     alt="${product.name}">
                 <div class="flex-1 min-w-0">
                     <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">${step.name}</p>
-                    <p class="text-sm font-medium text-slate-800 leading-tight truncate">${selected.product.name}</p>
-                    <p class="text-xs text-slate-400 font-normal mt-0.5">수량 1개</p>
+                    <p class="text-sm font-medium text-slate-800 leading-tight truncate">${product.name}</p>
+                    <p class="text-xs text-slate-400 font-normal mt-0.5">수량 1개 · ${renderGmarketLogoTag(product, "gmarket-logo-tag--mini")}</p>
                 </div>
-                <p class="text-sm font-bold text-slate-800 flex-shrink-0">${selected.product.price}원</p>
+                <p class="text-sm font-bold text-slate-800 flex-shrink-0">${product.price}원</p>
             </div>
         `;
     });
@@ -3995,6 +4158,7 @@ window.openPDP = function openPDP(stepIdx, prodIdx) {
 
     const product = intentData.steps[stepIdx]?.products[prodIdx];
     if (!product) return;
+    const isCartEligible = canAddProductToThreadCart(product);
 
     closeDeliveryPanel();
 
@@ -4003,6 +4167,8 @@ window.openPDP = function openPDP(stepIdx, prodIdx) {
     document.getElementById("pdp-price").innerText = product.price;
     document.getElementById("pdp-original-price").innerText = `${product.originalPrice}원`;
     document.getElementById("pdp-match-score").innerText = product.score;
+    const pdpMarketplaceTag = document.getElementById("pdp-marketplace-tag");
+    if (pdpMarketplaceTag) pdpMarketplaceTag.innerHTML = renderMarketplaceLabel(product);
     document.getElementById("pdp-intent-reason-text").innerText = intentData.intentReason;
     document.getElementById("pdp-spec-size").innerText = product.spec.size;
     document.getElementById("pdp-spec-feature").innerText = product.spec.feature;
@@ -4013,9 +4179,15 @@ window.openPDP = function openPDP(stepIdx, prodIdx) {
     if (pdpCartBtn) {
         const isInCart = activeSession?.session?.selectedItems?.[stepIdx]?.productIdx === prodIdx;
         pdpCartBtn.classList.toggle("in-cart", isInCart);
-        pdpCartBtn.textContent = isInCart ? "✓ 장바구니에 담았어요" : "장바구니";
+        pdpCartBtn.classList.toggle("cart-add-btn--disabled", !isCartEligible);
+        pdpCartBtn.disabled = !isCartEligible;
+        pdpCartBtn.textContent = !isCartEligible ? "지마켓 상품만 담기 가능" : (isInCart ? "✓ 장바구니에 담았어요" : "장바구니");
         pdpCartBtn.onclick = (e) => {
             e.stopPropagation();
+            if (!isCartEligible) {
+                showMiniToast("지마켓 상품만 쓰레드 장바구니에 담을 수 있어요.");
+                return;
+            }
             addToCart(state.currentIntent, stepIdx, prodIdx);
             const nowInCart = getActiveSessionForIntent(state.currentIntent)?.session?.selectedItems?.[stepIdx]?.productIdx === prodIdx;
             pdpCartBtn.classList.toggle("in-cart", nowInCart);
@@ -4977,6 +5149,87 @@ planIntegratedContent["여행 파우치"] = [
     }
 ];
 
+const scenarioStepThumbnailOverrides = {
+    "출근 10분룩": [
+        [WEB_SCENARIO_THUMBNAILS.officeBase, WEB_SCENARIO_THUMBNAILS.officePouch],
+        [WEB_SCENARIO_THUMBNAILS.officeEye],
+        [WEB_SCENARIO_THUMBNAILS.officeLip],
+        [WEB_SCENARIO_THUMBNAILS.aiTools]
+    ],
+    "AI 페이스 메이크오버": [
+        [WEB_SCENARIO_THUMBNAILS.aiFace],
+        [WEB_SCENARIO_THUMBNAILS.aiEye],
+        [WEB_SCENARIO_THUMBNAILS.aiColor],
+        [WEB_SCENARIO_THUMBNAILS.aiTools]
+    ],
+    "립스틱 전색발색": [
+        [WEB_SCENARIO_THUMBNAILS.lipstickSwatch],
+        [WEB_SCENARIO_THUMBNAILS.lipstickCoral],
+        [WEB_SCENARIO_THUMBNAILS.lipstickGloss],
+        [WEB_SCENARIO_THUMBNAILS.lipstickTools]
+    ],
+    "성분 궁합 체크": [
+        [WEB_SCENARIO_THUMBNAILS.ingredientSafe],
+        [WEB_SCENARIO_THUMBNAILS.ingredientActive],
+        [WEB_SCENARIO_THUMBNAILS.ingredientColor],
+        [WEB_SCENARIO_THUMBNAILS.ingredientCleanse]
+    ],
+    "여행 파우치": [
+        [WEB_SCENARIO_THUMBNAILS.travelPouch],
+        [WEB_SCENARIO_THUMBNAILS.travelMakeup],
+        [WEB_SCENARIO_THUMBNAILS.travelMini],
+        [WEB_SCENARIO_THUMBNAILS.travelAftercare]
+    ],
+    "20대 남자 피부과 고민 해결": [
+        [WEB_SCENARIO_THUMBNAILS.maleAcne],
+        [WEB_SCENARIO_THUMBNAILS.maleRoutine],
+        [WEB_SCENARIO_THUMBNAILS.maleRepair],
+        [WEB_SCENARIO_THUMBNAILS.maleDerm]
+    ],
+    "작품 속 화장품 추천": [
+        [WEB_SCENARIO_THUMBNAILS.dramaMakeup],
+        [WEB_SCENARIO_THUMBNAILS.dramaPalette],
+        [WEB_SCENARIO_THUMBNAILS.dramaLip],
+        [WEB_SCENARIO_THUMBNAILS.dramaTools]
+    ],
+    "30대 남자 스킨케어 성분 비교": [
+        [WEB_SCENARIO_THUMBNAILS.maleIngredients],
+        [WEB_SCENARIO_THUMBNAILS.maleSerum],
+        [WEB_SCENARIO_THUMBNAILS.maleRisk],
+        [WEB_SCENARIO_THUMBNAILS.maleFinish]
+    ],
+    "메이크업": [
+        [WEB_SCENARIO_THUMBNAILS.officeBase, WEB_SCENARIO_THUMBNAILS.aiFace],
+        [WEB_SCENARIO_THUMBNAILS.officeEye, WEB_SCENARIO_THUMBNAILS.officeLip, WEB_SCENARIO_THUMBNAILS.lipstickSwatch],
+        [WEB_SCENARIO_THUMBNAILS.travelMakeup],
+        [WEB_SCENARIO_THUMBNAILS.travelPouch, WEB_SCENARIO_THUMBNAILS.travelAftercare]
+    ]
+};
+
+function applyScenarioThumbnailOverrides(key, stepIndex, content) {
+    const overrides = scenarioStepThumbnailOverrides[key]?.[stepIndex];
+    if (!Array.isArray(overrides) || !overrides.length) return content;
+
+    const nextContent = { ...content };
+    const mediaItems = Array.isArray(content.mediaItems) && content.mediaItems.length
+        ? content.mediaItems
+        : (content.media ? [content.media] : []);
+
+    nextContent.mediaItems = mediaItems.map((media, index) => ({
+        ...media,
+        thumbnail: overrides[index] || overrides[0] || media.thumbnail
+    }));
+
+    if (content.media) {
+        nextContent.media = {
+            ...content.media,
+            thumbnail: overrides[0] || content.media.thumbnail
+        };
+    }
+
+    return nextContent;
+}
+
 Object.keys(BEAUTY_SCENARIOS).forEach((scenarioId) => {
     if (!planIntegratedContent[scenarioId] && planIntegratedContent["메이크업"]) {
         planIntegratedContent[scenarioId] = planIntegratedContent["메이크업"];
@@ -4993,9 +5246,9 @@ function buildYoutubeSearchHref(query) {
 
 function getPlanIntegratedContent(key, stepIndex, step) {
     const byIntent = planIntegratedContent[key]?.[stepIndex];
-    if (byIntent) return byIntent;
+    if (byIntent) return applyScenarioThumbnailOverrides(key, stepIndex, byIntent);
 
-    return {
+    return applyScenarioThumbnailOverrides(key, stepIndex, {
         layout: "media-left",
         label: `${step.name} 선택 기준`,
         headline: `${step.name} 단계는 사용 환경에 맞는 기준을 먼저 정했어요.`,
@@ -5023,7 +5276,7 @@ function getPlanIntegratedContent(key, stepIndex, step) {
         citations: [
             { label: "Naver", title: `${step.name} 구매 가이드 검색`, url: buildSearchHref(`${step.name} 구매 가이드`) }
         ]
-    };
+    });
 }
 
 function renderPlanIntegratedContent(key, stepIndex, step) {
@@ -5037,7 +5290,7 @@ function renderPlanIntegratedContent(key, stepIndex, step) {
 
     const imageFeatureHtml = imageItems.length ? `
         <a class="plan-step-feature-media" href="${escapeHtml(imageItems[0].url)}" target="_blank" rel="noopener noreferrer">
-            <img src="${escapeHtml(imageItems[0].thumbnail)}" alt="${escapeHtml(imageItems[0].title)}">
+            <img src="${escapeHtml(imageItems[0].thumbnail)}" alt="${escapeHtml(imageItems[0].title)}" onerror="this.onerror=null;this.src='${escapeHtml(PLAN_MEDIA_FALLBACK_THUMBNAIL)}'">
             <span class="plan-step-feature-media__caption">
                 <span>${escapeHtml(imageItems[0].type)}</span>
                 <strong>${escapeHtml(imageItems[0].title)}</strong>
@@ -5051,7 +5304,7 @@ function renderPlanIntegratedContent(key, stepIndex, step) {
             ${youtubeItems.map((media) => `
                 <a class="plan-video-card" href="${escapeHtml(media.url)}" target="_blank" rel="noopener noreferrer">
                     <span class="plan-video-card__thumb">
-                        <img src="${escapeHtml(media.thumbnail)}" alt="${escapeHtml(media.title)}">
+                        <img src="${escapeHtml(media.thumbnail)}" alt="${escapeHtml(media.title)}" onerror="this.onerror=null;this.src='${escapeHtml(PLAN_MEDIA_FALLBACK_THUMBNAIL)}'">
                         <span class="plan-step-media__play" aria-hidden="true"></span>
                     </span>
                     <span class="plan-video-card__body">
@@ -5113,7 +5366,7 @@ function renderLipstickSwatchOutcome() {
             </div>
             <div class="beauty-lipstick-swatch" aria-label="팔목 발색 비교표">
                 <a class="beauty-lipstick-swatch__example" href="${escapeHtml(LIPSTICK_SWATCH_EXAMPLE_URL)}" target="_blank" rel="noopener noreferrer">
-                    <img src="${escapeHtml(LIPSTICK_SWATCH_EXAMPLE_IMAGE)}" alt="립스틱 팔목 발색 예시 이미지" loading="eager" decoding="async" fetchpriority="high">
+                    <img src="${escapeHtml(LIPSTICK_SWATCH_EXAMPLE_IMAGE)}" alt="립스틱 팔목 발색 예시 이미지" loading="eager" decoding="async" fetchpriority="high" onerror="this.onerror=null;this.src='${escapeHtml(PLAN_MEDIA_FALLBACK_THUMBNAIL)}'">
                     <span>웹 예시 이미지 · 언니의파우치</span>
                 </a>
                 <div class="beauty-lipstick-swatch__legend" aria-label="색상 요약">
@@ -5137,7 +5390,7 @@ function renderDramaMakeupReferenceOutcome() {
             <strong>기사·드라마 장면의 메이크업 무드를 기준으로 잡았어요</strong>
             <div class="beauty-reference-card">
                 <a class="beauty-reference-card__media" href="${escapeHtml(DRAMA_MAKEUP_SOURCE_URL)}" target="_blank" rel="noopener noreferrer">
-                    <img src="${escapeHtml(DRAMA_MAKEUP_SCREENSHOT_IMAGE)}" alt="드라마 화장품 기사 스크린샷 참고 이미지" loading="eager" decoding="async" fetchpriority="high" onerror="this.src='./makeup-clone-assets/8e01e19fb7cf7c96.avif'">
+                    <img src="${escapeHtml(DRAMA_MAKEUP_SCREENSHOT_IMAGE)}" alt="드라마 화장품 기사 스크린샷 참고 이미지" loading="eager" decoding="async" fetchpriority="high" onerror="this.onerror=null;this.src='${escapeHtml(PLAN_MEDIA_FALLBACK_THUMBNAIL)}'">
                 </a>
                 <div class="beauty-reference-card__body">
                     <p>웹에서 확인한 드라마 화장품 소개 기사 이미지를 참고해 쿠션, 립, 아이 포인트를 분리했습니다. 실제 화면 속 제품과 완전히 같은 상품만 찾기보다, 화면에서 보이는 피부표현과 립 컬러를 재현하기 쉬운 후보로 구성했어요.</p>
@@ -5325,6 +5578,26 @@ function renderSolution(key, rawQuery) {
             }
         }
 
+        const gmarketEntry = shuffledProducts.find((entry) => canAddProductToThreadCart(entry.product));
+        if (
+            gmarketEntry &&
+            !visibleProducts.some((entry) => canAddProductToThreadCart(entry.product))
+        ) {
+            visibleProducts = [...visibleProducts.slice(0, Math.max(visibleProducts.length - 1, 0)), gmarketEntry];
+        }
+
+        const externalEntry = shuffledProducts.find((entry) => !canAddProductToThreadCart(entry.product));
+        if (
+            visibleProducts.length > 1 &&
+            externalEntry &&
+            !visibleProducts.some((entry) => !canAddProductToThreadCart(entry.product))
+        ) {
+            const replaceIndex = visibleProducts.findIndex((entry) => entry.originalIndex !== selectedState?.productIdx);
+            const nextProducts = [...visibleProducts];
+            nextProducts[replaceIndex >= 0 ? replaceIndex : nextProducts.length - 1] = externalEntry;
+            visibleProducts = nextProducts;
+        }
+
         const essentialBadge = step.essential
             ? `<span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-600 uppercase tracking-wide">필수</span>`
             : `<span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-400 uppercase tracking-wide">선택</span>`;
@@ -5333,14 +5606,18 @@ function renderSolution(key, rawQuery) {
             .map(
                 ({ product, originalIndex }) => {
                     const isInCart = selectedState?.productIdx === originalIndex;
+                    const isCartEligible = canAddProductToThreadCart(product);
                     return `
                     <div
                         data-product-card="${key}-${stepIndex}-${originalIndex}"
                         onclick="openPDP(${stepIndex}, ${originalIndex})"
-                        class="product-card cursor-pointer snap-start flex-shrink-0 w-52 md:w-56 bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden transition-all duration-300 relative group/card text-left font-bold ${isInCart ? "in-cart" : ""}">
+                        class="product-card cursor-pointer snap-start flex-shrink-0 w-52 md:w-56 bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden transition-all duration-300 relative group/card text-left font-bold ${isInCart ? "in-cart" : ""} ${isCartEligible ? "is-gmarket-product" : "is-external-product"}">
                         <div class="absolute top-3 left-3 z-20 bg-white/95 backdrop-blur px-2.5 py-1.5 rounded-xl border border-slate-100 flex items-center shadow-sm">
                             <span class="text-[10px] font-bold text-slate-400 mr-1.5 uppercase tracking-tighter">Match</span>
                             <span class="text-xs font-bold text-gmarket-blue">${product.score}%</span>
+                        </div>
+                        <div class="product-card-marketplace">
+                            ${renderMarketplaceLabel(product)}
                         </div>
                         <div class="h-44 bg-slate-100 flex items-center justify-center overflow-hidden">
                             <img src="${product.img}" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" onerror="this.src='https://images.unsplash.com/photo-1560393464-5c69a73c5770?auto=format&fit=crop&q=80&w=400'" alt="${product.name}">
@@ -5356,8 +5633,10 @@ function renderSolution(key, rawQuery) {
                                 <button
                                     data-cart-btn="${key}-${stepIndex}-${originalIndex}"
                                     onclick="event.stopPropagation(); addToCart('${key}', ${stepIndex}, ${originalIndex})"
-                                    class="cart-add-btn py-3 px-3 bg-slate-100 text-slate-700 text-[11px] rounded-xl font-bold ${isInCart ? "in-cart" : ""}">
-                                    ${isInCart ? "✓ 담았어요" : "담기"}
+                                    class="cart-add-btn py-3 px-3 bg-slate-100 text-slate-700 text-[11px] rounded-xl font-bold ${isInCart ? "in-cart" : ""} ${isCartEligible ? "" : "cart-add-btn--disabled"}"
+                                    ${isCartEligible ? "" : "disabled"}
+                                    title="${isCartEligible ? "쓰레드 장바구니 담기" : "지마켓 상품만 담을 수 있어요"}">
+                                    ${isCartEligible ? (isInCart ? "✓ 담았어요" : "담기") : "담기불가"}
                                 </button>
                             </div>
                         </div>
@@ -5398,6 +5677,7 @@ function renderSolution(key, rawQuery) {
                                 <tr class="border-b border-slate-100 last:border-b-0 hover:bg-white transition-colors ${isInCart ? "bg-gmarket-blue/5" : ""}">
                                     <td class="px-4 py-3 align-top">
                                         <div class="font-bold text-slate-800 leading-snug">${product.name}</div>
+                                        <div class="mt-1.5">${renderMarketplaceLabel(product)}</div>
                                         ${isInCart ? `<span class="inline-flex items-center mt-1.5 px-2 py-0.5 rounded-md bg-gmarket-blue/10 text-gmarket-blue text-[10px] font-bold">✓ 담음</span>` : ""}
                                     </td>
                                     <td class="px-4 py-3 align-top whitespace-nowrap">
@@ -5713,14 +5993,12 @@ function updateBottomCheckoutBar() {
     const isSolutionVisible = solutionView && !solutionView.classList.contains("hidden");
 
     const activeSession = getCartSession(state.currentSessionId);
-    const totalItems = Object.keys(activeSession?.selectedItems || {}).length;
+    const { count: totalItems, price: totalPrice } = calculateSessionTotals(activeSession);
 
     if (!isSolutionVisible || totalItems === 0) {
         cta.classList.add("hidden");
         return;
     }
-
-    const { price: totalPrice } = calculateSessionTotals(activeSession);
 
     if (countEl) countEl.textContent = `${totalItems}개 선택`;
     if (priceEl) priceEl.textContent = totalPrice.toLocaleString() + "원";
