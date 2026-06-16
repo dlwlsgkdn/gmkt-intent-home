@@ -1,0 +1,59 @@
+{
+  "ok": true,
+  "source": "gmarket-advanced-clean-home.html",
+  "url": "http://127.0.0.1:41744/gmarket-advanced-clean-home.html?reset=1",
+  "outDir": "C:\\Users\\dlwls\\OneDrive\\바탕 화면\\pp1k\\gmarket-intent-home\\gmkt-intent-home\\.codex\\html-screenshots",
+  "shots": [
+    {
+      "key": "home",
+      "file": "C:\\Users\\dlwls\\OneDrive\\바탕 화면\\pp1k\\gmarket-intent-home\\gmkt-intent-home\\.codex\\html-screenshots\\01-home-html.png"
+    },
+    {
+      "key": "brief",
+      "file": "C:\\Users\\dlwls\\OneDrive\\바탕 화면\\pp1k\\gmarket-intent-home\\gmkt-intent-home\\.codex\\html-screenshots\\02-brief-html.png"
+    },
+    {
+      "key": "plan",
+      "file": "C:\\Users\\dlwls\\OneDrive\\바탕 화면\\pp1k\\gmarket-intent-home\\gmkt-intent-home\\.codex\\html-screenshots\\03-plan-html.png"
+    },
+    {
+      "key": "pdp",
+      "file": "C:\\Users\\dlwls\\OneDrive\\바탕 화면\\pp1k\\gmarket-intent-home\\gmkt-intent-home\\.codex\\html-screenshots\\04-pdp-html.png"
+    },
+    {
+      "key": "checkout",
+      "file": "C:\\Users\\dlwls\\OneDrive\\바탕 화면\\pp1k\\gmarket-intent-home\\gmkt-intent-home\\.codex\\html-screenshots\\05-checkout-html.png"
+    },
+    {
+      "key": "complete",
+      "file": "C:\\Users\\dlwls\\OneDrive\\바탕 화면\\pp1k\\gmarket-intent-home\\gmkt-intent-home\\.codex\\html-screenshots\\06-complete-html.png"
+    },
+    {
+      "key": "claim",
+      "file": "C:\\Users\\dlwls\\OneDrive\\바탕 화면\\pp1k\\gmarket-intent-home\\gmkt-intent-home\\.codex\\html-screenshots\\07-claim-html.png"
+    },
+    {
+      "key": "skip",
+      "file": "C:\\Users\\dlwls\\OneDrive\\바탕 화면\\pp1k\\gmarket-intent-home\\gmkt-intent-home\\.codex\\html-screenshots\\03-plan-html.png"
+    }
+  ],
+  "meta": {
+    "title": "Beauty Brief",
+    "href": "http://127.0.0.1:41744/gmarket-advanced-clean-home.html?reset=1",
+    "width": 390,
+    "height": 844,
+    "tags": [
+      "#출근_10분룩",
+      "#AI_페이스룩",
+      "#립스틱_전색발색",
+      "#성분_궁합체크",
+      "#여행파우치",
+      "#20대남자_피부고민",
+      "#작품속_화장품",
+      "#30대남자_성분비교"
+    ]
+  },
+  "errors": [
+    "Failed to load resource: the server responded with a status of 404 (Not Found)"
+  ]
+}
