@@ -142,6 +142,7 @@ const HISTORY_STORAGE_KEY = "gmarket-solution-search-history";
 const HISTORY_PANEL_STATE_KEY = "gmarket-history-panel-collapsed";
 const CART_STORAGE_KEY = "gmarket-purpose-cart";
 const HISTORY_LIMIT = 6;
+const PLAN_CHAT_HISTORY_LIMIT = 16;
 
 const state = {
     currentIntent: "",
@@ -1279,6 +1280,56 @@ function persistCart() {
     window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(state.purposeCart));
 }
 
+function normalizePlanChatHistory(history) {
+    if (!Array.isArray(history)) return [];
+
+    return history
+        .filter((item) => item && (item.role === "user" || item.role === "assistant") && item.text)
+        .map((item) => ({
+            role: item.role,
+            text: String(item.text),
+            createdAt: item.createdAt || new Date().toISOString()
+        }))
+        .slice(-PLAN_CHAT_HISTORY_LIMIT);
+}
+
+function normalizePlanAdjustmentNotes(notes) {
+    if (!Array.isArray(notes)) return [];
+
+    return notes
+        .filter((note) => note && note.text)
+        .map((note) => ({
+            text: String(note.text),
+            createdAt: note.createdAt || new Date().toISOString()
+        }))
+        .slice(-5);
+}
+
+function normalizePlanAdjustments(adjustments) {
+    const normalized = { steps: {}, globalNotes: [] };
+    if (!adjustments || typeof adjustments !== "object" || Array.isArray(adjustments)) {
+        return normalized;
+    }
+
+    normalized.globalNotes = normalizePlanAdjustmentNotes(adjustments.globalNotes);
+    Object.entries(adjustments.steps || {}).forEach(([stepIndex, value]) => {
+        if (!value || typeof value !== "object" || Array.isArray(value)) return;
+        normalized.steps[stepIndex] = {
+            description: value.description ? String(value.description) : "",
+            notes: normalizePlanAdjustmentNotes(value.notes)
+        };
+    });
+
+    return normalized;
+}
+
+function ensurePlanChatSessionFields(session) {
+    if (!session) return null;
+    session.planChatHistory = normalizePlanChatHistory(session.planChatHistory);
+    session.planAdjustments = normalizePlanAdjustments(session.planAdjustments);
+    return session;
+}
+
 function normalizeCartData(cartData) {
     if (!cartData || typeof cartData !== "object" || Array.isArray(cartData)) {
         return {};
@@ -1302,6 +1353,8 @@ function normalizeCartData(cartData) {
             selectedItems: normalizeSelectedItemsForCart(hasSessionShape ? value.intentKey : key, value.selectedItems || {}),
             threadView: value.threadView || "solution",
             orderMeta: value.orderMeta || null,
+            planChatHistory: normalizePlanChatHistory(value.planChatHistory),
+            planAdjustments: normalizePlanAdjustments(value.planAdjustments),
             createdAt: value.createdAt || new Date().toISOString(),
             updatedAt: value.updatedAt || new Date().toISOString()
         };
@@ -1324,6 +1377,8 @@ function createCartSession(intentKey) {
             selectedItems: {},
             threadView: "solution",
             orderMeta: null,
+            planChatHistory: [],
+            planAdjustments: { steps: {}, globalNotes: [] },
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         }
@@ -1331,7 +1386,7 @@ function createCartSession(intentKey) {
 }
 
 function getCartSession(sessionId) {
-    return sessionId ? state.purposeCart[sessionId] : null;
+    return sessionId ? ensurePlanChatSessionFields(state.purposeCart[sessionId]) : null;
 }
 
 function getActiveSessionForIntent(intentKey) {
@@ -1582,6 +1637,7 @@ function hideThreadViews() {
     completeView?.classList.remove("flex", "flex-col");
     claimView?.classList.add("hidden");
     claimView?.classList.remove("flex", "flex-col");
+    renderPlanChat(null);
     closeDeliveryPanel();
     closeClaimStatusPanel();
 }
@@ -5452,6 +5508,236 @@ function renderIngredientComparisonOutcome() {
     `;
 }
 
+function getActivePlanSession(intentKey = state.currentIntent) {
+    const session = getCartSession(state.currentSessionId);
+    if (!session || session.intentKey !== intentKey) return null;
+    return ensurePlanChatSessionFields(session);
+}
+
+function getPlanChatWelcome(session) {
+    const title = session?.intentLabel || solutionData[session?.intentKey]?.title || "현재 계획";
+    return {
+        role: "assistant",
+        text: `${title}을 열어두고 있어요. "2단계에 저자극 기준 추가"처럼 말하면 계획 일부를 바꾸거나 메모로 붙여둘게요.`,
+        createdAt: new Date().toISOString()
+    };
+}
+
+function getPlanChatMessages(session) {
+    if (!session) return [];
+    const history = normalizePlanChatHistory(session.planChatHistory);
+    return history.length ? history : [getPlanChatWelcome(session)];
+}
+
+function renderPlanChat(session = getActivePlanSession()) {
+    const chat = document.getElementById("plan-ai-chat");
+    const historyEl = document.getElementById("plan-chat-history");
+    if (!chat || !historyEl) return;
+
+    if (!session) {
+        chat.classList.add("hidden");
+        historyEl.innerHTML = "";
+        return;
+    }
+
+    chat.classList.remove("hidden");
+    const messages = getPlanChatMessages(session);
+    historyEl.innerHTML = messages.map((message) => {
+        const roleLabel = message.role === "user" ? "나" : "AI";
+        return `
+            <div class="plan-ai-chat__message plan-ai-chat__message--${message.role}">
+                <span class="plan-ai-chat__speaker">${roleLabel}</span>
+                <div class="plan-ai-chat__bubble">${escapeHtml(message.text)}</div>
+            </div>
+        `;
+    }).join("");
+    requestAnimationFrame(() => {
+        historyEl.scrollTop = historyEl.scrollHeight;
+    });
+}
+
+function getPlanStepPresentation(intentKey, stepIndex, step) {
+    const session = getActivePlanSession(intentKey);
+    const adjustment = session?.planAdjustments?.steps?.[String(stepIndex)];
+    return {
+        ...step,
+        description: adjustment?.description || step.description
+    };
+}
+
+function renderPlanAdjustmentNotes(intentKey, stepIndex) {
+    const session = getActivePlanSession(intentKey);
+    const notes = session?.planAdjustments?.steps?.[String(stepIndex)]?.notes || [];
+    if (!notes.length) return "";
+
+    return `
+        <div class="plan-ai-note-list" aria-label="AI가 추가한 계획 메모">
+            ${notes.map((note) => `
+                <div class="plan-ai-note">
+                    <span class="plan-ai-note__label">AI 추가 메모</span>
+                    <p class="plan-ai-note__text">${escapeHtml(note.text)}</p>
+                </div>
+            `).join("")}
+        </div>
+    `;
+}
+
+function renderPlanGlobalNotes(intentKey) {
+    const session = getActivePlanSession(intentKey);
+    const notes = session?.planAdjustments?.globalNotes || [];
+    if (!notes.length) return "";
+
+    return `
+        <section class="plan-ai-note-list" aria-label="AI가 추가한 전체 계획 메모">
+            ${notes.map((note) => `
+                <div class="plan-ai-note">
+                    <span class="plan-ai-note__label">전체 계획 메모</span>
+                    <p class="plan-ai-note__text">${escapeHtml(note.text)}</p>
+                </div>
+            `).join("")}
+        </section>
+    `;
+}
+
+function findPlanChatTargetStep(message, data) {
+    const normalized = String(message || "").toLowerCase();
+    const numbered = normalized.match(/(?:step\s*([1-9])|([1-9])\s*(?:단계|번째|번))/i);
+    if (numbered) {
+        const stepIndex = Number(numbered[1] || numbered[2]) - 1;
+        if (stepIndex >= 0 && stepIndex < data.steps.length) return stepIndex;
+    }
+
+    const matchedIndex = data.steps.findIndex((step) => {
+        const name = String(step.name || "").toLowerCase();
+        if (name && normalized.includes(name)) return true;
+        return name.split(/\s+/).filter((token) => token.length >= 2).some((token) => normalized.includes(token));
+    });
+
+    return matchedIndex >= 0 ? matchedIndex : -1;
+}
+
+function getPlanChatFocus(message) {
+    const text = String(message || "");
+    const tests = [
+        {
+            match: /(예산|가격|저렴|가성비|비싸|낮춰|세일|할인)/,
+            note: "예산 우선순위를 높여 같은 목적 안에서 가격대가 낮고 할인 폭이 있는 상품을 먼저 비교하도록 조정했어요."
+        },
+        {
+            match: /(민감|저자극|트러블|피부|알러지|알레르기|진정|붉은기)/,
+            note: "민감도와 자극 가능성을 먼저 확인하도록 무향, 저자극 테스트, 진정 성분, 사용 후기의 트러블 언급을 함께 보도록 붙였어요."
+        },
+        {
+            match: /(성분|위험|논코메도|향료|알코올|파라벤|실리콘)/,
+            note: "성분 체크를 강화해 향료, 고함량 알코올, 모공 막힘 우려 성분, 병행 사용 시 자극 가능성을 비교 기준에 추가했어요."
+        },
+        {
+            match: /(배송|내일|빠른|급해|오늘|당일)/,
+            note: "빠른 수령이 필요하다는 조건을 반영해 도착 예정일, 무료배송 기준, 교환 가능 여부를 함께 확인하도록 추가했어요."
+        },
+        {
+            match: /(선물|포장|기프트|생일|축하)/,
+            note: "선물용 관점으로 패키지 완성도, 호불호가 적은 색상과 향, 교환 편의성, 리뷰 사진을 체크 포인트로 더했어요."
+        }
+    ];
+
+    return tests.find((test) => test.match.test(text))?.note
+        || "요청한 맥락을 반영해 상품을 고를 때 놓치기 쉬운 확인 기준과 비교 포인트를 추가했어요.";
+}
+
+function buildPlanChatStepText(message, step) {
+    const focus = getPlanChatFocus(message);
+    return `${step.name} 단계는 ${focus}`;
+}
+
+function isPlanChatRewriteRequest(message) {
+    return /(바꿔|변경|수정|교체|rewrite|replace|고쳐)/i.test(String(message || ""));
+}
+
+function isAllStepsPlanChatRequest(message) {
+    return /(각\s*단계|모든\s*단계|전체\s*단계|전부|다\s*넣|all\s*steps|every\s*step)/i.test(String(message || ""));
+}
+
+function appendPlanChatMessage(session, role, text) {
+    session.planChatHistory = normalizePlanChatHistory([
+        ...(session.planChatHistory || []),
+        { role, text, createdAt: new Date().toISOString() }
+    ]);
+}
+
+function handlePlanChatRequest(message) {
+    const cleaned = String(message || "").trim();
+    if (!cleaned || !state.currentIntent) return;
+
+    ensureBeautyScenarioSolutionData();
+    const data = solutionData[state.currentIntent];
+    const session = ensurePlanChatSessionFields(getActivePlanSession() || ensureSurveyResultSession());
+    if (!session || !data?.steps?.length) return;
+
+    appendPlanChatMessage(session, "user", cleaned);
+    const stepIndex = findPlanChatTargetStep(cleaned, data);
+    const rewrite = isPlanChatRewriteRequest(cleaned);
+    const applyToAllSteps = isAllStepsPlanChatRequest(cleaned);
+    const now = new Date().toISOString();
+    let assistantText = "";
+
+    if (stepIndex >= 0) {
+        const step = data.steps[stepIndex];
+        const stepKey = String(stepIndex);
+        const nextText = buildPlanChatStepText(cleaned, step);
+        const stepAdjustment = session.planAdjustments.steps[stepKey] || { description: "", notes: [] };
+
+        if (rewrite) {
+            stepAdjustment.description = nextText;
+            assistantText = `${stepIndex + 1}단계 "${step.name}" 설명을 요청한 기준으로 바꿨어요.`;
+        } else {
+            stepAdjustment.notes = normalizePlanAdjustmentNotes([
+                ...(stepAdjustment.notes || []),
+                { text: nextText, createdAt: now }
+            ]);
+            assistantText = `${stepIndex + 1}단계 "${step.name}" 아래에 추가 메모를 붙였어요.`;
+        }
+
+        session.planAdjustments.steps[stepKey] = stepAdjustment;
+    } else if (applyToAllSteps) {
+        data.steps.forEach((step, index) => {
+            const stepKey = String(index);
+            const nextText = buildPlanChatStepText(cleaned, step);
+            const stepAdjustment = session.planAdjustments.steps[stepKey] || { description: "", notes: [] };
+
+            if (rewrite) {
+                stepAdjustment.description = nextText;
+            } else {
+                stepAdjustment.notes = normalizePlanAdjustmentNotes([
+                    ...(stepAdjustment.notes || []),
+                    { text: nextText, createdAt: now }
+                ]);
+            }
+
+            session.planAdjustments.steps[stepKey] = stepAdjustment;
+        });
+        assistantText = rewrite
+            ? "모든 단계 설명을 요청한 기준으로 다시 정리했어요."
+            : "모든 단계 아래에 요청한 기준을 AI 추가 메모로 붙였어요.";
+    } else {
+        const globalText = getPlanChatFocus(cleaned);
+        session.planAdjustments.globalNotes = normalizePlanAdjustmentNotes([
+            ...(session.planAdjustments.globalNotes || []),
+            { text: globalText, createdAt: now }
+        ]);
+        assistantText = "특정 단계가 보이지 않아 전체 계획 메모로 추가했어요. 단계 번호를 함께 말하면 해당 step에 바로 반영할게요.";
+    }
+
+    appendPlanChatMessage(session, "assistant", assistantText);
+    session.updatedAt = now;
+    persistCart();
+    renderSolution(state.currentIntent, state.rawQuery || state.currentIntent);
+    updateProductCardCartState(state.currentIntent);
+    updateBottomCheckoutBar();
+    renderCart();
+    showMiniToast("계획에 AI 요청을 반영했어요", "success");
+}
+
 function renderBeautyScenarioOutcome(key) {
     const scenario = getBeautyScenario(key);
     if (!scenario) return "";
@@ -5553,8 +5839,13 @@ function renderSolution(key, rawQuery) {
     if (scenarioOutcomeHtml) {
         planContainer.insertAdjacentHTML("beforeend", scenarioOutcomeHtml);
     }
+    const globalNotesHtml = renderPlanGlobalNotes(key);
+    if (globalNotesHtml) {
+        planContainer.insertAdjacentHTML("beforeend", globalNotesHtml);
+    }
 
     data.steps.forEach((step, stepIndex) => {
+        const displayStep = getPlanStepPresentation(key, stepIndex, step);
         const stepEl = document.createElement("div");
         stepEl.className = "relative pl-8 md:pl-12 border-l-2 border-slate-200 pb-4 text-left font-bold";
         const selectedState = getSessionSelectionState(key, stepIndex);
@@ -5708,7 +5999,8 @@ function renderSolution(key, rawQuery) {
             </div>
         ` : "";
 
-        const integratedContentHtml = renderPlanIntegratedContent(key, stepIndex, step);
+        const integratedContentHtml = renderPlanIntegratedContent(key, stepIndex, displayStep);
+        const planAdjustmentNotesHtml = renderPlanAdjustmentNotes(key, stepIndex);
 
         stepEl.innerHTML = `
             <div class="absolute -left-[20px] top-0 w-10 h-10 rounded-full bg-slate-900 shadow-xl flex items-center justify-center font-bold text-white z-20 border-4 border-slate-50">
@@ -5716,11 +6008,12 @@ function renderSolution(key, rawQuery) {
             </div>
             <div class="mb-8 text-left">
                 <h3 class="text-2xl font-bold text-slate-800 mb-3 flex items-center flex-wrap gap-1">
-                    ${renderKeywordDetailText(step.name, "plan-step-title-text")}
+                    ${renderKeywordDetailText(displayStep.name, "plan-step-title-text")}
                     ${essentialBadge}
                 </h3>
-                <p class="text-slate-500 text-sm leading-relaxed">${step.description || "지마켓 AI가 제안하는 단계별 상품입니다."}</p>
+                <p class="text-slate-500 text-sm leading-relaxed">${displayStep.description || "지마켓 AI가 제안하는 단계별 상품입니다."}</p>
             </div>
+            ${planAdjustmentNotesHtml}
             ${integratedContentHtml}
             <div class="flex items-center justify-between gap-3 mb-4">
                 <p class="text-xs font-bold text-slate-400">좌우로 넘겨 더 많은 상품을 볼 수 있어요</p>
@@ -5733,6 +6026,7 @@ function renderSolution(key, rawQuery) {
 
         planContainer.appendChild(stepEl);
     });
+    renderPlanChat(getActivePlanSession(key));
 }
 
 function startDdakCompletedPlan(urlParams, searchInput) {
@@ -5808,6 +6102,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const surveyEditConfirmModal = document.getElementById("survey-edit-confirm-modal");
     const surveyEditConfirmBtn = document.getElementById("survey-edit-confirm-btn");
     const surveyEditCancelBtn = document.getElementById("survey-edit-cancel-btn");
+    const planChat = document.getElementById("plan-ai-chat");
+    const planChatForm = document.getElementById("plan-chat-form");
+    const planChatInput = document.getElementById("plan-chat-input");
+    const planChatMinimizeBtn = document.getElementById("plan-chat-minimize-btn");
 
     generateEqualizerRays();
 
@@ -5841,6 +6139,30 @@ document.addEventListener("DOMContentLoaded", () => {
     surveyEditConfirmModal?.addEventListener("click", (event) => {
         if (event.target.closest("[data-survey-confirm-cancel='true']")) {
             closeSurveyEditConfirmModal();
+        }
+    });
+
+    planChatForm?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const value = planChatInput?.value.trim() || "";
+        if (!value) return;
+        if (planChatInput) planChatInput.value = "";
+        planChat?.classList.remove("is-minimized");
+        handlePlanChatRequest(value);
+    });
+
+    planChat?.addEventListener("click", (event) => {
+        const promptButton = event.target.closest("[data-plan-chat-prompt]");
+        if (!promptButton) return;
+        planChat.classList.remove("is-minimized");
+        handlePlanChatRequest(promptButton.dataset.planChatPrompt || promptButton.textContent);
+    });
+
+    planChatMinimizeBtn?.addEventListener("click", () => {
+        const isMinimized = planChat?.classList.toggle("is-minimized");
+        planChatMinimizeBtn.setAttribute("aria-label", isMinimized ? "계획 채팅 펼치기" : "계획 채팅 접기");
+        if (!isMinimized) {
+            requestAnimationFrame(() => planChatInput?.focus());
         }
     });
 

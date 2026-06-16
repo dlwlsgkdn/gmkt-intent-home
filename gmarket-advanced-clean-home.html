@@ -7,7 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="./gmarket-advanced.tailwind.js"></script>
     <link rel="stylesheet" href="./gmarket-advanced.css">
-    <link rel="stylesheet" href="./gmarket-advanced-clean-home.css?v=gmarket-logo-v51">
+    <link rel="stylesheet" href="./gmarket-advanced-clean-home.css?v=plan-chat-v52">
 </head>
 <body class="clean-home-page bg-slate-50 font-sans min-h-screen text-slate-900 overflow-x-hidden">
 
@@ -388,6 +388,34 @@
         </div>
 
     </section>
+
+    <aside id="plan-ai-chat" class="plan-ai-chat hidden" aria-label="계획 수정 AI 채팅">
+        <div class="plan-ai-chat__header">
+            <div>
+                <span class="plan-ai-chat__eyebrow">Plan AI</span>
+                <h3>계획 조정 채팅</h3>
+            </div>
+            <button type="button" id="plan-chat-minimize-btn" class="plan-ai-chat__icon-btn" aria-label="계획 채팅 접기">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                    <path d="M5 12h14" stroke-width="2" stroke-linecap="round"></path>
+                </svg>
+            </button>
+        </div>
+        <div id="plan-chat-history" class="plan-ai-chat__history" aria-live="polite"></div>
+        <div class="plan-ai-chat__quick" aria-label="빠른 요청">
+            <button type="button" data-plan-chat-prompt="예산을 조금 낮춰서 다시 잡아줘">예산 낮추기</button>
+            <button type="button" data-plan-chat-prompt="민감피부 기준을 각 단계에 추가해줘">민감피부 기준</button>
+            <button type="button" data-plan-chat-prompt="선물용으로 볼 때 확인할 포인트를 붙여줘">선물용 포인트</button>
+        </div>
+        <form id="plan-chat-form" class="plan-ai-chat__form">
+            <input id="plan-chat-input" type="text" autocomplete="off" placeholder="예: 2단계에 저자극 성분 기준을 추가해줘">
+            <button type="submit" aria-label="계획 수정 요청 보내기">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                    <path d="M5 12h14M13 6l6 6-6 6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+                </svg>
+            </button>
+        </form>
+    </aside>
 
     <div id="pdp-overlay" class="fixed inset-0 z-[150] invisible opacity-0 pointer-events-none flex justify-end">
         <div id="pdp-backdrop" class="absolute inset-0 bg-slate-900/10 backdrop-blur-sm opacity-0 pointer-events-none"></div>
@@ -989,7 +1017,7 @@
     </script>
 
     <script src="./gmarket-advanced.mock.js"></script>
-    <script src="./gmarket-advanced.js?v=gmarket-logo-v51"></script>
+    <script src="./gmarket-advanced.js?v=plan-chat-v52"></script>
     <script src="./gmarket-thread-navigation.js"></script>
 
 </body>
