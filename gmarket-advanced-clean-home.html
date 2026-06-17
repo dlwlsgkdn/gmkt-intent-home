@@ -7,7 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="./gmarket-advanced.tailwind.js"></script>
     <link rel="stylesheet" href="./gmarket-advanced.css">
-    <link rel="stylesheet" href="./gmarket-advanced-clean-home.css?v=plan-chat-v52">
+    <link rel="stylesheet" href="./gmarket-advanced-clean-home.css?v=plan-chat-v54">
 </head>
 <body class="clean-home-page bg-slate-50 font-sans min-h-screen text-slate-900 overflow-x-hidden">
 
@@ -172,9 +172,17 @@
         </div>
     </div>
 
-    <button type="button" id="historySidebarToggle" class="history-sidebar-toggle fixed left-4 top-20 z-[120] inline-flex lg:hidden items-center gap-2 rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 text-sm font-medium text-slate-700 shadow-lg backdrop-blur" aria-label="쇼핑 쓰레드 열기" aria-expanded="false" aria-controls="history-panel">
-        <svg class="w-5 h-5 text-gmarket-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 6h16M4 12h16M4 18h10"></path></svg>
-    </button>
+    <nav class="clean-floating-actionbar" aria-label="빠른 이동">
+        <button type="button" id="cleanHomeFloatingBtn" class="clean-floating-actionbar__btn" aria-label="홈으로 이동" title="홈">
+            <svg aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M3.5 11.5 12 4l8.5 7.5M5.5 10.5V20h13v-9.5M9.5 20v-5.5h5V20"></path></svg>
+        </button>
+        <button type="button" id="planChatOpenBtn" class="clean-floating-actionbar__btn" aria-label="채팅창 열기" title="채팅">
+            <svg aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M5 6.5h14a2 2 0 0 1 2 2v6.5a2 2 0 0 1-2 2H9l-4.5 3v-3H5a2 2 0 0 1-2-2V8.5a2 2 0 0 1 2-2Z"></path><path stroke-linecap="round" stroke-width="2.2" d="M8 11h8M8 14h5"></path></svg>
+        </button>
+        <button type="button" id="historySidebarToggle" class="history-sidebar-toggle clean-floating-actionbar__btn" aria-label="쇼핑 쓰레드 열기" aria-expanded="false" aria-controls="history-panel" title="쇼핑 쓰레드">
+            <svg aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 6h16M4 12h16M4 18h10"></path></svg>
+        </button>
+    </nav>
 
     <aside id="history-panel" class="history-sidebar fixed left-0 top-16 z-[130] h-[calc(100vh-4rem)] w-[320px] max-w-[86vw] -translate-x-full lg:translate-x-0 border-r border-slate-200/80 bg-white/92 text-slate-900 shadow-[24px_0_60px_-30px_rgba(15,23,42,0.18)] transition-transform duration-300">
         <div class="flex h-full flex-col">
@@ -397,9 +405,9 @@
                 <span class="plan-ai-chat__eyebrow">Plan AI</span>
                 <h3>계획 조정 채팅</h3>
             </div>
-            <button type="button" id="plan-chat-minimize-btn" class="plan-ai-chat__icon-btn" aria-label="계획 채팅 접기">
+            <button type="button" id="plan-chat-close-btn" class="plan-ai-chat__icon-btn" aria-label="계획 채팅 닫기">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
-                    <path d="M5 12h14" stroke-width="2" stroke-linecap="round"></path>
+                    <path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
                 </svg>
             </button>
         </div>
@@ -1019,7 +1027,7 @@
     </script>
 
     <script src="./gmarket-advanced.mock.js"></script>
-    <script src="./gmarket-advanced.js?v=plan-chat-v52"></script>
+    <script src="./gmarket-advanced.js?v=plan-chat-v54"></script>
     <script src="./gmarket-thread-navigation.js"></script>
 
 </body>

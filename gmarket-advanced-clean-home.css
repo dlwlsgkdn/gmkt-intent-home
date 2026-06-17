@@ -64,42 +64,92 @@
     display: none !important;
 }
 
-.clean-home-page #historySidebarToggle {
+.clean-floating-actionbar {
     position: fixed;
-    top: 22px;
-    left: 22px;
+    left: 50%;
+    bottom: calc(22px + env(safe-area-inset-bottom));
+    transform: translateX(-50%);
     z-index: 150;
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: min(232px, calc(100vw - 48px));
+    padding: 7px 14px;
+    border: 1px solid rgba(52, 70, 90, 0.16) !important;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.9) !important;
+    box-shadow: 0 18px 44px rgba(31, 41, 51, 0.16) !important;
+    backdrop-filter: blur(18px);
+}
+
+.clean-floating-actionbar__btn {
+    position: relative;
     display: inline-flex !important;
     align-items: center;
     justify-content: center;
-    gap: 0;
-    width: 38px;
-    height: 38px;
+    flex: 0 0 auto;
+    width: 44px;
+    height: 44px;
     padding: 0 !important;
-    border: 1px solid rgba(52, 70, 90, 0.16) !important;
+    border: 0 !important;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.86) !important;
+    background: transparent !important;
     color: var(--beauty-ink) !important;
     font-size: 0 !important;
     line-height: 0 !important;
     box-shadow: none !important;
-    backdrop-filter: blur(14px);
+    transition: background-color 0.16s ease, color 0.16s ease, transform 0.16s ease;
 }
 
-.clean-home-page #historySidebarToggle.history-sidebar-toggle-active {
-    background: rgba(246, 248, 250, 0.94) !important;
-    border-color: rgba(31, 41, 51, 0.28) !important;
+.clean-floating-actionbar__btn:hover,
+.clean-floating-actionbar__btn:focus-visible {
+    background: rgba(52, 70, 90, 0.08) !important;
+    transform: translateY(-1px);
+    outline: none;
 }
 
-.clean-home-page #historySidebarToggle svg {
+.clean-floating-actionbar__btn:active {
+    transform: translateY(0);
+}
+
+.clean-home-page #historySidebarToggle.history-sidebar-toggle-active,
+.clean-home-page #planChatOpenBtn.is-active {
+    background: var(--beauty-ink) !important;
+    color: #ffffff !important;
+}
+
+.clean-floating-actionbar__btn svg {
     flex: 0 0 auto;
-    width: 19px;
-    height: 19px;
-    color: var(--beauty-ink) !important;
+    width: 20px;
+    height: 20px;
 }
 
 .clean-home-page #historySidebarToggle > :not(svg) {
     display: none !important;
+}
+
+body.clean-home-page .plan-ai-chat {
+    right: auto;
+    left: 50%;
+    bottom: calc(96px + env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    animation-name: cleanPlanChatFloatIn;
+}
+
+@keyframes cleanPlanChatFloatIn {
+    from {
+        opacity: 0;
+        transform: translate(-50%, 10px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, 0) scale(1);
+    }
+}
+
+body.clean-home-page #mini-toast {
+    bottom: calc(92px + env(safe-area-inset-bottom)) !important;
 }
 
 body.clean-home-page #history-panel.history-sidebar {
@@ -546,6 +596,8 @@ body.clean-home-page #history-panel.history-sidebar.history-sidebar-collapsed {
     box-shadow: 0 24px 70px rgba(31, 41, 51, 0.16);
     backdrop-filter: blur(18px);
     overflow: hidden;
+    transform-origin: bottom center;
+    animation: planChatFloatIn 0.22s ease-out both;
 }
 
 .plan-ai-chat.hidden,
@@ -553,16 +605,15 @@ body:not(.clean-solution-active) .plan-ai-chat {
     display: none !important;
 }
 
-.plan-ai-chat.is-minimized {
-    width: auto;
-    min-width: 210px;
-    max-height: 62px;
-}
-
-.plan-ai-chat.is-minimized .plan-ai-chat__history,
-.plan-ai-chat.is-minimized .plan-ai-chat__quick,
-.plan-ai-chat.is-minimized .plan-ai-chat__form {
-    display: none;
+@keyframes planChatFloatIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
 }
 
 .plan-ai-chat__header {
@@ -3103,9 +3154,15 @@ body.clean-home-page #solution-checkout-cta button {
 }
 
 @media (max-width: 1023px) {
-    .clean-home-page #historySidebarToggle {
-        top: 18px;
-        left: 18px;
+    .clean-floating-actionbar {
+        bottom: calc(16px + env(safe-area-inset-bottom));
+        width: min(210px, calc(100vw - 32px));
+        padding-inline: 12px;
+    }
+
+    .clean-floating-actionbar__btn {
+        width: 42px;
+        height: 42px;
     }
 
     .clean-home__wrap {
@@ -3305,16 +3362,16 @@ body.clean-home-page #solution-checkout-cta button {
     }
 
     .plan-ai-chat {
-        right: 12px;
-        bottom: 12px;
         width: calc(100% - 24px);
         max-height: min(520px, calc(100vh - 96px));
         border-radius: 20px;
     }
 
-    .plan-ai-chat.is-minimized {
-        width: calc(100% - 24px);
-        min-width: 0;
+    body.clean-home-page .plan-ai-chat {
+        right: auto;
+        left: 50%;
+        bottom: calc(88px + env(safe-area-inset-bottom));
+        max-height: min(520px, calc(100vh - 132px));
     }
 
     .plan-ai-chat__history {

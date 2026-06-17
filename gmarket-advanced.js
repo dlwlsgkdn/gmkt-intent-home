@@ -5634,15 +5634,19 @@ function getPlanChatMessages(session) {
 function renderPlanChat(session = getActivePlanSession()) {
     const chat = document.getElementById("plan-ai-chat");
     const historyEl = document.getElementById("plan-chat-history");
+    const openBtn = document.getElementById("planChatOpenBtn");
     if (!chat || !historyEl) return;
 
     if (!session) {
         chat.classList.add("hidden");
+        openBtn?.classList.remove("is-active");
         historyEl.innerHTML = "";
         return;
     }
 
-    chat.classList.remove("hidden");
+    const isVisible = !chat.classList.contains("hidden")
+        && document.body.classList.contains("clean-solution-active");
+    openBtn?.classList.toggle("is-active", isVisible);
     const messages = getPlanChatMessages(session);
     historyEl.innerHTML = messages.map((message) => {
         const roleLabel = message.role === "user" ? "나" : "AI";
@@ -5656,6 +5660,44 @@ function renderPlanChat(session = getActivePlanSession()) {
     requestAnimationFrame(() => {
         historyEl.scrollTop = historyEl.scrollHeight;
     });
+}
+
+function closePlanChatPanel() {
+    const chat = document.getElementById("plan-ai-chat");
+    const openBtn = document.getElementById("planChatOpenBtn");
+    if (!chat) return;
+
+    chat.classList.add("hidden");
+    openBtn?.classList.remove("is-active");
+}
+
+function openPlanChatFromFloatingBar() {
+    const chat = document.getElementById("plan-ai-chat");
+    const input = document.getElementById("plan-chat-input");
+    const openBtn = document.getElementById("planChatOpenBtn");
+    if (!chat) return;
+
+    const canOpenPlan = Boolean(state.currentIntent)
+        && (isSurveySkipped(state.currentIntent) || isSurveyComplete(state.currentIntent));
+    if (!canOpenPlan) {
+        showMiniToast("맞춤 브리프를 만든 뒤 채팅을 열 수 있어요.");
+        return;
+    }
+
+    if (!chat.classList.contains("hidden")) {
+        closePlanChatPanel();
+        return;
+    }
+
+    if (!document.body.classList.contains("clean-solution-active")) {
+        goThreadPhase("solution");
+    }
+
+    const session = ensurePlanChatSessionFields(getActivePlanSession() || ensureSurveyResultSession());
+    renderPlanChat(session);
+    chat.classList.remove("hidden");
+    openBtn?.classList.add("is-active");
+    requestAnimationFrame(() => input?.focus());
 }
 
 function getPlanStepPresentation(intentKey, stepIndex, step) {
@@ -6195,6 +6237,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const historyList = document.getElementById("history-list");
     const clearHistoryBtn = document.getElementById("clearHistoryBtn");
     const historySidebarToggle = document.getElementById("historySidebarToggle");
+    const cleanHomeFloatingBtn = document.getElementById("cleanHomeFloatingBtn");
+    const planChatOpenBtn = document.getElementById("planChatOpenBtn");
     const closeHistorySidebarBtn = document.getElementById("closeHistorySidebar");
     const historySidebarBackdrop = document.getElementById("history-sidebar-backdrop");
     const collapseHistorySidebarBtn = document.getElementById("collapseHistorySidebar");
@@ -6207,7 +6251,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const planChat = document.getElementById("plan-ai-chat");
     const planChatForm = document.getElementById("plan-chat-form");
     const planChatInput = document.getElementById("plan-chat-input");
-    const planChatMinimizeBtn = document.getElementById("plan-chat-minimize-btn");
+    const planChatCloseBtn = document.getElementById("plan-chat-close-btn");
 
     generateEqualizerRays();
 
@@ -6260,24 +6304,16 @@ document.addEventListener("DOMContentLoaded", () => {
         const value = planChatInput?.value.trim() || "";
         if (!value) return;
         if (planChatInput) planChatInput.value = "";
-        planChat?.classList.remove("is-minimized");
         handlePlanChatRequest(value);
     });
 
     planChat?.addEventListener("click", (event) => {
         const promptButton = event.target.closest("[data-plan-chat-prompt]");
         if (!promptButton) return;
-        planChat.classList.remove("is-minimized");
         handlePlanChatRequest(promptButton.dataset.planChatPrompt || promptButton.textContent);
     });
 
-    planChatMinimizeBtn?.addEventListener("click", () => {
-        const isMinimized = planChat?.classList.toggle("is-minimized");
-        planChatMinimizeBtn.setAttribute("aria-label", isMinimized ? "계획 채팅 펼치기" : "계획 채팅 접기");
-        if (!isMinimized) {
-            requestAnimationFrame(() => planChatInput?.focus());
-        }
-    });
+    planChatCloseBtn?.addEventListener("click", closePlanChatPanel);
 
     const handleKeywordDetailTrigger = (event) => {
         const keywordButton = event.target.closest("[data-keyword-detail]");
@@ -6314,6 +6350,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         if (event.key === "Escape" && !document.getElementById("ingredient-risk-modal")?.classList.contains("hidden")) {
             closeIngredientRiskModal();
+        }
+        if (event.key === "Escape" && !planChat?.classList.contains("hidden")) {
+            closePlanChatPanel();
         }
     });
 
@@ -6410,6 +6449,11 @@ document.addEventListener("DOMContentLoaded", () => {
     // 초기 하단 바 상태 반영
     updateBottomCheckoutBar();
 
+    cleanHomeFloatingBtn?.addEventListener("click", () => {
+        goThreadPhase("home");
+        closeHistorySidebar();
+    });
+    planChatOpenBtn?.addEventListener("click", openPlanChatFromFloatingBar);
     historySidebarToggle?.addEventListener("click", toggleHistorySidebar);
     closeHistorySidebarBtn?.addEventListener("click", closeHistorySidebar);
     historySidebarBackdrop?.addEventListener("click", closeHistorySidebar);
