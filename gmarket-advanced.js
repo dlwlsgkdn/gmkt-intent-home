@@ -141,6 +141,7 @@ const solutionData = window.solutionData || {};
 const HISTORY_STORAGE_KEY = "gmarket-solution-search-history";
 const HISTORY_PANEL_STATE_KEY = "gmarket-history-panel-collapsed";
 const CART_STORAGE_KEY = "gmarket-purpose-cart";
+const SAVED_PROFILE_KEY = "gmarket-saved-user-profile";
 const HISTORY_LIMIT = 6;
 const PLAN_CHAT_HISTORY_LIMIT = 16;
 
@@ -158,7 +159,8 @@ const state = {
     purposeCart: {},      // { sessionId: { intentKey, intentLabel, rawQuery, choices, selectedItems: { stepIdx: { productIdx, product } } } }
     activeTab: "cart",
     latestOrder: null,
-    activeDeliveryItemIndex: 0
+    activeDeliveryItemIndex: 0,
+    savedProfileExclusions: new Set()
 };
 
 function getEmptyChoices() {
@@ -1280,6 +1282,94 @@ function persistCart() {
     window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(state.purposeCart));
 }
 
+/* ─── Saved user profile ───────────────────────────────────── */
+
+const SAVED_PROFILE_FIELDS = [
+    { key: "ageGroup", label: "나이대" },
+    { key: "gender", label: "성별" },
+    { key: "skinType", label: "피부타입" },
+    { key: "personalColor", label: "퍼스널 컬러" }
+];
+
+function loadSavedProfile() {
+    try {
+        const stored = window.localStorage.getItem(SAVED_PROFILE_KEY);
+        return stored ? JSON.parse(stored) : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function persistSavedProfile(profile) {
+    window.localStorage.setItem(SAVED_PROFILE_KEY, JSON.stringify(profile));
+}
+
+function getActiveSavedProfileEntries() {
+    const profile = loadSavedProfile();
+    if (!profile) return [];
+    return SAVED_PROFILE_FIELDS
+        .filter(f => profile[f.key] && !state.savedProfileExclusions.has(f.key))
+        .map(f => ({ key: f.key, label: f.label, value: profile[f.key] }));
+}
+
+function toggleSavedProfileField(key) {
+    if (state.savedProfileExclusions.has(key)) {
+        state.savedProfileExclusions.delete(key);
+    } else {
+        state.savedProfileExclusions.add(key);
+    }
+    renderSavedProfileSection();
+}
+
+function renderSavedProfileSection() {
+    const container = document.getElementById("saved-profile-section");
+    if (!container) return;
+
+    const profile = loadSavedProfile();
+    if (!profile) {
+        container.classList.add("hidden");
+        container.innerHTML = "";
+        return;
+    }
+
+    const fields = SAVED_PROFILE_FIELDS.filter(f => profile[f.key]);
+    if (!fields.length) {
+        container.classList.add("hidden");
+        container.innerHTML = "";
+        return;
+    }
+
+    const chips = fields.map(f => {
+        const excluded = state.savedProfileExclusions.has(f.key);
+        return `
+            <button type="button" class="saved-profile-chip ${excluded ? "saved-profile-chip--excluded" : ""}" onclick="toggleSavedProfileField('${f.key}')">
+                <span class="saved-profile-chip__label">${escapeHtml(f.label)}</span>
+                <span class="saved-profile-chip__value">${escapeHtml(profile[f.key])}</span>
+                <span class="saved-profile-chip__toggle" aria-label="${excluded ? "포함하기" : "제외하기"}">
+                    ${excluded
+                        ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>'
+                        : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>'
+                    }
+                </span>
+            </button>
+        `;
+    }).join("");
+
+    container.innerHTML = `
+        <div class="saved-profile-section__head">
+            <span class="saved-profile-section__icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            </span>
+            <span class="saved-profile-section__title">유진님에 대해 이미 알고 있어요</span>
+            <span class="saved-profile-section__hint">이번엔 빼고 싶은 항목을 눌러주세요</span>
+        </div>
+        <div class="saved-profile-section__chips">${chips}</div>
+    `;
+    container.classList.remove("hidden");
+}
+
+window.toggleSavedProfileField = toggleSavedProfileField;
+
 function normalizePlanChatHistory(history) {
     if (!Array.isArray(history)) return [];
 
@@ -1655,6 +1745,7 @@ function startNewShoppingThread() {
     state.isSurveyReviewMode = false;
     state.latestOrder = null;
     state.activeDeliveryItemIndex = 0;
+    state.savedProfileExclusions = new Set();
 
     if (searchInput) {
         searchInput.value = "";
@@ -1880,10 +1971,12 @@ function renderSearchHistory() {
 }
 
 function buildHistorySummary() {
-    return Object.entries(state.choices)
+    const profileParts = getActiveSavedProfileEntries()
+        .map(e => `${e.label}: ${e.value}`);
+    const surveyParts = Object.entries(state.choices)
         .filter(([key, value]) => Boolean(value) && key !== "photo" && key !== "photoName")
-        .map(([, value]) => value)
-        .join(" / ");
+        .map(([, value]) => value);
+    return [...profileParts, ...surveyParts].join(" / ");
 }
 
 function buildCartGroupSummary(cartGroup, intentData) {
@@ -3942,7 +4035,14 @@ function renderSurveyLockSummary() {
         return;
     }
 
-    const items = questions
+    const profileItems = getActiveSavedProfileEntries().map(e => `
+        <div class="clean-survey-lock__item" aria-readonly="true">
+            <span class="clean-survey-lock__label">${escapeHtml(e.label)}</span>
+            <span class="clean-survey-lock__value">${escapeHtml(e.value)}</span>
+        </div>
+    `);
+
+    const surveyItems = questions
         .map((question) => {
             const value = state.choices[question.category];
             if (!value) return "";
@@ -3954,8 +4054,9 @@ function renderSurveyLockSummary() {
                 </div>
             `;
         })
-        .filter(Boolean)
-        .join("");
+        .filter(Boolean);
+
+    const items = [...profileItems, ...surveyItems].join("");
 
     if (!items) {
         container.classList.add("hidden");
@@ -3980,6 +4081,7 @@ function renderInfoView(intent) {
     if (!cfg) return;
     const surveyQuestions = getSurveyQuestions(intent);
     clampSurveyStepIndex(surveyQuestions);
+    renderSavedProfileSection();
 
     const trimmedQuery = state.rawQuery?.trim() || "";
     if (infoTitle) {
@@ -6113,6 +6215,17 @@ document.addEventListener("DOMContentLoaded", () => {
     state.searchHistory = loadSearchHistory();
     state.purposeCart = loadCart();
     state.isHistoryPanelCollapsed = loadHistoryPanelState();
+
+    const demoProfile = {
+        ageGroup: "20대 후반",
+        gender: "여성",
+        skinType: "복합성 (T존 유분, 볼 건조)",
+        personalColor: "웜톤 봄 라이트"
+    };
+    const existing = loadSavedProfile();
+    if (!existing || existing.ageGroup === "20대") {
+        persistSavedProfile(demoProfile);
+    }
 
     applyHistoryPanelState();
     renderSearchHistory();
