@@ -240,7 +240,7 @@ const BEAUTY_SCENARIOS = {
     }
 };
 
-const SAMPLE_FACE_PHOTO = "./makeup-clone-assets/1cebcb36604d1166.avif";
+const SAMPLE_FACE_PHOTO = "./before.png";
 const LIPSTICK_SWATCH_EXAMPLE_URL = "https://unpa.me/tip/detail/50a73d0b-81dd-4d11-b952-6045da3a71be";
 const LIPSTICK_SWATCH_EXAMPLE_IMAGE = "https://d33ur1yh5ph6b5.cloudfront.net/2ed3f6d9-cf79-41af-bd8b-6e434d972fc2-mid";
 const DRAMA_MAKEUP_SOURCE_URL = "https://unpa.me/tip/detail/3771243e-9ab7-4ba4-9c81-b74c878bc012";
@@ -1126,7 +1126,7 @@ function decorateGmarketProducts() {
                 const isGmarket = explicitlyExternal ? false : (explicitlyGmarket || productIndex % 3 !== 1);
                 const marketplace = isGmarket
                     ? GMARKET_MARKETPLACE
-                    : (product.marketplace || (productIndex % 2 ? "브랜드몰" : "외부몰"));
+                    : (product.marketplace || (productIndex % 2 ? "올리브영" : "외부몰"));
 
                 return {
                     ...product,
@@ -1214,6 +1214,48 @@ function renderMarketplaceLabel(product) {
         ? renderGmarketLogoTag(product, "gmarket-logo-tag--inline")
         : `<span class="marketplace-muted-tag">${product?.marketplace || "외부몰"}</span>`;
 }
+
+function getProductDetailUrl(marketplace) {
+    if (marketplace === GMARKET_MARKETPLACE) return "https://m.gmarket.co.kr/vi/product/2230890201";
+    if (marketplace === "올리브영") return "https://m.oliveyoung.co.kr/m/goods/getGoodsDetail.do?goodsNo=A000000198343&dispCatNo=1000001000200070002";
+    return "#";
+}
+window.getProductDetailUrl = getProductDetailUrl;
+
+function openExternalPDP(url) {
+    if (!url || url === "#") return;
+    let overlay = document.getElementById("external-pdp-overlay");
+    if (!overlay) {
+        overlay = document.createElement("div");
+        overlay.id = "external-pdp-overlay";
+        overlay.className = "external-pdp-overlay";
+        overlay.innerHTML = `
+            <div class="external-pdp-backdrop" onclick="closeExternalPDP()"></div>
+            <div class="external-pdp-panel">
+                <div class="external-pdp-header">
+                    <button type="button" onclick="closeExternalPDP()">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+                <iframe id="external-pdp-iframe" class="external-pdp-iframe" sandbox="allow-same-origin allow-scripts allow-popups allow-forms"></iframe>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+    }
+    const iframe = document.getElementById("external-pdp-iframe");
+    if (iframe) iframe.src = url;
+    overlay.classList.add("is-open");
+}
+window.openExternalPDP = openExternalPDP;
+
+function closeExternalPDP() {
+    const overlay = document.getElementById("external-pdp-overlay");
+    if (!overlay) return;
+    overlay.classList.remove("is-open");
+    const iframe = document.getElementById("external-pdp-iframe");
+    if (iframe) iframe.src = "about:blank";
+}
+window.closeExternalPDP = closeExternalPDP;
 
 function getBeautyScenario(intentOrQuery = "") {
     const value = String(intentOrQuery || "");
@@ -1347,8 +1389,8 @@ function renderSavedProfileSection() {
                 <span class="saved-profile-chip__value">${escapeHtml(profile[f.key])}</span>
                 <span class="saved-profile-chip__toggle" aria-label="${excluded ? "포함하기" : "제외하기"}">
                     ${excluded
-                        ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>'
-                        : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>'
+                        ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>'
+                        : '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>'
                     }
                 </span>
             </button>
@@ -1358,7 +1400,7 @@ function renderSavedProfileSection() {
     container.innerHTML = `
         <div class="saved-profile-section__head">
             <span class="saved-profile-section__icon">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
             </span>
             <span class="saved-profile-section__title">유진님에 대해 이미 알고 있어요</span>
             <span class="saved-profile-section__hint">이번엔 빼고 싶은 항목을 눌러주세요</span>
@@ -2281,16 +2323,26 @@ function getCartItemCount() {
 
 function updateCartBadge() {
     const badge = document.getElementById("cartBadge");
-    if (!badge) return;
+    const v2Badge = document.getElementById("v2-bottom-badge");
     const count = getCartItemCount();
 
-    if (count > 0) {
-        badge.textContent = count;
-        badge.classList.remove("hidden");
-        badge.classList.add("badge-pop");
-        setTimeout(() => badge.classList.remove("badge-pop"), 350);
-    } else {
-        badge.classList.add("hidden");
+    if (badge) {
+        if (count > 0) {
+            badge.textContent = count;
+            badge.classList.remove("hidden");
+            badge.classList.add("badge-pop");
+            setTimeout(() => badge.classList.remove("badge-pop"), 350);
+        } else {
+            badge.classList.add("hidden");
+        }
+    }
+    if (v2Badge) {
+        if (count > 0) {
+            v2Badge.textContent = count;
+            v2Badge.classList.remove("hidden");
+        } else {
+            v2Badge.classList.add("hidden");
+        }
     }
 }
 
@@ -3256,6 +3308,28 @@ function executeSearch(query, options = {}) {
     if (!query) return;
     const { resetChoices = true } = options;
 
+    const existingSession = Object.entries(state.purposeCart).find(
+        ([, s]) => s.rawQuery === query && s.intentKey
+    );
+    if (existingSession) {
+        state.currentSessionId = existingSession[0];
+        state.currentIntent = existingSession[1].intentKey;
+        state.currentScenarioId = existingSession[1].intentKey;
+        state.rawQuery = query;
+        state.choices = { ...getEmptyChoices(), ...(existingSession[1].choices || {}) };
+        state.surveyStepIndex = 0;
+        state.isSurveyReviewMode = false;
+        renderInfoView(state.currentIntent);
+        infoView?.classList.remove("hidden");
+        infoView?.classList.add("flex");
+        if (document.body.classList.contains("clean-home-page")) {
+            document.body.classList.add("clean-survey-active");
+            document.body.classList.remove("clean-solution-active");
+        }
+        updateThreadStepper();
+        return;
+    }
+
     state.currentSessionId = "";
     if (resetChoices) {
         state.choices = getEmptyChoices();
@@ -3491,7 +3565,8 @@ const infoViewConfig = {
                 { main: "건성", sub: "촉촉한 베이스 우선", row: true },
                 { main: "지성/복합성", sub: "지속력과 유분 조절", row: true },
                 { main: "민감성", sub: "저자극 성분 중심", row: true },
-                { main: "잘 모르겠어요", sub: "무난한 기본 조합", row: true }
+                { main: "잘 모르겠어요", sub: "무난한 기본 조합", row: true },
+                { main: "아무거나", sub: "다 괜찮아요", row: true }
             ],
             category: "skin"
         },
@@ -3501,7 +3576,8 @@ const infoViewConfig = {
             options: [
                 { main: "내추럴", sub: "가볍고 자연스럽게", icon: true },
                 { main: "화사한 톤업", sub: "맑고 생기 있게", icon: true },
-                { main: "차분한 데일리", sub: "은은하고 단정하게", icon: true }
+                { main: "차분한 데일리", sub: "은은하고 단정하게", icon: true },
+                { main: "아무거나", sub: "다 좋아요", icon: true }
             ],
             category: "mood"
         },
@@ -3511,7 +3587,8 @@ const infoViewConfig = {
             options: [
                 { main: "5만원 안쪽", sub: "최소 필수템", icon: true },
                 { main: "10만원 안쪽", sub: "균형 구성", icon: true },
-                { main: "15만원 이상도 가능", sub: "도구까지 넉넉히", icon: true }
+                { main: "15만원 이상도 가능", sub: "도구까지 넉넉히", icon: true },
+                { main: "아무거나", sub: "상관없어요", icon: true }
             ],
             category: "budget"
         },
@@ -3521,7 +3598,8 @@ const infoViewConfig = {
             options: [
                 { main: "출근/등교", sub: "지속력 중심", icon: true },
                 { main: "데일리 외출", sub: "간편한 루틴", icon: true },
-                { main: "약속/데이트", sub: "생기와 분위기", icon: true }
+                { main: "약속/데이트", sub: "생기와 분위기", icon: true },
+                { main: "아무거나", sub: "다 괜찮아요", icon: true }
             ],
             category: "occasion"
         }
@@ -3535,7 +3613,8 @@ infoViewConfig["출근 10분룩"] = {
         options: [
             { main: "5분", sub: "최소 루틴", icon: true },
             { main: "10분", sub: "균형 루틴", icon: true },
-            { main: "15분", sub: "조금 더 정교하게", icon: true }
+            { main: "15분", sub: "조금 더 정교하게", icon: true },
+            { main: "아무거나", sub: "상관없어요", icon: true }
         ],
         category: "occasion"
     },
@@ -3545,7 +3624,8 @@ infoViewConfig["출근 10분룩"] = {
         options: [
             { main: "코/나비존", sub: "유분과 모공", icon: true },
             { main: "볼/턱", sub: "건조와 들뜸", icon: true },
-            { main: "눈가", sub: "번짐과 주름", icon: true }
+            { main: "눈가", sub: "번짐과 주름", icon: true },
+            { main: "아무거나", sub: "잘 모르겠어요", icon: true }
         ],
         category: "skin"
     },
@@ -3555,7 +3635,8 @@ infoViewConfig["출근 10분룩"] = {
         options: [
             { main: "단정함", sub: "회의/오피스", icon: true },
             { main: "화사함", sub: "생기 중심", icon: true },
-            { main: "차분함", sub: "톤다운 데일리", icon: true }
+            { main: "차분함", sub: "톤다운 데일리", icon: true },
+            { main: "아무거나", sub: "다 좋아요", icon: true }
         ],
         category: "mood"
     }
@@ -4097,21 +4178,33 @@ function renderInfoView(intent) {
     const buildQ = (q) => {
         if (q.type === "photo") {
             const hasPhoto = Boolean(state.choices[q.category]);
+            if (hasPhoto) {
+                return `<div class="clean-photo-question">
+                    <div class="clean-photo-upload has-photo">
+                        <div class="clean-photo-upload__result">
+                            <img src="${escapeHtml(state.choices[q.category])}" alt="업로드한 얼굴 사진">
+                            <span class="clean-photo-upload__check">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+                            </span>
+                        </div>
+                        <p class="clean-photo-upload__status">${escapeHtml(state.choices.photoName || "업로드한 사진")}</p>
+                        <div class="clean-photo-upload__actions">
+                            <label for="beauty-photo-input" class="clean-photo-upload__btn">다른 사진</label>
+                            <button type="button" class="clean-photo-upload__btn clean-photo-upload__btn--ghost" onclick="resetBeautyPhoto('${q.category}')">초기화</button>
+                        </div>
+                        <input id="beauty-photo-input" type="file" accept="image/*" class="clean-photo-upload__input" onchange="handleBeautyPhotoUpload(this, '${q.category}')">
+                    </div>
+                </div>`;
+            }
             return `<div class="clean-photo-question">
-                <label class="text-sm font-medium text-slate-400 mb-3 block">${q.label}</label>
-                <div class="clean-photo-upload ${hasPhoto ? "has-photo" : ""}">
+                <div class="clean-photo-upload">
                     <input id="beauty-photo-input" type="file" accept="image/*" class="clean-photo-upload__input" onchange="handleBeautyPhotoUpload(this, '${q.category}')">
-                    <label for="beauty-photo-input" class="clean-photo-upload__drop">
-                        <span class="clean-photo-upload__preview">
-                            ${hasPhoto
-                                ? `<img src="${escapeHtml(state.choices[q.category])}" alt="업로드한 얼굴 사진">`
-                                : `<span>얼굴 사진 업로드</span>`
-                            }
+                    <label for="beauty-photo-input" class="clean-photo-upload__empty">
+                        <span class="clean-photo-upload__icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
                         </span>
-                        <span class="clean-photo-upload__body">
-                            <strong>${hasPhoto ? "사진이 준비됐어요" : "정면 얼굴 사진을 선택해주세요"}</strong>
-                            <small>${hasPhoto ? escapeHtml(state.choices.photoName || "업로드한 사진") : "AI 메이크업 결과 미리보기와 구현 플랜에 사용됩니다."}</small>
-                        </span>
+                        <strong>얼굴 사진을 올려주세요</strong>
+                        <small>AI 메이크업 시뮬레이션에 사용돼요</small>
                     </label>
                     <button type="button" class="clean-photo-upload__sample" onclick="useSampleBeautyPhoto('${q.category}')">
                         샘플 얼굴로 진행하기
@@ -4184,6 +4277,13 @@ window.handleBeautyPhotoUpload = function handleBeautyPhotoUpload(input, categor
         updateThreadStepper();
     };
     reader.readAsDataURL(file);
+};
+
+window.resetBeautyPhoto = function resetBeautyPhoto(category = "photo") {
+    state.choices[category] = "";
+    state.choices.photoName = "";
+    renderInfoView(state.currentIntent);
+    updateSurveyProgress();
 };
 
 window.useSampleBeautyPhoto = function useSampleBeautyPhoto(category = "photo") {
@@ -5634,19 +5734,16 @@ function getPlanChatMessages(session) {
 function renderPlanChat(session = getActivePlanSession()) {
     const chat = document.getElementById("plan-ai-chat");
     const historyEl = document.getElementById("plan-chat-history");
-    const openBtn = document.getElementById("planChatOpenBtn");
     if (!chat || !historyEl) return;
 
     if (!session) {
         chat.classList.add("hidden");
-        openBtn?.classList.remove("is-active");
         historyEl.innerHTML = "";
         return;
     }
 
-    const isVisible = !chat.classList.contains("hidden")
-        && document.body.classList.contains("clean-solution-active");
-    openBtn?.classList.toggle("is-active", isVisible);
+    const isV2Survey = Boolean(document.getElementById("v2-bottom-chat"));
+    if (!isV2Survey) chat.classList.remove("hidden");
     const messages = getPlanChatMessages(session);
     historyEl.innerHTML = messages.map((message) => {
         const roleLabel = message.role === "user" ? "나" : "AI";
@@ -5660,44 +5757,6 @@ function renderPlanChat(session = getActivePlanSession()) {
     requestAnimationFrame(() => {
         historyEl.scrollTop = historyEl.scrollHeight;
     });
-}
-
-function closePlanChatPanel() {
-    const chat = document.getElementById("plan-ai-chat");
-    const openBtn = document.getElementById("planChatOpenBtn");
-    if (!chat) return;
-
-    chat.classList.add("hidden");
-    openBtn?.classList.remove("is-active");
-}
-
-function openPlanChatFromFloatingBar() {
-    const chat = document.getElementById("plan-ai-chat");
-    const input = document.getElementById("plan-chat-input");
-    const openBtn = document.getElementById("planChatOpenBtn");
-    if (!chat) return;
-
-    const canOpenPlan = Boolean(state.currentIntent)
-        && (isSurveySkipped(state.currentIntent) || isSurveyComplete(state.currentIntent));
-    if (!canOpenPlan) {
-        showMiniToast("맞춤 브리프를 만든 뒤 채팅을 열 수 있어요.");
-        return;
-    }
-
-    if (!chat.classList.contains("hidden")) {
-        closePlanChatPanel();
-        return;
-    }
-
-    if (!document.body.classList.contains("clean-solution-active")) {
-        goThreadPhase("solution");
-    }
-
-    const session = ensurePlanChatSessionFields(getActivePlanSession() || ensureSurveyResultSession());
-    renderPlanChat(session);
-    chat.classList.remove("hidden");
-    openBtn?.classList.add("is-active");
-    requestAnimationFrame(() => input?.focus());
 }
 
 function getPlanStepPresentation(intentKey, stepIndex, step) {
@@ -5902,19 +5961,20 @@ function renderBeautyScenarioOutcome(key) {
         const mood = state.choices.mood || "원하는 무드";
         const intensity = state.choices.intensity || "데일리 정도";
         const finish = state.choices.finish || "내 피부처럼";
+        const beforeSrc = state.choices.photo;
+        const afterSrc = "./after.png";
         return `
             <section class="beauty-ai-outcome" aria-label="AI 메이크업 이미지 결과">
                 <div class="beauty-ai-outcome__copy">
                     <span>AI Image Result</span>
                     <h3>${escapeHtml(mood)} 메이크업을 입힌 결과</h3>
-                    <p>${escapeHtml(intensity)}의 표현 강도와 ${escapeHtml(finish)} 피부 표현을 기준으로, 업로드한 얼굴 사진 위에 적용될 메이크업 방향을 시각화했어요. 아래 플랜은 이 결과에 가까워지기 위한 단계별 제품과 방법입니다.</p>
+                    <p>${escapeHtml(intensity)}의 표현 강도와 ${escapeHtml(finish)} 피부 표현을 기준으로, 업로드한 얼굴 사진 위에 적용될 메이크업 방향을 시각화했어요.</p>
                 </div>
                 <div class="beauty-before-after" style="--split: 52%" data-before-after>
                     <div class="beauty-before-after__stage">
-                        <img class="beauty-before-after__image beauty-before-after__image--before" src="${escapeHtml(state.choices.photo)}" alt="업로드한 얼굴 사진" loading="eager" decoding="async" fetchpriority="high">
+                        <img class="beauty-before-after__image beauty-before-after__image--before" src="${escapeHtml(beforeSrc)}" alt="Before" loading="eager" decoding="async" fetchpriority="high">
                         <div class="beauty-before-after__after" aria-hidden="true">
-                            <img class="beauty-before-after__image" src="${escapeHtml(state.choices.photo)}" alt="" loading="eager" decoding="async" fetchpriority="high">
-                            <span class="beauty-before-after__makeup-glow"></span>
+                            <img class="beauty-before-after__image" src="${escapeHtml(afterSrc)}" alt="After" loading="eager" decoding="async" fetchpriority="high">
                         </div>
                         <span class="beauty-before-after__label beauty-before-after__label--before">Before</span>
                         <span class="beauty-before-after__label beauty-before-after__label--after">AI ${escapeHtml(mood)}</span>
@@ -6064,7 +6124,7 @@ function renderSolution(key, rawQuery) {
                                 <span class="text-xs font-medium text-slate-400 ml-0.5">원</span>
                             </div>
                             <div class="flex gap-2">
-                                <button class="flex-1 py-3 bg-slate-900 text-white text-[11px] rounded-xl font-bold transition-colors hover:bg-gmarket-blue">상세보기</button>
+                                <button class="flex-1 py-3 bg-slate-900 text-white text-[11px] rounded-xl font-bold transition-colors hover:bg-gmarket-blue" onclick="event.stopPropagation(); openExternalPDP(getProductDetailUrl('${product.marketplace}'))">상세보기</button>
                                 <button
                                     data-cart-btn="${key}-${stepIndex}-${originalIndex}"
                                     onclick="event.stopPropagation(); addToCart('${key}', ${stepIndex}, ${originalIndex})"
@@ -6237,8 +6297,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const historyList = document.getElementById("history-list");
     const clearHistoryBtn = document.getElementById("clearHistoryBtn");
     const historySidebarToggle = document.getElementById("historySidebarToggle");
-    const cleanHomeFloatingBtn = document.getElementById("cleanHomeFloatingBtn");
-    const planChatOpenBtn = document.getElementById("planChatOpenBtn");
     const closeHistorySidebarBtn = document.getElementById("closeHistorySidebar");
     const historySidebarBackdrop = document.getElementById("history-sidebar-backdrop");
     const collapseHistorySidebarBtn = document.getElementById("collapseHistorySidebar");
@@ -6251,7 +6309,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const planChat = document.getElementById("plan-ai-chat");
     const planChatForm = document.getElementById("plan-chat-form");
     const planChatInput = document.getElementById("plan-chat-input");
-    const planChatCloseBtn = document.getElementById("plan-chat-close-btn");
+    const planChatMinimizeBtn = document.getElementById("plan-chat-minimize-btn");
 
     generateEqualizerRays();
 
@@ -6263,11 +6321,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const demoProfile = {
         ageGroup: "20대 후반",
         gender: "여성",
-        skinType: "복합성 (T존 유분, 볼 건조)",
+        skinType: "복합성",
         personalColor: "웜톤 봄 라이트"
     };
     const existing = loadSavedProfile();
-    if (!existing || existing.ageGroup === "20대") {
+    if (!existing || existing.ageGroup === "20대" || (existing.skinType && existing.skinType.length > 6)) {
         persistSavedProfile(demoProfile);
     }
 
@@ -6304,16 +6362,24 @@ document.addEventListener("DOMContentLoaded", () => {
         const value = planChatInput?.value.trim() || "";
         if (!value) return;
         if (planChatInput) planChatInput.value = "";
+        planChat?.classList.remove("is-minimized");
         handlePlanChatRequest(value);
     });
 
     planChat?.addEventListener("click", (event) => {
         const promptButton = event.target.closest("[data-plan-chat-prompt]");
         if (!promptButton) return;
+        planChat.classList.remove("is-minimized");
         handlePlanChatRequest(promptButton.dataset.planChatPrompt || promptButton.textContent);
     });
 
-    planChatCloseBtn?.addEventListener("click", closePlanChatPanel);
+    planChatMinimizeBtn?.addEventListener("click", () => {
+        const isMinimized = planChat?.classList.toggle("is-minimized");
+        planChatMinimizeBtn.setAttribute("aria-label", isMinimized ? "계획 채팅 펼치기" : "계획 채팅 접기");
+        if (!isMinimized) {
+            requestAnimationFrame(() => planChatInput?.focus());
+        }
+    });
 
     const handleKeywordDetailTrigger = (event) => {
         const keywordButton = event.target.closest("[data-keyword-detail]");
@@ -6351,9 +6417,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (event.key === "Escape" && !document.getElementById("ingredient-risk-modal")?.classList.contains("hidden")) {
             closeIngredientRiskModal();
         }
-        if (event.key === "Escape" && !planChat?.classList.contains("hidden")) {
-            closePlanChatPanel();
-        }
     });
 
     // URL 파라미터로 전달된 검색어 자동 실행 (목업 홈 쓰레드 모드 진입)
@@ -6370,7 +6433,8 @@ document.addEventListener("DOMContentLoaded", () => {
         } else {
             executeSearch(urlQuery);
         }
-        window.history.replaceState({}, "", window.location.pathname);
+        const isV2Survey = Boolean(document.getElementById("v2-bottom-chat"));
+        if (!isV2Survey) window.history.replaceState({}, "", window.location.pathname);
     }
 
     searchInput?.addEventListener("input", (event) => {
@@ -6449,11 +6513,6 @@ document.addEventListener("DOMContentLoaded", () => {
     // 초기 하단 바 상태 반영
     updateBottomCheckoutBar();
 
-    cleanHomeFloatingBtn?.addEventListener("click", () => {
-        goThreadPhase("home");
-        closeHistorySidebar();
-    });
-    planChatOpenBtn?.addEventListener("click", openPlanChatFromFloatingBar);
     historySidebarToggle?.addEventListener("click", toggleHistorySidebar);
     closeHistorySidebarBtn?.addEventListener("click", closeHistorySidebar);
     historySidebarBackdrop?.addEventListener("click", closeHistorySidebar);
