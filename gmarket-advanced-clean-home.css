@@ -72,15 +72,45 @@
     z-index: 150;
     display: inline-flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    width: min(232px, calc(100vw - 48px));
+    justify-content: center;
+    gap: 14px;
+    width: auto;
+    max-width: calc(100vw - 32px);
     padding: 7px 14px;
     border: 1px solid rgba(52, 70, 90, 0.16) !important;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.9) !important;
     box-shadow: 0 18px 44px rgba(31, 41, 51, 0.16) !important;
     backdrop-filter: blur(18px);
+    transition: gap 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* 채팅 버튼: 계획(solution) phase에서만 노출 — 3개 → 4개 확장 애니메이션 */
+.clean-floating-actionbar .clean-floating-actionbar__btn--chat {
+    width: 0 !important;
+    min-width: 0;
+    margin-left: -14px;
+    opacity: 0;
+    transform: scale(0.4);
+    pointer-events: none;
+    overflow: hidden;
+    transition: width 0.36s cubic-bezier(0.22, 1, 0.36, 1),
+                margin-left 0.36s cubic-bezier(0.22, 1, 0.36, 1),
+                opacity 0.28s ease 0.04s,
+                transform 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+body.clean-solution-active .clean-floating-actionbar .clean-floating-actionbar__btn--chat {
+    width: 44px !important;
+    margin-left: 0;
+    opacity: 1;
+    transform: scale(1);
+    pointer-events: auto;
+    /* 계획 phase 진입 후 약 0.6s 뒤에 천천히 펼쳐지도록 */
+    transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.6s,
+                margin-left 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.6s,
+                opacity 0.4s ease 0.66s,
+                transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.66s !important;
 }
 
 .clean-floating-actionbar__btn {
@@ -3156,13 +3186,22 @@ body.clean-home-page #solution-checkout-cta button {
 @media (max-width: 1023px) {
     .clean-floating-actionbar {
         bottom: calc(16px + env(safe-area-inset-bottom));
-        width: min(210px, calc(100vw - 32px));
         padding-inline: 12px;
+        gap: 12px;
     }
 
     .clean-floating-actionbar__btn {
         width: 42px;
         height: 42px;
+    }
+
+    .clean-floating-actionbar .clean-floating-actionbar__btn--chat {
+        margin-left: -12px;
+    }
+
+    body.clean-solution-active .clean-floating-actionbar .clean-floating-actionbar__btn--chat {
+        width: 42px !important;
+        margin-left: 0;
     }
 
     .clean-home__wrap {

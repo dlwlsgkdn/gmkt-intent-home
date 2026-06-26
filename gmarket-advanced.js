@@ -6514,6 +6514,28 @@ document.addEventListener("DOMContentLoaded", () => {
     updateBottomCheckoutBar();
 
     historySidebarToggle?.addEventListener("click", toggleHistorySidebar);
+
+    const cleanHomeFloatingBtn = document.getElementById("cleanHomeFloatingBtn");
+    cleanHomeFloatingBtn?.addEventListener("click", () => goThreadPhase("home"));
+
+    const cleanMyFloatingBtn = document.getElementById("cleanMyFloatingBtn");
+    cleanMyFloatingBtn?.addEventListener("click", () => {
+        if (typeof showMiniToast === "function") {
+            showMiniToast("마이 페이지는 준비 중이에요", "info");
+        }
+    });
+
+    const planChatOpenBtn = document.getElementById("planChatOpenBtn");
+    planChatOpenBtn?.addEventListener("click", () => {
+        if (!document.body.classList.contains("clean-solution-active")) return;
+        if (!planChat) return;
+        planChat.classList.remove("hidden");
+        const isMinimized = planChat.classList.toggle("is-minimized");
+        planChatOpenBtn.classList.toggle("is-active", !isMinimized);
+        if (!isMinimized) {
+            requestAnimationFrame(() => planChatInput?.focus());
+        }
+    });
     closeHistorySidebarBtn?.addEventListener("click", closeHistorySidebar);
     historySidebarBackdrop?.addEventListener("click", closeHistorySidebar);
     collapseHistorySidebarBtn?.addEventListener("click", toggleHistoryPanelCollapse);
