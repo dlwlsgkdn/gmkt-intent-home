@@ -484,6 +484,41 @@
 .sb-resize-handle:hover { transform: scale(1.15); }
 
 .sb-btn--small { margin-top: 8px; padding: 6px 12px; font-size: 12px; }
+.sb-btn--open { border-color: var(--sb-accent); color: var(--sb-accent); }
+
+/* 자동 정렬 드롭다운 메뉴 */
+.sb-menu-wrap { position: relative; }
+.sb-menu-backdrop { position: fixed; inset: 0; z-index: 90; }
+.sb-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 95;
+  min-width: 230px;
+  padding: 6px;
+  border-radius: 16px;
+  border: 1px solid var(--sb-line);
+  background: #fff;
+  box-shadow: 0 24px 48px -20px rgba(15, 23, 42, 0.3);
+  animation: sb-menu-in 0.15s ease;
+}
+@keyframes sb-menu-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.sb-menu__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 11px;
+  text-align: left;
+  transition: background 0.12s ease;
+}
+.sb-menu__item:hover { background: var(--sb-accent-soft); }
+.sb-menu__item strong { font-size: 13px; font-weight: 600; color: var(--sb-ink); }
+.sb-menu__item small { font-size: 11px; color: #94a3b8; }
 
 /* 인스펙터 */
 .sb-inspector {

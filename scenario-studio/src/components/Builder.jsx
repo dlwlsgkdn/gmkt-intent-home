@@ -35,17 +35,66 @@ function resolveCollision(items, movedId, heights) {
   return items.map((it) => placed.find((p) => p.id === it.id) || it)
 }
 
-/* 자동 배치: y→x 순으로 정렬해 겹침 없이 세로 스택 */
-function autoLayout(items, heights) {
+/* ── 자동 정렬 모드들 ── */
+
+/* 1단 세로 스택: y→x 순으로 전체 너비로 쌓기 */
+function layoutStack(items, heights) {
   const sorted = sortByPosition(items)
   let cursor = PAD
   const positioned = {}
   sorted.forEach((it) => {
-    positioned[it.id] = { x: PAD, y: cursor, w: Math.min(it.w, ITEM_W_DEFAULT) }
+    positioned[it.id] = { x: PAD, y: cursor, w: ITEM_W_DEFAULT }
     cursor += (it.h || heights[it.id] || 80) + GAP
   })
   return items.map((it) => ({ ...it, ...positioned[it.id] }))
 }
+
+/* 2단 그리드: 반폭으로 나눠 항상 짧은 열에 채우기 (마소너리) */
+function layoutTwoColumns(items, heights) {
+  const colW = Math.floor((CANVAS_W - PAD * 2 - GAP) / 2)
+  const sorted = sortByPosition(items)
+  const cols = [PAD, PAD] // 각 열의 다음 y 커서
+  const positioned = {}
+  sorted.forEach((it) => {
+    const col = cols[0] <= cols[1] ? 0 : 1
+    positioned[it.id] = {
+      x: PAD + col * (colW + GAP),
+      y: cols[col],
+      w: colW,
+    }
+    cols[col] += (it.h || heights[it.id] || 80) + GAP
+  })
+  return items.map((it) => ({ ...it, ...positioned[it.id] }))
+}
+
+/* 위로 컴팩트: x/너비는 유지한 채 빈 공간 없이 위로 끌어올리기 (겹침도 함께 해소) */
+function layoutCompactUp(items, heights) {
+  const h = (it) => it.h || heights[it.id] || 80
+  const sorted = sortByPosition(items)
+  const placed = []
+  for (const it of sorted) {
+    let y = PAD
+    for (let guard = 0; guard < 200; guard++) {
+      const hit = placed.find(
+        (p) =>
+          it.x < p.x + p.w &&
+          it.x + it.w > p.x &&
+          y < p.y + h(p) &&
+          y + h(it) > p.y
+      )
+      if (!hit) break
+      y = hit.y + h(hit) + GAP
+    }
+    placed.push({ ...it, y })
+  }
+  return items.map((it) => placed.find((p) => p.id === it.id) || it)
+}
+
+const LAYOUT_MODES = [
+  { key: 'stack', label: '1단 세로 정렬', desc: '전체 너비로 위에서부터 차곡차곡', fn: layoutStack },
+  { key: 'twocol', label: '2단 그리드 정렬', desc: '반폭 2열 마소너리 배치', fn: layoutTwoColumns },
+  { key: 'compact', label: '위로 컴팩트 정렬', desc: '크기·가로 위치 유지, 빈 공간만 제거', fn: layoutCompactUp },
+]
 
 function CanvasItem({ item, selected, dragPos, sizeDraft, heightsRef, onSelect, onDragStart, onDrag, onDragEnd, onResize, onResizeEnd }) {
   const ref = useRef(null)
@@ -144,6 +193,7 @@ export default function Builder({ api, scenario }) {
   const [selectedId, setSelectedId] = useState(null)
   const [dragPos, setDragPos] = useState(null) // {id, x, y}
   const [sizeDraft, setSizeDraft] = useState(null) // {id, w, h}
+  const [layoutMenuOpen, setLayoutMenuOpen] = useState(false)
   const dragPosRef = useRef(null)
   const sizeDraftRef = useRef(null)
   const heightsRef = useRef({})
@@ -275,9 +325,16 @@ export default function Builder({ api, scenario }) {
     })
   }
 
-  const runAutoLayout = () => {
-    setItems((prev) => autoLayout(prev, heightsRef.current))
-    api.showToast('겹침 없이 자동 배치했어요.')
+  const runAutoLayout = (mode) => {
+    setLayoutMenuOpen(false)
+    setItems((prev) => mode.fn(prev, heightsRef.current))
+    // 너비가 바뀌는 정렬은 높이가 다시 측정된 뒤 한 번 더 컴팩트하게 보정한다
+    if (mode.key !== 'compact') {
+      setTimeout(() => {
+        setItems((prev) => layoutCompactUp(prev, heightsRef.current))
+      }, 180)
+    }
+    api.showToast(`${mode.label}로 겹침 없이 배치했어요.`)
   }
 
   const publish = () => {
@@ -348,7 +405,29 @@ export default function Builder({ api, scenario }) {
           {scenario.status === 'published' ? '발행됨' : '작성 중'}
         </span>
         <div className="sb-topbar__actions">
-          <button type="button" className="sb-btn" onClick={runAutoLayout}>자동 정렬</button>
+          <div className="sb-menu-wrap">
+            <button
+              type="button"
+              className={'sb-btn' + (layoutMenuOpen ? ' sb-btn--open' : '')}
+              onClick={() => setLayoutMenuOpen((v) => !v)}
+            >
+              자동 정렬
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" /></svg>
+            </button>
+            {layoutMenuOpen && (
+              <>
+                <div className="sb-menu-backdrop" onClick={() => setLayoutMenuOpen(false)} />
+                <div className="sb-menu">
+                  {LAYOUT_MODES.map((mode) => (
+                    <button key={mode.key} type="button" className="sb-menu__item" onClick={() => runAutoLayout(mode)}>
+                      <strong>{mode.label}</strong>
+                      <small>{mode.desc}</small>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
           <button type="button" className="sb-btn" onClick={() => api.playScenario(scenario.id)}>시험해보기</button>
           {scenario.status === 'published' ? (
             <button type="button" className="sb-btn sb-btn--ghost" onClick={unpublish}>발행 취소</button>
