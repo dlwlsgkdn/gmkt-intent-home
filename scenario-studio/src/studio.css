@@ -976,6 +976,59 @@
 }
 .sb-option--selected span:first-child { color: var(--sb-accent) !important; }
 
+/* ── 모바일(좁은 컨테이너) 대응: 컴포넌트가 자기 폭에 반응 ── */
+.sb-canvas-item__content,
+.sb-player__item {
+  container-type: inline-size;
+}
+
+/* 뷰포트(vw) 기준이던 타이포를 컨테이너 폭 기준으로 스케일 */
+.sb-canvas-item__content .clean-info-header h2,
+.sb-player__item .clean-info-header h2 {
+  font-size: clamp(20px, 9cqw, 40px);
+}
+.sb-canvas-item__content .clean-info-header p,
+.sb-player__item .clean-info-header p {
+  font-size: clamp(13px, 4.6cqw, 15px);
+}
+.sb-canvas-item__content .sb-plan-title,
+.sb-player__item .sb-plan-title {
+  font-size: clamp(20px, 8cqw, 34px);
+}
+
+/* 설문 옵션: nowrap 해제 — 긴 선택지도 카드 안에서 줄바꿈 */
+.sb-question__grid .whitespace-nowrap {
+  white-space: normal !important;
+  word-break: keep-all;
+}
+
+/* CTA 바: 좁은 컨테이너에서는 세로 스택 + 풀폭 버튼 */
+.sb-cta-bar button { word-break: keep-all; }
+@container (max-width: 480px) {
+  .sb-cta-bar > div {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  .sb-cta-bar button { width: 100% !important; }
+}
+
+/* 상품 카드: 좁은 컨테이너에서 이미지 축소 + 상품명 2줄 허용 */
+@container (max-width: 400px) {
+  .sb-product-card .sb-product-img {
+    width: 56px;
+    height: 56px;
+    border-radius: 14px;
+  }
+  .sb-product-card p.font-semibold {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: keep-all;
+  }
+}
+
 /* ── 프로필/설문 요약 패널 ── */
 .sb-player__panels {
   width: min(760px, 100%);
@@ -994,6 +1047,17 @@
   align-items: center;
   gap: 10px;
   margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.sb-profile-panel__head strong { word-break: keep-all; }
+/* 좁은 컨테이너: 힌트 문구를 아랫줄로 내림 */
+@container (max-width: 480px) {
+  .sb-profile-panel__head small {
+    flex-basis: 100%;
+    margin-left: 42px;
+    margin-top: -4px;
+    white-space: normal;
+  }
 }
 .sb-profile-panel__avatar {
   display: inline-flex;
@@ -1027,6 +1091,15 @@
   background: #fff;
   font-size: 13px;
   transition: all 0.14s ease;
+  /* 긴 질문 라벨도 칩 안에서 자연스럽게 줄바꿈 (단어 중간 꺾임 방지) */
+  max-width: 100%;
+  flex-wrap: wrap;
+  text-align: left;
+}
+.sb-info-chip__label,
+.sb-info-chip strong {
+  white-space: normal;
+  word-break: keep-all;
 }
 button.sb-info-chip:hover { border-color: #94a3b8; background: #f8fafc; }
 .sb-info-chip__label { color: #94a3b8; font-weight: 400; }

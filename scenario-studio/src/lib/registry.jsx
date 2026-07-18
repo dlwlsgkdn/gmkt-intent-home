@@ -370,7 +370,7 @@ export const LIBRARY = {
     render: (p) => (
       <div className="sb-static">
         <span className="text-xs font-medium text-gmarket-blue uppercase tracking-widest mb-2 block">{p.kicker}</span>
-        <h2 className="text-2xl md:text-4xl font-bold text-slate-800 leading-snug">{p.title}</h2>
+        <h2 className="sb-plan-title text-2xl md:text-4xl font-bold text-slate-800 leading-snug">{p.title}</h2>
       </div>
     ),
   },
@@ -431,7 +431,7 @@ export const LIBRARY = {
       { key: 'imageUrl', label: '이미지 URL', kind: 'text' },
     ],
     render: (p, ctx) => (
-      <div className="rounded-[28px] border border-slate-100 bg-white p-4 shadow-sm flex items-center gap-4">
+      <div className="sb-product-card rounded-[28px] border border-slate-100 bg-white p-4 shadow-sm flex items-center gap-4">
         <div className="w-20 h-20 rounded-2xl overflow-hidden bg-slate-50 border border-slate-100 flex-shrink-0 sb-product-img">
           <Img src={p.imageUrl} alt={p.name} />
         </div>
@@ -492,7 +492,7 @@ export const LIBRARY = {
       { key: 'buttonText', label: '버튼 문구', kind: 'text' },
     ],
     render: (p, ctx) => (
-      <div className="rounded-[32px] border border-slate-200 bg-white/90 p-6 shadow-sm">
+      <div className="sb-cta-bar rounded-[32px] border border-slate-200 bg-white/90 p-6 shadow-sm">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-slate-400">{p.countLabel}</p>
