@@ -95,7 +95,7 @@ const LAYOUT_MODES = [
   { key: 'compact', label: '위로 컴팩트 정렬', desc: '크기·가로 위치 유지, 빈 공간만 제거', fn: (items, heights) => layoutCompactUp(items, heights) },
 ]
 
-function CanvasItem({ item, selected, dragPos, sizeDraft, heightsRef, onSelect, onDragStart, onDrag, onDragEnd, onResize, onResizeEnd, onInspect }) {
+function CanvasItem({ item, selected, dragPos, sizeDraft, heightsRef, renderCtx, onSelect, onDragStart, onDrag, onDragEnd, onResize, onResizeEnd, onInspect }) {
   const ref = useRef(null)
   const dragging = dragPos != null
   const resizing = sizeDraft != null
@@ -180,8 +180,15 @@ function CanvasItem({ item, selected, dragPos, sizeDraft, heightsRef, onSelect, 
       onDoubleClick={() => onInspect(item.id)}
     >
       <span className="sb-canvas-item__tag">{def?.icon} {def?.label}</span>
-      <div className="sb-canvas-item__content" style={h ? { height: '100%', overflow: 'hidden' } : undefined}>
-        {renderItem(item, { mode: 'canvas' })}
+      <div
+        className="sb-canvas-item__content"
+        style={{
+          ...(h ? { height: '100%', overflow: 'hidden' } : null),
+          // 일부 컴포넌트(프로필 패널 등)는 캔버스에서도 클릭 가능
+          ...(def?.canvasInteractive ? { pointerEvents: 'auto' } : null),
+        }}
+      >
+        {renderItem(item, renderCtx || { mode: 'canvas' })}
       </div>
       <span className="sb-resize-handle" onPointerDown={onResizeDown} title="크기 조절" />
     </div>
@@ -213,15 +220,24 @@ export default function Builder({ api, scenario }) {
   const canvasW = device.w
   const itemW = canvasW - PAD * 2
 
-  /* 프로필(고정 설문 정보) — 시나리오별 노출 항목 (빈 라벨 항목 제외) */
+  /* 프로필(고정 설문 정보) — 빈 라벨 항목 제외 */
   const profileItems = (api.profile?.items || []).filter((it) => it.label && it.label.trim())
-  const activeProfileKeys = scenario.profileKeys ?? profileItems.map((it) => it.label)
-  const toggleProfileKey = (label) => {
-    api.updateScenario(scenario.id, (s) => {
-      const cur = s.profileKeys ?? profileItems.map((p) => p.label)
-      const next = cur.includes(label) ? cur.filter((l) => l !== label) : [...cur, label]
-      return { ...s, profileKeys: next }
-    })
+  /* 설문 단계의 프로필 요약 패널 컴포넌트가 숨긴 라벨들 → 계획 요약 미리보기에 반영 */
+  const hiddenProfileLabels = (scenario.stages.survey || [])
+    .filter((it) => it.type === 'profilePanel')
+    .flatMap((it) => String(it.props.hidden || '').split(',').map((s) => s.trim()).filter(Boolean))
+
+  /* 캔버스 렌더 컨텍스트: 프로필 데이터, 배지 클릭 토글, 계획 요약 미리보기 */
+  const canvasCtx = {
+    mode: 'canvas',
+    profile: api.profile,
+    updateProps: (id, key, value) => updateProps(id, key, value),
+    summaryPreview: {
+      profile: profileItems.filter((it) => !hiddenProfileLabels.includes(it.label)),
+      questions: (scenario.stages.survey || [])
+        .filter((it) => it.type === 'surveyQuestion')
+        .map((q) => ({ q: q.props.question, a: '아무거나' })),
+    },
   }
 
   /* 변경 직전 상태를 히스토리에 기록 (500ms 안의 연속 변경은 하나로 묶는다) */
@@ -829,76 +845,6 @@ export default function Builder({ api, scenario }) {
         <main className="sb-canvas-wrap" onPointerDown={(e) => { if (e.target === e.currentTarget) setSelectedId(null) }}>
           <div className="sb-canvas-col" style={{ width: canvasW }}>
 
-          {/* 설문 단계: 프로필 요약 고정 패널 미리보기 (배지 클릭 = 노출 토글) */}
-          {stageKey === 'survey' && profileItems.length > 0 && (
-            <div className="sb-pinned-panel">
-              <span className="sb-pinned-panel__badge">고정 패널 · 설문 상단에 자동 표시</span>
-              <div className="sb-profile-panel">
-                <div className="sb-profile-panel__head">
-                  <span className="sb-profile-panel__avatar" aria-hidden="true">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 20c0-3.3 3.1-6 7-6s7 2.7 7 6" /></svg>
-                  </span>
-                  <strong>{api.profile?.name || '사용자'}님에 대해 이미 알고 있어요</strong>
-                  <small>배지를 눌러 이 시나리오 노출을 켜고 끄세요</small>
-                </div>
-                <div className="sb-profile-panel__chips">
-                  {profileItems.map((it) => {
-                    const on = activeProfileKeys.includes(it.label)
-                    return (
-                      <button
-                        key={it.label}
-                        type="button"
-                        className={'sb-info-chip' + (on ? '' : ' sb-info-chip--off')}
-                        onClick={() => toggleProfileKey(it.label)}
-                        title={on ? '이 시나리오에서 숨기기' : '이 시나리오에 노출하기'}
-                      >
-                        <span className="sb-info-chip__label">{it.label}:</span>
-                        <strong>{it.value}</strong>
-                        {on && (
-                          <span className="sb-info-chip__check" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
-                          </span>
-                        )}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* 계획 단계: 설문 요약 고정 패널 미리보기 */}
-          {stageKey === 'plan' && (
-            <div className="sb-pinned-panel">
-              <span className="sb-pinned-panel__badge">고정 패널 · 계획 상단에 자동 표시</span>
-              <div className="sb-summary-panel">
-                <p className="sb-summary-panel__title">설문 요약</p>
-                <div className="sb-summary-panel__chips">
-                  {profileItems
-                    .filter((it) => activeProfileKeys.includes(it.label))
-                    .map((it) => (
-                      <span key={it.label} className="sb-info-chip sb-info-chip--static">
-                        <span className="sb-info-chip__label">{it.label}:</span>
-                        <strong>{it.value}</strong>
-                      </span>
-                    ))}
-                  {(scenario.stages.survey || [])
-                    .filter((it) => it.type === 'surveyQuestion')
-                    .map((q) => (
-                      <span key={q.id} className="sb-info-chip sb-info-chip--static">
-                        <span className="sb-info-chip__label">{q.props.question}:</span>
-                        <strong>아무거나</strong>
-                      </span>
-                    ))}
-                  {profileItems.filter((it) => activeProfileKeys.includes(it.label)).length === 0 &&
-                    (scenario.stages.survey || []).filter((it) => it.type === 'surveyQuestion').length === 0 && (
-                      <span className="sb-pinned-panel__empty">설문 질문과 프로필 항목이 여기에 요약돼요.</span>
-                    )}
-                </div>
-              </div>
-            </div>
-          )}
-
           <div
             className="sb-canvas"
             style={{ width: canvasW, height: canvasHeight }}
@@ -925,6 +871,7 @@ export default function Builder({ api, scenario }) {
                 dragPos={dragPos && dragPos.id === it.id ? dragPos : null}
                 sizeDraft={sizeDraft && sizeDraft.id === it.id ? sizeDraft : null}
                 heightsRef={heightsRef}
+                renderCtx={canvasCtx}
                 onSelect={setSelectedId}
                 onDragStart={() => {}}
                 onDrag={onDrag}
@@ -945,30 +892,11 @@ export default function Builder({ api, scenario }) {
             <div className="sb-inspector__empty">
               <p className="sb-panel-label">편집</p>
               캔버스에서 컴포넌트를 선택하면<br />플레이스홀더를 편집할 수 있어요.
-
-              {stageKey === 'survey' && profileItems.length > 0 && (
-                <div className="sb-profile-config">
-                  <p className="sb-panel-label">프로필 요약 패널</p>
-                  <p className="sb-profile-config__hint">
-                    설문 타이틀 아래에 보여줄, 이 시나리오와 연관된 고정 설문 정보를 고르세요.
-                    캔버스 위 미리보기의 배지를 눌러도 토글돼요.
-                  </p>
-                  {profileItems.map((it) => {
-                    const on = activeProfileKeys.includes(it.label)
-                    return (
-                      <button
-                        key={it.label}
-                        type="button"
-                        className={'sb-profile-config__row' + (on ? ' sb-profile-config__row--on' : '')}
-                        onClick={() => toggleProfileKey(it.label)}
-                      >
-                        <span className="sb-profile-config__check">{on ? '✓' : ''}</span>
-                        <span className="sb-profile-config__label">{it.label}</span>
-                        <span className="sb-profile-config__value">{it.value}</span>
-                      </button>
-                    )
-                  })}
-                </div>
+              {stageKey === 'survey' && (
+                <p className="sb-profile-config__hint" style={{ marginTop: 14 }}>
+                  💡 프로필 요약 패널은 팔레트의 "프로필 요약 패널" 컴포넌트로 배치하고,
+                  배지를 클릭해 노출 항목을 조절하세요.
+                </p>
               )}
             </div>
           ) : (

@@ -250,6 +250,76 @@ export const LIBRARY = {
     },
   },
 
+  profilePanel: {
+    label: '프로필 요약 패널',
+    stage: 'survey',
+    icon: '🪪',
+    hint: '"~님에 대해 이미 알고 있어요" — 배지 클릭으로 노출 조절',
+    canvasInteractive: true,
+    defaults: {
+      hint: '이번엔 빼고 싶은 항목을 눌러주세요',
+      hidden: '', // 이 시나리오에서 숨길 프로필 라벨 (쉼표 구분)
+    },
+    fields: [
+      { key: 'hint', label: '우측 안내 문구', kind: 'text' },
+      { key: 'hidden', label: '숨길 항목 라벨 (쉼표 구분 · 캔버스 배지 클릭과 동기화)', kind: 'text' },
+    ],
+    render: (p, ctx) => {
+      const profile = ctx.profile || { name: '사용자', items: [] }
+      const items = (profile.items || []).filter((it) => it.label && it.label.trim())
+      const hidden = splitList(p.hidden)
+      const isPlayer = ctx.mode === 'player'
+      const excluded = isPlayer ? ctx.player.excludedProfile || [] : []
+      // 플레이어에서는 숨긴 항목을 아예 안 보여주고, 캔버스에서는 흐리게 보여준다
+      const visible = isPlayer ? items.filter((it) => !hidden.includes(it.label)) : items
+      return (
+        <div className="sb-profile-panel">
+          <div className="sb-profile-panel__head">
+            <span className="sb-profile-panel__avatar" aria-hidden="true">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 20c0-3.3 3.1-6 7-6s7 2.7 7 6" /></svg>
+            </span>
+            <strong>{profile.name}님에 대해 이미 알고 있어요</strong>
+            <small>{isPlayer ? p.hint : '배지를 눌러 이 시나리오 노출을 켜고 끄세요'}</small>
+          </div>
+          <div className="sb-profile-panel__chips">
+            {visible.length === 0 && (
+              <span className="sb-pinned-panel__empty">프로필 항목이 없어요. 탐색 페이지 편집기에서 추가하세요.</span>
+            )}
+            {visible.map((it) => {
+              const off = isPlayer ? excluded.includes(it.label) : hidden.includes(it.label)
+              return (
+                <button
+                  key={it.label}
+                  type="button"
+                  className={'sb-info-chip' + (off ? ' sb-info-chip--off' : '')}
+                  title={isPlayer ? (off ? '다시 포함하기' : '이번 설문에서 빼기') : (off ? '이 시나리오에 노출하기' : '이 시나리오에서 숨기기')}
+                  onClick={() => {
+                    if (isPlayer) {
+                      ctx.player.toggleProfileItem(it.label)
+                    } else if (ctx.updateProps) {
+                      const next = hidden.includes(it.label)
+                        ? hidden.filter((l) => l !== it.label)
+                        : [...hidden, it.label]
+                      ctx.updateProps(ctx.itemId, 'hidden', next.join(', '))
+                    }
+                  }}
+                >
+                  <span className="sb-info-chip__label">{it.label}:</span>
+                  <strong>{it.value}</strong>
+                  {!off && (
+                    <span className="sb-info-chip__check" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )
+    },
+  },
+
   profileCard: {
     label: '저장된 프로필 카드',
     stage: 'survey',
@@ -279,6 +349,42 @@ export const LIBRARY = {
   },
 
   /* ─────────── 계획 단계 ─────────── */
+  surveySummary: {
+    label: '설문 요약 패널',
+    stage: 'plan',
+    icon: '🧾',
+    hint: '프로필 + 설문에서 고른 답을 칩으로 요약',
+    defaults: { title: '설문 요약' },
+    fields: [{ key: 'title', label: '제목', kind: 'text' }],
+    render: (p, ctx) => {
+      const data =
+        (ctx.mode === 'player' ? ctx.player.summary : ctx.summaryPreview) || { profile: [], questions: [] }
+      const empty = data.profile.length === 0 && data.questions.length === 0
+      return (
+        <div className="sb-summary-panel">
+          <p className="sb-summary-panel__title">{p.title}</p>
+          <div className="sb-summary-panel__chips">
+            {empty && (
+              <span className="sb-pinned-panel__empty">설문 질문과 프로필 항목이 여기에 요약돼요.</span>
+            )}
+            {data.profile.map((it) => (
+              <span key={it.label} className="sb-info-chip sb-info-chip--static">
+                <span className="sb-info-chip__label">{it.label}:</span>
+                <strong>{it.value}</strong>
+              </span>
+            ))}
+            {data.questions.map((q, i) => (
+              <span key={i} className="sb-info-chip sb-info-chip--static">
+                <span className="sb-info-chip__label">{q.q}:</span>
+                <strong>{q.a}</strong>
+              </span>
+            ))}
+          </div>
+        </div>
+      )
+    },
+  },
+
   planTitle: {
     label: '계획 타이틀',
     stage: 'plan',

@@ -86,7 +86,7 @@ export default function ExploreEditor({ api }) {
           <div className="sb-explore-story-fields">
             <p className="sb-panel-label">사용자 프로필 (고정 설문 정보)</p>
             <p className="sb-profile-config__hint">
-              설문 단계 상단의 "이미 알고 있어요" 패널에 쓰여요. 시나리오별 노출 항목은 빌더의 설문 탭에서 고릅니다.
+              "프로필 요약 패널" 컴포넌트에 쓰여요. 시나리오별 노출 항목은 빌더 캔버스에서 패널의 배지를 눌러 고릅니다.
             </p>
             <div className="sb-field">
               <label>사용자 이름</label>
