@@ -1,10 +1,42 @@
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import { BgBlobs, FloatingBar, StudioFab } from './Frame.jsx'
+import { TEMPLATES } from '../lib/templates.js'
 
 export default function HomeView({ api }) {
   const [query, setQuery] = useState('')
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const importInputRef = useRef(null)
   const published = api.scenarios.filter((s) => s.status === 'published')
+
+  const exportScenarios = () => {
+    if (api.scenarios.length === 0) {
+      api.showToast('내보낼 시나리오가 없어요.')
+      return
+    }
+    const blob = new Blob([JSON.stringify(api.scenarios, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'ddak-scenarios.json'
+    a.click()
+    URL.revokeObjectURL(url)
+    api.showToast(`시나리오 ${api.scenarios.length}개를 JSON으로 내보냈어요.`)
+  }
+
+  const handleImportFile = (e) => {
+    const file = e.target.files && e.target.files[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      try {
+        api.importScenarios(JSON.parse(reader.result))
+      } catch (err) {
+        api.showToast('가져오기 실패: JSON 형식을 확인해주세요.')
+      }
+    }
+    reader.readAsText(file)
+    e.target.value = ''
+  }
 
   const submit = (e) => {
     e.preventDefault()
@@ -128,9 +160,28 @@ export default function HomeView({ api }) {
               </button>
             </div>
 
-            <button type="button" className="sb-new-btn" onClick={api.newScenario}>
-              + 새 시나리오 만들기
-            </button>
+            <p className="sb-panel-label">새로 만들기</p>
+            <div className="sb-template-grid">
+              {TEMPLATES.map((t) => (
+                <button key={t.key} type="button" className="sb-template-card" onClick={() => api.newScenario(t)}>
+                  <span className="sb-template-card__icon">{t.icon}</span>
+                  <strong>{t.name}</strong>
+                  <small>{t.desc}</small>
+                </button>
+              ))}
+            </div>
+
+            <div className="sb-drawer__tools">
+              <button type="button" onClick={exportScenarios}>
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16" /></svg>
+                내보내기
+              </button>
+              <button type="button" onClick={() => importInputRef.current && importInputRef.current.click()}>
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M12 16V4m0 0L8 8m4-4l4 4M4 20h16" /></svg>
+                가져오기
+              </button>
+              <input ref={importInputRef} type="file" accept=".json,application/json" className="hidden" onChange={handleImportFile} />
+            </div>
 
             <div className="sb-drawer__list">
               {api.scenarios.length === 0 && (

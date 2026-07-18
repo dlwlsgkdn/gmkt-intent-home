@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { STAGES, createItem, sortByPosition } from '../lib/store.js'
 import { LIBRARY, libraryForStage, renderItem } from '../lib/registry.jsx'
 
@@ -96,7 +96,7 @@ const LAYOUT_MODES = [
   { key: 'compact', label: '위로 컴팩트 정렬', desc: '크기·가로 위치 유지, 빈 공간만 제거', fn: layoutCompactUp },
 ]
 
-function CanvasItem({ item, selected, dragPos, sizeDraft, heightsRef, onSelect, onDragStart, onDrag, onDragEnd, onResize, onResizeEnd }) {
+function CanvasItem({ item, selected, dragPos, sizeDraft, heightsRef, onSelect, onDragStart, onDrag, onDragEnd, onResize, onResizeEnd, onInspect }) {
   const ref = useRef(null)
   const dragging = dragPos != null
   const resizing = sizeDraft != null
@@ -178,6 +178,7 @@ function CanvasItem({ item, selected, dragPos, sizeDraft, heightsRef, onSelect, 
       }
       style={{ left: x, top: y, width: w, height: h || 'auto' }}
       onPointerDown={onPointerDown}
+      onDoubleClick={() => onInspect(item.id)}
     >
       <span className="sb-canvas-item__tag">{def?.icon} {def?.label}</span>
       <div className="sb-canvas-item__content" style={h ? { height: '100%', overflow: 'hidden' } : undefined}>
@@ -194,23 +195,60 @@ export default function Builder({ api, scenario }) {
   const [dragPos, setDragPos] = useState(null) // {id, x, y}
   const [sizeDraft, setSizeDraft] = useState(null) // {id, w, h}
   const [layoutMenuOpen, setLayoutMenuOpen] = useState(false)
+  const [paletteTab, setPaletteTab] = useState('components') // 'components' | 'layers'
+  const [guides, setGuides] = useState([]) // 드래그 중 스냅 가이드라인
+  const [focusTick, setFocusTick] = useState(0) // 더블클릭 → 인스펙터 포커스 신호
+  const [, setHistVer] = useState(0) // undo/redo 버튼 활성화 갱신용
   const dragPosRef = useRef(null)
   const sizeDraftRef = useRef(null)
   const heightsRef = useRef({})
+  const historyRef = useRef({ past: [], future: [], lastPush: 0 })
 
   const items = scenario.stages[stageKey] || []
   const selected = items.find((it) => it.id === selectedId) || null
   const stageMeta = STAGES.find((s) => s.key === stageKey)
 
-  const setItems = useCallback(
-    (updater) => {
-      api.updateScenario(scenario.id, (s) => ({
-        ...s,
-        stages: { ...s.stages, [stageKey]: updater(s.stages[stageKey] || []) },
-      }))
-    },
-    [api, scenario.id, stageKey]
-  )
+  /* 변경 직전 상태를 히스토리에 기록 (500ms 안의 연속 변경은 하나로 묶는다) */
+  const pushHistory = () => {
+    const h = historyRef.current
+    const now = Date.now()
+    if (now - h.lastPush < 500) return
+    h.past.push(JSON.stringify(scenario.stages))
+    if (h.past.length > 60) h.past.shift()
+    h.future = []
+    h.lastPush = now
+    setHistVer((v) => v + 1)
+  }
+
+  const undo = () => {
+    const h = historyRef.current
+    const snap = h.past.pop()
+    if (!snap) return
+    h.future.push(JSON.stringify(scenario.stages))
+    h.lastPush = 0
+    setHistVer((v) => v + 1)
+    setSelectedId(null)
+    api.updateScenario(scenario.id, (s) => ({ ...s, stages: JSON.parse(snap) }))
+  }
+
+  const redo = () => {
+    const h = historyRef.current
+    const snap = h.future.pop()
+    if (!snap) return
+    h.past.push(JSON.stringify(scenario.stages))
+    h.lastPush = 0
+    setHistVer((v) => v + 1)
+    setSelectedId(null)
+    api.updateScenario(scenario.id, (s) => ({ ...s, stages: JSON.parse(snap) }))
+  }
+
+  const setItems = (updater) => {
+    pushHistory()
+    api.updateScenario(scenario.id, (s) => ({
+      ...s,
+      stages: { ...s.stages, [stageKey]: updater(s.stages[stageKey] || []) },
+    }))
+  }
 
   useEffect(() => {
     setSelectedId(null)
@@ -260,14 +298,54 @@ export default function Builder({ api, scenario }) {
     setSelectedId(copy.id)
   }
 
+  /* 스마트 스냅: 캔버스 가장자리/중앙, 다른 아이템의 모서리·간격에 자석처럼 붙는다 */
+  const SNAP = 6
   const onDrag = (id, x, y) => {
     const it = items.find((i) => i.id === id)
     const w = it ? it.w : ITEM_W_DEFAULT
-    const pos = {
-      id,
-      x: Math.max(0, Math.min(CANVAS_W - w, x)),
-      y: Math.max(0, y),
+    const hh = (it && it.h) || heightsRef.current[id] || 80
+    let nx = Math.max(0, Math.min(CANVAS_W - w, x))
+    let ny = Math.max(0, y)
+    const activeGuides = []
+
+    // 세로 가이드 후보: [스냅될 x, 가이드라인 표시 위치]
+    const vCands = [
+      [PAD, PAD],
+      [(CANVAS_W - w) / 2, CANVAS_W / 2],
+      [CANVAS_W - PAD - w, CANVAS_W - PAD],
+    ]
+    items.forEach((o) => {
+      if (o.id === id) return
+      vCands.push([o.x, o.x])
+      vCands.push([o.x + o.w - w, o.x + o.w])
+    })
+    for (const [cand, line] of vCands) {
+      if (Math.abs(nx - cand) <= SNAP) {
+        nx = cand
+        activeGuides.push({ type: 'v', pos: line })
+        break
+      }
     }
+
+    // 가로 가이드 후보: 상단 정렬, 다른 아이템 위/아래 + 간격 스냅
+    const hCands = [[PAD, PAD]]
+    items.forEach((o) => {
+      if (o.id === id) return
+      const oh = o.h || heightsRef.current[o.id] || 80
+      hCands.push([o.y, o.y])
+      hCands.push([o.y + oh + GAP, o.y + oh + GAP])
+      hCands.push([o.y - hh - GAP, o.y - GAP / 2])
+    })
+    for (const [cand, line] of hCands) {
+      if (cand >= 0 && Math.abs(ny - cand) <= SNAP) {
+        ny = cand
+        activeGuides.push({ type: 'h', pos: line })
+        break
+      }
+    }
+
+    setGuides(activeGuides)
+    const pos = { id, x: nx, y: ny }
     dragPosRef.current = pos
     setDragPos(pos)
   }
@@ -275,6 +353,7 @@ export default function Builder({ api, scenario }) {
   const onDragEnd = (id) => {
     const pos = dragPosRef.current
     dragPosRef.current = null
+    setGuides([])
     // 진행 중인 React 렌더와 커밋이 겹치지 않도록 다음 틱으로 미룬다
     setTimeout(() => {
       if (pos && pos.id === id) {
@@ -324,6 +403,89 @@ export default function Builder({ api, scenario }) {
       return resolveCollision(updated, id, heightsRef.current)
     })
   }
+
+  /* 방향키 미세 이동 */
+  const nudge = (id, dx, dy) => {
+    setItems((prev) => {
+      const moved = prev.map((it) =>
+        it.id === id
+          ? {
+              ...it,
+              x: Math.max(0, Math.min(CANVAS_W - it.w, it.x + dx)),
+              y: Math.max(0, it.y + dy),
+            }
+          : it
+      )
+      return resolveCollision(moved, id, heightsRef.current)
+    })
+  }
+
+  /* 레이어 패널에서 순서 바꾸기: 이웃과 자리를 교환하고 컴팩트 정리 */
+  const moveLayer = (id, dir) => {
+    setItems((prev) => {
+      const sorted = sortByPosition(prev)
+      const idx = sorted.findIndex((it) => it.id === id)
+      const j = idx + dir
+      if (idx < 0 || j < 0 || j >= sorted.length) return prev
+      const a = sorted[idx]
+      const b = sorted[j]
+      const swapped = prev.map((it) =>
+        it.id === a.id ? { ...it, x: b.x, y: b.y } : it.id === b.id ? { ...it, x: a.x, y: a.y } : it
+      )
+      return layoutCompactUp(swapped, heightsRef.current)
+    })
+  }
+
+  /* 키보드 단축키: ⌘Z 실행취소, ⇧⌘Z 다시실행, ⌘D 복제, Delete 삭제, 방향키 이동, Esc 해제 */
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.target.closest && e.target.closest('input, textarea, select, [contenteditable]')) return
+      const meta = e.metaKey || e.ctrlKey
+      if (meta && e.key.toLowerCase() === 'z') {
+        e.preventDefault()
+        e.shiftKey ? redo() : undo()
+        return
+      }
+      if (meta && e.key.toLowerCase() === 'd' && selectedId) {
+        e.preventDefault()
+        duplicateItem(selectedId)
+        return
+      }
+      if (!selectedId) return
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault()
+        removeItem(selectedId)
+        return
+      }
+      if (e.key === 'Escape') {
+        setSelectedId(null)
+        return
+      }
+      const step = e.shiftKey ? 1 : 8
+      const dir = {
+        ArrowUp: [0, -step],
+        ArrowDown: [0, step],
+        ArrowLeft: [-step, 0],
+        ArrowRight: [step, 0],
+      }[e.key]
+      if (dir) {
+        e.preventDefault()
+        nudge(selectedId, dir[0], dir[1])
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
+  /* 더블클릭 시 인스펙터 첫 입력란에 포커스 */
+  useEffect(() => {
+    if (!focusTick) return
+    const el = document.querySelector('.sb-inspector input[type="text"], .sb-inspector textarea')
+    if (el) {
+      el.focus()
+      if (el.select) el.select()
+    }
+  }, [focusTick])
 
   const runAutoLayout = (mode) => {
     setLayoutMenuOpen(false)
@@ -404,7 +566,30 @@ export default function Builder({ api, scenario }) {
         <span className={'sb-status ' + (scenario.status === 'published' ? 'sb-status--live' : '')}>
           {scenario.status === 'published' ? '발행됨' : '작성 중'}
         </span>
+        <span className="sb-autosave" title={scenario.updatedAt}>
+          자동 저장됨 · {new Date(scenario.updatedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+        </span>
         <div className="sb-topbar__actions">
+          <button
+            type="button"
+            className="sb-icon-btn"
+            title="실행 취소 (⌘Z)"
+            aria-label="실행 취소"
+            disabled={historyRef.current.past.length === 0}
+            onClick={undo}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M9 14L4 9l5-5M4 9h10a6 6 0 010 12h-3" /></svg>
+          </button>
+          <button
+            type="button"
+            className="sb-icon-btn"
+            title="다시 실행 (⇧⌘Z)"
+            aria-label="다시 실행"
+            disabled={historyRef.current.future.length === 0}
+            onClick={redo}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M15 14l5-5-5-5M20 9H10a6 6 0 000 12h3" /></svg>
+          </button>
           <div className="sb-menu-wrap">
             <button
               type="button"
@@ -456,19 +641,80 @@ export default function Builder({ api, scenario }) {
       </div>
 
       <div className="sb-workspace">
-        {/* 팔레트 */}
+        {/* 팔레트 / 레이어 */}
         <aside className="sb-palette">
-          <p className="sb-panel-label">컴포넌트</p>
-          {libraryForStage(stageKey).map((def) => (
-            <button key={def.type} type="button" className="sb-palette-card" onClick={() => addItem(def.type)}>
-              <span className="sb-palette-card__icon">{def.icon}</span>
-              <span className="sb-palette-card__text">
-                <strong>{def.label}</strong>
-                <small>{def.hint}</small>
-              </span>
-              <span className="sb-palette-card__add">+</span>
+          <div className="sb-palette-tabs">
+            <button
+              type="button"
+              className={paletteTab === 'components' ? 'sb-palette-tab--active' : ''}
+              onClick={() => setPaletteTab('components')}
+            >
+              컴포넌트
             </button>
-          ))}
+            <button
+              type="button"
+              className={paletteTab === 'layers' ? 'sb-palette-tab--active' : ''}
+              onClick={() => setPaletteTab('layers')}
+            >
+              레이어 <span className="sb-palette-tab__count">{items.length}</span>
+            </button>
+          </div>
+
+          {paletteTab === 'components' ? (
+            libraryForStage(stageKey).map((def) => (
+              <button key={def.type} type="button" className="sb-palette-card" onClick={() => addItem(def.type)}>
+                <span className="sb-palette-card__icon">{def.icon}</span>
+                <span className="sb-palette-card__text">
+                  <strong>{def.label}</strong>
+                  <small>{def.hint}</small>
+                </span>
+                <span className="sb-palette-card__add">+</span>
+              </button>
+            ))
+          ) : (
+            <div className="sb-layer-list">
+              {items.length === 0 && (
+                <p className="sb-layer-list__empty">이 단계에 컴포넌트가 없어요.</p>
+              )}
+              {sortByPosition(items).map((it, i, arr) => (
+                <div
+                  key={it.id}
+                  className={'sb-layer' + (selectedId === it.id ? ' sb-layer--active' : '')}
+                  onClick={() => setSelectedId(it.id)}
+                >
+                  <span className="sb-layer__icon">{LIBRARY[it.type]?.icon}</span>
+                  <span className="sb-layer__name">
+                    <strong>{LIBRARY[it.type]?.label}</strong>
+                    <small>
+                      {String(
+                        it.props.title || it.props.text || it.props.question || it.props.name || it.props.tags || ''
+                      ).slice(0, 22)}
+                    </small>
+                  </span>
+                  <span className="sb-layer__btns">
+                    <button
+                      type="button"
+                      title="위로"
+                      disabled={i === 0}
+                      onClick={(e) => { e.stopPropagation(); moveLayer(it.id, -1) }}
+                    >↑</button>
+                    <button
+                      type="button"
+                      title="아래로"
+                      disabled={i === arr.length - 1}
+                      onClick={(e) => { e.stopPropagation(); moveLayer(it.id, 1) }}
+                    >↓</button>
+                    <button
+                      type="button"
+                      title="삭제"
+                      className="sb-layer__del"
+                      onClick={(e) => { e.stopPropagation(); removeItem(it.id) }}
+                    >✕</button>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </aside>
 
         {/* 캔버스 */}
@@ -484,6 +730,13 @@ export default function Builder({ api, scenario }) {
                 <span>추가한 컴포넌트는 마우스로 끌어 배치할 수 있어요.</span>
               </div>
             )}
+            {guides.map((g, i) => (
+              <div
+                key={i}
+                className={'sb-guide sb-guide--' + g.type}
+                style={g.type === 'v' ? { left: g.pos } : { top: g.pos }}
+              />
+            ))}
             {displayItems.map((it) => (
               <CanvasItem
                 key={it.id}
@@ -498,6 +751,7 @@ export default function Builder({ api, scenario }) {
                 onDragEnd={onDragEnd}
                 onResize={onResize}
                 onResizeEnd={onResizeEnd}
+                onInspect={(id) => { setSelectedId(id); setFocusTick((t) => t + 1) }}
               />
             ))}
           </div>

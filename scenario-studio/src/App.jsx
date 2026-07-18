@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { loadScenarios, saveScenarios, createScenario } from './lib/store.js'
+import { loadScenarios, saveScenarios, createScenario, uid } from './lib/store.js'
 import HomeView from './components/HomeView.jsx'
 import Builder from './components/Builder.jsx'
 import Player from './components/Player.jsx'
@@ -31,10 +31,36 @@ export default function App() {
     if (route.id === id) setRoute({ name: 'home' })
   }
 
-  const newScenario = () => {
-    const s = createScenario()
+  /* 템플릿을 넘기면 해당 구성으로, 없거나 blank면 빈 시나리오로 생성 */
+  const newScenario = (tpl) => {
+    const s = createScenario(
+      tpl && tpl.key && tpl.key !== 'blank'
+        ? { title: tpl.name, chip: tpl.chip, stages: tpl.build() }
+        : {}
+    )
     setScenarios((prev) => [...prev, s])
     setRoute({ name: 'builder', id: s.id })
+  }
+
+  const importScenarios = (arr) => {
+    if (!Array.isArray(arr)) {
+      setToast('가져오기 실패: 시나리오 배열(JSON)이 아니에요.')
+      return
+    }
+    const cleaned = arr
+      .filter((s) => s && typeof s === 'object' && s.stages)
+      .map((s) => ({
+        ...createScenario(),
+        ...s,
+        id: uid(),
+        updatedAt: new Date().toISOString(),
+      }))
+    if (cleaned.length === 0) {
+      setToast('가져올 수 있는 시나리오가 없어요.')
+      return
+    }
+    setScenarios((prev) => [...prev, ...cleaned])
+    setToast(`시나리오 ${cleaned.length}개를 가져왔어요.`)
   }
 
   const current = useMemo(
@@ -48,6 +74,7 @@ export default function App() {
     updateScenario,
     removeScenario,
     newScenario,
+    importScenarios,
     goHome: () => setRoute({ name: 'home' }),
     openBuilder: (id) => setRoute({ name: 'builder', id }),
     playScenario: (id) => setRoute({ name: 'player', id }),

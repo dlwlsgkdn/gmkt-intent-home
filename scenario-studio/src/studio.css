@@ -54,6 +54,14 @@
   transition: all 0.15s ease;
 }
 .sb-icon-btn:hover { color: var(--sb-ink); border-color: #94a3b8; }
+.sb-icon-btn:disabled { opacity: 0.35; cursor: default; }
+.sb-icon-btn:disabled:hover { color: #64748b; border-color: var(--sb-line); }
+
+.sb-autosave {
+  font-size: 11px;
+  color: #94a3b8;
+  white-space: nowrap;
+}
 
 .sb-btn {
   display: inline-flex;
@@ -163,19 +171,52 @@
   margin-bottom: 18px;
 }
 .sb-drawer__head h3 { margin: 4px 0 0; font-size: 20px; font-weight: 600; color: var(--sb-ink); }
-.sb-new-btn {
-  width: 100%;
-  padding: 13px;
+/* 템플릿 갤러리 */
+.sb-template-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.sb-template-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 12px 11px;
   border-radius: 16px;
-  border: 1px dashed rgba(95, 116, 101, 0.5);
+  border: 1px dashed rgba(95, 116, 101, 0.45);
   background: var(--sb-accent-soft);
-  color: var(--sb-accent);
-  font-size: 14px;
-  font-weight: 600;
+  text-align: left;
   transition: all 0.15s ease;
+}
+.sb-template-card:hover { background: rgba(95, 116, 101, 0.2); border-style: solid; }
+.sb-template-card__icon { font-size: 18px; }
+.sb-template-card strong { font-size: 12px; font-weight: 700; color: var(--sb-accent); }
+.sb-template-card small { font-size: 10px; line-height: 1.45; color: #7d8a80; word-break: keep-all; }
+
+/* 내보내기/가져오기 */
+.sb-drawer__tools {
+  display: flex;
+  gap: 8px;
   margin-bottom: 16px;
 }
-.sb-new-btn:hover { background: rgba(95, 116, 101, 0.2); }
+.sb-drawer__tools button {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px;
+  border-radius: 12px;
+  border: 1px solid var(--sb-line);
+  background: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  transition: all 0.15s ease;
+}
+.sb-drawer__tools button:hover { border-color: #94a3b8; background: #f8fafc; }
 .sb-drawer__list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
 .sb-drawer__empty {
   padding: 28px 18px;
@@ -336,6 +377,71 @@
   color: #94a3b8;
 }
 
+/* 팔레트 탭 (컴포넌트/레이어) */
+.sb-palette-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 12px;
+  border-radius: 13px;
+  background: #f1f5f9;
+}
+.sb-palette-tabs button {
+  padding: 8px 6px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  transition: all 0.13s ease;
+}
+.sb-palette-tabs .sb-palette-tab--active {
+  background: #fff;
+  color: var(--sb-ink);
+  box-shadow: 0 2px 8px -3px rgba(15, 23, 42, 0.2);
+}
+.sb-palette-tab__count {
+  font-size: 10px;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+/* 레이어 목록 */
+.sb-layer-list { display: flex; flex-direction: column; gap: 6px; }
+.sb-layer-list__empty { font-size: 12px; color: #94a3b8; text-align: center; padding: 24px 0; }
+.sb-layer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 13px;
+  border: 1px solid var(--sb-line);
+  background: #fff;
+  cursor: pointer;
+  transition: all 0.13s ease;
+}
+.sb-layer:hover { border-color: #94a3b8; }
+.sb-layer--active {
+  border-color: var(--sb-accent);
+  box-shadow: 0 0 0 3px var(--sb-accent-soft);
+}
+.sb-layer__icon { font-size: 15px; flex-shrink: 0; }
+.sb-layer__name { min-width: 0; flex: 1; display: flex; flex-direction: column; }
+.sb-layer__name strong { font-size: 12px; font-weight: 600; color: var(--sb-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sb-layer__name small { font-size: 10px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sb-layer__btns { display: flex; gap: 2px; flex-shrink: 0; }
+.sb-layer__btns button {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  font-size: 11px;
+  color: #64748b;
+  transition: all 0.12s ease;
+}
+.sb-layer__btns button:hover { background: #f1f5f9; color: var(--sb-ink); }
+.sb-layer__btns button:disabled { opacity: 0.25; }
+.sb-layer__btns .sb-layer__del:hover { background: #fef2f2; color: #dc2626; }
+
 /* 팔레트 */
 .sb-palette {
   padding: 18px 14px;
@@ -416,6 +522,16 @@
   pointer-events: none;
 }
 .sb-canvas__empty span { font-size: 12px; }
+
+/* 스마트 스냅 가이드라인 */
+.sb-guide {
+  position: absolute;
+  z-index: 30;
+  background: #f43f5e;
+  pointer-events: none;
+}
+.sb-guide--v { top: 0; bottom: 0; width: 1px; }
+.sb-guide--h { left: 0; right: 0; height: 1px; }
 
 .sb-canvas-item {
   position: absolute;
