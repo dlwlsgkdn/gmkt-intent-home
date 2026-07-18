@@ -44,15 +44,6 @@ export function kText(text, ctx) {
   })
 }
 
-/* 마켓 태그: 지마켓 상품 vs 외부몰 상품 구분 표시 */
-function MarketTag({ external, mall }) {
-  return external ? (
-    <span className="sb-market-tag sb-market-tag--external">외부몰{mall ? ` · ${mall}` : ''}</span>
-  ) : (
-    <span className="sb-market-tag sb-market-tag--gmarket">G마켓</span>
-  )
-}
-
 export const LIBRARY = {
   /* ─────────── 탐색 단계 ─────────── */
   greeting: {
@@ -250,38 +241,39 @@ export const LIBRARY = {
       const selectedSet = new Set(
         p.multi ? (Array.isArray(answer) ? answer : []) : answer != null ? [answer] : []
       )
+      // 원본 clean-home 설문 마크업 구조 그대로 (clean-question-list가 라벨/그리드 스타일 담당)
       return (
-        <div className="sb-question">
-          <label className="text-sm font-medium text-slate-400 mb-3 block">{kText(p.question, ctx)}</label>
-          <div className="sb-question__grid">
-            {opts.map((opt, i) => {
-              const selected = selectedSet.has(opt.main)
-              return (
-                <button
-                  key={i}
-                  type="button"
-                  className={
-                    'info-card sb-option border-2 rounded-2xl transition-all p-3 text-center flex flex-col items-center justify-center gap-1 min-w-[5rem] ' +
-                    (selected
-                      ? 'sb-option--selected bg-white shadow-sm'
-                      : 'border-slate-100 bg-slate-50 hover:border-gmarket-blue')
-                  }
-                  onClick={() => {
-                    if (!isPlayer) return
-                    if (p.multi) {
-                      const next = new Set(selectedSet)
-                      next.has(opt.main) ? next.delete(opt.main) : next.add(opt.main)
-                      ctx.player.setAnswer(ctx.itemId, [...next])
-                    } else {
-                      ctx.player.setAnswer(ctx.itemId, opt.main)
+        <div className="clean-question-list">
+          <div>
+            <label className="text-sm font-medium text-slate-400 mb-3 block">{kText(p.question, ctx)}</label>
+            <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 pt-2 -mt-2">
+              {opts.map((opt, i) => {
+                const selected = selectedSet.has(opt.main)
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    className={
+                      'flex-shrink-0 info-card border-2 border-slate-100 rounded-2xl transition-all bg-slate-50 hover:border-gmarket-blue p-3 text-center flex flex-col items-center justify-center gap-1 min-w-[5rem]' +
+                      (selected ? ' active-card ring-4 ring-blue-100' : '')
                     }
-                  }}
-                >
-                  <span className="text-sm font-semibold text-slate-800 whitespace-nowrap">{kText(opt.main, ctx)}</span>
-                  {opt.sub ? <span className="text-[11px] font-normal text-slate-400 whitespace-nowrap">{kText(opt.sub, ctx)}</span> : null}
-                </button>
-              )
-            })}
+                    onClick={() => {
+                      if (!isPlayer) return
+                      if (p.multi) {
+                        const next = new Set(selectedSet)
+                        next.has(opt.main) ? next.delete(opt.main) : next.add(opt.main)
+                        ctx.player.setAnswer(ctx.itemId, [...next])
+                      } else {
+                        ctx.player.setAnswer(ctx.itemId, opt.main)
+                      }
+                    }}
+                  >
+                    <span className="text-sm font-semibold text-slate-800 whitespace-nowrap">{kText(opt.main, ctx)}</span>
+                    {opt.sub ? <span className="text-[11px] font-normal text-slate-400 whitespace-nowrap">{kText(opt.sub, ctx)}</span> : null}
+                  </button>
+                )
+              })}
+            </div>
           </div>
         </div>
       )
@@ -310,16 +302,17 @@ export const LIBRARY = {
       const excluded = isPlayer ? ctx.player.excludedProfile || [] : []
       // 플레이어에서는 숨긴 항목을 아예 안 보여주고, 캔버스에서는 흐리게 보여준다
       const visible = isPlayer ? items.filter((it) => !hidden.includes(it.label)) : items
+      // 원본 saved-profile-section 마크업/클래스 그대로
       return (
-        <div className="sb-profile-panel">
-          <div className="sb-profile-panel__head">
-            <span className="sb-profile-panel__avatar" aria-hidden="true">
-              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 20c0-3.3 3.1-6 7-6s7 2.7 7 6" /></svg>
+        <div className="saved-profile-section" style={{ display: 'block' }}>
+          <div className="saved-profile-section__head">
+            <span className="saved-profile-section__icon">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
             </span>
-            <strong>{profile.name}님에 대해 이미 알고 있어요</strong>
-            <small>{isPlayer ? p.hint : '배지를 눌러 이 시나리오 노출을 켜고 끄세요'}</small>
+            <span className="saved-profile-section__title">{profile.name}님에 대해 이미 알고 있어요</span>
+            <span className="saved-profile-section__hint">{isPlayer ? p.hint : '배지를 눌러 이 시나리오 노출을 켜고 끄세요'}</span>
           </div>
-          <div className="sb-profile-panel__chips">
+          <div className="saved-profile-section__chips">
             {visible.length === 0 && (
               <span className="sb-pinned-panel__empty">프로필 항목이 없어요. 탐색 페이지 편집기에서 추가하세요.</span>
             )}
@@ -329,7 +322,7 @@ export const LIBRARY = {
                 <button
                   key={it.label}
                   type="button"
-                  className={'sb-info-chip' + (off ? ' sb-info-chip--off' : '')}
+                  className={'saved-profile-chip' + (off ? ' saved-profile-chip--excluded' : '')}
                   title={isPlayer ? (off ? '다시 포함하기' : '이번 설문에서 빼기') : (off ? '이 시나리오에 노출하기' : '이 시나리오에서 숨기기')}
                   onClick={() => {
                     if (isPlayer) {
@@ -342,13 +335,13 @@ export const LIBRARY = {
                     }
                   }}
                 >
-                  <span className="sb-info-chip__label">{it.label}:</span>
-                  <strong>{it.value}</strong>
-                  {!off && (
-                    <span className="sb-info-chip__check" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
-                    </span>
-                  )}
+                  <span className="saved-profile-chip__label">{it.label}</span>
+                  <span className="saved-profile-chip__value">{it.value}</span>
+                  <span className="saved-profile-chip__toggle" aria-hidden="true">
+                    {off
+                      ? <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+                      : <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5" /></svg>}
+                  </span>
                 </button>
               )
             })}
@@ -363,31 +356,34 @@ export const LIBRARY = {
     label: '설문 요약 패널',
     stage: 'plan',
     icon: '🧾',
-    hint: '프로필 + 설문에서 고른 답을 칩으로 요약',
+    hint: '프로필 + 설문에서 고른 답을 요약 (원본 설문 요약 스타일)',
     defaults: { title: '설문 요약' },
     fields: [{ key: 'title', label: '제목', kind: 'text' }],
     render: (p, ctx) => {
       const data =
         (ctx.mode === 'player' ? ctx.player.summary : ctx.summaryPreview) || { profile: [], questions: [] }
       const empty = data.profile.length === 0 && data.questions.length === 0
+      // 원본 clean-survey-lock 마크업/클래스 그대로
       return (
-        <div className="sb-summary-panel">
-          <p className="sb-summary-panel__title">{p.title}</p>
-          <div className="sb-summary-panel__chips">
+        <div className="clean-survey-lock" style={{ display: 'block' }}>
+          <div className="clean-survey-lock__head">
+            <p className="clean-survey-lock__title">{p.title}</p>
+          </div>
+          <div className="clean-survey-lock__items">
             {empty && (
               <span className="sb-pinned-panel__empty">설문 질문과 프로필 항목이 여기에 요약돼요.</span>
             )}
             {data.profile.map((it) => (
-              <span key={it.label} className="sb-info-chip sb-info-chip--static">
-                <span className="sb-info-chip__label">{it.label}:</span>
-                <strong>{it.value}</strong>
-              </span>
+              <div key={it.label} className="clean-survey-lock__item" aria-readonly="true">
+                <span className="clean-survey-lock__label">{it.label}</span>
+                <span className="clean-survey-lock__value">{it.value}</span>
+              </div>
             ))}
             {data.questions.map((q, i) => (
-              <span key={i} className="sb-info-chip sb-info-chip--static">
-                <span className="sb-info-chip__label">{q.q}:</span>
-                <strong>{q.a}</strong>
-              </span>
+              <div key={i} className="clean-survey-lock__item" aria-readonly="true">
+                <span className="clean-survey-lock__label">{q.q}</span>
+                <span className="clean-survey-lock__value">{q.a}</span>
+              </div>
             ))}
           </div>
         </div>
@@ -417,85 +413,125 @@ export const LIBRARY = {
     label: '계획 단계 카드',
     stage: 'plan',
     icon: '🪜',
-    hint: 'N단계 계획 설명 + 체크포인트',
+    hint: '원본 스타일 — 번호 원 + 제목 + 설명 + 체크포인트',
     defaults: {
-      badge: 'STEP 1',
-      title: '피부결 정돈 — 수분 프라이머',
-      desc: '유분은 T존에만, 광은 볼에만 남기는 프라이머부터 시작해요.',
+      no: '1',
+      title: '피부결 정돈 — 수분 [[프라이머]]',
+      desc: '유분은 T존에만, 광은 볼에만 남기는 [[프라이머]]부터 시작해요.',
       points: '모공보다 결 위주로 얇게, 손보다 퍼프 마무리',
     },
     fields: [
-      { key: 'badge', label: '단계 배지', kind: 'text' },
+      { key: 'no', label: '단계 번호', kind: 'text' },
       { key: 'title', label: '단계 제목', kind: 'text' },
       { key: 'desc', label: '설명', kind: 'textarea' },
       { key: 'points', label: '체크포인트 (쉼표 구분)', kind: 'textarea' },
     ],
-    render: (p, ctx) => (
-      <div className="rounded-[28px] border border-slate-100 bg-white p-6 shadow-sm">
-        <span className="inline-flex items-center rounded-full bg-gmarket-blue/10 px-3 py-1 text-[11px] font-bold text-gmarket-blue tracking-widest">{p.badge}</span>
-        <h3 className="mt-3 text-lg font-semibold text-slate-900 leading-snug">{kText(p.title, ctx)}</h3>
-        <p className="mt-2 text-sm leading-relaxed text-slate-600">{kText(p.desc, ctx)}</p>
-        {splitList(p.points).length ? (
-          <ul className="mt-4 space-y-2">
-            {splitList(p.points).map((pt, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm text-slate-700">
-                <svg className="w-4 h-4 mt-0.5 text-gmarket-blue flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
-                <span>{kText(pt, ctx)}</span>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </div>
-    ),
+    render: (p, ctx) => {
+      // 구버전 데이터 호환: badge('STEP 2')만 있으면 숫자를 추출
+      const no = p.no || (String(p.badge || '').replace(/\D/g, '') || '1')
+      return (
+        <div className="sb-plan-step">
+          <div className="sb-plan-step__head">
+            <span className="w-10 h-10 rounded-full bg-slate-900 shadow-xl flex items-center justify-center font-bold text-white border-4 border-slate-50 flex-shrink-0">
+              {no}
+            </span>
+            <h3 className="text-2xl font-bold text-slate-800 leading-snug">{kText(p.title, ctx)}</h3>
+          </div>
+          <p className="text-slate-500 text-sm leading-relaxed mt-3">{kText(p.desc, ctx)}</p>
+          {splitList(p.points).length ? (
+            <ul className="mt-4 space-y-2">
+              {splitList(p.points).map((pt, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
+                  <svg className="w-4 h-4 mt-0.5 text-gmarket-blue flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
+                  <span>{kText(pt, ctx)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      )
+    },
   },
 
   productCard: {
     label: '추천 상품 카드',
     stage: 'plan',
     icon: '🛍️',
-    hint: '기본 세로형 — 넓히면 가로형으로 자동 전환',
-    defaultW: 260,
+    hint: '원본 상품 카드 스타일 — 기본 세로형, 넓히면 가로형',
+    defaultW: 224,
     defaults: {
       name: '수분광 톤업 프라이머 30ml',
       price: '18,900',
-      tag: 'AI OPTIMIZED',
+      score: '94',
       external: false,
       mall: '',
-      desc: '복합성 피부 유분 밸런스 · 무향 저자극',
       imageUrl: './makeup-clone-assets/8e01e19fb7cf7c96.avif',
     },
     fields: [
       { key: 'name', label: '상품명', kind: 'text' },
       { key: 'price', label: '가격 (원 제외)', kind: 'text' },
-      { key: 'tag', label: '배지 문구', kind: 'text' },
+      { key: 'score', label: '매칭률 (%)', kind: 'text' },
       { key: 'external', label: '외부몰 상품', kind: 'toggle' },
-      { key: 'mall', label: '외부몰 이름 (예: 무신사)', kind: 'text' },
-      { key: 'desc', label: '한 줄 설명', kind: 'text' },
+      { key: 'mall', label: '외부몰 이름 (예: 올리브영)', kind: 'text' },
       { key: 'imageUrl', label: '이미지 URL', kind: 'text' },
     ],
-    render: (p, ctx) => (
-      <div className="sb-media-card sb-product-card2">
-        <div className="sb-media-card__thumb">
-          <Img src={p.imageUrl} alt={p.name} />
-        </div>
-        <div className="sb-media-card__body">
-          <div className="sb-media-card__tags">
-            <MarketTag external={p.external} mall={p.mall} />
-            {p.tag ? <span className="sb-badge-blue">{p.tag}</span> : null}
+    render: (p, ctx) => {
+      const isPlayer = ctx.mode === 'player'
+      const score = p.score || '94'
+      return (
+        <div className="sb-media-card sb-product-card2 bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden text-left">
+          <div className="sb-media-card__thumb">
+            <span className="sb-product-card2__match bg-white/95 backdrop-blur px-2.5 py-1.5 rounded-xl border border-slate-100 flex items-center shadow-sm">
+              <span className="text-[10px] font-bold text-slate-400 mr-1.5 uppercase tracking-tighter">Match</span>
+              <span className="text-xs font-bold text-gmarket-blue">{score}%</span>
+            </span>
+            <Img src={p.imageUrl} alt={p.name} />
           </div>
-          <p className="sb-media-card__title">{kText(p.name, ctx)}</p>
-          {p.desc ? <p className="sb-media-card__sub">{kText(p.desc, ctx)}</p> : null}
-          <p className="sb-product-card2__price">{p.price}<span>원</span></p>
+          <div className="sb-media-card__body sb-product-card2__body">
+            <div className="sb-media-card__tags">
+              {p.external ? (
+                <span className="marketplace-muted-tag">{p.mall || '외부몰'}</span>
+              ) : (
+                <span className="gmarket-logo-tag gmarket-logo-tag--inline" aria-label="지마켓 상품">
+                  <svg className="gmarket-logo-tag__mark" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+                    <circle cx="24" cy="24" r="23.5" fill="currentColor" stroke="#E0E0E0" />
+                    <path fillRule="evenodd" clipRule="evenodd" d="M24.6048 36.6653C17.6544 36.6653 12 30.984 12 24C12 17.017 17.6544 11.3347 24.6048 11.3347C27.5395 11.3347 30.3792 12.3562 32.6016 14.2128C33.1699 14.6861 33.551 15.4531 33.551 16.1213C33.551 16.7568 33.3043 17.3539 32.8579 17.8022C32.4106 18.2515 31.8163 18.4992 31.1846 18.4992C30.6442 18.4992 30.1046 18.3014 29.665 17.9424C28.2643 16.8 26.3251 16.0906 24.6058 16.0906C20.2646 16.0906 16.7338 19.6397 16.7338 24.001C16.7338 28.3622 20.2646 31.9094 24.6058 31.9094C28.6282 31.9094 31.1069 29.0218 31.1069 26.3779H24.743V21.7507H33.5942C34.8259 21.7507 35.8464 22.68 35.951 23.9126C35.9875 24.3504 36 24.6806 36 24.9859C36 28.081 35.1619 30.9974 32.9923 33.1968C30.7853 35.4336 28.1434 36.6653 24.6048 36.6653Z" fill="#00C400" />
+                    <path fillRule="evenodd" clipRule="evenodd" d="M27.0451 24.0643C27.0451 25.3421 26.0151 26.3779 24.7431 26.3779C23.4711 26.3779 22.441 25.3421 22.441 24.0643C22.441 22.7866 23.4711 21.7507 24.7431 21.7507C26.0151 21.7507 27.0451 22.7866 27.0451 24.0643Z" fill="#082DA9" />
+                  </svg>
+                  <span className="gmarket-logo-tag__word">Gmarket</span>
+                </span>
+              )}
+            </div>
+            <h4 className="text-sm font-bold text-slate-800 mb-1.5 leading-tight sb-media-card__title">{kText(p.name, ctx)}</h4>
+            <div className="flex items-baseline mb-3 text-left">
+              <span className="text-lg font-bold text-gmarket-blue">{p.price}</span>
+              <span className="text-xs font-medium text-slate-400 ml-0.5">원</span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="flex-1 py-3 bg-slate-900 text-white text-[11px] rounded-xl font-bold transition-colors hover:bg-gmarket-blue"
+                onClick={() => { if (isPlayer) ctx.player.openExternal('상품 상세') }}
+              >
+                상세보기
+              </button>
+              <button
+                type="button"
+                className={
+                  'cart-add-btn py-3 px-3 bg-slate-100 text-slate-700 text-[11px] rounded-xl font-bold' +
+                  (p.external ? ' cart-add-btn--disabled' : '')
+                }
+                disabled={!!p.external}
+                title={p.external ? '지마켓 상품만 담을 수 있어요' : '쓰레드 장바구니 담기'}
+                onClick={() => { if (isPlayer && !p.external) ctx.player.addToCart(p.name) }}
+              >
+                {p.external ? '담기불가' : '담기'}
+              </button>
+            </div>
+          </div>
         </div>
-        <button
-          type="button"
-          className="sb-product-card2__cart"
-          onClick={() => { if (ctx.mode === 'player') ctx.player.addToCart(p.name) }}
-        >
-          담기
-        </button>
-      </div>
-    ),
+      )
+    },
   },
 
   videoCard: {

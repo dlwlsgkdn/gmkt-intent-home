@@ -964,17 +964,6 @@
 .sb-product-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .sb-image-card img { width: 100%; height: auto; display: block; }
 
-.sb-question__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 10px;
-}
-.sb-option--selected {
-  border-color: var(--sb-accent) !important;
-  background: #fff !important;
-  box-shadow: 0 0 0 3px var(--sb-accent-soft) !important;
-}
-.sb-option--selected span:first-child { color: var(--sb-accent) !important; }
 
 /* ── 모바일(좁은 컨테이너) 대응: 컴포넌트가 자기 폭에 반응 ── */
 .sb-canvas-item__content,
@@ -996,8 +985,14 @@
   font-size: clamp(20px, 8cqw, 34px);
 }
 
+/* 질문 라벨: 원본은 vw 기준 — 좁은 캔버스에서는 컨테이너 기준으로 보정 */
+.sb-canvas-item__content .clean-question-list label,
+.sb-player__item .clean-question-list label {
+  font-size: clamp(17px, 7cqw, 28px) !important;
+}
+
 /* 설문 옵션: nowrap 해제 — 긴 선택지도 카드 안에서 줄바꿈 */
-.sb-question__grid .whitespace-nowrap {
+.clean-question-list .whitespace-nowrap {
   white-space: normal !important;
   word-break: keep-all;
 }
@@ -1012,10 +1007,11 @@
   .sb-cta-bar button { width: 100% !important; }
 }
 
-/* ── 미디어 카드 (상품/영상/게시글): 좁으면 세로형, 넓으면 가로형 ── */
+/* ── 미디어 카드 (상품/영상/게시글): 기본 세로형(원본 스타일), 넓으면 가로형 ── */
 .sb-media-card {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: 14px;
   padding: 14px;
   border-radius: 24px;
@@ -1027,12 +1023,12 @@
 .sb-media-card[role='button'] { cursor: pointer; }
 .sb-media-card__thumb {
   position: relative;
-  width: 88px;
-  height: 88px;
+  width: 100%;
+  aspect-ratio: 16 / 11;
   flex-shrink: 0;
   border-radius: 16px;
   overflow: hidden;
-  background: #f8fafc;
+  background: #f1f5f9;
   border: 1px solid #f1f5f9;
 }
 .sb-media-card__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -1064,13 +1060,20 @@
 .sb-article-card__snippet { -webkit-line-clamp: 2; }
 .sb-media-card__meta { margin: 6px 0 0; font-size: 11px; color: #b6c0cc; }
 
-/* 세로 모드: 컨테이너가 좁으면 이미지가 위로 */
-@container (max-width: 340px) {
-  .sb-media-card { flex-direction: column; align-items: stretch; }
-  .sb-media-card__thumb { width: 100%; height: auto; aspect-ratio: 16 / 11; }
-  .sb-product-card2 .sb-media-card__thumb { aspect-ratio: 1 / 1; }
-  .sb-media-card__sub { -webkit-line-clamp: 2; }
-  .sb-product-card2__cart { width: 100%; }
+/* 가로 모드: 컨테이너가 넓으면 이미지가 왼쪽으로 */
+@container (min-width: 341px) {
+  .sb-media-card { flex-direction: row; align-items: center; }
+  .sb-media-card__thumb { width: 96px; height: 96px; aspect-ratio: auto; }
+  .sb-product-card2 { flex-direction: row; align-items: stretch; }
+  .sb-product-card2 .sb-media-card__thumb {
+    width: 148px;
+    height: auto;
+    aspect-ratio: auto;
+    border-radius: 0;
+    border: 0;
+    border-right: 1px solid #f1f5f9;
+  }
+  .sb-product-card2__body { padding: 16px 20px; }
 }
 
 /* 마켓 태그 (지마켓/외부몰) */
@@ -1099,21 +1102,47 @@
   white-space: nowrap;
 }
 
-/* 상품 카드 전용 */
-.sb-product-card2__price { margin: 6px 0 0; font-size: 16px; font-weight: 800; color: var(--sb-ink); }
-.sb-product-card2__price span { font-size: 12px; font-weight: 600; margin-left: 1px; }
-.sb-product-card2__cart {
-  flex-shrink: 0;
-  align-self: center;
-  padding: 9px 14px;
-  border-radius: 12px;
-  background: #f1f5f9;
-  font-size: 12px;
-  font-weight: 700;
-  color: #334155;
-  transition: background 0.14s ease;
+/* 상품 카드 전용 — 원본 product-card 룩 (풀블리드 이미지 + p-5 본문) */
+.sb-product-card2 {
+  padding: 0;
+  gap: 0;
+  border-radius: 24px; /* 원본 rounded-3xl */
 }
-.sb-product-card2__cart:hover { background: #e2e8f0; }
+.sb-product-card2 .sb-media-card__thumb {
+  border-radius: 0;
+  border: 0;
+  aspect-ratio: 14 / 11; /* 원본 h-44 비율에 근사 */
+}
+.sb-product-card2__body { padding: 20px; }
+.sb-product-card2__match {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 5;
+}
+.sb-product-card2 .cart-add-btn--disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* 캔버스/플레이어 안에서 원본 패널들이 흐름 배치되도록 */
+.sb-canvas-item__content .saved-profile-section,
+.sb-player__item .saved-profile-section,
+.sb-canvas-item__content .clean-survey-lock,
+.sb-player__item .clean-survey-lock {
+  margin: 0;
+}
+/* 단일 질문 컴포넌트: 원본 리스트의 상하 여백을 컴팩트하게 */
+.sb-canvas-item__content .clean-question-list > div,
+.sb-player__item .clean-question-list > div {
+  min-height: 0;
+  padding: 12px 0 8px;
+}
+
+/* 계획 단계 (원본: 번호 원 + 제목 흐름형) */
+.sb-plan-step { padding: 4px 2px; }
+.sb-plan-step__head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
 
 /* 영상 카드 전용 */
 .sb-video-card__play {

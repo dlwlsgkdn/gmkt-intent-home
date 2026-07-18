@@ -44,7 +44,7 @@ export const TEMPLATES = [
           desc: '유분은 T존에만, 광은 볼에만 남기는 [[프라이머]]부터 시작해요.',
         }, 312),
         make('planStep', {
-          badge: 'STEP 2',
+          no: '2',
           title: '[[픽서]]로 고정력 마무리',
           desc: '마지막 단계에서 고정력을 높여 하루 종일 유지해요.',
           points: '얼굴 20cm 거리에서 분사, T존 위주로 한 번 더',
@@ -86,7 +86,7 @@ export const TEMPLATES = [
         make('surveySummary', {}, 24),
         make('planTitle', { kicker: 'Gift Plan', title: '마음이 전해지는 선물 플랜' }, 178),
         make('planStep', {
-          badge: 'GIFT 1',
+          no: '1',
           title: '향으로 기억되는 선물',
           desc: '취향을 크게 타지 않는 무난하면서도 고급스러운 향 카테고리부터 제안해요.',
           points: '시향 후기 확인, 선물 포장 옵션 체크',
@@ -94,10 +94,9 @@ export const TEMPLATES = [
         make('productCard', {
           name: '딥 모이스처 핸드크림 기프트 세트',
           price: '32,000',
-          tag: 'GIFT PICK',
+          score: '91',
           external: true,
           mall: '올리브영',
-          desc: '포장 옵션 포함 · 리뷰 4.9점',
         }, 556, 260),
         make('checklist', {
           title: '선물 전 확인 리스트',
