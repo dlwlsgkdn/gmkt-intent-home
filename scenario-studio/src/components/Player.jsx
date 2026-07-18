@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { STAGES, sortByPosition } from '../lib/store.js'
+import { STAGES, DEVICE_PRESETS, sortByPosition } from '../lib/store.js'
 import { renderItem } from '../lib/registry.jsx'
 import { BgBlobs, FloatingBar, StudioFab } from './Frame.jsx'
 
@@ -14,6 +14,9 @@ export default function Player({ api, scenario }) {
     () => sortByPosition(scenario.stages[stage.key] || []),
     [scenario, stage.key]
   )
+  /* 시나리오가 모바일 기기 폭으로 설계됐다면 플레이어도 그 폭으로 보여준다 */
+  const device = DEVICE_PRESETS.find((d) => d.key === (scenario.device || 'desktop'))
+  const deviceStyle = device && device.w < 760 ? { maxWidth: device.w } : undefined
 
   const next = () => setStageIdx((i) => Math.min(STAGES.length - 1, i + 1))
   const prev = () => setStageIdx((i) => Math.max(0, i - 1))
@@ -89,7 +92,7 @@ export default function Player({ api, scenario }) {
           )}
         </div>
 
-        <div className="sb-player__stack">
+        <div className="sb-player__stack" style={deviceStyle}>
           {items.length === 0 && (
             <div className="sb-player__empty">
               이 단계에 배치된 컴포넌트가 없어요.<br />
@@ -107,7 +110,7 @@ export default function Player({ api, scenario }) {
           ))}
         </div>
 
-        <div className="clean-survey-nav sb-player__nav">
+        <div className="clean-survey-nav sb-player__nav" style={deviceStyle}>
           {stageIdx > 0 ? (
             <button type="button" className="clean-survey-nav-btn clean-survey-nav-btn--ghost" onClick={prev}>
               이전 단계

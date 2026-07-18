@@ -4,6 +4,16 @@ export function uid() {
   return Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4)
 }
 
+/* 캔버스/플레이어 기기 프리셋 (논리 픽셀 너비) */
+export const DEVICE_PRESETS = [
+  { key: 'desktop', label: '데스크톱', w: 720, icon: '🖥️' },
+  { key: 'galaxy', label: '갤럭시 S (360)', w: 360, icon: '📱' },
+  { key: 'iphone-se', label: 'iPhone SE (375)', w: 375, icon: '📱' },
+  { key: 'iphone-15', label: 'iPhone 15 (390)', w: 390, icon: '📱' },
+  { key: 'iphone-pro-max', label: 'iPhone Pro Max (430)', w: 430, icon: '📱' },
+  { key: 'tablet', label: '태블릿 (768)', w: 768, icon: '💻' },
+]
+
 export const STAGES = [
   { key: 'explore', label: '탐색', desc: '홈에서 시나리오가 시작되는 첫 화면' },
   { key: 'survey', label: '설문', desc: '사용자에게 물어볼 질문 구성' },
@@ -16,6 +26,7 @@ export function createScenario(partial = {}) {
     title: '새 시나리오',
     chip: '새_시나리오',
     query: '',
+    device: 'desktop',
     status: 'draft',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),

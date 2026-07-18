@@ -1,11 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { STAGES, createItem, sortByPosition } from '../lib/store.js'
+import { STAGES, DEVICE_PRESETS, createItem, sortByPosition } from '../lib/store.js'
 import { LIBRARY, libraryForStage, renderItem } from '../lib/registry.jsx'
 
-const CANVAS_W = 720
 const PAD = 24
 const GAP = 14
-const ITEM_W_DEFAULT = CANVAS_W - PAD * 2
+const MIN_ITEM_W = 160
 
 /* 겹침 해소: 기준(드래그/리사이즈된) 아이템은 제자리를 지키고,
    겹치는 다른 아이템들이 아래로 밀린다 */
@@ -38,20 +37,20 @@ function resolveCollision(items, movedId, heights) {
 /* ── 자동 정렬 모드들 ── */
 
 /* 1단 세로 스택: y→x 순으로 전체 너비로 쌓기 */
-function layoutStack(items, heights) {
+function layoutStack(items, heights, ctx) {
   const sorted = sortByPosition(items)
   let cursor = PAD
   const positioned = {}
   sorted.forEach((it) => {
-    positioned[it.id] = { x: PAD, y: cursor, w: ITEM_W_DEFAULT }
+    positioned[it.id] = { x: PAD, y: cursor, w: ctx.itemW }
     cursor += (it.h || heights[it.id] || 80) + GAP
   })
   return items.map((it) => ({ ...it, ...positioned[it.id] }))
 }
 
 /* 2단 그리드: 반폭으로 나눠 항상 짧은 열에 채우기 (마소너리) */
-function layoutTwoColumns(items, heights) {
-  const colW = Math.floor((CANVAS_W - PAD * 2 - GAP) / 2)
+function layoutTwoColumns(items, heights, ctx) {
+  const colW = Math.floor((ctx.canvasW - PAD * 2 - GAP) / 2)
   const sorted = sortByPosition(items)
   const cols = [PAD, PAD] // 각 열의 다음 y 커서
   const positioned = {}
@@ -93,7 +92,7 @@ function layoutCompactUp(items, heights) {
 const LAYOUT_MODES = [
   { key: 'stack', label: '1단 세로 정렬', desc: '전체 너비로 위에서부터 차곡차곡', fn: layoutStack },
   { key: 'twocol', label: '2단 그리드 정렬', desc: '반폭 2열 마소너리 배치', fn: layoutTwoColumns },
-  { key: 'compact', label: '위로 컴팩트 정렬', desc: '크기·가로 위치 유지, 빈 공간만 제거', fn: layoutCompactUp },
+  { key: 'compact', label: '위로 컴팩트 정렬', desc: '크기·가로 위치 유지, 빈 공간만 제거', fn: (items, heights) => layoutCompactUp(items, heights) },
 ]
 
 function CanvasItem({ item, selected, dragPos, sizeDraft, heightsRef, onSelect, onDragStart, onDrag, onDragEnd, onResize, onResizeEnd, onInspect }) {
@@ -195,6 +194,7 @@ export default function Builder({ api, scenario }) {
   const [dragPos, setDragPos] = useState(null) // {id, x, y}
   const [sizeDraft, setSizeDraft] = useState(null) // {id, w, h}
   const [layoutMenuOpen, setLayoutMenuOpen] = useState(false)
+  const [deviceMenuOpen, setDeviceMenuOpen] = useState(false)
   const [paletteTab, setPaletteTab] = useState('components') // 'components' | 'layers'
   const [guides, setGuides] = useState([]) // 드래그 중 스냅 가이드라인
   const [focusTick, setFocusTick] = useState(0) // 더블클릭 → 인스펙터 포커스 신호
@@ -208,12 +208,28 @@ export default function Builder({ api, scenario }) {
   const selected = items.find((it) => it.id === selectedId) || null
   const stageMeta = STAGES.find((s) => s.key === stageKey)
 
+  /* 기기 프리셋에 따른 캔버스 폭 */
+  const device = DEVICE_PRESETS.find((d) => d.key === (scenario.device || 'desktop')) || DEVICE_PRESETS[0]
+  const canvasW = device.w
+  const itemW = canvasW - PAD * 2
+
   /* 변경 직전 상태를 히스토리에 기록 (500ms 안의 연속 변경은 하나로 묶는다) */
+  const takeSnapshot = () => JSON.stringify({ stages: scenario.stages, device: scenario.device })
+  const applySnapshot = (snap) => {
+    const data = JSON.parse(snap)
+    setSelectedId(null)
+    api.updateScenario(scenario.id, (s) => ({
+      ...s,
+      stages: data.stages || data,
+      device: data.device || s.device,
+    }))
+  }
+
   const pushHistory = () => {
     const h = historyRef.current
     const now = Date.now()
     if (now - h.lastPush < 500) return
-    h.past.push(JSON.stringify(scenario.stages))
+    h.past.push(takeSnapshot())
     if (h.past.length > 60) h.past.shift()
     h.future = []
     h.lastPush = now
@@ -224,22 +240,45 @@ export default function Builder({ api, scenario }) {
     const h = historyRef.current
     const snap = h.past.pop()
     if (!snap) return
-    h.future.push(JSON.stringify(scenario.stages))
+    h.future.push(takeSnapshot())
     h.lastPush = 0
     setHistVer((v) => v + 1)
-    setSelectedId(null)
-    api.updateScenario(scenario.id, (s) => ({ ...s, stages: JSON.parse(snap) }))
+    applySnapshot(snap)
   }
 
   const redo = () => {
     const h = historyRef.current
     const snap = h.future.pop()
     if (!snap) return
-    h.past.push(JSON.stringify(scenario.stages))
+    h.past.push(takeSnapshot())
     h.lastPush = 0
     setHistVer((v) => v + 1)
-    setSelectedId(null)
-    api.updateScenario(scenario.id, (s) => ({ ...s, stages: JSON.parse(snap) }))
+    applySnapshot(snap)
+  }
+
+  /* 기기 프리셋 전환: 컴포넌트 크기/위치를 새 폭에 비례해 스케일 */
+  const changeDevice = (preset) => {
+    setDeviceMenuOpen(false)
+    if (preset.key === (scenario.device || 'desktop')) return
+    pushHistory()
+    const ratio = (preset.w - PAD * 2) / (canvasW - PAD * 2)
+    const newItemW = preset.w - PAD * 2
+    api.updateScenario(scenario.id, (s) => {
+      const stages = {}
+      Object.keys(s.stages).forEach((k) => {
+        stages[k] = (s.stages[k] || []).map((it) => {
+          const w = Math.max(MIN_ITEM_W, Math.min(newItemW, Math.round(it.w * ratio)))
+          const x = Math.max(0, Math.min(preset.w - PAD - w, Math.round(PAD + (it.x - PAD) * ratio)))
+          return { ...it, w, x }
+        })
+      })
+      return { ...s, device: preset.key, stages }
+    })
+    // 폭 변경으로 높이가 다시 측정된 뒤 겹침/간격을 보정한다
+    setTimeout(() => {
+      setItems((prev) => layoutCompactUp(prev, heightsRef.current))
+    }, 200)
+    api.showToast(`${preset.label} 폭 기준으로 캔버스를 전환했어요.`)
   }
 
   const setItems = (updater) => {
@@ -264,7 +303,7 @@ export default function Builder({ api, scenario }) {
         (max, it) => Math.max(max, it.y + (heightsRef.current[it.id] || 80)),
         PAD - GAP
       )
-      return [...prev, { ...item, x: PAD, y: bottom + GAP, w: ITEM_W_DEFAULT }]
+      return [...prev, { ...item, x: PAD, y: bottom + GAP, w: itemW }]
     })
     setSelectedId(item.id)
   }
@@ -302,17 +341,17 @@ export default function Builder({ api, scenario }) {
   const SNAP = 6
   const onDrag = (id, x, y) => {
     const it = items.find((i) => i.id === id)
-    const w = it ? it.w : ITEM_W_DEFAULT
+    const w = it ? it.w : itemW
     const hh = (it && it.h) || heightsRef.current[id] || 80
-    let nx = Math.max(0, Math.min(CANVAS_W - w, x))
+    let nx = Math.max(0, Math.min(canvasW - w, x))
     let ny = Math.max(0, y)
     const activeGuides = []
 
     // 세로 가이드 후보: [스냅될 x, 가이드라인 표시 위치]
     const vCands = [
       [PAD, PAD],
-      [(CANVAS_W - w) / 2, CANVAS_W / 2],
-      [CANVAS_W - PAD - w, CANVAS_W - PAD],
+      [(canvasW - w) / 2, canvasW / 2],
+      [canvasW - PAD - w, canvasW - PAD],
     ]
     items.forEach((o) => {
       if (o.id === id) return
@@ -369,7 +408,7 @@ export default function Builder({ api, scenario }) {
   const onResize = (id, w, h) => {
     const draft = {
       id,
-      w: Math.max(240, Math.min(ITEM_W_DEFAULT, Math.round(w))),
+      w: Math.max(MIN_ITEM_W, Math.min(itemW, Math.round(w))),
       h: Math.max(48, Math.round(h)),
     }
     sizeDraftRef.current = draft
@@ -385,7 +424,7 @@ export default function Builder({ api, scenario }) {
         setItems((prev) => {
           const resized = prev.map((it) =>
             it.id === id
-              ? { ...it, w: draft.w, h: draft.h, x: Math.min(it.x, CANVAS_W - draft.w) }
+              ? { ...it, w: draft.w, h: draft.h, x: Math.min(it.x, canvasW - draft.w) }
               : it
           )
           return resolveCollision(resized, id, heightsRef.current)
@@ -411,7 +450,7 @@ export default function Builder({ api, scenario }) {
         it.id === id
           ? {
               ...it,
-              x: Math.max(0, Math.min(CANVAS_W - it.w, it.x + dx)),
+              x: Math.max(0, Math.min(canvasW - it.w, it.x + dx)),
               y: Math.max(0, it.y + dy),
             }
           : it
@@ -489,7 +528,7 @@ export default function Builder({ api, scenario }) {
 
   const runAutoLayout = (mode) => {
     setLayoutMenuOpen(false)
-    setItems((prev) => mode.fn(prev, heightsRef.current))
+    setItems((prev) => mode.fn(prev, heightsRef.current, { itemW, canvasW }))
     // 너비가 바뀌는 정렬은 높이가 다시 측정된 뒤 한 번 더 컴팩트하게 보정한다
     if (mode.key !== 'compact') {
       setTimeout(() => {
@@ -590,6 +629,35 @@ export default function Builder({ api, scenario }) {
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M15 14l5-5-5-5M20 9H10a6 6 0 000 12h3" /></svg>
           </button>
+          <div className="sb-menu-wrap">
+            <button
+              type="button"
+              className={'sb-btn' + (deviceMenuOpen ? ' sb-btn--open' : '')}
+              onClick={() => setDeviceMenuOpen((v) => !v)}
+              title="캔버스 기기 폭 선택"
+            >
+              {device.icon} {device.label}
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" /></svg>
+            </button>
+            {deviceMenuOpen && (
+              <>
+                <div className="sb-menu-backdrop" onClick={() => setDeviceMenuOpen(false)} />
+                <div className="sb-menu">
+                  {DEVICE_PRESETS.map((p) => (
+                    <button
+                      key={p.key}
+                      type="button"
+                      className={'sb-menu__item' + (p.key === device.key ? ' sb-menu__item--active' : '')}
+                      onClick={() => changeDevice(p)}
+                    >
+                      <strong>{p.icon} {p.label}</strong>
+                      <small>캔버스 폭 {p.w}px{p.key === device.key ? ' · 사용 중' : ''}</small>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
           <div className="sb-menu-wrap">
             <button
               type="button"
@@ -721,7 +789,7 @@ export default function Builder({ api, scenario }) {
         <main className="sb-canvas-wrap" onPointerDown={(e) => { if (e.target === e.currentTarget) setSelectedId(null) }}>
           <div
             className="sb-canvas"
-            style={{ width: CANVAS_W, height: canvasHeight }}
+            style={{ width: canvasW, height: canvasHeight }}
             onPointerDown={(e) => { if (e.target === e.currentTarget) setSelectedId(null) }}
           >
             {items.length === 0 && (
@@ -802,12 +870,12 @@ export default function Builder({ api, scenario }) {
                 <input
                   type="range"
                   min={240}
-                  max={ITEM_W_DEFAULT}
+                  max={itemW}
                   step={8}
                   value={selected.w}
                   onChange={(e) => {
                     const w = Number(e.target.value)
-                    setSize(selected.id, { w, x: Math.min(selected.x, CANVAS_W - w) })
+                    setSize(selected.id, { w, x: Math.min(selected.x, canvasW - w) })
                   }}
                 />
               </div>

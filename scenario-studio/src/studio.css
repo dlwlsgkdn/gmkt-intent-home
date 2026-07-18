@@ -633,6 +633,8 @@
   transition: background 0.12s ease;
 }
 .sb-menu__item:hover { background: var(--sb-accent-soft); }
+.sb-menu__item--active { background: var(--sb-accent-soft); }
+.sb-menu__item--active strong { color: var(--sb-accent); }
 .sb-menu__item strong { font-size: 13px; font-weight: 600; color: var(--sb-ink); }
 .sb-menu__item small { font-size: 11px; color: #94a3b8; }
 
