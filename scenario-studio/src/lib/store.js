@@ -14,6 +14,23 @@ export const DEVICE_PRESETS = [
   { key: 'tablet', label: '태블릿 (768)', w: 768, icon: '💻' },
 ]
 
+/* 시나리오 칩 색상 프리셋 */
+export const CHIP_COLORS = [
+  { key: 'sage', label: '세이지', color: '#5f7465' },
+  { key: 'rose', label: '로즈', color: '#b45a6b' },
+  { key: 'blue', label: '블루', color: '#4a6b8a' },
+  { key: 'amber', label: '앰버', color: '#a9762c' },
+  { key: 'plum', label: '플럼', color: '#7b5a86' },
+  { key: 'slate', label: '슬레이트', color: '#5b6673' },
+]
+
+export function hexToRgba(hex, alpha) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim())
+  if (!m) return `rgba(95, 116, 101, ${alpha})`
+  const n = parseInt(m[1], 16)
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`
+}
+
 /* 시나리오가 소유하는 단계: 설문 → 계획.
    탐색(홈)은 모든 시나리오가 공유하는 공통 페이지로, 칩 클릭이 곧 탐색 완료다. */
 export const STAGES = [
@@ -117,6 +134,8 @@ export function createScenario(partial = {}) {
     chip: '새_시나리오',
     query: '',
     device: 'desktop',
+    color: '#5f7465',
+    versions: [], // 발행 시점 스냅샷 (최근 10개)
     status: 'draft',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),

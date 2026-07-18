@@ -2,12 +2,45 @@ import React, { useRef, useState } from 'react'
 import { BgBlobs, FloatingBar, StudioFab } from './Frame.jsx'
 import ExploreFrame from './ExploreFrame.jsx'
 import { TEMPLATES } from '../lib/templates.js'
+import { hexToRgba } from '../lib/store.js'
 
 export default function HomeView({ api }) {
   const [query, setQuery] = useState('')
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [draggingChipId, setDraggingChipId] = useState(null)
   const importInputRef = useRef(null)
+  const chipDragRef = useRef(null) // { id, startX, startY, moved }
   const published = api.scenarios.filter((s) => s.status === 'published')
+
+  /* 칩 드래그로 순서 변경 — 6px 이상 움직이면 드래그, 아니면 클릭(실행) */
+  const onChipPointerDown = (e, id) => {
+    if (e.button !== 0) return
+    chipDragRef.current = { id, startX: e.clientX, startY: e.clientY, moved: false }
+    const move = (ev) => {
+      const st = chipDragRef.current
+      if (!st) return
+      if (!st.moved && Math.abs(ev.clientX - st.startX) + Math.abs(ev.clientY - st.startY) > 6) {
+        st.moved = true
+        setDraggingChipId(st.id)
+      }
+      if (st.moved) {
+        const el = document.elementFromPoint(ev.clientX, ev.clientY)
+        const target = el && el.closest && el.closest('[data-chip-id]')
+        const targetId = target && target.getAttribute('data-chip-id')
+        if (targetId && targetId !== st.id) api.reorderScenario(st.id, targetId)
+      }
+    }
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      const st = chipDragRef.current
+      chipDragRef.current = null
+      setDraggingChipId(null)
+      if (st && !st.moved) api.playScenario(st.id)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
 
   const exportScenarios = () => {
     if (api.scenarios.length === 0) {
@@ -73,17 +106,22 @@ export default function HomeView({ api }) {
           searchValue={query}
           onSearchChange={setQuery}
           onSubmit={submit}
-          chips={published.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              className="suggestion-tag sb-chip-scenario"
-              title={s.title}
-              onClick={() => api.playScenario(s.id)}
-            >
-              <span className="sb-chip-scenario__spark">✦</span>#{s.chip}
-            </button>
-          ))}
+          chips={published.map((s) => {
+            const c = s.color || '#5f7465'
+            return (
+              <button
+                key={s.id}
+                type="button"
+                data-chip-id={s.id}
+                className={'suggestion-tag sb-chip-scenario' + (draggingChipId === s.id ? ' sb-chip-scenario--dragging' : '')}
+                title={s.title + ' (드래그로 순서 변경)'}
+                style={{ color: c, borderColor: hexToRgba(c, 0.45), background: hexToRgba(c, 0.08) }}
+                onPointerDown={(e) => onChipPointerDown(e, s.id)}
+              >
+                <span className="sb-chip-scenario__spark">✦</span>#{s.chip}
+              </button>
+            )
+          })}
         />
       </section>
 
@@ -148,7 +186,7 @@ export default function HomeView({ api }) {
                       {s.status === 'published' ? '발행됨' : '작성 중'}
                     </span>
                     <p className="sb-scenario-row__title">{s.title}</p>
-                    <p className="sb-scenario-row__chip">#{s.chip}</p>
+                    <p className="sb-scenario-row__chip" style={{ color: s.color || '#5f7465' }}>#{s.chip}</p>
                   </div>
                   <div className="sb-scenario-row__actions">
                     <button type="button" onClick={() => api.playScenario(s.id)}>시험</button>

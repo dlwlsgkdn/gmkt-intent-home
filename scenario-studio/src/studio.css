@@ -136,6 +136,45 @@
   color: #45564a;
 }
 .sb-chip-scenario__spark { margin-right: 4px; font-size: 11px; }
+.sb-chip-scenario { touch-action: none; cursor: grab; }
+.sb-chip-scenario--dragging {
+  opacity: 0.55;
+  transform: scale(1.06);
+  cursor: grabbing;
+  box-shadow: 0 10px 24px -10px rgba(15, 23, 42, 0.4);
+}
+
+/* 칩 색상 피커 */
+.sb-color-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--sb-line);
+  background: #fff;
+  transition: all 0.14s ease;
+}
+.sb-color-btn:hover { border-color: #94a3b8; transform: scale(1.06); }
+.sb-color-dot { width: 14px; height: 14px; border-radius: 50%; }
+.sb-color-menu {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+}
+.sb-color-swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  transition: transform 0.13s ease;
+}
+.sb-color-swatch:hover { transform: scale(1.15); }
+.sb-color-swatch--active { border-color: var(--sb-ink); box-shadow: 0 0 0 2px #fff inset; }
+
+.sb-multi-count { font-size: 18px; font-weight: 700; color: var(--sb-ink); }
 
 /* ── 홈: 시나리오 드로어 ── */
 .sb-drawer-backdrop {

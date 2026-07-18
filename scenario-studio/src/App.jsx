@@ -53,6 +53,20 @@ export default function App() {
     setRoute({ name: 'builder', id: s.id })
   }
 
+  /* 홈 칩 드래그 순서 변경: dragId를 targetId 위치로 이동 */
+  const reorderScenario = (dragId, targetId) => {
+    if (dragId === targetId) return
+    setScenarios((prev) => {
+      const from = prev.findIndex((s) => s.id === dragId)
+      const to = prev.findIndex((s) => s.id === targetId)
+      if (from < 0 || to < 0) return prev
+      const next = [...prev]
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      return next
+    })
+  }
+
   /* 시나리오 복제 — 아이템 id까지 새로 발급해 완전한 사본을 만든다 */
   const copyScenario = (id) => {
     const src = scenarios.find((s) => s.id === id)
@@ -108,6 +122,7 @@ export default function App() {
     removeScenario,
     newScenario,
     copyScenario,
+    reorderScenario,
     importScenarios,
     goHome: () => setRoute({ name: 'home' }),
     openBuilder: (id) => setRoute({ name: 'builder', id }),

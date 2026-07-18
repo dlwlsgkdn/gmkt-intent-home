@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { STAGES, DEVICE_PRESETS, createItem, sortByPosition } from '../lib/store.js'
+import { STAGES, DEVICE_PRESETS, CHIP_COLORS, createItem, sortByPosition } from '../lib/store.js'
 import { LIBRARY, libraryForStage, renderItem } from '../lib/registry.jsx'
 
 const PAD = 24
@@ -8,14 +8,15 @@ const MIN_ITEM_W = 160
 
 /* 겹침 해소: 기준(드래그/리사이즈된) 아이템은 제자리를 지키고,
    겹치는 다른 아이템들이 아래로 밀린다 */
-function resolveCollision(items, movedId, heights) {
+function resolveCollision(items, movedIds, heights) {
   const h = (it) => it.h || heights[it.id] || 80
-  const moved = items.find((it) => it.id === movedId)
-  if (!moved) return items
+  const movedSet = new Set(Array.isArray(movedIds) ? movedIds : [movedIds])
+  const moved = items.filter((it) => movedSet.has(it.id))
+  if (moved.length === 0) return items
   const others = items
-    .filter((it) => it.id !== movedId)
+    .filter((it) => !movedSet.has(it.id))
     .sort((a, b) => (a.y - b.y) || (a.x - b.x))
-  const placed = [moved]
+  const placed = [...moved]
   for (const it of others) {
     const cur = { ...it }
     for (let guard = 0; guard < 100; guard++) {
@@ -115,7 +116,11 @@ function CanvasItem({ item, selected, dragPos, sizeDraft, heightsRef, renderCtx,
   const onPointerDown = (e) => {
     if (e.button !== 0) return
     e.preventDefault()
-    onSelect(item.id)
+    if (e.shiftKey) {
+      onSelect(item.id, true)
+      return
+    }
+    onSelect(item.id, false)
     const startX = e.clientX
     const startY = e.clientY
     const origX = item.x
@@ -143,7 +148,7 @@ function CanvasItem({ item, selected, dragPos, sizeDraft, heightsRef, renderCtx,
     if (e.button !== 0) return
     e.preventDefault()
     e.stopPropagation()
-    onSelect(item.id)
+    onSelect(item.id, false)
     const startX = e.clientX
     const startY = e.clientY
     const origW = item.w
@@ -197,23 +202,35 @@ function CanvasItem({ item, selected, dragPos, sizeDraft, heightsRef, renderCtx,
 
 export default function Builder({ api, scenario }) {
   const [stageKey, setStageKey] = useState(STAGES[0].key)
-  const [selectedId, setSelectedId] = useState(null)
+  const [selectedIds, setSelectedIds] = useState([]) // 다중 선택 (⇧+클릭)
   const [dragPos, setDragPos] = useState(null) // {id, x, y}
   const [sizeDraft, setSizeDraft] = useState(null) // {id, w, h}
   const [layoutMenuOpen, setLayoutMenuOpen] = useState(false)
   const [deviceMenuOpen, setDeviceMenuOpen] = useState(false)
+  const [colorMenuOpen, setColorMenuOpen] = useState(false)
+  const [versionMenuOpen, setVersionMenuOpen] = useState(false)
   const [paletteTab, setPaletteTab] = useState('components') // 'components' | 'layers'
   const [guides, setGuides] = useState([]) // 드래그 중 스냅 가이드라인
   const [focusTick, setFocusTick] = useState(0) // 더블클릭 → 인스펙터 포커스 신호
   const [, setHistVer] = useState(0) // undo/redo 버튼 활성화 갱신용
   const dragPosRef = useRef(null)
+  const dragStartRef = useRef(null) // 그룹 드래그 시작 시점의 위치들
   const sizeDraftRef = useRef(null)
   const heightsRef = useRef({})
   const historyRef = useRef({ past: [], future: [], lastPush: 0 })
 
   const items = scenario.stages[stageKey] || []
+  const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
   const selected = items.find((it) => it.id === selectedId) || null
   const stageMeta = STAGES.find((s) => s.key === stageKey)
+
+  /* 선택: ⇧+클릭 = 토글 추가, 일반 클릭 = 단일 선택(그룹 멤버 클릭 시 그룹 유지) */
+  const handleSelect = (id, shift) => {
+    setSelectedIds((prev) => {
+      if (shift) return prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      return prev.includes(id) && prev.length > 1 ? prev : [id]
+    })
+  }
 
   /* 기기 프리셋에 따른 캔버스 폭 */
   const device = DEVICE_PRESETS.find((d) => d.key === (scenario.device || 'desktop')) || DEVICE_PRESETS[0]
@@ -244,7 +261,7 @@ export default function Builder({ api, scenario }) {
   const takeSnapshot = () => JSON.stringify({ stages: scenario.stages, device: scenario.device })
   const applySnapshot = (snap) => {
     const data = JSON.parse(snap)
-    setSelectedId(null)
+    setSelectedIds([])
     api.updateScenario(scenario.id, (s) => ({
       ...s,
       stages: data.stages || data,
@@ -317,7 +334,7 @@ export default function Builder({ api, scenario }) {
   }
 
   useEffect(() => {
-    setSelectedId(null)
+    setSelectedIds([])
     setDragPos(null)
     setSizeDraft(null)
   }, [stageKey])
@@ -332,7 +349,7 @@ export default function Builder({ api, scenario }) {
       )
       return [...prev, { ...item, x: PAD, y: bottom + GAP, w: itemW }]
     })
-    setSelectedId(item.id)
+    setSelectedIds([item.id])
   }
 
   const updateItem = (id, patch) => {
@@ -347,7 +364,13 @@ export default function Builder({ api, scenario }) {
 
   const removeItem = (id) => {
     setItems((prev) => prev.filter((it) => it.id !== id))
-    if (selectedId === id) setSelectedId(null)
+    setSelectedIds((prev) => prev.filter((x) => x !== id))
+  }
+
+  const removeSelected = () => {
+    const ids = new Set(selectedIds)
+    setItems((prev) => prev.filter((it) => !ids.has(it.id)))
+    setSelectedIds([])
   }
 
   const duplicateItem = (id) => {
@@ -362,12 +385,61 @@ export default function Builder({ api, scenario }) {
       props: { ...src.props },
     }
     setItems((prev) => [...prev, copy])
-    setSelectedId(copy.id)
+    setSelectedIds([copy.id])
+  }
+
+  /* 선택된 모든 컴포넌트 복제 (⌘D) */
+  const duplicateSelected = () => {
+    const srcs = items.filter((it) => selectedIds.includes(it.id))
+    if (srcs.length === 0) return
+    const copies = srcs.map((src) => ({
+      ...createItem(src.type, src.props),
+      x: src.x,
+      y: src.y + (src.h || heightsRef.current[src.id] || 80) + GAP,
+      w: src.w,
+      h: src.h,
+      props: { ...src.props },
+    }))
+    setItems((prev) => resolveCollision([...prev, ...copies], copies.map((c) => c.id), heightsRef.current))
+    setSelectedIds(copies.map((c) => c.id))
+  }
+
+  /* 그룹 드래그: 시작 시점에 선택 그룹의 원래 위치를 기록 */
+  const onGroupDragStart = (id) => {
+    const groupIds = selectedIds.includes(id) && selectedIds.length > 1 ? selectedIds : [id]
+    const positions = {}
+    items.forEach((it) => {
+      if (groupIds.includes(it.id)) positions[it.id] = { x: it.x, y: it.y }
+    })
+    dragStartRef.current = { primary: id, positions }
   }
 
   /* 스마트 스냅: 캔버스 가장자리/중앙, 다른 아이템의 모서리·간격에 자석처럼 붙는다 */
   const SNAP = 6
   const onDrag = (id, x, y) => {
+    const start = dragStartRef.current
+    const groupIds = start ? Object.keys(start.positions) : [id]
+
+    // 다중 선택 그룹 이동: 스냅 없이 함께 이동
+    if (start && groupIds.length > 1) {
+      const dx = x - start.positions[id].x
+      const dy = y - start.positions[id].y
+      const positions = {}
+      groupIds.forEach((k) => {
+        const it = items.find((i) => i.id === k)
+        const w = it ? it.w : itemW
+        positions[k] = {
+          x: Math.max(0, Math.min(canvasW - w, start.positions[k].x + dx)),
+          y: Math.max(0, start.positions[k].y + dy),
+        }
+      })
+      const pos = { id, positions }
+      dragPosRef.current = pos
+      setDragPos(pos)
+      setGuides([])
+      return
+    }
+
     const it = items.find((i) => i.id === id)
     const w = it ? it.w : itemW
     const hh = (it && it.h) || heightsRef.current[id] || 80
@@ -412,7 +484,7 @@ export default function Builder({ api, scenario }) {
     }
 
     setGuides(activeGuides)
-    const pos = { id, x: nx, y: ny }
+    const pos = { id, positions: { [id]: { x: nx, y: ny } } }
     dragPosRef.current = pos
     setDragPos(pos)
   }
@@ -420,13 +492,14 @@ export default function Builder({ api, scenario }) {
   const onDragEnd = (id) => {
     const pos = dragPosRef.current
     dragPosRef.current = null
+    dragStartRef.current = null
     setGuides([])
     // 진행 중인 React 렌더와 커밋이 겹치지 않도록 다음 틱으로 미룬다
     setTimeout(() => {
       if (pos && pos.id === id) {
         setItems((prev) => {
-          const movedList = prev.map((it) => (it.id === id ? { ...it, x: pos.x, y: pos.y } : it))
-          return resolveCollision(movedList, id, heightsRef.current)
+          const movedList = prev.map((it) => (pos.positions[it.id] ? { ...it, ...pos.positions[it.id] } : it))
+          return resolveCollision(movedList, Object.keys(pos.positions), heightsRef.current)
         })
       }
       setDragPos(null)
@@ -471,11 +544,13 @@ export default function Builder({ api, scenario }) {
     })
   }
 
-  /* 방향키 미세 이동 */
-  const nudge = (id, dx, dy) => {
+  /* 방향키 미세 이동 (다중 선택 지원) */
+  const nudgeSelected = (dx, dy) => {
+    const ids = new Set(selectedIds)
+    if (ids.size === 0) return
     setItems((prev) => {
       const moved = prev.map((it) =>
-        it.id === id
+        ids.has(it.id)
           ? {
               ...it,
               x: Math.max(0, Math.min(canvasW - it.w, it.x + dx)),
@@ -483,7 +558,7 @@ export default function Builder({ api, scenario }) {
             }
           : it
       )
-      return resolveCollision(moved, id, heightsRef.current)
+      return resolveCollision(moved, [...ids], heightsRef.current)
     })
   }
 
@@ -513,19 +588,19 @@ export default function Builder({ api, scenario }) {
         e.shiftKey ? redo() : undo()
         return
       }
-      if (meta && e.key.toLowerCase() === 'd' && selectedId) {
+      if (meta && e.key.toLowerCase() === 'd' && selectedIds.length > 0) {
         e.preventDefault()
-        duplicateItem(selectedId)
+        duplicateSelected()
         return
       }
-      if (!selectedId) return
+      if (selectedIds.length === 0) return
       if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault()
-        removeItem(selectedId)
+        removeSelected()
         return
       }
       if (e.key === 'Escape') {
-        setSelectedId(null)
+        setSelectedIds([])
         return
       }
       const step = e.shiftKey ? 1 : 8
@@ -537,7 +612,7 @@ export default function Builder({ api, scenario }) {
       }[e.key]
       if (dir) {
         e.preventDefault()
-        nudge(selectedId, dir[0], dir[1])
+        nudgeSelected(dir[0], dir[1])
       }
     }
     window.addEventListener('keydown', onKey)
@@ -578,9 +653,39 @@ export default function Builder({ api, scenario }) {
     const cleaned = (scenario.chip || '').replace(/^#+/, '').trim()
     const fallback = (scenario.title || '').trim().replace(/\s+/g, '_') || '시나리오'
     const finalChip = cleaned || fallback
-    api.updateScenario(scenario.id, (s) => ({ ...s, status: 'published', chip: finalChip }))
+    // 발행 시점 스냅샷을 버전으로 보관 (최근 10개)
+    const snapshot = {
+      at: new Date().toISOString(),
+      title: scenario.title,
+      chip: finalChip,
+      device: scenario.device,
+      stages: JSON.parse(JSON.stringify(scenario.stages)),
+    }
+    api.updateScenario(scenario.id, (s) => ({
+      ...s,
+      status: 'published',
+      chip: finalChip,
+      versions: [...(s.versions || []), snapshot].slice(-10),
+    }))
     api.showToast(`"#${finalChip}" 칩이 홈 탐색창 밑에 발행됐어요!`)
     api.goHome()
+  }
+
+  /* 발행 버전 복원: 현재 상태는 undo 히스토리로 보존 */
+  const restoreVersion = (snap) => {
+    setVersionMenuOpen(false)
+    const when = new Date(snap.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    if (!window.confirm(`${when} 발행 시점으로 되돌릴까요?\n(현재 상태는 ⌘Z로 복구할 수 있어요)`)) return
+    pushHistory()
+    setSelectedIds([])
+    api.updateScenario(scenario.id, (s) => ({
+      ...s,
+      title: snap.title,
+      chip: snap.chip,
+      device: snap.device,
+      stages: JSON.parse(JSON.stringify(snap.stages)),
+    }))
+    api.showToast('발행 시점 버전으로 복원했어요.')
   }
 
   const unpublish = () => {
@@ -592,15 +697,15 @@ export default function Builder({ api, scenario }) {
   let displayItems = items
   if (dragPos) {
     const moved = items.map((it) =>
-      it.id === dragPos.id ? { ...it, x: dragPos.x, y: dragPos.y } : it
+      dragPos.positions[it.id] ? { ...it, ...dragPos.positions[it.id] } : it
     )
-    displayItems = resolveCollision(moved, dragPos.id, heightsRef.current)
+    displayItems = resolveCollision(moved, Object.keys(dragPos.positions), heightsRef.current)
   }
 
   const canvasHeight = Math.max(
     560,
     ...displayItems.map((it) => {
-      const y = dragPos && dragPos.id === it.id ? dragPos.y : it.y
+      const y = (dragPos && dragPos.positions[it.id]?.y) ?? it.y
       return y + (it.h || heightsRef.current[it.id] || 80) + 120
     })
   )
@@ -619,10 +724,11 @@ export default function Builder({ api, scenario }) {
             placeholder="시나리오 제목"
             onChange={(e) => api.updateScenario(scenario.id, (s) => ({ ...s, title: e.target.value }))}
           />
-          <div className="sb-chip-input-wrap">
+          <div className="sb-chip-input-wrap" style={{ color: scenario.color || '#5f7465' }}>
             <span>#</span>
             <input
               className="sb-chip-input"
+              style={{ color: scenario.color || '#5f7465' }}
               value={scenario.chip}
               placeholder="칩_라벨"
               onChange={(e) =>
@@ -632,6 +738,37 @@ export default function Builder({ api, scenario }) {
                 }))
               }
             />
+          </div>
+          <div className="sb-menu-wrap">
+            <button
+              type="button"
+              className="sb-color-btn"
+              title="칩 색상 선택"
+              aria-label="칩 색상 선택"
+              onClick={() => setColorMenuOpen((v) => !v)}
+            >
+              <span className="sb-color-dot" style={{ background: scenario.color || '#5f7465' }} />
+            </button>
+            {colorMenuOpen && (
+              <>
+                <div className="sb-menu-backdrop" onClick={() => setColorMenuOpen(false)} />
+                <div className="sb-menu sb-color-menu">
+                  {CHIP_COLORS.map((c) => (
+                    <button
+                      key={c.key}
+                      type="button"
+                      className={'sb-color-swatch' + ((scenario.color || '#5f7465') === c.color ? ' sb-color-swatch--active' : '')}
+                      title={c.label}
+                      style={{ background: c.color }}
+                      onClick={() => {
+                        api.updateScenario(scenario.id, (s) => ({ ...s, color: c.color }))
+                        setColorMenuOpen(false)
+                      }}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
         <span className={'sb-status ' + (scenario.status === 'published' ? 'sb-status--live' : '')}>
@@ -714,6 +851,34 @@ export default function Builder({ api, scenario }) {
             )}
           </div>
           <button type="button" className="sb-btn" onClick={() => api.playScenario(scenario.id)}>시험해보기</button>
+          {(scenario.versions || []).length > 0 && (
+            <div className="sb-menu-wrap">
+              <button
+                type="button"
+                className={'sb-btn' + (versionMenuOpen ? ' sb-btn--open' : '')}
+                onClick={() => setVersionMenuOpen((v) => !v)}
+                title="발행 시점 버전 복원"
+              >
+                버전 {(scenario.versions || []).length}
+              </button>
+              {versionMenuOpen && (
+                <>
+                  <div className="sb-menu-backdrop" onClick={() => setVersionMenuOpen(false)} />
+                  <div className="sb-menu">
+                    {[...(scenario.versions || [])].reverse().map((v, i, arr) => (
+                      <button key={v.at} type="button" className="sb-menu__item" onClick={() => restoreVersion(v)}>
+                        <strong>발행 v{arr.length - i}</strong>
+                        <small>
+                          {new Date(v.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          {' · '}설문 {(v.stages.survey || []).length} · 계획 {(v.stages.plan || []).length}
+                        </small>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
           {scenario.status === 'published' ? (
             <button type="button" className="sb-btn sb-btn--ghost" onClick={unpublish}>발행 취소</button>
           ) : null}
@@ -787,6 +952,7 @@ export default function Builder({ api, scenario }) {
                 <p className="sb-panel-label">단축키</p>
                 <dl>
                   <div><dt>⌘Z / ⇧⌘Z</dt><dd>실행 취소 / 다시 실행</dd></div>
+                  <div><dt>⇧+클릭</dt><dd>다중 선택 (함께 이동)</dd></div>
                   <div><dt>⌘D</dt><dd>선택 컴포넌트 복제</dd></div>
                   <div><dt>Delete</dt><dd>선택 컴포넌트 삭제</dd></div>
                   <div><dt>방향키</dt><dd>8px 이동 (⇧: 1px)</dd></div>
@@ -803,8 +969,8 @@ export default function Builder({ api, scenario }) {
               {sortByPosition(items).map((it, i, arr) => (
                 <div
                   key={it.id}
-                  className={'sb-layer' + (selectedId === it.id ? ' sb-layer--active' : '')}
-                  onClick={() => setSelectedId(it.id)}
+                  className={'sb-layer' + (selectedIds.includes(it.id) ? ' sb-layer--active' : '')}
+                  onClick={(e) => handleSelect(it.id, e.shiftKey)}
                 >
                   <span className="sb-layer__icon">{LIBRARY[it.type]?.icon}</span>
                   <span className="sb-layer__name">
@@ -842,13 +1008,13 @@ export default function Builder({ api, scenario }) {
         </aside>
 
         {/* 캔버스 */}
-        <main className="sb-canvas-wrap" onPointerDown={(e) => { if (e.target === e.currentTarget) setSelectedId(null) }}>
+        <main className="sb-canvas-wrap" onPointerDown={(e) => { if (e.target === e.currentTarget) setSelectedIds([]) }}>
           <div className="sb-canvas-col" style={{ width: canvasW }}>
 
           <div
             className="sb-canvas"
             style={{ width: canvasW, height: canvasHeight }}
-            onPointerDown={(e) => { if (e.target === e.currentTarget) setSelectedId(null) }}
+            onPointerDown={(e) => { if (e.target === e.currentTarget) setSelectedIds([]) }}
           >
             {items.length === 0 && (
               <div className="sb-canvas__empty">
@@ -867,18 +1033,18 @@ export default function Builder({ api, scenario }) {
               <CanvasItem
                 key={it.id}
                 item={it}
-                selected={selectedId === it.id}
-                dragPos={dragPos && dragPos.id === it.id ? dragPos : null}
+                selected={selectedIds.includes(it.id)}
+                dragPos={dragPos && dragPos.positions[it.id] ? dragPos.positions[it.id] : null}
                 sizeDraft={sizeDraft && sizeDraft.id === it.id ? sizeDraft : null}
                 heightsRef={heightsRef}
                 renderCtx={canvasCtx}
-                onSelect={setSelectedId}
-                onDragStart={() => {}}
+                onSelect={handleSelect}
+                onDragStart={onGroupDragStart}
                 onDrag={onDrag}
                 onDragEnd={onDragEnd}
                 onResize={onResize}
                 onResizeEnd={onResizeEnd}
-                onInspect={(id) => { setSelectedId(id); setFocusTick((t) => t + 1) }}
+                onInspect={(id) => { setSelectedIds([id]); setFocusTick((t) => t + 1) }}
               />
             ))}
           </div>
@@ -888,10 +1054,21 @@ export default function Builder({ api, scenario }) {
 
         {/* 인스펙터 */}
         <aside className="sb-inspector">
-          {!selected ? (
+          {selectedIds.length > 1 ? (
+            <div className="sb-inspector__empty">
+              <p className="sb-panel-label">다중 선택</p>
+              <strong className="sb-multi-count">{selectedIds.length}개</strong> 컴포넌트가 선택됐어요.<br />
+              드래그하면 함께 이동하고, 방향키로 같이 움직여요.
+              <div className="sb-inspector__actions">
+                <button type="button" className="sb-btn" onClick={duplicateSelected}>모두 복제</button>
+                <button type="button" className="sb-btn sb-btn--danger" onClick={removeSelected}>모두 삭제</button>
+              </div>
+            </div>
+          ) : !selected ? (
             <div className="sb-inspector__empty">
               <p className="sb-panel-label">편집</p>
-              캔버스에서 컴포넌트를 선택하면<br />플레이스홀더를 편집할 수 있어요.
+              캔버스에서 컴포넌트를 선택하면<br />플레이스홀더를 편집할 수 있어요.<br />
+              <span style={{ fontSize: 12 }}>⇧+클릭으로 여러 개를 선택할 수 있어요.</span>
               {stageKey === 'survey' && (
                 <p className="sb-profile-config__hint" style={{ marginTop: 14 }}>
                   💡 프로필 요약 패널은 팔레트의 "프로필 요약 패널" 컴포넌트로 배치하고,
