@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { loadScenarios, saveScenarios, createScenario, uid, loadExplore, saveExplore, loadProfile, saveProfile } from './lib/store.js'
+import { loadScenarios, saveScenarios, createScenario, uid, loadExplore, saveExplore, loadProfile, saveProfile, loadKeywords, saveKeywords } from './lib/store.js'
 import { readShareFromHash, clearShareHash } from './lib/share.js'
 import HomeView from './components/HomeView.jsx'
 import Builder from './components/Builder.jsx'
@@ -10,6 +10,7 @@ export default function App() {
   const [scenarios, setScenarios] = useState(loadScenarios)
   const [explore, setExplore] = useState(loadExplore)
   const [profile, setProfile] = useState(loadProfile)
+  const [keywords, setKeywords] = useState(loadKeywords)
   // 공유 링크(#s=...)로 들어온 경우: 저장하지 않고 바로 체험
   const [shared, setShared] = useState(readShareFromHash)
   // route: {name:'home'} | {name:'builder', id} | {name:'player', id} | {name:'explore-editor'}
@@ -27,6 +28,10 @@ export default function App() {
   useEffect(() => {
     saveProfile(profile)
   }, [profile])
+
+  useEffect(() => {
+    saveKeywords(keywords)
+  }, [keywords])
 
   useEffect(() => {
     if (!toast) return
@@ -136,6 +141,8 @@ export default function App() {
     updateExplore: setExplore,
     profile,
     updateProfile: setProfile,
+    keywords,
+    updateKeywords: setKeywords,
     showToast: (msg) => setToast(msg),
   }
 

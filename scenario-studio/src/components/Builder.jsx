@@ -110,12 +110,14 @@ export default function Builder({ api, scenario }) {
   const addItem = (type) => {
     const def = LIBRARY[type]
     const item = createItem(type, def.defaults)
+    // 컴포넌트별 기본 폭 (예: 상품/영상/게시글 카드는 세로형으로 시작)
+    const w = Math.min(def.defaultW || itemW, itemW)
     setItems((prev) => {
       const bottom = prev.reduce(
         (max, it) => Math.max(max, it.y + (heightsRef.current[it.id] || 80)),
         PAD - GAP
       )
-      return [...prev, { ...item, x: PAD, y: bottom + GAP, w: itemW }]
+      return [...prev, { ...item, x: PAD, y: bottom + GAP, w }]
     })
     setSelectedIds([item.id])
   }

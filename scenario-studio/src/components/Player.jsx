@@ -9,6 +9,7 @@ export default function Player({ api, scenario }) {
   const [answers, setAnswers] = useState({})
   const [cart, setCart] = useState([])
   const [excludedProfile, setExcludedProfile] = useState([]) // 이번 회차에서 뺀 프로필 항목
+  const [keyword, setKeyword] = useState(null) // 점선 밑줄 키워드 클릭 → 설명 모달
 
   const stage = STAGES[stageIdx]
   /* 숨김 처리된 컴포넌트는 실행에서 제외 */
@@ -67,6 +68,15 @@ export default function Player({ api, scenario }) {
     complete: () => {
       api.showToast('시나리오 체험 완료! 홈으로 돌아갑니다. 🎉')
       setTimeout(api.goHome, 900)
+    },
+    /* 키워드 설명 모달 */
+    showKeyword: (word) => {
+      const hit = (api.keywords || []).find((k) => k.word === word)
+      setKeyword({ word, desc: hit?.desc, points: hit?.points })
+    },
+    /* 외부 콘텐츠(영상/게시글) 클릭 목업 */
+    openExternal: (label) => {
+      api.showToast(`${label}(으)로 이동하는 목업이에요.`)
     },
     /* 프로필 요약 패널 / 설문 요약 패널 컴포넌트용 */
     excludedProfile,
@@ -181,6 +191,35 @@ export default function Player({ api, scenario }) {
           <p className="sb-player__cart">🧺 담은 상품 {cart.length}개</p>
         )}
       </section>
+
+      {/* 키워드 설명 모달 (원본 keyword-detail 스타일 재사용) */}
+      {keyword && (
+        <div className="keyword-detail-modal" role="dialog" aria-modal="true">
+          <button
+            type="button"
+            className="keyword-detail-modal__backdrop"
+            aria-label="키워드 설명 닫기"
+            onClick={() => setKeyword(null)}
+          />
+          <article className="keyword-detail-card">
+            <div className="keyword-detail-card__head">
+              <span>Keyword</span>
+              <button type="button" className="keyword-detail-card__close" aria-label="닫기" onClick={() => setKeyword(null)}>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <h3>{keyword.word}</h3>
+            <p>{keyword.desc || '아직 설명이 등록되지 않은 키워드예요. 탐색 페이지 편집기의 "키워드 사전"에서 추가할 수 있어요.'}</p>
+            {keyword.points ? (
+              <ul>
+                {String(keyword.points).split(',').map((pt, i) => (
+                  <li key={i}>{pt.trim()}</li>
+                ))}
+              </ul>
+            ) : null}
+          </article>
+        </div>
+      )}
     </>
   )
 }

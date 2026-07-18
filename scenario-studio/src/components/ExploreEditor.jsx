@@ -22,6 +22,14 @@ export default function ExploreEditor({ api }) {
 
   const published = api.scenarios.filter((s) => s.status === 'published')
 
+  /* 키워드 사전 편집 — [[키워드]] 점선 밑줄 클릭 시 뜨는 설명 */
+  const keywords = api.keywords || []
+  const setKeywordItem = (i, patch) => {
+    api.updateKeywords(keywords.map((k, idx) => (idx === i ? { ...k, ...patch } : k)))
+  }
+  const addKeyword = () => api.updateKeywords([...keywords, { word: '', desc: '', points: '' }])
+  const removeKeyword = (i) => api.updateKeywords(keywords.filter((_, idx) => idx !== i))
+
   /* 사용자 프로필 (고정 설문 정보) 편집 */
   const profile = api.profile
   const setProfile = (patch) => api.updateProfile({ ...profile, ...patch })
@@ -110,6 +118,39 @@ export default function ExploreEditor({ api }) {
               </div>
             ))}
             <button type="button" className="sb-btn sb-btn--small" onClick={addProfileItem}>+ 항목 추가</button>
+          </div>
+
+          <div className="sb-explore-story-fields">
+            <p className="sb-panel-label">키워드 사전</p>
+            <p className="sb-profile-config__hint">
+              컴포넌트 문구에 <code>[[키워드]]</code>로 쓰면 점선 밑줄이 생기고, 실행 중 클릭하면 여기 설명이 모달로 떠요.
+            </p>
+            {keywords.map((k, i) => (
+              <div key={i} className="sb-keyword-edit">
+                <div className="sb-profile-edit-row">
+                  <input
+                    type="text"
+                    placeholder="키워드"
+                    value={k.word}
+                    onChange={(e) => setKeywordItem(i, { word: e.target.value })}
+                  />
+                  <button type="button" aria-label="키워드 삭제" onClick={() => removeKeyword(i)}>✕</button>
+                </div>
+                <textarea
+                  rows={2}
+                  placeholder="설명"
+                  value={k.desc}
+                  onChange={(e) => setKeywordItem(i, { desc: e.target.value })}
+                />
+                <input
+                  type="text"
+                  placeholder="포인트 (쉼표 구분)"
+                  value={k.points}
+                  onChange={(e) => setKeywordItem(i, { points: e.target.value })}
+                />
+              </div>
+            ))}
+            <button type="button" className="sb-btn sb-btn--small" onClick={addKeyword}>+ 키워드 추가</button>
           </div>
 
           {cfg.stories.map((s, i) => (

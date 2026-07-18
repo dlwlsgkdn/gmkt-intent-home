@@ -100,6 +100,46 @@ export function saveProfile(profile) {
   }
 }
 
+/* ── 키워드 사전 — 텍스트 안 [[키워드]]에 점선 밑줄 + 클릭 시 설명 모달 ── */
+export const DEFAULT_KEYWORDS = [
+  {
+    word: '프라이머',
+    desc: '메이크업 전에 피부 결과 모공을 매끈하게 정돈해 베이스의 밀착력을 높여주는 제품이에요.',
+    points: '커버보다 결 정돈이 목적, T존 위주로 얇게, 손보다 퍼프 마무리',
+  },
+  {
+    word: '픽서',
+    desc: '완성한 메이크업 위에 분사해 고정력을 높여주는 스프레이예요. 유분·마찰에 의한 무너짐을 줄여줘요.',
+    points: '얼굴에서 20cm 거리 유지, T존 위주로 한 번 더, 흔들어서 사용',
+  },
+  {
+    word: '세라마이드',
+    desc: '피부 장벽을 구성하는 지질 성분으로, 수분 손실을 막고 민감해진 피부를 진정시키는 데 도움을 줘요.',
+    points: '건조·민감 피부에 적합, 레티놀과 함께 쓰기 좋은 진정 성분',
+  },
+]
+
+const KEYWORDS_KEY = 'ddak-keywords-v1'
+
+export function loadKeywords() {
+  try {
+    const raw = localStorage.getItem(KEYWORDS_KEY)
+    if (!raw) return DEFAULT_KEYWORDS
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : DEFAULT_KEYWORDS
+  } catch (e) {
+    return DEFAULT_KEYWORDS
+  }
+}
+
+export function saveKeywords(list) {
+  try {
+    localStorage.setItem(KEYWORDS_KEY, JSON.stringify(list))
+  } catch (e) {
+    /* ignore */
+  }
+}
+
 const EXPLORE_KEY = 'ddak-explore-page-v1'
 
 export function loadExplore() {
