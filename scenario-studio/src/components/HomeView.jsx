@@ -1,14 +1,6 @@
 import React, { useState } from 'react'
 import { BgBlobs, FloatingBar, StudioFab } from './Frame.jsx'
 
-const DEFAULT_TAGS = [
-  { label: '출근_10분룩', query: '출근 전 10분 안에 완성하는 지속력 데일리 메이크업' },
-  { label: 'AI_페이스룩', query: '내 얼굴 사진으로 코랄 메이크업 AI 시뮬레이션' },
-  { label: '립스틱_전색발색', query: '립스틱 한 제품의 전 색상을 팔목 발색으로 비교해줘' },
-  { label: '성분_궁합체크', query: '민감 피부를 위한 성분 궁합 체크' },
-  { label: '여행파우치', query: '주말 여행 파우치 뷰티 구성' },
-]
-
 export default function HomeView({ api }) {
   const [query, setQuery] = useState('')
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -73,7 +65,7 @@ export default function HomeView({ api }) {
               </div>
             </form>
 
-            <div className="clean-tag-row" aria-label="뷰티 키워드 시나리오">
+            <div className="clean-tag-row" aria-label="발행된 시나리오">
               {published.map((s) => (
                 <button
                   key={s.id}
@@ -83,16 +75,6 @@ export default function HomeView({ api }) {
                   onClick={() => api.playScenario(s.id)}
                 >
                   <span className="sb-chip-scenario__spark">✦</span>#{s.chip}
-                </button>
-              ))}
-              {DEFAULT_TAGS.map((t) => (
-                <button
-                  key={t.label}
-                  type="button"
-                  className="suggestion-tag"
-                  onClick={() => setQuery(t.query)}
-                >
-                  #{t.label}
                 </button>
               ))}
             </div>
