@@ -320,34 +320,6 @@ export const LIBRARY = {
     },
   },
 
-  profileCard: {
-    label: '저장된 프로필 카드',
-    stage: 'survey',
-    icon: '👤',
-    hint: '이전 설문 결과를 요약해 보여주는 카드',
-    defaults: {
-      label: '저장된 브리프',
-      name: '유진님의 베이스 프로필',
-      tags: '복합성, 쿨톤, 저자극 선호',
-    },
-    fields: [
-      { key: 'label', label: '라벨', kind: 'text' },
-      { key: 'name', label: '프로필 이름', kind: 'text' },
-      { key: 'tags', label: '태그 (쉼표 구분)', kind: 'text' },
-    ],
-    render: (p) => (
-      <div className="rounded-[24px] border border-slate-200 bg-white/90 p-5 shadow-sm">
-        <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-gmarket-blue mb-2">{p.label}</p>
-        <p className="text-base font-semibold text-slate-800">{p.name}</p>
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {splitList(p.tags).map((t, i) => (
-            <span key={i} className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600">{t}</span>
-          ))}
-        </div>
-      </div>
-    ),
-  },
-
   /* ─────────── 계획 단계 ─────────── */
   surveySummary: {
     label: '설문 요약 패널',

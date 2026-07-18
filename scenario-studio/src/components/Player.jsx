@@ -11,10 +11,21 @@ export default function Player({ api, scenario }) {
   const [excludedProfile, setExcludedProfile] = useState([]) // 이번 회차에서 뺀 프로필 항목
 
   const stage = STAGES[stageIdx]
+  /* 숨김 처리된 컴포넌트는 실행에서 제외 */
   const items = useMemo(
-    () => sortByPosition(scenario.stages[stage.key] || []),
+    () => sortByPosition(scenario.stages[stage.key] || []).filter((it) => !it.hidden),
     [scenario, stage.key]
   )
+
+  /* 처음부터 다시 체험 */
+  const restart = () => {
+    setStageIdx(0)
+    setAnswers({})
+    setExcludedProfile([])
+    setCart([])
+    setQuery(scenario.query || '')
+    api.showToast('처음부터 다시 시작해요.')
+  }
   /* 시나리오가 모바일 기기 폭으로 설계됐다면 플레이어도 그 폭으로 보여준다 */
   const device = DEVICE_PRESETS.find((d) => d.key === (scenario.device || 'desktop'))
   const deviceStyle = device && device.w < 760 ? { maxWidth: device.w } : undefined
@@ -104,7 +115,12 @@ export default function Player({ api, scenario }) {
 
       <section className="sb-player min-h-screen relative z-10">
         <div className="sb-player__head">
-          <p className="sb-eyebrow">#{scenario.chip} 칩으로 진입 · 탐색 완료</p>
+          <div className="sb-player__head-row">
+            <p className="sb-eyebrow">#{scenario.chip} 칩으로 진입 · 탐색 완료</p>
+            <button type="button" className="sb-player-restart" onClick={restart} title="응답을 초기화하고 처음부터">
+              ↺ 처음부터
+            </button>
+          </div>
           <h2>{scenario.title}</h2>
           {stage.key === 'survey' && questionCount > 0 && (
             <div className="clean-survey-progress sb-player__progress" aria-label="설문 진행률">

@@ -25,12 +25,18 @@ cd scenario-studio && npm run build   # vite build && cp -R ../legacy ../docs/le
 
 ## 아키텍처 (scenario-studio/src)
 
-- `App.jsx` — 라우팅(home/builder/player/explore-editor), 시나리오/탐색/프로필 상태 + localStorage 저장, 시나리오 CRUD·복제·순서변경·가져오기/내보내기 API
+- `App.jsx` — 라우팅(home/builder/player/explore-editor + 공유 링크 모드), 시나리오/탐색/프로필 상태 + localStorage 저장, 시나리오 CRUD·복제·순서변경·가져오기/내보내기 API
 - `lib/store.js` — 데이터 모델·localStorage. STAGES(설문→계획), DEVICE_PRESETS(기기 폭), CHIP_COLORS, DEFAULT_EXPLORE(공통 탐색 페이지), DEFAULT_PROFILE(고정 설문 정보)
+- `lib/layout.js` — **레이아웃 엔진** (순수 함수): resolveCollision(겹침 해소, 다중 이동+잠금 지원), layoutStack/TwoColumns/CompactUp, alignItems(다중 정렬), PAD/GAP 상수
+- `lib/share.js` — 공유 링크: 시나리오를 `#s=<base64url JSON>` 해시로 인코딩/디코딩 (서버 불필요)
 - `lib/registry.jsx` — **컴포넌트 레지스트리** (팔레트의 모든 컴포넌트). `{ label, stage, icon, defaults, fields[], render(props, ctx), canvasInteractive? }`. ctx.mode='canvas'|'player', ctx.player(실행 API), ctx.profile, ctx.updateProps(캔버스 내 편집), ctx.summaryPreview
 - `lib/templates.js` — 새 시나리오 템플릿 (빈/뷰티 브리프/선물 추천)
-- `components/Builder.jsx` — 편집기 본체. 팔레트(컴포넌트/레이어 탭)·캔버스(자유 드래그)·인스펙터. Undo/Redo(historyRef, 500ms 병합), 스마트 스냅 가이드, 다중 선택(⇧클릭, 그룹 드래그), 리사이즈 핸들, 자동 정렬 3모드(1단/2단 마소너리/컴팩트), 기기 프리셋(비례 스케일), 발행(버전 스냅샷 보관), 버전 복원
-- `components/Player.jsx` — 시나리오 실행(설문→계획 스테퍼). 기기 폭 반영, 응답/프로필 제외 상태를 ctx.player로 컴포넌트에 공급
+- `components/Builder.jsx` — 편집기 오케스트레이터 (상태/드래그/히스토리/발행). Undo/Redo(500ms 병합), 스마트 스냅, 다중 선택(⇧클릭·⌘A·그룹 드래그·정렬 도구), 기기 프리셋, 발행 버전 스냅샷·복원, 공유 링크 복사
+- `components/builder/CanvasItem.jsx` — 캔버스 아이템 (드래그/리사이즈/잠금/숨김)
+- `components/builder/Palette.jsx` — 팔레트(검색)/레이어 패널(잠금·숨김·순서)
+- `components/builder/Inspector.jsx` — 속성 편집 / 다중 선택 정렬 도구
+- `components/ui/Dropdown.jsx` — 상단 바 드롭다운 공용 래퍼
+- `components/Player.jsx` — 시나리오 실행(설문→계획 스테퍼). 기기 폭 반영, hidden 아이템 제외, 다시 시작, 응답/프로필 제외 상태를 ctx.player로 공급
 - `components/HomeView.jsx` — 홈. 발행 칩(색상/드래그 순서변경/클릭 실행), 시나리오 드로어(템플릿·복제·JSON 입출력)
 - `components/ExploreFrame.jsx` — 공통 탐색(홈) 렌더러 (홈과 편집기가 공유)
 - `components/ExploreEditor.jsx` — 공통 탐색 페이지 + 사용자 프로필 편집기 (라이브 미리보기)

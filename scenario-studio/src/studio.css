@@ -176,6 +176,65 @@
 
 .sb-multi-count { font-size: 18px; font-weight: 700; color: var(--sb-ink); }
 
+/* 다중 선택 정렬 도구 */
+.sb-align-tools {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.sb-align-tools button {
+  padding: 8px 6px;
+  border-radius: 11px;
+  border: 1px solid var(--sb-line);
+  background: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  transition: all 0.13s ease;
+}
+.sb-align-tools button:hover { border-color: var(--sb-accent); background: var(--sb-accent-soft); color: var(--sb-accent); }
+
+/* 팔레트 검색 */
+.sb-palette-search {
+  width: 100%;
+  padding: 9px 12px;
+  margin-bottom: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--sb-line);
+  background: #fff;
+  font-size: 12px;
+  color: var(--sb-ink);
+  outline: none;
+}
+.sb-palette-search:focus { border-color: var(--sb-accent); }
+
+/* 잠금 / 숨김 상태 */
+.sb-canvas-item--locked { cursor: default; }
+.sb-canvas-item--locked:hover { border-color: rgba(148, 163, 184, 0.5); }
+.sb-canvas-item--hidden .sb-canvas-item__content { opacity: 0.35; }
+.sb-layer--hidden .sb-layer__name { opacity: 0.5; }
+.sb-layer__btns .sb-layer__btn--on { background: var(--sb-accent-soft); }
+
+/* 플레이어 다시 시작 */
+.sb-player__head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.sb-player-restart {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--sb-line);
+  background: rgba(255, 255, 255, 0.85);
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  transition: all 0.14s ease;
+}
+.sb-player-restart:hover { border-color: var(--sb-accent); color: var(--sb-accent); }
+
 /* ── 홈: 시나리오 드로어 ── */
 .sb-drawer-backdrop {
   position: fixed;

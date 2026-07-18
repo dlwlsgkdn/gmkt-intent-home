@@ -1,215 +1,24 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { STAGES, DEVICE_PRESETS, CHIP_COLORS, createItem, sortByPosition } from '../lib/store.js'
-import { LIBRARY, libraryForStage, renderItem } from '../lib/registry.jsx'
+import { STAGES, DEVICE_PRESETS, CHIP_COLORS, createItem } from '../lib/store.js'
+import { LIBRARY } from '../lib/registry.jsx'
+import {
+  PAD, GAP, MIN_ITEM_W,
+  resolveCollision, layoutCompactUp, alignItems, LAYOUT_MODES,
+} from '../lib/layout.js'
+import { buildShareUrl } from '../lib/share.js'
+import Dropdown from './ui/Dropdown.jsx'
+import CanvasItem from './builder/CanvasItem.jsx'
+import Palette from './builder/Palette.jsx'
+import Inspector from './builder/Inspector.jsx'
 
-const PAD = 24
-const GAP = 14
-const MIN_ITEM_W = 160
-
-/* 겹침 해소: 기준(드래그/리사이즈된) 아이템은 제자리를 지키고,
-   겹치는 다른 아이템들이 아래로 밀린다 */
-function resolveCollision(items, movedIds, heights) {
-  const h = (it) => it.h || heights[it.id] || 80
-  const movedSet = new Set(Array.isArray(movedIds) ? movedIds : [movedIds])
-  const moved = items.filter((it) => movedSet.has(it.id))
-  if (moved.length === 0) return items
-  const others = items
-    .filter((it) => !movedSet.has(it.id))
-    .sort((a, b) => (a.y - b.y) || (a.x - b.x))
-  const placed = [...moved]
-  for (const it of others) {
-    const cur = { ...it }
-    for (let guard = 0; guard < 100; guard++) {
-      const hit = placed.find(
-        (p) =>
-          cur.x < p.x + p.w &&
-          cur.x + cur.w > p.x &&
-          cur.y < p.y + h(p) &&
-          cur.y + h(cur) > p.y
-      )
-      if (!hit) break
-      cur.y = hit.y + h(hit) + GAP
-    }
-    placed.push(cur)
-  }
-  return items.map((it) => placed.find((p) => p.id === it.id) || it)
-}
-
-/* ── 자동 정렬 모드들 ── */
-
-/* 1단 세로 스택: y→x 순으로 전체 너비로 쌓기 */
-function layoutStack(items, heights, ctx) {
-  const sorted = sortByPosition(items)
-  let cursor = PAD
-  const positioned = {}
-  sorted.forEach((it) => {
-    positioned[it.id] = { x: PAD, y: cursor, w: ctx.itemW }
-    cursor += (it.h || heights[it.id] || 80) + GAP
-  })
-  return items.map((it) => ({ ...it, ...positioned[it.id] }))
-}
-
-/* 2단 그리드: 반폭으로 나눠 항상 짧은 열에 채우기 (마소너리) */
-function layoutTwoColumns(items, heights, ctx) {
-  const colW = Math.floor((ctx.canvasW - PAD * 2 - GAP) / 2)
-  const sorted = sortByPosition(items)
-  const cols = [PAD, PAD] // 각 열의 다음 y 커서
-  const positioned = {}
-  sorted.forEach((it) => {
-    const col = cols[0] <= cols[1] ? 0 : 1
-    positioned[it.id] = {
-      x: PAD + col * (colW + GAP),
-      y: cols[col],
-      w: colW,
-    }
-    cols[col] += (it.h || heights[it.id] || 80) + GAP
-  })
-  return items.map((it) => ({ ...it, ...positioned[it.id] }))
-}
-
-/* 위로 컴팩트: x/너비는 유지한 채 빈 공간 없이 위로 끌어올리기 (겹침도 함께 해소) */
-function layoutCompactUp(items, heights) {
-  const h = (it) => it.h || heights[it.id] || 80
-  const sorted = sortByPosition(items)
-  const placed = []
-  for (const it of sorted) {
-    let y = PAD
-    for (let guard = 0; guard < 200; guard++) {
-      const hit = placed.find(
-        (p) =>
-          it.x < p.x + p.w &&
-          it.x + it.w > p.x &&
-          y < p.y + h(p) &&
-          y + h(it) > p.y
-      )
-      if (!hit) break
-      y = hit.y + h(hit) + GAP
-    }
-    placed.push({ ...it, y })
-  }
-  return items.map((it) => placed.find((p) => p.id === it.id) || it)
-}
-
-const LAYOUT_MODES = [
-  { key: 'stack', label: '1단 세로 정렬', desc: '전체 너비로 위에서부터 차곡차곡', fn: layoutStack },
-  { key: 'twocol', label: '2단 그리드 정렬', desc: '반폭 2열 마소너리 배치', fn: layoutTwoColumns },
-  { key: 'compact', label: '위로 컴팩트 정렬', desc: '크기·가로 위치 유지, 빈 공간만 제거', fn: (items, heights) => layoutCompactUp(items, heights) },
-]
-
-function CanvasItem({ item, selected, dragPos, sizeDraft, heightsRef, renderCtx, onSelect, onDragStart, onDrag, onDragEnd, onResize, onResizeEnd, onInspect }) {
-  const ref = useRef(null)
-  const dragging = dragPos != null
-  const resizing = sizeDraft != null
-
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const report = () => {
-      heightsRef.current[item.id] = el.offsetHeight
-    }
-    report()
-    const ro = new ResizeObserver(report)
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [item.id, heightsRef])
-
-  const onPointerDown = (e) => {
-    if (e.button !== 0) return
-    e.preventDefault()
-    if (e.shiftKey) {
-      onSelect(item.id, true)
-      return
-    }
-    onSelect(item.id, false)
-    const startX = e.clientX
-    const startY = e.clientY
-    const origX = item.x
-    const origY = item.y
-    let moved = false
-    const move = (ev) => {
-      const dx = ev.clientX - startX
-      const dy = ev.clientY - startY
-      if (!moved && Math.abs(dx) + Math.abs(dy) > 3) {
-        moved = true
-        onDragStart(item.id)
-      }
-      if (moved) onDrag(item.id, origX + dx, origY + dy)
-    }
-    const up = () => {
-      window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', up)
-      if (moved) onDragEnd(item.id)
-    }
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', up)
-  }
-
-  const onResizeDown = (e) => {
-    if (e.button !== 0) return
-    e.preventDefault()
-    e.stopPropagation()
-    onSelect(item.id, false)
-    const startX = e.clientX
-    const startY = e.clientY
-    const origW = item.w
-    const origH = item.h || (ref.current ? ref.current.offsetHeight : 120)
-    const move = (ev) => {
-      onResize(item.id, origW + (ev.clientX - startX), origH + (ev.clientY - startY))
-    }
-    const up = () => {
-      window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', up)
-      onResizeEnd(item.id)
-    }
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', up)
-  }
-
-  const def = LIBRARY[item.type]
-  const x = dragging ? dragPos.x : item.x
-  const y = dragging ? dragPos.y : item.y
-  const w = resizing ? sizeDraft.w : item.w
-  const h = resizing ? sizeDraft.h : item.h
-
-  return (
-    <div
-      ref={ref}
-      className={
-        'sb-canvas-item' +
-        (selected ? ' sb-canvas-item--selected' : '') +
-        (dragging ? ' sb-canvas-item--dragging' : '') +
-        (resizing ? ' sb-canvas-item--resizing' : '')
-      }
-      style={{ left: x, top: y, width: w, height: h || 'auto' }}
-      onPointerDown={onPointerDown}
-      onDoubleClick={() => onInspect(item.id)}
-    >
-      <span className="sb-canvas-item__tag">{def?.icon} {def?.label}</span>
-      <div
-        className="sb-canvas-item__content"
-        style={{
-          ...(h ? { height: '100%', overflow: 'hidden' } : null),
-          // 일부 컴포넌트(프로필 패널 등)는 캔버스에서도 클릭 가능
-          ...(def?.canvasInteractive ? { pointerEvents: 'auto' } : null),
-        }}
-      >
-        {renderItem(item, renderCtx || { mode: 'canvas' })}
-      </div>
-      <span className="sb-resize-handle" onPointerDown={onResizeDown} title="크기 조절" />
-    </div>
-  )
-}
+const SNAP = 6
 
 export default function Builder({ api, scenario }) {
   const [stageKey, setStageKey] = useState(STAGES[0].key)
   const [selectedIds, setSelectedIds] = useState([]) // 다중 선택 (⇧+클릭)
-  const [dragPos, setDragPos] = useState(null) // {id, x, y}
+  const [dragPos, setDragPos] = useState(null) // { id, positions: {id:{x,y}} }
   const [sizeDraft, setSizeDraft] = useState(null) // {id, w, h}
-  const [layoutMenuOpen, setLayoutMenuOpen] = useState(false)
-  const [deviceMenuOpen, setDeviceMenuOpen] = useState(false)
-  const [colorMenuOpen, setColorMenuOpen] = useState(false)
-  const [versionMenuOpen, setVersionMenuOpen] = useState(false)
-  const [paletteTab, setPaletteTab] = useState('components') // 'components' | 'layers'
+  const [openMenu, setOpenMenu] = useState(null) // 'device' | 'layout' | 'color' | 'version'
   const [guides, setGuides] = useState([]) // 드래그 중 스냅 가이드라인
   const [focusTick, setFocusTick] = useState(0) // 더블클릭 → 인스펙터 포커스 신호
   const [, setHistVer] = useState(0) // undo/redo 버튼 활성화 갱신용
@@ -223,6 +32,14 @@ export default function Builder({ api, scenario }) {
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
   const selected = items.find((it) => it.id === selectedId) || null
   const stageMeta = STAGES.find((s) => s.key === stageKey)
+  const chipColor = scenario.color || '#5f7465'
+
+  /* 기기 프리셋에 따른 캔버스 폭 */
+  const device = DEVICE_PRESETS.find((d) => d.key === (scenario.device || 'desktop')) || DEVICE_PRESETS[0]
+  const canvasW = device.w
+  const itemW = canvasW - PAD * 2
+
+  const toggleMenu = (key) => setOpenMenu((cur) => (cur === key ? null : key))
 
   /* 선택: ⇧+클릭 = 토글 추가, 일반 클릭 = 단일 선택(그룹 멤버 클릭 시 그룹 유지) */
   const handleSelect = (id, shift) => {
@@ -232,32 +49,7 @@ export default function Builder({ api, scenario }) {
     })
   }
 
-  /* 기기 프리셋에 따른 캔버스 폭 */
-  const device = DEVICE_PRESETS.find((d) => d.key === (scenario.device || 'desktop')) || DEVICE_PRESETS[0]
-  const canvasW = device.w
-  const itemW = canvasW - PAD * 2
-
-  /* 프로필(고정 설문 정보) — 빈 라벨 항목 제외 */
-  const profileItems = (api.profile?.items || []).filter((it) => it.label && it.label.trim())
-  /* 설문 단계의 프로필 요약 패널 컴포넌트가 숨긴 라벨들 → 계획 요약 미리보기에 반영 */
-  const hiddenProfileLabels = (scenario.stages.survey || [])
-    .filter((it) => it.type === 'profilePanel')
-    .flatMap((it) => String(it.props.hidden || '').split(',').map((s) => s.trim()).filter(Boolean))
-
-  /* 캔버스 렌더 컨텍스트: 프로필 데이터, 배지 클릭 토글, 계획 요약 미리보기 */
-  const canvasCtx = {
-    mode: 'canvas',
-    profile: api.profile,
-    updateProps: (id, key, value) => updateProps(id, key, value),
-    summaryPreview: {
-      profile: profileItems.filter((it) => !hiddenProfileLabels.includes(it.label)),
-      questions: (scenario.stages.survey || [])
-        .filter((it) => it.type === 'surveyQuestion')
-        .map((q) => ({ q: q.props.question, a: '아무거나' })),
-    },
-  }
-
-  /* 변경 직전 상태를 히스토리에 기록 (500ms 안의 연속 변경은 하나로 묶는다) */
+  /* ── 히스토리 (Undo/Redo) ── */
   const takeSnapshot = () => JSON.stringify({ stages: scenario.stages, device: scenario.device })
   const applySnapshot = (snap) => {
     const data = JSON.parse(snap)
@@ -272,7 +64,7 @@ export default function Builder({ api, scenario }) {
   const pushHistory = () => {
     const h = historyRef.current
     const now = Date.now()
-    if (now - h.lastPush < 500) return
+    if (now - h.lastPush < 500) return // 연속 변경 병합
     h.past.push(takeSnapshot())
     if (h.past.length > 60) h.past.shift()
     h.future = []
@@ -300,31 +92,7 @@ export default function Builder({ api, scenario }) {
     applySnapshot(snap)
   }
 
-  /* 기기 프리셋 전환: 컴포넌트 크기/위치를 새 폭에 비례해 스케일 */
-  const changeDevice = (preset) => {
-    setDeviceMenuOpen(false)
-    if (preset.key === (scenario.device || 'desktop')) return
-    pushHistory()
-    const ratio = (preset.w - PAD * 2) / (canvasW - PAD * 2)
-    const newItemW = preset.w - PAD * 2
-    api.updateScenario(scenario.id, (s) => {
-      const stages = {}
-      Object.keys(s.stages).forEach((k) => {
-        stages[k] = (s.stages[k] || []).map((it) => {
-          const w = Math.max(MIN_ITEM_W, Math.min(newItemW, Math.round(it.w * ratio)))
-          const x = Math.max(0, Math.min(preset.w - PAD - w, Math.round(PAD + (it.x - PAD) * ratio)))
-          return { ...it, w, x }
-        })
-      })
-      return { ...s, device: preset.key, stages }
-    })
-    // 폭 변경으로 높이가 다시 측정된 뒤 겹침/간격을 보정한다
-    setTimeout(() => {
-      setItems((prev) => layoutCompactUp(prev, heightsRef.current))
-    }, 200)
-    api.showToast(`${preset.label} 폭 기준으로 캔버스를 전환했어요.`)
-  }
-
+  /* ── 아이템 변경 ── */
   const setItems = (updater) => {
     pushHistory()
     api.updateScenario(scenario.id, (s) => ({
@@ -373,18 +141,22 @@ export default function Builder({ api, scenario }) {
     setSelectedIds([])
   }
 
+  const cloneOf = (src) => ({
+    ...createItem(src.type, src.props),
+    x: src.x,
+    y: src.y + (src.h || heightsRef.current[src.id] || 80) + GAP,
+    w: src.w,
+    h: src.h,
+    locked: false,
+    hidden: src.hidden,
+    props: { ...src.props },
+  })
+
   const duplicateItem = (id) => {
     const src = items.find((it) => it.id === id)
     if (!src) return
-    const copy = {
-      ...createItem(src.type, src.props),
-      x: src.x,
-      y: src.y + (heightsRef.current[src.id] || 80) + GAP,
-      w: src.w,
-      h: src.h,
-      props: { ...src.props },
-    }
-    setItems((prev) => [...prev, copy])
+    const copy = cloneOf(src)
+    setItems((prev) => resolveCollision([...prev, copy], [copy.id], heightsRef.current))
     setSelectedIds([copy.id])
   }
 
@@ -392,30 +164,23 @@ export default function Builder({ api, scenario }) {
   const duplicateSelected = () => {
     const srcs = items.filter((it) => selectedIds.includes(it.id))
     if (srcs.length === 0) return
-    const copies = srcs.map((src) => ({
-      ...createItem(src.type, src.props),
-      x: src.x,
-      y: src.y + (src.h || heightsRef.current[src.id] || 80) + GAP,
-      w: src.w,
-      h: src.h,
-      props: { ...src.props },
-    }))
+    const copies = srcs.map(cloneOf)
     setItems((prev) => resolveCollision([...prev, ...copies], copies.map((c) => c.id), heightsRef.current))
     setSelectedIds(copies.map((c) => c.id))
   }
 
-  /* 그룹 드래그: 시작 시점에 선택 그룹의 원래 위치를 기록 */
+  /* ── 드래그 / 리사이즈 ── */
+
+  /* 그룹 드래그: 시작 시점에 선택 그룹(잠긴 것 제외)의 원래 위치를 기록 */
   const onGroupDragStart = (id) => {
     const groupIds = selectedIds.includes(id) && selectedIds.length > 1 ? selectedIds : [id]
     const positions = {}
     items.forEach((it) => {
-      if (groupIds.includes(it.id)) positions[it.id] = { x: it.x, y: it.y }
+      if (groupIds.includes(it.id) && !it.locked) positions[it.id] = { x: it.x, y: it.y }
     })
     dragStartRef.current = { primary: id, positions }
   }
 
-  /* 스마트 스냅: 캔버스 가장자리/중앙, 다른 아이템의 모서리·간격에 자석처럼 붙는다 */
-  const SNAP = 6
   const onDrag = (id, x, y) => {
     const start = dragStartRef.current
     const groupIds = start ? Object.keys(start.positions) : [id]
@@ -440,6 +205,7 @@ export default function Builder({ api, scenario }) {
       return
     }
 
+    // 단일 드래그: 스마트 스냅 (캔버스 가장자리/중앙, 다른 아이템 모서리·간격)
     const it = items.find((i) => i.id === id)
     const w = it ? it.w : itemW
     const hh = (it && it.h) || heightsRef.current[id] || 80
@@ -447,7 +213,6 @@ export default function Builder({ api, scenario }) {
     let ny = Math.max(0, y)
     const activeGuides = []
 
-    // 세로 가이드 후보: [스냅될 x, 가이드라인 표시 위치]
     const vCands = [
       [PAD, PAD],
       [(canvasW - w) / 2, canvasW / 2],
@@ -466,7 +231,6 @@ export default function Builder({ api, scenario }) {
       }
     }
 
-    // 가로 가이드 후보: 상단 정렬, 다른 아이템 위/아래 + 간격 스냅
     const hCands = [[PAD, PAD]]
     items.forEach((o) => {
       if (o.id === id) return
@@ -544,9 +308,9 @@ export default function Builder({ api, scenario }) {
     })
   }
 
-  /* 방향키 미세 이동 (다중 선택 지원) */
+  /* 방향키 미세 이동 (다중 선택 지원, 잠긴 것 제외) */
   const nudgeSelected = (dx, dy) => {
-    const ids = new Set(selectedIds)
+    const ids = new Set(items.filter((it) => selectedIds.includes(it.id) && !it.locked).map((it) => it.id))
     if (ids.size === 0) return
     setItems((prev) => {
       const moved = prev.map((it) =>
@@ -562,10 +326,16 @@ export default function Builder({ api, scenario }) {
     })
   }
 
+  /* 다중 선택 정렬 도구 */
+  const alignSelected = (mode) => {
+    if (selectedIds.length < 2) return
+    setItems((prev) => alignItems(prev, selectedIds, mode, { canvasW }, heightsRef.current))
+  }
+
   /* 레이어 패널에서 순서 바꾸기: 이웃과 자리를 교환하고 컴팩트 정리 */
   const moveLayer = (id, dir) => {
     setItems((prev) => {
-      const sorted = sortByPosition(prev)
+      const sorted = [...prev].sort((a, b) => (a.y - b.y) || (a.x - b.x))
       const idx = sorted.findIndex((it) => it.id === id)
       const j = idx + dir
       if (idx < 0 || j < 0 || j >= sorted.length) return prev
@@ -578,7 +348,7 @@ export default function Builder({ api, scenario }) {
     })
   }
 
-  /* 키보드 단축키: ⌘Z 실행취소, ⇧⌘Z 다시실행, ⌘D 복제, Delete 삭제, 방향키 이동, Esc 해제 */
+  /* ── 키보드 단축키 ── */
   useEffect(() => {
     const onKey = (e) => {
       if (e.target.closest && e.target.closest('input, textarea, select, [contenteditable]')) return
@@ -586,6 +356,11 @@ export default function Builder({ api, scenario }) {
       if (meta && e.key.toLowerCase() === 'z') {
         e.preventDefault()
         e.shiftKey ? redo() : undo()
+        return
+      }
+      if (meta && e.key.toLowerCase() === 'a') {
+        e.preventDefault()
+        setSelectedIds(items.map((it) => it.id))
         return
       }
       if (meta && e.key.toLowerCase() === 'd' && selectedIds.length > 0) {
@@ -629,8 +404,33 @@ export default function Builder({ api, scenario }) {
     }
   }, [focusTick])
 
+  /* ── 상단 바 액션 ── */
+  const changeDevice = (preset) => {
+    setOpenMenu(null)
+    if (preset.key === (scenario.device || 'desktop')) return
+    pushHistory()
+    const ratio = (preset.w - PAD * 2) / (canvasW - PAD * 2)
+    const newItemW = preset.w - PAD * 2
+    api.updateScenario(scenario.id, (s) => {
+      const stages = {}
+      Object.keys(s.stages).forEach((k) => {
+        stages[k] = (s.stages[k] || []).map((it) => {
+          const w = Math.max(MIN_ITEM_W, Math.min(newItemW, Math.round(it.w * ratio)))
+          const x = Math.max(0, Math.min(preset.w - PAD - w, Math.round(PAD + (it.x - PAD) * ratio)))
+          return { ...it, w, x }
+        })
+      })
+      return { ...s, device: preset.key, stages }
+    })
+    // 폭 변경으로 높이가 다시 측정된 뒤 겹침/간격을 보정한다
+    setTimeout(() => {
+      setItems((prev) => layoutCompactUp(prev, heightsRef.current))
+    }, 200)
+    api.showToast(`${preset.label} 폭 기준으로 캔버스를 전환했어요.`)
+  }
+
   const runAutoLayout = (mode) => {
-    setLayoutMenuOpen(false)
+    setOpenMenu(null)
     setItems((prev) => mode.fn(prev, heightsRef.current, { itemW, canvasW }))
     // 너비가 바뀌는 정렬은 높이가 다시 측정된 뒤 한 번 더 컴팩트하게 보정한다
     if (mode.key !== 'compact') {
@@ -673,7 +473,7 @@ export default function Builder({ api, scenario }) {
 
   /* 발행 버전 복원: 현재 상태는 undo 히스토리로 보존 */
   const restoreVersion = (snap) => {
-    setVersionMenuOpen(false)
+    setOpenMenu(null)
     const when = new Date(snap.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
     if (!window.confirm(`${when} 발행 시점으로 되돌릴까요?\n(현재 상태는 ⌘Z로 복구할 수 있어요)`)) return
     pushHistory()
@@ -693,7 +493,22 @@ export default function Builder({ api, scenario }) {
     api.showToast('발행을 취소했어요.')
   }
 
-  /* 드래그 중에는 다른 아이템들이 실시간으로 밀려나는 미리보기 레이아웃을 보여준다 */
+  /* 공유 링크 복사: URL 해시에 시나리오 전체가 담겨 어디서든 바로 실행된다 */
+  const copyShareLink = () => {
+    const url = buildShareUrl(scenario)
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(
+        () => api.showToast('공유 링크를 복사했어요. 받는 사람은 링크만 열면 바로 체험할 수 있어요.'),
+        () => window.prompt('아래 링크를 복사하세요', url)
+      )
+    } else {
+      window.prompt('아래 링크를 복사하세요', url)
+    }
+  }
+
+  /* ── 렌더 ── */
+
+  /* 드래그 중에는 다른 아이템들이 실시간으로 밀려나는 미리보기 레이아웃 */
   let displayItems = items
   if (dragPos) {
     const moved = items.map((it) =>
@@ -710,6 +525,27 @@ export default function Builder({ api, scenario }) {
     })
   )
 
+  /* 캔버스 렌더 컨텍스트: 프로필 데이터, 배지 클릭 토글, 계획 요약 미리보기 */
+  const profileItems = (api.profile?.items || []).filter((it) => it.label && it.label.trim())
+  const hiddenProfileLabels = (scenario.stages.survey || [])
+    .filter((it) => it.type === 'profilePanel')
+    .flatMap((it) => String(it.props.hidden || '').split(',').map((s) => s.trim()).filter(Boolean))
+  const canvasCtx = {
+    mode: 'canvas',
+    profile: api.profile,
+    updateProps: (id, key, value) => updateProps(id, key, value),
+    summaryPreview: {
+      profile: profileItems.filter((it) => !hiddenProfileLabels.includes(it.label)),
+      questions: (scenario.stages.survey || [])
+        .filter((it) => it.type === 'surveyQuestion')
+        .map((q) => ({ q: q.props.question, a: '아무거나' })),
+    },
+  }
+
+  const chevron = (
+    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" /></svg>
+  )
+
   return (
     <div className="sb-builder">
       {/* 상단 바 */}
@@ -717,6 +553,7 @@ export default function Builder({ api, scenario }) {
         <button type="button" className="sb-icon-btn" onClick={api.goHome} aria-label="홈으로">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M15 19l-7-7 7-7" /></svg>
         </button>
+
         <div className="sb-topbar__meta">
           <input
             className="sb-title-input"
@@ -724,164 +561,130 @@ export default function Builder({ api, scenario }) {
             placeholder="시나리오 제목"
             onChange={(e) => api.updateScenario(scenario.id, (s) => ({ ...s, title: e.target.value }))}
           />
-          <div className="sb-chip-input-wrap" style={{ color: scenario.color || '#5f7465' }}>
+          <div className="sb-chip-input-wrap" style={{ color: chipColor }}>
             <span>#</span>
             <input
               className="sb-chip-input"
-              style={{ color: scenario.color || '#5f7465' }}
+              style={{ color: chipColor }}
               value={scenario.chip}
               placeholder="칩_라벨"
               onChange={(e) =>
-                api.updateScenario(scenario.id, (s) => ({
-                  ...s,
-                  chip: e.target.value.replace(/\s+/g, '_'),
-                }))
+                api.updateScenario(scenario.id, (s) => ({ ...s, chip: e.target.value.replace(/\s+/g, '_') }))
               }
             />
           </div>
-          <div className="sb-menu-wrap">
-            <button
-              type="button"
-              className="sb-color-btn"
-              title="칩 색상 선택"
-              aria-label="칩 색상 선택"
-              onClick={() => setColorMenuOpen((v) => !v)}
-            >
-              <span className="sb-color-dot" style={{ background: scenario.color || '#5f7465' }} />
-            </button>
-            {colorMenuOpen && (
-              <>
-                <div className="sb-menu-backdrop" onClick={() => setColorMenuOpen(false)} />
-                <div className="sb-menu sb-color-menu">
-                  {CHIP_COLORS.map((c) => (
-                    <button
-                      key={c.key}
-                      type="button"
-                      className={'sb-color-swatch' + ((scenario.color || '#5f7465') === c.color ? ' sb-color-swatch--active' : '')}
-                      title={c.label}
-                      style={{ background: c.color }}
-                      onClick={() => {
-                        api.updateScenario(scenario.id, (s) => ({ ...s, color: c.color }))
-                        setColorMenuOpen(false)
-                      }}
-                    />
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
+          <Dropdown
+            open={openMenu === 'color'}
+            onClose={() => setOpenMenu(null)}
+            menuClass="sb-color-menu"
+            button={
+              <button type="button" className="sb-color-btn" title="칩 색상 선택" aria-label="칩 색상 선택" onClick={() => toggleMenu('color')}>
+                <span className="sb-color-dot" style={{ background: chipColor }} />
+              </button>
+            }
+          >
+            {CHIP_COLORS.map((c) => (
+              <button
+                key={c.key}
+                type="button"
+                className={'sb-color-swatch' + (chipColor === c.color ? ' sb-color-swatch--active' : '')}
+                title={c.label}
+                style={{ background: c.color }}
+                onClick={() => {
+                  api.updateScenario(scenario.id, (s) => ({ ...s, color: c.color }))
+                  setOpenMenu(null)
+                }}
+              />
+            ))}
+          </Dropdown>
         </div>
+
         <span className={'sb-status ' + (scenario.status === 'published' ? 'sb-status--live' : '')}>
           {scenario.status === 'published' ? '발행됨' : '작성 중'}
         </span>
         <span className="sb-autosave" title={scenario.updatedAt}>
           자동 저장됨 · {new Date(scenario.updatedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
         </span>
+
         <div className="sb-topbar__actions">
-          <button
-            type="button"
-            className="sb-icon-btn"
-            title="실행 취소 (⌘Z)"
-            aria-label="실행 취소"
-            disabled={historyRef.current.past.length === 0}
-            onClick={undo}
-          >
+          <button type="button" className="sb-icon-btn" title="실행 취소 (⌘Z)" aria-label="실행 취소" disabled={historyRef.current.past.length === 0} onClick={undo}>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M9 14L4 9l5-5M4 9h10a6 6 0 010 12h-3" /></svg>
           </button>
-          <button
-            type="button"
-            className="sb-icon-btn"
-            title="다시 실행 (⇧⌘Z)"
-            aria-label="다시 실행"
-            disabled={historyRef.current.future.length === 0}
-            onClick={redo}
-          >
+          <button type="button" className="sb-icon-btn" title="다시 실행 (⇧⌘Z)" aria-label="다시 실행" disabled={historyRef.current.future.length === 0} onClick={redo}>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M15 14l5-5-5-5M20 9H10a6 6 0 000 12h3" /></svg>
           </button>
-          <div className="sb-menu-wrap">
-            <button
-              type="button"
-              className={'sb-btn' + (deviceMenuOpen ? ' sb-btn--open' : '')}
-              onClick={() => setDeviceMenuOpen((v) => !v)}
-              title="캔버스 기기 폭 선택"
-            >
-              {device.icon} {device.label}
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" /></svg>
-            </button>
-            {deviceMenuOpen && (
-              <>
-                <div className="sb-menu-backdrop" onClick={() => setDeviceMenuOpen(false)} />
-                <div className="sb-menu">
-                  {DEVICE_PRESETS.map((p) => (
-                    <button
-                      key={p.key}
-                      type="button"
-                      className={'sb-menu__item' + (p.key === device.key ? ' sb-menu__item--active' : '')}
-                      onClick={() => changeDevice(p)}
-                    >
-                      <strong>{p.icon} {p.label}</strong>
-                      <small>캔버스 폭 {p.w}px{p.key === device.key ? ' · 사용 중' : ''}</small>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-          <div className="sb-menu-wrap">
-            <button
-              type="button"
-              className={'sb-btn' + (layoutMenuOpen ? ' sb-btn--open' : '')}
-              onClick={() => setLayoutMenuOpen((v) => !v)}
-            >
-              자동 정렬
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" /></svg>
-            </button>
-            {layoutMenuOpen && (
-              <>
-                <div className="sb-menu-backdrop" onClick={() => setLayoutMenuOpen(false)} />
-                <div className="sb-menu">
-                  {LAYOUT_MODES.map((mode) => (
-                    <button key={mode.key} type="button" className="sb-menu__item" onClick={() => runAutoLayout(mode)}>
-                      <strong>{mode.label}</strong>
-                      <small>{mode.desc}</small>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-          <button type="button" className="sb-btn" onClick={() => api.playScenario(scenario.id)}>시험해보기</button>
-          {(scenario.versions || []).length > 0 && (
-            <div className="sb-menu-wrap">
-              <button
-                type="button"
-                className={'sb-btn' + (versionMenuOpen ? ' sb-btn--open' : '')}
-                onClick={() => setVersionMenuOpen((v) => !v)}
-                title="발행 시점 버전 복원"
-              >
-                버전 {(scenario.versions || []).length}
+          <button type="button" className="sb-icon-btn" title="공유 링크 복사 — 링크만 열면 바로 체험" aria-label="공유 링크 복사" onClick={copyShareLink}>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5M10.172 13.828a4 4 0 010-5.656l3-3a4 4 0 015.656 5.656l-1.5 1.5" /></svg>
+          </button>
+
+          <Dropdown
+            open={openMenu === 'device'}
+            onClose={() => setOpenMenu(null)}
+            button={
+              <button type="button" className={'sb-btn' + (openMenu === 'device' ? ' sb-btn--open' : '')} onClick={() => toggleMenu('device')} title="캔버스 기기 폭 선택">
+                {device.icon} {device.label}
+                {chevron}
               </button>
-              {versionMenuOpen && (
-                <>
-                  <div className="sb-menu-backdrop" onClick={() => setVersionMenuOpen(false)} />
-                  <div className="sb-menu">
-                    {[...(scenario.versions || [])].reverse().map((v, i, arr) => (
-                      <button key={v.at} type="button" className="sb-menu__item" onClick={() => restoreVersion(v)}>
-                        <strong>발행 v{arr.length - i}</strong>
-                        <small>
-                          {new Date(v.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                          {' · '}설문 {(v.stages.survey || []).length} · 계획 {(v.stages.plan || []).length}
-                        </small>
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
+            }
+          >
+            {DEVICE_PRESETS.map((p) => (
+              <button
+                key={p.key}
+                type="button"
+                className={'sb-menu__item' + (p.key === device.key ? ' sb-menu__item--active' : '')}
+                onClick={() => changeDevice(p)}
+              >
+                <strong>{p.icon} {p.label}</strong>
+                <small>캔버스 폭 {p.w}px{p.key === device.key ? ' · 사용 중' : ''}</small>
+              </button>
+            ))}
+          </Dropdown>
+
+          <Dropdown
+            open={openMenu === 'layout'}
+            onClose={() => setOpenMenu(null)}
+            button={
+              <button type="button" className={'sb-btn' + (openMenu === 'layout' ? ' sb-btn--open' : '')} onClick={() => toggleMenu('layout')}>
+                자동 정렬
+                {chevron}
+              </button>
+            }
+          >
+            {LAYOUT_MODES.map((mode) => (
+              <button key={mode.key} type="button" className="sb-menu__item" onClick={() => runAutoLayout(mode)}>
+                <strong>{mode.label}</strong>
+                <small>{mode.desc}</small>
+              </button>
+            ))}
+          </Dropdown>
+
+          <button type="button" className="sb-btn" onClick={() => api.playScenario(scenario.id)}>시험해보기</button>
+
+          {(scenario.versions || []).length > 0 && (
+            <Dropdown
+              open={openMenu === 'version'}
+              onClose={() => setOpenMenu(null)}
+              button={
+                <button type="button" className={'sb-btn' + (openMenu === 'version' ? ' sb-btn--open' : '')} onClick={() => toggleMenu('version')} title="발행 시점 버전 복원">
+                  버전 {(scenario.versions || []).length}
+                </button>
+              }
+            >
+              {[...(scenario.versions || [])].reverse().map((v, i, arr) => (
+                <button key={v.at} type="button" className="sb-menu__item" onClick={() => restoreVersion(v)}>
+                  <strong>발행 v{arr.length - i}</strong>
+                  <small>
+                    {new Date(v.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    {' · '}설문 {(v.stages.survey || []).length} · 계획 {(v.stages.plan || []).length}
+                  </small>
+                </button>
+              ))}
+            </Dropdown>
           )}
-          {scenario.status === 'published' ? (
+
+          {scenario.status === 'published' && (
             <button type="button" className="sb-btn sb-btn--ghost" onClick={unpublish}>발행 취소</button>
-          ) : null}
+          )}
           <button type="button" className="sb-btn sb-btn--primary" onClick={publish}>
             {scenario.status === 'published' ? '변경사항 재발행' : '발행하기'}
           </button>
@@ -917,244 +720,77 @@ export default function Builder({ api, scenario }) {
       </div>
 
       <div className="sb-workspace">
-        {/* 팔레트 / 레이어 */}
-        <aside className="sb-palette">
-          <div className="sb-palette-tabs">
-            <button
-              type="button"
-              className={paletteTab === 'components' ? 'sb-palette-tab--active' : ''}
-              onClick={() => setPaletteTab('components')}
-            >
-              컴포넌트
-            </button>
-            <button
-              type="button"
-              className={paletteTab === 'layers' ? 'sb-palette-tab--active' : ''}
-              onClick={() => setPaletteTab('layers')}
-            >
-              레이어 <span className="sb-palette-tab__count">{items.length}</span>
-            </button>
-          </div>
-
-          {paletteTab === 'components' ? (
-            <>
-              {libraryForStage(stageKey).map((def) => (
-                <button key={def.type} type="button" className="sb-palette-card" onClick={() => addItem(def.type)}>
-                  <span className="sb-palette-card__icon">{def.icon}</span>
-                  <span className="sb-palette-card__text">
-                    <strong>{def.label}</strong>
-                    <small>{def.hint}</small>
-                  </span>
-                  <span className="sb-palette-card__add">+</span>
-                </button>
-              ))}
-              <div className="sb-shortcut-hints">
-                <p className="sb-panel-label">단축키</p>
-                <dl>
-                  <div><dt>⌘Z / ⇧⌘Z</dt><dd>실행 취소 / 다시 실행</dd></div>
-                  <div><dt>⇧+클릭</dt><dd>다중 선택 (함께 이동)</dd></div>
-                  <div><dt>⌘D</dt><dd>선택 컴포넌트 복제</dd></div>
-                  <div><dt>Delete</dt><dd>선택 컴포넌트 삭제</dd></div>
-                  <div><dt>방향키</dt><dd>8px 이동 (⇧: 1px)</dd></div>
-                  <div><dt>Esc</dt><dd>선택 해제</dd></div>
-                  <div><dt>더블클릭</dt><dd>바로 문구 편집</dd></div>
-                </dl>
-              </div>
-            </>
-          ) : (
-            <div className="sb-layer-list">
-              {items.length === 0 && (
-                <p className="sb-layer-list__empty">이 단계에 컴포넌트가 없어요.</p>
-              )}
-              {sortByPosition(items).map((it, i, arr) => (
-                <div
-                  key={it.id}
-                  className={'sb-layer' + (selectedIds.includes(it.id) ? ' sb-layer--active' : '')}
-                  onClick={(e) => handleSelect(it.id, e.shiftKey)}
-                >
-                  <span className="sb-layer__icon">{LIBRARY[it.type]?.icon}</span>
-                  <span className="sb-layer__name">
-                    <strong>{LIBRARY[it.type]?.label}</strong>
-                    <small>
-                      {String(
-                        it.props.title || it.props.text || it.props.question || it.props.name || it.props.tags || ''
-                      ).slice(0, 22)}
-                    </small>
-                  </span>
-                  <span className="sb-layer__btns">
-                    <button
-                      type="button"
-                      title="위로"
-                      disabled={i === 0}
-                      onClick={(e) => { e.stopPropagation(); moveLayer(it.id, -1) }}
-                    >↑</button>
-                    <button
-                      type="button"
-                      title="아래로"
-                      disabled={i === arr.length - 1}
-                      onClick={(e) => { e.stopPropagation(); moveLayer(it.id, 1) }}
-                    >↓</button>
-                    <button
-                      type="button"
-                      title="삭제"
-                      className="sb-layer__del"
-                      onClick={(e) => { e.stopPropagation(); removeItem(it.id) }}
-                    >✕</button>
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </aside>
+        <Palette
+          stageKey={stageKey}
+          items={items}
+          selectedIds={selectedIds}
+          onSelect={handleSelect}
+          onAdd={addItem}
+          onMoveLayer={moveLayer}
+          onRemove={removeItem}
+          onToggleLock={(id) => updateItem(id, { locked: !items.find((it) => it.id === id)?.locked })}
+          onToggleHide={(id) => updateItem(id, { hidden: !items.find((it) => it.id === id)?.hidden })}
+        />
 
         {/* 캔버스 */}
         <main className="sb-canvas-wrap" onPointerDown={(e) => { if (e.target === e.currentTarget) setSelectedIds([]) }}>
           <div className="sb-canvas-col" style={{ width: canvasW }}>
-
-          <div
-            className="sb-canvas"
-            style={{ width: canvasW, height: canvasHeight }}
-            onPointerDown={(e) => { if (e.target === e.currentTarget) setSelectedIds([]) }}
-          >
-            {items.length === 0 && (
-              <div className="sb-canvas__empty">
-                왼쪽 팔레트에서 컴포넌트를 눌러 추가하세요.<br />
-                <span>추가한 컴포넌트는 마우스로 끌어 배치할 수 있어요.</span>
-              </div>
-            )}
-            {guides.map((g, i) => (
-              <div
-                key={i}
-                className={'sb-guide sb-guide--' + g.type}
-                style={g.type === 'v' ? { left: g.pos } : { top: g.pos }}
-              />
-            ))}
-            {displayItems.map((it) => (
-              <CanvasItem
-                key={it.id}
-                item={it}
-                selected={selectedIds.includes(it.id)}
-                dragPos={dragPos && dragPos.positions[it.id] ? dragPos.positions[it.id] : null}
-                sizeDraft={sizeDraft && sizeDraft.id === it.id ? sizeDraft : null}
-                heightsRef={heightsRef}
-                renderCtx={canvasCtx}
-                onSelect={handleSelect}
-                onDragStart={onGroupDragStart}
-                onDrag={onDrag}
-                onDragEnd={onDragEnd}
-                onResize={onResize}
-                onResizeEnd={onResizeEnd}
-                onInspect={(id) => { setSelectedIds([id]); setFocusTick((t) => t + 1) }}
-              />
-            ))}
-          </div>
-
+            <div
+              className="sb-canvas"
+              style={{ width: canvasW, height: canvasHeight }}
+              onPointerDown={(e) => { if (e.target === e.currentTarget) setSelectedIds([]) }}
+            >
+              {items.length === 0 && (
+                <div className="sb-canvas__empty">
+                  왼쪽 팔레트에서 컴포넌트를 눌러 추가하세요.<br />
+                  <span>추가한 컴포넌트는 마우스로 끌어 배치할 수 있어요.</span>
+                </div>
+              )}
+              {guides.map((g, i) => (
+                <div
+                  key={i}
+                  className={'sb-guide sb-guide--' + g.type}
+                  style={g.type === 'v' ? { left: g.pos } : { top: g.pos }}
+                />
+              ))}
+              {displayItems.map((it) => (
+                <CanvasItem
+                  key={it.id}
+                  item={it}
+                  selected={selectedIds.includes(it.id)}
+                  dragPos={dragPos && dragPos.positions[it.id] ? dragPos.positions[it.id] : null}
+                  sizeDraft={sizeDraft && sizeDraft.id === it.id ? sizeDraft : null}
+                  heightsRef={heightsRef}
+                  renderCtx={canvasCtx}
+                  onSelect={handleSelect}
+                  onDragStart={onGroupDragStart}
+                  onDrag={onDrag}
+                  onDragEnd={onDragEnd}
+                  onResize={onResize}
+                  onResizeEnd={onResizeEnd}
+                  onInspect={(id) => { setSelectedIds([id]); setFocusTick((t) => t + 1) }}
+                />
+              ))}
+            </div>
           </div>
         </main>
 
-        {/* 인스펙터 */}
-        <aside className="sb-inspector">
-          {selectedIds.length > 1 ? (
-            <div className="sb-inspector__empty">
-              <p className="sb-panel-label">다중 선택</p>
-              <strong className="sb-multi-count">{selectedIds.length}개</strong> 컴포넌트가 선택됐어요.<br />
-              드래그하면 함께 이동하고, 방향키로 같이 움직여요.
-              <div className="sb-inspector__actions">
-                <button type="button" className="sb-btn" onClick={duplicateSelected}>모두 복제</button>
-                <button type="button" className="sb-btn sb-btn--danger" onClick={removeSelected}>모두 삭제</button>
-              </div>
-            </div>
-          ) : !selected ? (
-            <div className="sb-inspector__empty">
-              <p className="sb-panel-label">편집</p>
-              캔버스에서 컴포넌트를 선택하면<br />플레이스홀더를 편집할 수 있어요.<br />
-              <span style={{ fontSize: 12 }}>⇧+클릭으로 여러 개를 선택할 수 있어요.</span>
-              {stageKey === 'survey' && (
-                <p className="sb-profile-config__hint" style={{ marginTop: 14 }}>
-                  💡 프로필 요약 패널은 팔레트의 "프로필 요약 패널" 컴포넌트로 배치하고,
-                  배지를 클릭해 노출 항목을 조절하세요.
-                </p>
-              )}
-            </div>
-          ) : (
-            <>
-              <p className="sb-panel-label">
-                {LIBRARY[selected.type]?.icon} {LIBRARY[selected.type]?.label}
-              </p>
-              {LIBRARY[selected.type]?.fields.map((f) => (
-                <div key={f.key} className="sb-field">
-                  <label>{f.label}</label>
-                  {f.kind === 'textarea' ? (
-                    <textarea
-                      rows={3}
-                      value={selected.props[f.key] ?? ''}
-                      onChange={(e) => updateProps(selected.id, f.key, e.target.value)}
-                    />
-                  ) : f.kind === 'toggle' ? (
-                    <button
-                      type="button"
-                      className={'sb-toggle' + (selected.props[f.key] ? ' sb-toggle--on' : '')}
-                      onClick={() => updateProps(selected.id, f.key, !selected.props[f.key])}
-                    >
-                      <span className="sb-toggle__knob" />
-                      {selected.props[f.key] ? '켜짐' : '꺼짐'}
-                    </button>
-                  ) : (
-                    <input
-                      type="text"
-                      value={selected.props[f.key] ?? ''}
-                      onChange={(e) => updateProps(selected.id, f.key, e.target.value)}
-                    />
-                  )}
-                </div>
-              ))}
-
-              <div className="sb-field">
-                <label>너비 — {selected.w}px</label>
-                <input
-                  type="range"
-                  min={240}
-                  max={itemW}
-                  step={8}
-                  value={selected.w}
-                  onChange={(e) => {
-                    const w = Number(e.target.value)
-                    setSize(selected.id, { w, x: Math.min(selected.x, canvasW - w) })
-                  }}
-                />
-              </div>
-
-              <div className="sb-field">
-                <label>높이 — {selected.h ? `${selected.h}px` : '자동'}</label>
-                <input
-                  type="range"
-                  min={48}
-                  max={720}
-                  step={8}
-                  value={selected.h || heightsRef.current[selected.id] || 120}
-                  onChange={(e) => setSize(selected.id, { h: Number(e.target.value) })}
-                />
-                {selected.h ? (
-                  <button
-                    type="button"
-                    className="sb-btn sb-btn--ghost sb-btn--small"
-                    onClick={() => {
-                      delete heightsRef.current[selected.id]
-                      updateItem(selected.id, { h: null })
-                    }}
-                  >
-                    자동 높이로 되돌리기
-                  </button>
-                ) : null}
-              </div>
-
-              <div className="sb-inspector__actions">
-                <button type="button" className="sb-btn" onClick={() => duplicateItem(selected.id)}>복제</button>
-                <button type="button" className="sb-btn sb-btn--danger" onClick={() => removeItem(selected.id)}>삭제</button>
-              </div>
-            </>
-          )}
-        </aside>
+        <Inspector
+          stageKey={stageKey}
+          selected={selected}
+          selectedIds={selectedIds}
+          itemW={itemW}
+          canvasW={canvasW}
+          heightsRef={heightsRef}
+          updateProps={updateProps}
+          updateItem={updateItem}
+          setSize={setSize}
+          duplicateSelected={duplicateSelected}
+          removeSelected={removeSelected}
+          duplicateItem={duplicateItem}
+          removeItem={removeItem}
+          alignSelected={alignSelected}
+        />
       </div>
     </div>
   )

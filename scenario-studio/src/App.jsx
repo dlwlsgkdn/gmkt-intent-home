@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { loadScenarios, saveScenarios, createScenario, uid, loadExplore, saveExplore, loadProfile, saveProfile } from './lib/store.js'
+import { readShareFromHash, clearShareHash } from './lib/share.js'
 import HomeView from './components/HomeView.jsx'
 import Builder from './components/Builder.jsx'
 import Player from './components/Player.jsx'
@@ -9,6 +10,8 @@ export default function App() {
   const [scenarios, setScenarios] = useState(loadScenarios)
   const [explore, setExplore] = useState(loadExplore)
   const [profile, setProfile] = useState(loadProfile)
+  // 공유 링크(#s=...)로 들어온 경우: 저장하지 않고 바로 체험
+  const [shared, setShared] = useState(readShareFromHash)
   // route: {name:'home'} | {name:'builder', id} | {name:'player', id} | {name:'explore-editor'}
   const [route, setRoute] = useState({ name: 'home' })
   const [toast, setToast] = useState(null)
@@ -134,6 +137,27 @@ export default function App() {
     profile,
     updateProfile: setProfile,
     showToast: (msg) => setToast(msg),
+  }
+
+  /* 공유 링크 모드: 임시 시나리오를 바로 실행. '편집' 버튼은 내 스튜디오로 가져오기 */
+  if (shared) {
+    const exitShared = () => {
+      setShared(null)
+      clearShareHash()
+    }
+    const adoptShared = () => {
+      const s = { ...createScenario(), ...shared, id: uid(), status: 'draft' }
+      setScenarios((prev) => [...prev, s])
+      exitShared()
+      setRoute({ name: 'builder', id: s.id })
+      setToast('공유받은 시나리오를 내 스튜디오로 가져왔어요.')
+    }
+    return (
+      <>
+        <Player api={{ ...api, goHome: exitShared, openBuilder: adoptShared }} scenario={shared} />
+        {toast && <div className="sb-toast">{toast}</div>}
+      </>
+    )
   }
 
   return (
