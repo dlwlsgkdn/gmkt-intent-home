@@ -693,6 +693,17 @@ export default function Builder({ api, scenario }) {
 
       {/* 단계 탭 */}
       <div className="sb-stage-tabs">
+        <button
+          type="button"
+          className="sb-stage-tab sb-stage-tab--common"
+          title="모든 시나리오가 공유하는 공통 탐색(홈) 페이지 편집"
+          onClick={api.openExploreEditor}
+        >
+          <span className="sb-stage-tab__num">🧭</span>
+          탐색
+          <span className="sb-stage-tab__count">공통</span>
+        </button>
+        <span className="sb-stage-tabs__divider" aria-hidden="true" />
         {STAGES.map((s, i) => (
           <button
             key={s.key}
@@ -831,6 +842,39 @@ export default function Builder({ api, scenario }) {
             <div className="sb-inspector__empty">
               <p className="sb-panel-label">편집</p>
               캔버스에서 컴포넌트를 선택하면<br />플레이스홀더를 편집할 수 있어요.
+
+              {stageKey === 'survey' && (api.profile?.items || []).length > 0 && (
+                <div className="sb-profile-config">
+                  <p className="sb-panel-label">프로필 요약 패널</p>
+                  <p className="sb-profile-config__hint">
+                    설문 타이틀 아래에 보여줄, 이 시나리오와 연관된 고정 설문 정보를 고르세요.
+                  </p>
+                  {api.profile.items.map((it) => {
+                    const activeKeys = scenario.profileKeys ?? api.profile.items.map((p) => p.label)
+                    const on = activeKeys.includes(it.label)
+                    return (
+                      <button
+                        key={it.label}
+                        type="button"
+                        className={'sb-profile-config__row' + (on ? ' sb-profile-config__row--on' : '')}
+                        onClick={() => {
+                          api.updateScenario(scenario.id, (s) => {
+                            const cur = s.profileKeys ?? api.profile.items.map((p) => p.label)
+                            const next = cur.includes(it.label)
+                              ? cur.filter((l) => l !== it.label)
+                              : [...cur, it.label]
+                            return { ...s, profileKeys: next }
+                          })
+                        }}
+                      >
+                        <span className="sb-profile-config__check">{on ? '✓' : ''}</span>
+                        <span className="sb-profile-config__label">{it.label}</span>
+                        <span className="sb-profile-config__value">{it.value}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           ) : (
             <>

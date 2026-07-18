@@ -47,6 +47,42 @@ export const DEFAULT_EXPLORE = {
   ],
 }
 
+/* ── 사용자 프로필 (고정 설문 정보) — 모든 시나리오가 공유 ── */
+export const DEFAULT_PROFILE = {
+  name: '유진',
+  items: [
+    { label: '나이대', value: '20대 후반' },
+    { label: '성별', value: '여성' },
+    { label: '피부타입', value: '복합성' },
+    { label: '퍼스널 컬러', value: '웜톤 봄 라이트' },
+  ],
+}
+
+const PROFILE_KEY = 'ddak-profile-v1'
+
+export function loadProfile() {
+  try {
+    const raw = localStorage.getItem(PROFILE_KEY)
+    if (!raw) return DEFAULT_PROFILE
+    const parsed = JSON.parse(raw)
+    return {
+      ...DEFAULT_PROFILE,
+      ...parsed,
+      items: Array.isArray(parsed.items) ? parsed.items : DEFAULT_PROFILE.items,
+    }
+  } catch (e) {
+    return DEFAULT_PROFILE
+  }
+}
+
+export function saveProfile(profile) {
+  try {
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(profile))
+  } catch (e) {
+    /* ignore */
+  }
+}
+
 const EXPLORE_KEY = 'ddak-explore-page-v1'
 
 export function loadExplore() {

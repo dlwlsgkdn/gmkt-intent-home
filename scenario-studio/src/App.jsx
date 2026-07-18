@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { loadScenarios, saveScenarios, createScenario, uid, loadExplore, saveExplore } from './lib/store.js'
+import { loadScenarios, saveScenarios, createScenario, uid, loadExplore, saveExplore, loadProfile, saveProfile } from './lib/store.js'
 import HomeView from './components/HomeView.jsx'
 import Builder from './components/Builder.jsx'
 import Player from './components/Player.jsx'
@@ -8,6 +8,7 @@ import ExploreEditor from './components/ExploreEditor.jsx'
 export default function App() {
   const [scenarios, setScenarios] = useState(loadScenarios)
   const [explore, setExplore] = useState(loadExplore)
+  const [profile, setProfile] = useState(loadProfile)
   // route: {name:'home'} | {name:'builder', id} | {name:'player', id} | {name:'explore-editor'}
   const [route, setRoute] = useState({ name: 'home' })
   const [toast, setToast] = useState(null)
@@ -19,6 +20,10 @@ export default function App() {
   useEffect(() => {
     saveExplore(explore)
   }, [explore])
+
+  useEffect(() => {
+    saveProfile(profile)
+  }, [profile])
 
   useEffect(() => {
     if (!toast) return
@@ -84,9 +89,12 @@ export default function App() {
     goHome: () => setRoute({ name: 'home' }),
     openBuilder: (id) => setRoute({ name: 'builder', id }),
     playScenario: (id) => setRoute({ name: 'player', id }),
-    openExploreEditor: () => setRoute({ name: 'explore-editor' }),
+    openExploreEditor: () => setRoute((prev) => ({ name: 'explore-editor', back: prev })),
+    closeExploreEditor: () => setRoute((prev) => prev.back || { name: 'home' }),
     explore,
     updateExplore: setExplore,
+    profile,
+    updateProfile: setProfile,
     showToast: (msg) => setToast(msg),
   }
 

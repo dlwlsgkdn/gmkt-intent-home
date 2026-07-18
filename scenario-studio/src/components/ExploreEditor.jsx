@@ -22,10 +22,19 @@ export default function ExploreEditor({ api }) {
 
   const published = api.scenarios.filter((s) => s.status === 'published')
 
+  /* 사용자 프로필 (고정 설문 정보) 편집 */
+  const profile = api.profile
+  const setProfile = (patch) => api.updateProfile({ ...profile, ...patch })
+  const setProfileItem = (i, patch) => {
+    setProfile({ items: profile.items.map((it, idx) => (idx === i ? { ...it, ...patch } : it)) })
+  }
+  const addProfileItem = () => setProfile({ items: [...profile.items, { label: '', value: '' }] })
+  const removeProfileItem = (i) => setProfile({ items: profile.items.filter((_, idx) => idx !== i) })
+
   return (
     <div className="sb-builder">
       <div className="sb-topbar">
-        <button type="button" className="sb-icon-btn" onClick={api.goHome} aria-label="홈으로">
+        <button type="button" className="sb-icon-btn" onClick={api.closeExploreEditor} aria-label="이전 화면으로">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M15 19l-7-7 7-7" /></svg>
         </button>
         <div className="sb-topbar__meta">
@@ -72,6 +81,35 @@ export default function ExploreEditor({ api }) {
           <div className="sb-field">
             <label>검색창 플레이스홀더</label>
             <input type="text" value={cfg.searchPlaceholder} onChange={(e) => set({ searchPlaceholder: e.target.value })} />
+          </div>
+
+          <div className="sb-explore-story-fields">
+            <p className="sb-panel-label">사용자 프로필 (고정 설문 정보)</p>
+            <p className="sb-profile-config__hint">
+              설문 단계 상단의 "이미 알고 있어요" 패널에 쓰여요. 시나리오별 노출 항목은 빌더의 설문 탭에서 고릅니다.
+            </p>
+            <div className="sb-field">
+              <label>사용자 이름</label>
+              <input type="text" value={profile.name} onChange={(e) => setProfile({ name: e.target.value })} />
+            </div>
+            {profile.items.map((it, i) => (
+              <div key={i} className="sb-profile-edit-row">
+                <input
+                  type="text"
+                  placeholder="라벨"
+                  value={it.label}
+                  onChange={(e) => setProfileItem(i, { label: e.target.value })}
+                />
+                <input
+                  type="text"
+                  placeholder="값"
+                  value={it.value}
+                  onChange={(e) => setProfileItem(i, { value: e.target.value })}
+                />
+                <button type="button" aria-label="항목 삭제" onClick={() => removeProfileItem(i)}>✕</button>
+              </div>
+            ))}
+            <button type="button" className="sb-btn sb-btn--small" onClick={addProfileItem}>+ 항목 추가</button>
           </div>
 
           {cfg.stories.map((s, i) => (
