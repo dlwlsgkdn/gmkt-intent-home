@@ -75,7 +75,7 @@ export default function Player({ api, scenario }) {
 
       <section className="sb-player min-h-screen relative z-10">
         <div className="sb-player__head">
-          <p className="sb-eyebrow">Scenario Preview · #{scenario.chip}</p>
+          <p className="sb-eyebrow">#{scenario.chip} 칩으로 진입 · 탐색 완료</p>
           <h2>{scenario.title}</h2>
           {stage.key === 'survey' && questionCount > 0 && (
             <div className="clean-survey-progress sb-player__progress" aria-label="설문 진행률">
@@ -122,7 +122,7 @@ export default function Player({ api, scenario }) {
           )}
           {stageIdx < STAGES.length - 1 ? (
             <button type="button" className="clean-plan-submit" onClick={next}>
-              {stage.key === 'explore' ? '설문으로 이동' : '맞춤 브리프 확인하기'}
+              맞춤 브리프 확인하기
             </button>
           ) : (
             <button type="button" className="clean-plan-submit" onClick={playerApi.complete}>

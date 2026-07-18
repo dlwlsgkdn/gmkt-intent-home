@@ -189,7 +189,7 @@ function CanvasItem({ item, selected, dragPos, sizeDraft, heightsRef, onSelect, 
 }
 
 export default function Builder({ api, scenario }) {
-  const [stageKey, setStageKey] = useState('explore')
+  const [stageKey, setStageKey] = useState(STAGES[0].key)
   const [selectedId, setSelectedId] = useState(null)
   const [dragPos, setDragPos] = useState(null) // {id, x, y}
   const [sizeDraft, setSizeDraft] = useState(null) // {id, w, h}

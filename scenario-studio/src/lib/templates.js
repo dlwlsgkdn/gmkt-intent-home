@@ -18,21 +18,15 @@ export const TEMPLATES = [
     icon: '📄',
     desc: '아무것도 없는 캔버스에서 시작',
     chip: '새_시나리오',
-    build: () => ({ explore: [], survey: [], plan: [] }),
+    build: () => ({ survey: [], plan: [] }),
   },
   {
     key: 'beauty-brief',
     name: '뷰티 브리프',
     icon: '💄',
-    desc: '탐색·설문·계획 기본 구성이 채워진 상태',
+    desc: '설문·계획 기본 구성이 채워진 상태',
     chip: '뷰티_브리프',
     build: () => ({
-      explore: [
-        make('greeting', {}, 24),
-        make('searchBox', {}, 128),
-        make('tagRow', {}, 232),
-        make('storyFeature', {}, 306),
-      ],
       survey: [
         make('surveyIntro', {}, 24),
         make('surveyQuestion', {}, 268),
@@ -62,16 +56,6 @@ export const TEMPLATES = [
     desc: '받는 분 정보를 설문으로 모아 선물 계획 제안',
     chip: '선물_추천',
     build: () => ({
-      explore: [
-        make('greeting', { text: '선물 받을 분의 얼굴을 떠올리면서 가볍게 시작해볼까요?' }, 24),
-        make('searchBox', { placeholder: '예: 20대 여자친구 생일 선물 스킨케어 세트' }, 128),
-        make('tagRow', { tags: '생일선물, 기념일, 향수, 스킨케어_세트' }, 232),
-        make('storyCard', {
-          kicker: 'Gift Edit',
-          title: '실패 없는 뷰티 선물 공식',
-          imageUrl: './makeup-clone-assets/42072b0ad4be9333.avif',
-        }, 306),
-      ],
       survey: [
         make('surveyIntro', {
           kicker: 'Gift Brief',

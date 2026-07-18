@@ -1,18 +1,24 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { loadScenarios, saveScenarios, createScenario, uid } from './lib/store.js'
+import { loadScenarios, saveScenarios, createScenario, uid, loadExplore, saveExplore } from './lib/store.js'
 import HomeView from './components/HomeView.jsx'
 import Builder from './components/Builder.jsx'
 import Player from './components/Player.jsx'
+import ExploreEditor from './components/ExploreEditor.jsx'
 
 export default function App() {
   const [scenarios, setScenarios] = useState(loadScenarios)
-  // route: {name:'home'} | {name:'builder', id} | {name:'player', id}
+  const [explore, setExplore] = useState(loadExplore)
+  // route: {name:'home'} | {name:'builder', id} | {name:'player', id} | {name:'explore-editor'}
   const [route, setRoute] = useState({ name: 'home' })
   const [toast, setToast] = useState(null)
 
   useEffect(() => {
     saveScenarios(scenarios)
   }, [scenarios])
+
+  useEffect(() => {
+    saveExplore(explore)
+  }, [explore])
 
   useEffect(() => {
     if (!toast) return
@@ -78,15 +84,19 @@ export default function App() {
     goHome: () => setRoute({ name: 'home' }),
     openBuilder: (id) => setRoute({ name: 'builder', id }),
     playScenario: (id) => setRoute({ name: 'player', id }),
+    openExploreEditor: () => setRoute({ name: 'explore-editor' }),
+    explore,
+    updateExplore: setExplore,
     showToast: (msg) => setToast(msg),
   }
 
   return (
     <>
       {route.name === 'home' && <HomeView api={api} />}
+      {route.name === 'explore-editor' && <ExploreEditor api={api} />}
       {route.name === 'builder' && current && <Builder api={api} scenario={current} />}
       {route.name === 'player' && current && <Player api={api} scenario={current} />}
-      {route.name !== 'home' && !current && <HomeView api={api} />}
+      {route.name !== 'home' && route.name !== 'explore-editor' && !current && <HomeView api={api} />}
 
       {toast && <div className="sb-toast">{toast}</div>}
     </>

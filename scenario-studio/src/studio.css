@@ -171,6 +171,65 @@
   margin-bottom: 18px;
 }
 .sb-drawer__head h3 { margin: 4px 0 0; font-size: 20px; font-weight: 600; color: var(--sb-ink); }
+/* 탐색 페이지 편집 진입 버튼 */
+.sb-explore-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  border-radius: 16px;
+  border: 1px solid var(--sb-line);
+  background: linear-gradient(135deg, #f8fafc, #eef2f6);
+  text-align: left;
+  color: #64748b;
+  transition: all 0.15s ease;
+}
+.sb-explore-btn:hover { border-color: var(--sb-accent); background: var(--sb-accent-soft); }
+.sb-explore-btn__icon { font-size: 18px; flex-shrink: 0; }
+.sb-explore-btn__text { flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.sb-explore-btn__text strong { font-size: 13px; font-weight: 700; color: var(--sb-ink); }
+.sb-explore-btn__text small { font-size: 11px; color: #94a3b8; }
+
+/* 탐색 페이지 편집기 */
+.sb-title-static { font-size: 16px; font-weight: 600; color: var(--sb-ink); white-space: nowrap; }
+.sb-explore-workspace {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  border-top: 1px solid var(--sb-line);
+  background: #fff;
+  min-height: 0;
+}
+.sb-explore-preview {
+  padding: 24px;
+  overflow: auto;
+  background:
+    radial-gradient(rgba(52, 70, 90, 0.14) 1px, transparent 1px) 0 0 / 22px 22px,
+    #eef1f4;
+}
+.sb-explore-preview__frame {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 36px 28px 48px;
+  border-radius: 24px;
+  border: 1px solid var(--sb-line);
+  background: #f8fafc;
+  box-shadow: 0 30px 60px -40px rgba(15, 23, 42, 0.3);
+  overflow: hidden;
+}
+/* 미리보기에서는 히어로 영역을 컴팩트하게 */
+.sb-explore-preview__frame .beauty-search-stage { min-height: 460px; margin-bottom: 24px; }
+.sb-explore-preview__frame .beauty-webzine { margin-top: 0; }
+.sb-explore-fields { max-height: calc(100vh - 70px); }
+.sb-explore-story-fields {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--sb-line);
+}
+.sb-chip-scenario--sample { opacity: 0.55; border-style: dashed !important; }
+
 /* 템플릿 갤러리 */
 .sb-template-grid {
   display: grid;

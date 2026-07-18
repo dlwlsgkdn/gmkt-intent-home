@@ -14,11 +14,65 @@ export const DEVICE_PRESETS = [
   { key: 'tablet', label: '태블릿 (768)', w: 768, icon: '💻' },
 ]
 
+/* 시나리오가 소유하는 단계: 설문 → 계획.
+   탐색(홈)은 모든 시나리오가 공유하는 공통 페이지로, 칩 클릭이 곧 탐색 완료다. */
 export const STAGES = [
-  { key: 'explore', label: '탐색', desc: '홈에서 시나리오가 시작되는 첫 화면' },
   { key: 'survey', label: '설문', desc: '사용자에게 물어볼 질문 구성' },
   { key: 'plan', label: '계획', desc: '설문 후 보여줄 맞춤 계획' },
 ]
+
+/* ── 공통 탐색(홈) 페이지 설정 ── */
+export const DEFAULT_EXPLORE = {
+  greeting: '유진님, 오늘은 피부결이 먼저 보이는 베이스 루틴을 가볍게 정리해볼까요?',
+  searchPlaceholder: '예: 출근 전에 10분 안에 안 무너지는 데일리 메이크업',
+  stories: [
+    {
+      kicker: 'Base Notes',
+      title: '속광은 남기고 유분만 덜어내는 베이스',
+      desc: '최근 쓰레드에서 반복된 키워드: 무너짐, 들뜸, 얇은 커버.',
+      imageUrl: './makeup-clone-assets/d9b261330f3ffccf.avif',
+    },
+    {
+      kicker: 'Color Mood',
+      title: '맑은 로즈 한 끗',
+      desc: '',
+      imageUrl: './makeup-clone-assets/8e01e19fb7cf7c96.avif',
+    },
+    {
+      kicker: 'Pouch Edit',
+      title: '1박 2일 파우치 최소 구성',
+      desc: '',
+      imageUrl: './makeup-clone-assets/42072b0ad4be9333.avif',
+    },
+  ],
+}
+
+const EXPLORE_KEY = 'ddak-explore-page-v1'
+
+export function loadExplore() {
+  try {
+    const raw = localStorage.getItem(EXPLORE_KEY)
+    if (!raw) return DEFAULT_EXPLORE
+    const parsed = JSON.parse(raw)
+    return {
+      ...DEFAULT_EXPLORE,
+      ...parsed,
+      stories: Array.isArray(parsed.stories) && parsed.stories.length === 3
+        ? parsed.stories
+        : DEFAULT_EXPLORE.stories,
+    }
+  } catch (e) {
+    return DEFAULT_EXPLORE
+  }
+}
+
+export function saveExplore(cfg) {
+  try {
+    localStorage.setItem(EXPLORE_KEY, JSON.stringify(cfg))
+  } catch (e) {
+    /* ignore */
+  }
+}
 
 export function createScenario(partial = {}) {
   return {
@@ -30,7 +84,7 @@ export function createScenario(partial = {}) {
     status: 'draft',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    stages: { explore: [], survey: [], plan: [] },
+    stages: { survey: [], plan: [] },
     ...partial,
   }
 }
