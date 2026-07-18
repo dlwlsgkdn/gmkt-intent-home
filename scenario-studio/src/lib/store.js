@@ -31,6 +31,7 @@ export function createItem(type, defaults, index = 0) {
     x: 0,
     y: 24 + index * 40,
     w: 672,
+    h: null, // null = 자동 높이
     props: { ...defaults },
   }
 }

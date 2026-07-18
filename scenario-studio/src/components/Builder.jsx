@@ -7,17 +7,17 @@ const PAD = 24
 const GAP = 14
 const ITEM_W_DEFAULT = CANVAS_W - PAD * 2
 
-/* 겹침 해소: 드래그된 아이템은 제자리를 지키고, 겹치는 다른 아이템들이 아래로 밀린다 */
+/* 겹침 해소: 기준(드래그/리사이즈된) 아이템은 제자리를 지키고,
+   겹치는 다른 아이템들이 아래로 밀린다 */
 function resolveCollision(items, movedId, heights) {
-  const h = (it) => heights[it.id] || 80
-  const sorted = [...items].sort((a, b) => {
-    if (a.y !== b.y) return a.y - b.y
-    if (a.id === movedId) return -1
-    if (b.id === movedId) return 1
-    return a.x - b.x
-  })
-  const placed = []
-  for (const it of sorted) {
+  const h = (it) => it.h || heights[it.id] || 80
+  const moved = items.find((it) => it.id === movedId)
+  if (!moved) return items
+  const others = items
+    .filter((it) => it.id !== movedId)
+    .sort((a, b) => (a.y - b.y) || (a.x - b.x))
+  const placed = [moved]
+  for (const it of others) {
     const cur = { ...it }
     for (let guard = 0; guard < 100; guard++) {
       const hit = placed.find(
@@ -42,14 +42,15 @@ function autoLayout(items, heights) {
   const positioned = {}
   sorted.forEach((it) => {
     positioned[it.id] = { x: PAD, y: cursor, w: Math.min(it.w, ITEM_W_DEFAULT) }
-    cursor += (heights[it.id] || 80) + GAP
+    cursor += (it.h || heights[it.id] || 80) + GAP
   })
   return items.map((it) => ({ ...it, ...positioned[it.id] }))
 }
 
-function CanvasItem({ item, selected, dragPos, heightsRef, onSelect, onDragStart, onDrag, onDragEnd }) {
+function CanvasItem({ item, selected, dragPos, sizeDraft, heightsRef, onSelect, onDragStart, onDrag, onDragEnd, onResize, onResizeEnd }) {
   const ref = useRef(null)
   const dragging = dragPos != null
+  const resizing = sizeDraft != null
 
   useEffect(() => {
     const el = ref.current
@@ -90,9 +91,32 @@ function CanvasItem({ item, selected, dragPos, heightsRef, onSelect, onDragStart
     window.addEventListener('pointerup', up)
   }
 
+  const onResizeDown = (e) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    e.stopPropagation()
+    onSelect(item.id)
+    const startX = e.clientX
+    const startY = e.clientY
+    const origW = item.w
+    const origH = item.h || (ref.current ? ref.current.offsetHeight : 120)
+    const move = (ev) => {
+      onResize(item.id, origW + (ev.clientX - startX), origH + (ev.clientY - startY))
+    }
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      onResizeEnd(item.id)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
+
   const def = LIBRARY[item.type]
   const x = dragging ? dragPos.x : item.x
   const y = dragging ? dragPos.y : item.y
+  const w = resizing ? sizeDraft.w : item.w
+  const h = resizing ? sizeDraft.h : item.h
 
   return (
     <div
@@ -100,13 +124,17 @@ function CanvasItem({ item, selected, dragPos, heightsRef, onSelect, onDragStart
       className={
         'sb-canvas-item' +
         (selected ? ' sb-canvas-item--selected' : '') +
-        (dragging ? ' sb-canvas-item--dragging' : '')
+        (dragging ? ' sb-canvas-item--dragging' : '') +
+        (resizing ? ' sb-canvas-item--resizing' : '')
       }
-      style={{ left: x, top: y, width: item.w }}
+      style={{ left: x, top: y, width: w, height: h || 'auto' }}
       onPointerDown={onPointerDown}
     >
       <span className="sb-canvas-item__tag">{def?.icon} {def?.label}</span>
-      <div className="sb-canvas-item__content">{renderItem(item, { mode: 'canvas' })}</div>
+      <div className="sb-canvas-item__content" style={h ? { height: '100%', overflow: 'hidden' } : undefined}>
+        {renderItem(item, { mode: 'canvas' })}
+      </div>
+      <span className="sb-resize-handle" onPointerDown={onResizeDown} title="크기 조절" />
     </div>
   )
 }
@@ -115,6 +143,9 @@ export default function Builder({ api, scenario }) {
   const [stageKey, setStageKey] = useState('explore')
   const [selectedId, setSelectedId] = useState(null)
   const [dragPos, setDragPos] = useState(null) // {id, x, y}
+  const [sizeDraft, setSizeDraft] = useState(null) // {id, w, h}
+  const dragPosRef = useRef(null)
+  const sizeDraftRef = useRef(null)
   const heightsRef = useRef({})
 
   const items = scenario.stages[stageKey] || []
@@ -134,6 +165,7 @@ export default function Builder({ api, scenario }) {
   useEffect(() => {
     setSelectedId(null)
     setDragPos(null)
+    setSizeDraft(null)
   }, [stageKey])
 
   const addItem = (type) => {
@@ -181,22 +213,65 @@ export default function Builder({ api, scenario }) {
   const onDrag = (id, x, y) => {
     const it = items.find((i) => i.id === id)
     const w = it ? it.w : ITEM_W_DEFAULT
-    setDragPos({
+    const pos = {
       id,
       x: Math.max(0, Math.min(CANVAS_W - w, x)),
       y: Math.max(0, y),
-    })
+    }
+    dragPosRef.current = pos
+    setDragPos(pos)
   }
 
   const onDragEnd = (id) => {
-    setDragPos((pos) => {
+    const pos = dragPosRef.current
+    dragPosRef.current = null
+    // 진행 중인 React 렌더와 커밋이 겹치지 않도록 다음 틱으로 미룬다
+    setTimeout(() => {
       if (pos && pos.id === id) {
         setItems((prev) => {
           const movedList = prev.map((it) => (it.id === id ? { ...it, x: pos.x, y: pos.y } : it))
           return resolveCollision(movedList, id, heightsRef.current)
         })
       }
-      return null
+      setDragPos(null)
+    }, 0)
+  }
+
+  const onResize = (id, w, h) => {
+    const draft = {
+      id,
+      w: Math.max(240, Math.min(ITEM_W_DEFAULT, Math.round(w))),
+      h: Math.max(48, Math.round(h)),
+    }
+    sizeDraftRef.current = draft
+    setSizeDraft(draft)
+  }
+
+  const onResizeEnd = (id) => {
+    const draft = sizeDraftRef.current
+    sizeDraftRef.current = null
+    setTimeout(() => {
+      if (draft && draft.id === id) {
+        heightsRef.current[id] = draft.h
+        setItems((prev) => {
+          const resized = prev.map((it) =>
+            it.id === id
+              ? { ...it, w: draft.w, h: draft.h, x: Math.min(it.x, CANVAS_W - draft.w) }
+              : it
+          )
+          return resolveCollision(resized, id, heightsRef.current)
+        })
+      }
+      setSizeDraft(null)
+    }, 0)
+  }
+
+  /* 크기 변경(인스펙터) 시에도 즉시 겹침 해소 */
+  const setSize = (id, patch) => {
+    if (patch.h != null) heightsRef.current[id] = patch.h
+    setItems((prev) => {
+      const updated = prev.map((it) => (it.id === id ? { ...it, ...patch } : it))
+      return resolveCollision(updated, id, heightsRef.current)
     })
   }
 
@@ -223,11 +298,20 @@ export default function Builder({ api, scenario }) {
     api.showToast('발행을 취소했어요.')
   }
 
+  /* 드래그 중에는 다른 아이템들이 실시간으로 밀려나는 미리보기 레이아웃을 보여준다 */
+  let displayItems = items
+  if (dragPos) {
+    const moved = items.map((it) =>
+      it.id === dragPos.id ? { ...it, x: dragPos.x, y: dragPos.y } : it
+    )
+    displayItems = resolveCollision(moved, dragPos.id, heightsRef.current)
+  }
+
   const canvasHeight = Math.max(
     560,
-    ...items.map((it) => {
+    ...displayItems.map((it) => {
       const y = dragPos && dragPos.id === it.id ? dragPos.y : it.y
-      return y + (heightsRef.current[it.id] || 80) + 120
+      return y + (it.h || heightsRef.current[it.id] || 80) + 120
     })
   )
 
@@ -321,17 +405,20 @@ export default function Builder({ api, scenario }) {
                 <span>추가한 컴포넌트는 마우스로 끌어 배치할 수 있어요.</span>
               </div>
             )}
-            {items.map((it) => (
+            {displayItems.map((it) => (
               <CanvasItem
                 key={it.id}
                 item={it}
                 selected={selectedId === it.id}
                 dragPos={dragPos && dragPos.id === it.id ? dragPos : null}
+                sizeDraft={sizeDraft && sizeDraft.id === it.id ? sizeDraft : null}
                 heightsRef={heightsRef}
                 onSelect={setSelectedId}
                 onDragStart={() => {}}
                 onDrag={onDrag}
                 onDragEnd={onDragEnd}
+                onResize={onResize}
+                onResizeEnd={onResizeEnd}
               />
             ))}
           </div>
@@ -387,12 +474,33 @@ export default function Builder({ api, scenario }) {
                   value={selected.w}
                   onChange={(e) => {
                     const w = Number(e.target.value)
-                    updateItem(selected.id, {
-                      w,
-                      x: Math.min(selected.x, CANVAS_W - w),
-                    })
+                    setSize(selected.id, { w, x: Math.min(selected.x, CANVAS_W - w) })
                   }}
                 />
+              </div>
+
+              <div className="sb-field">
+                <label>높이 — {selected.h ? `${selected.h}px` : '자동'}</label>
+                <input
+                  type="range"
+                  min={48}
+                  max={720}
+                  step={8}
+                  value={selected.h || heightsRef.current[selected.id] || 120}
+                  onChange={(e) => setSize(selected.id, { h: Number(e.target.value) })}
+                />
+                {selected.h ? (
+                  <button
+                    type="button"
+                    className="sb-btn sb-btn--ghost sb-btn--small"
+                    onClick={() => {
+                      delete heightsRef.current[selected.id]
+                      updateItem(selected.id, { h: null })
+                    }}
+                  >
+                    자동 높이로 되돌리기
+                  </button>
+                ) : null}
               </div>
 
               <div className="sb-inspector__actions">

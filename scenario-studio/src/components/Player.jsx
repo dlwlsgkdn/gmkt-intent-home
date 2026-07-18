@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { STAGES, sortByPosition } from '../lib/store.js'
 import { renderItem } from '../lib/registry.jsx'
-import { BgBlobs, FloatingBar } from './Frame.jsx'
+import { BgBlobs, FloatingBar, StudioFab } from './Frame.jsx'
 
 export default function Player({ api, scenario }) {
   const [stageIdx, setStageIdx] = useState(0)
@@ -44,9 +44,10 @@ export default function Player({ api, scenario }) {
       <BgBlobs />
       <FloatingBar
         onHome={api.goHome}
-        onStudio={() => api.openBuilder(scenario.id)}
+        onMy={() => api.showToast('마이 페이지는 프로토타입에서 준비 중이에요.')}
         onList={api.goHome}
       />
+      <StudioFab label="이 시나리오 편집" onClick={() => api.openBuilder(scenario.id)} />
 
       {/* 단계 스테퍼 */}
       <nav className="sb-player-stepper" aria-label="시나리오 단계">
@@ -96,7 +97,11 @@ export default function Player({ api, scenario }) {
             </div>
           )}
           {items.map((it) => (
-            <div key={it.id} className="sb-player__item" style={{ maxWidth: it.w }}>
+            <div
+              key={it.id}
+              className="sb-player__item"
+              style={{ maxWidth: it.w, height: it.h || undefined, overflow: it.h ? 'hidden' : undefined }}
+            >
               {renderItem(it, { mode: 'player', player: playerApi })}
             </div>
           ))}

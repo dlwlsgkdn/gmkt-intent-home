@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { BgBlobs, FloatingBar } from './Frame.jsx'
+import { BgBlobs, FloatingBar, StudioFab } from './Frame.jsx'
 
 const DEFAULT_TAGS = [
   { label: '출근_10분룩', query: '출근 전 10분 안에 완성하는 지속력 데일리 메이크업' },
@@ -34,9 +34,10 @@ export default function HomeView({ api }) {
       <FloatingBar
         active="home"
         onHome={() => setDrawerOpen(false)}
-        onStudio={api.newScenario}
+        onMy={() => api.showToast('마이 페이지는 프로토타입에서 준비 중이에요.')}
         onList={() => setDrawerOpen((v) => !v)}
       />
+      <StudioFab onClick={() => setDrawerOpen(true)} />
 
       <section className="clean-home min-h-screen relative z-10">
         <div className="clean-home__wrap">

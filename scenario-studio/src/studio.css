@@ -95,6 +95,27 @@
 
 .sb-fab-active { color: var(--sb-accent) !important; }
 
+/* 우상단 시나리오 스튜디오 진입 버튼 */
+.sb-studio-fab {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 210;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 18px;
+  border-radius: 999px;
+  background: var(--sb-ink);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 18px 40px -18px rgba(15, 23, 42, 0.5);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.sb-studio-fab:hover { transform: translateY(-1px); background: #33414e; }
+.sb-studio-fab svg { width: 15px; height: 15px; }
+
 /* ── 홈: 시나리오 칩 ── */
 .clean-tag-row .suggestion-tag.sb-chip-scenario {
   border-color: rgba(95, 116, 101, 0.45);
@@ -404,6 +425,10 @@
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
   user-select: none;
 }
+/* 드래그 중 다른 아이템들이 밀려날 때 부드럽게 이동 */
+.sb-canvas-item:not(.sb-canvas-item--dragging):not(.sb-canvas-item--resizing) {
+  transition: left 0.18s ease, top 0.18s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+}
 .sb-canvas-item:hover { border-color: rgba(95, 116, 101, 0.45); }
 .sb-canvas-item--selected {
   border-color: var(--sb-accent);
@@ -438,6 +463,27 @@
   pointer-events: none;
   padding: 10px;
 }
+
+/* 크기 조절 핸들 (우하단 모서리) */
+.sb-resize-handle {
+  position: absolute;
+  right: -7px;
+  bottom: -7px;
+  z-index: 7;
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  background: #fff;
+  border: 2px solid var(--sb-accent);
+  cursor: nwse-resize;
+  opacity: 0;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+.sb-canvas-item:hover .sb-resize-handle,
+.sb-canvas-item--selected .sb-resize-handle { opacity: 1; }
+.sb-resize-handle:hover { transform: scale(1.15); }
+
+.sb-btn--small { margin-top: 8px; padding: 6px 12px; font-size: 12px; }
 
 /* 인스펙터 */
 .sb-inspector {
@@ -521,12 +567,13 @@
 
 .sb-story { display: block; }
 .sb-story .beauty-story__media {
-  height: 210px;
+  height: auto;
+  aspect-ratio: 16 / 10;
   border-radius: 22px;
   overflow: hidden;
   cursor: pointer;
 }
-.sb-story--feature .beauty-story__media { height: 320px; }
+.sb-story--feature .beauty-story__media { aspect-ratio: 4 / 3; }
 
 .sb-product-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .sb-image-card img { width: 100%; height: auto; display: block; }
