@@ -373,6 +373,12 @@
   align-items: center;
   gap: 8px;
   padding: 12px 20px 0;
+  /* 상단 바 바로 아래에 고정 */
+  position: sticky;
+  top: 64px;
+  z-index: 55;
+  background: #eef1f4;
+  box-shadow: 0 -8px 0 #eef1f4;
 }
 .sb-stage-tab {
   display: inline-flex;
@@ -574,6 +580,34 @@
   justify-content: center;
   align-items: flex-start;
 }
+.sb-canvas-col {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* 캔버스 위 고정 패널 미리보기 */
+.sb-pinned-panel { position: relative; padding-top: 10px; }
+.sb-pinned-panel__badge {
+  position: absolute;
+  top: 0;
+  left: 14px;
+  z-index: 2;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--sb-ink);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.sb-pinned-panel .sb-profile-panel,
+.sb-pinned-panel .sb-summary-panel {
+  border-style: dashed;
+  background: rgba(255, 255, 255, 0.82);
+}
+.sb-pinned-panel__empty { font-size: 12px; color: #94a3b8; }
 .sb-canvas {
   position: relative;
   flex-shrink: 0;

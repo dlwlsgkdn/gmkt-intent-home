@@ -213,6 +213,17 @@ export default function Builder({ api, scenario }) {
   const canvasW = device.w
   const itemW = canvasW - PAD * 2
 
+  /* 프로필(고정 설문 정보) — 시나리오별 노출 항목 */
+  const profileItems = api.profile?.items || []
+  const activeProfileKeys = scenario.profileKeys ?? profileItems.map((it) => it.label)
+  const toggleProfileKey = (label) => {
+    api.updateScenario(scenario.id, (s) => {
+      const cur = s.profileKeys ?? profileItems.map((p) => p.label)
+      const next = cur.includes(label) ? cur.filter((l) => l !== label) : [...cur, label]
+      return { ...s, profileKeys: next }
+    })
+  }
+
   /* 변경 직전 상태를 히스토리에 기록 (500ms 안의 연속 변경은 하나로 묶는다) */
   const takeSnapshot = () => JSON.stringify({ stages: scenario.stages, device: scenario.device })
   const applySnapshot = (snap) => {
@@ -798,6 +809,78 @@ export default function Builder({ api, scenario }) {
 
         {/* 캔버스 */}
         <main className="sb-canvas-wrap" onPointerDown={(e) => { if (e.target === e.currentTarget) setSelectedId(null) }}>
+          <div className="sb-canvas-col" style={{ width: canvasW }}>
+
+          {/* 설문 단계: 프로필 요약 고정 패널 미리보기 (배지 클릭 = 노출 토글) */}
+          {stageKey === 'survey' && profileItems.length > 0 && (
+            <div className="sb-pinned-panel">
+              <span className="sb-pinned-panel__badge">고정 패널 · 설문 상단에 자동 표시</span>
+              <div className="sb-profile-panel">
+                <div className="sb-profile-panel__head">
+                  <span className="sb-profile-panel__avatar" aria-hidden="true">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 20c0-3.3 3.1-6 7-6s7 2.7 7 6" /></svg>
+                  </span>
+                  <strong>{api.profile?.name || '사용자'}님에 대해 이미 알고 있어요</strong>
+                  <small>배지를 눌러 이 시나리오 노출을 켜고 끄세요</small>
+                </div>
+                <div className="sb-profile-panel__chips">
+                  {profileItems.map((it) => {
+                    const on = activeProfileKeys.includes(it.label)
+                    return (
+                      <button
+                        key={it.label}
+                        type="button"
+                        className={'sb-info-chip' + (on ? '' : ' sb-info-chip--off')}
+                        onClick={() => toggleProfileKey(it.label)}
+                        title={on ? '이 시나리오에서 숨기기' : '이 시나리오에 노출하기'}
+                      >
+                        <span className="sb-info-chip__label">{it.label}:</span>
+                        <strong>{it.value}</strong>
+                        {on && (
+                          <span className="sb-info-chip__check" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 계획 단계: 설문 요약 고정 패널 미리보기 */}
+          {stageKey === 'plan' && (
+            <div className="sb-pinned-panel">
+              <span className="sb-pinned-panel__badge">고정 패널 · 계획 상단에 자동 표시</span>
+              <div className="sb-summary-panel">
+                <p className="sb-summary-panel__title">설문 요약</p>
+                <div className="sb-summary-panel__chips">
+                  {profileItems
+                    .filter((it) => activeProfileKeys.includes(it.label))
+                    .map((it) => (
+                      <span key={it.label} className="sb-info-chip sb-info-chip--static">
+                        <span className="sb-info-chip__label">{it.label}:</span>
+                        <strong>{it.value}</strong>
+                      </span>
+                    ))}
+                  {(scenario.stages.survey || [])
+                    .filter((it) => it.type === 'surveyQuestion')
+                    .map((q) => (
+                      <span key={q.id} className="sb-info-chip sb-info-chip--static">
+                        <span className="sb-info-chip__label">{q.props.question}:</span>
+                        <strong>아무거나</strong>
+                      </span>
+                    ))}
+                  {profileItems.filter((it) => activeProfileKeys.includes(it.label)).length === 0 &&
+                    (scenario.stages.survey || []).filter((it) => it.type === 'surveyQuestion').length === 0 && (
+                      <span className="sb-pinned-panel__empty">설문 질문과 프로필 항목이 여기에 요약돼요.</span>
+                    )}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div
             className="sb-canvas"
             style={{ width: canvasW, height: canvasHeight }}
@@ -834,6 +917,8 @@ export default function Builder({ api, scenario }) {
               />
             ))}
           </div>
+
+          </div>
         </main>
 
         {/* 인스펙터 */}
@@ -843,29 +928,21 @@ export default function Builder({ api, scenario }) {
               <p className="sb-panel-label">편집</p>
               캔버스에서 컴포넌트를 선택하면<br />플레이스홀더를 편집할 수 있어요.
 
-              {stageKey === 'survey' && (api.profile?.items || []).length > 0 && (
+              {stageKey === 'survey' && profileItems.length > 0 && (
                 <div className="sb-profile-config">
                   <p className="sb-panel-label">프로필 요약 패널</p>
                   <p className="sb-profile-config__hint">
                     설문 타이틀 아래에 보여줄, 이 시나리오와 연관된 고정 설문 정보를 고르세요.
+                    캔버스 위 미리보기의 배지를 눌러도 토글돼요.
                   </p>
-                  {api.profile.items.map((it) => {
-                    const activeKeys = scenario.profileKeys ?? api.profile.items.map((p) => p.label)
-                    const on = activeKeys.includes(it.label)
+                  {profileItems.map((it) => {
+                    const on = activeProfileKeys.includes(it.label)
                     return (
                       <button
                         key={it.label}
                         type="button"
                         className={'sb-profile-config__row' + (on ? ' sb-profile-config__row--on' : '')}
-                        onClick={() => {
-                          api.updateScenario(scenario.id, (s) => {
-                            const cur = s.profileKeys ?? api.profile.items.map((p) => p.label)
-                            const next = cur.includes(it.label)
-                              ? cur.filter((l) => l !== it.label)
-                              : [...cur, it.label]
-                            return { ...s, profileKeys: next }
-                          })
-                        }}
+                        onClick={() => toggleProfileKey(it.label)}
                       >
                         <span className="sb-profile-config__check">{on ? '✓' : ''}</span>
                         <span className="sb-profile-config__label">{it.label}</span>
