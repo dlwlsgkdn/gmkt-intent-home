@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>DDAK v4 — 뷰티, 딱 맞게</title>
+<style>
+  :root{
+    --bg:#faf7f4; --card:#ffffff; --ink:#211d1a; --sub:#8a817a;
+    --line:#efe9e3; --accent:#ff5d73; --accent2:#ff9a76;
+    --grad:linear-gradient(135deg,#ff5d73,#ff9a76);
+    --gm:#00c73c; --soft:#fff0ec; --chipbg:#f6f1ec;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{
+    background:#e9e4df; font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;
+    color:var(--ink); display:flex; justify-content:center; min-height:100vh;
+  }
+  .phone{
+    width:100%; max-width:402px; min-height:100vh; background:var(--bg);
+    position:relative; overflow:hidden; box-shadow:0 0 40px rgba(0,0,0,.12);
+  }
+  @media(min-width:500px){
+    body{padding:24px 0}
+    .phone{min-height:calc(100vh - 48px); border-radius:36px; border:8px solid #2a2522}
+  }
+  .screen{display:none; flex-direction:column; min-height:100%; position:absolute; inset:0; overflow-y:auto; background:var(--bg); scrollbar-width:none; padding-top:54px}
+  .screen::-webkit-scrollbar{display:none}
+  .screen.on{display:flex; animation:fadein .25s ease}
+  @keyframes fadein{from{opacity:0; transform:translateY(6px)} to{opacity:1; transform:none}}
+
+  /* ---------- common ---------- */
+  .btn{
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    width:100%; padding:15px; border:none; border-radius:16px;
+    font-size:15.5px; font-weight:700; cursor:pointer; font-family:inherit; transition:transform .08s;
+  }
+  .btn:active{transform:scale(.97)}
+  .btn-grad{background:var(--grad); color:#fff; box-shadow:0 8px 20px rgba(255,93,115,.3)}
+  .btn-ghost{background:transparent; color:var(--sub); font-weight:600}
+  .btn-gm{background:var(--gm); color:#fff}
+  .chip{
+    display:inline-flex; align-items:center; gap:6px; padding:10px 15px; border-radius:999px;
+    background:var(--chipbg); border:1.5px solid transparent; font-size:13.5px; font-weight:600;
+    color:#5c544e; cursor:pointer; transition:all .15s; user-select:none;
+  }
+  .chip.sel{background:var(--soft); border-color:var(--accent); color:var(--accent)}
+  .toast{
+    position:absolute; bottom:30px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:#2a2522; color:#fff; padding:12px 20px; border-radius:999px; font-size:13px; font-weight:600;
+    opacity:0; pointer-events:none; transition:all .3s; z-index:300; white-space:nowrap; max-width:92%;
+    overflow:hidden; text-overflow:ellipsis;
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+  .term{
+    text-decoration:underline dotted #c9bdb3 1.5px; text-underline-offset:3px; cursor:pointer; font-weight:inherit;
+  }
+
+  /* ---------- topbar (네비게이션) ---------- */
+  .topbar{
+    position:absolute; top:0; left:0; right:0; height:54px; z-index:100;
+    background:rgba(250,247,244,.95); backdrop-filter:blur(10px); border-bottom:1px solid var(--line);
+    display:flex; align-items:center; gap:8px; padding:0 12px;
+  }
+  .tb-ico{
+    width:36px; height:36px; border-radius:12px; display:flex; align-items:center; justify-content:center;
+    font-size:17px; cursor:pointer; color:#6b625b; flex:none;
+  }
+  .tb-ico:active{background:var(--chipbg)}
+  .stepper{flex:1; display:flex; align-items:center; justify-content:center; gap:2px; overflow-x:auto; scrollbar-width:none}
+  .stepper::-webkit-scrollbar{display:none}
+  .stp{
+    flex:none; font-size:12.5px; font-weight:700; color:#bdb3aa; padding:7px 11px; border-radius:999px; cursor:pointer;
+    display:flex; align-items:center; gap:5px;
+  }
+  .stp .dot{width:6px; height:6px; border-radius:50%; background:#ddd3cb}
+  .stp.done{color:#6b625b}
+  .stp.done .dot{background:#a8d5b3}
+  .stp.on{color:#fff; background:var(--grad)}
+  .stp.on .dot{background:#fff}
+  .stp-sep{color:#d8cec5; font-size:11px; flex:none}
+
+  /* ---------- drawer (쓰레드 사이드바) ---------- */
+  .scrim{
+    position:absolute; inset:0; background:rgba(33,29,26,.45); z-index:150;
+    opacity:0; pointer-events:none; transition:opacity .25s;
+  }
+  .scrim.on{opacity:1; pointer-events:auto}
+  .drawer{
+    position:absolute; top:0; bottom:0; left:0; width:78%; max-width:300px; background:#fff; z-index:160;
+    transform:translateX(-102%); transition:transform .28s cubic-bezier(.3,.8,.3,1);
+    display:flex; flex-direction:column; box-shadow:14px 0 40px rgba(0,0,0,.12);
+  }
+  .drawer.on{transform:none}
+  .dw-head{padding:20px 18px 12px; display:flex; align-items:center; justify-content:space-between}
+  .dw-head .logo{font-size:19px; font-weight:900; letter-spacing:-.5px}
+  .dw-head .logo em{font-style:normal; background:var(--grad); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
+  .dw-new{
+    margin:4px 16px 10px; padding:12px; border-radius:13px; border:1.5px dashed #e7ada9; color:var(--accent);
+    font-size:13.5px; font-weight:700; text-align:center; cursor:pointer; background:var(--soft);
+  }
+  .dw-label{font-size:11px; font-weight:800; color:#b6aca4; letter-spacing:.08em; padding:10px 20px 6px}
+  .dw-list{flex:1; overflow-y:auto; padding:0 10px 20px}
+  .th-item{
+    padding:12px; border-radius:14px; cursor:pointer; display:flex; gap:11px; align-items:flex-start; margin-bottom:2px;
+  }
+  .th-item:active{background:var(--chipbg)}
+  .th-item.cur{background:var(--soft)}
+  .th-item .ti{font-size:20px; flex:none; margin-top:1px}
+  .th-item .tt{flex:1; min-width:0}
+  .th-item .tt b{
+    font-size:13.5px; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; letter-spacing:-.2px;
+  }
+  .th-item .tt span{font-size:11.5px; color:var(--sub); display:flex; gap:6px; margin-top:3px; align-items:center}
+  .th-badge{font-size:10px; font-weight:800; padding:2px 7px; border-radius:6px}
+  .th-badge.lock{background:#f1ece7; color:#8a817a}
+  .th-badge.ing{background:#e8f6ec; color:#2c9650}
+  .th-badge.copy{background:#eef2fd; color:#5b79d6}
+  .dw-foot{padding:14px 20px; border-top:1px solid var(--line); font-size:12px; color:var(--sub)}
+
+  /* ---------- home ---------- */
+  .home-center{
+    min-height:calc(100vh - 210px); display:flex; flex-direction:column; justify-content:center;
+    padding:24px 24px 10px;
+  }
+  .h-logo{font-size:30px; font-weight:900; letter-spacing:-1.5px; text-align:center}
+  .h-logo em{font-style:normal; background:var(--grad); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
+  .h-cap{font-size:14px; color:var(--sub); text-align:center; margin-top:8px}
+  .s-box{
+    margin-top:22px; background:#fff; border-radius:18px; padding:7px 7px 7px 16px;
+    display:flex; align-items:center; gap:8px; border:1.5px solid var(--line);
+    box-shadow:0 10px 26px rgba(33,29,26,.07);
+  }
+  .s-box:focus-within{border-color:var(--accent)}
+  .s-box input{flex:1; border:none; outline:none; font-family:inherit; font-size:14.5px; color:var(--ink); background:transparent; min-width:0}
+  .s-box input::placeholder{color:#c0b6ad}
+  .s-box .go{
+    flex:none; border:none; background:var(--grad); color:#fff; font-weight:800;
+    padding:12px 17px; border-radius:13px; font-size:14px; cursor:pointer; font-family:inherit;
+  }
+  .kw-label{font-size:12px; font-weight:800; color:#b6aca4; letter-spacing:.06em; margin:24px 0 10px; text-align:center}
+  .kw-wrap{display:flex; flex-wrap:wrap; gap:8px; justify-content:center}
+  .kw{
+    font-size:13px; font-weight:700; color:#6b5f57; background:#fff; border:1px solid var(--line);
+    padding:9px 14px; border-radius:999px; cursor:pointer;
+  }
+  .kw b{color:var(--accent); font-weight:800}
+  .ed-sec{padding:10px 20px 30px}
+  .ed-title{font-size:16px; font-weight:800; letter-spacing:-.3px; margin-bottom:13px; display:flex; justify-content:space-between; align-items:baseline}
+  .ed-title span{font-size:12px; color:var(--sub); font-weight:600}
+  .ed-card{
+    background:#fff; border:1px solid var(--line); border-radius:20px; overflow:hidden; margin-bottom:14px; cursor:pointer;
+  }
+  .ed-img{height:170px; display:flex; align-items:center; justify-content:center; font-size:58px; position:relative}
+  .ed-img .ed-tag{
+    position:absolute; top:12px; left:12px; font-size:11px; font-weight:800; color:#fff;
+    background:rgba(33,29,26,.55); padding:5px 11px; border-radius:999px; backdrop-filter:blur(4px);
+  }
+  .ed-body{padding:15px 17px 17px}
+  .ed-body h4{font-size:15px; font-weight:800; letter-spacing:-.3px; line-height:1.4}
+  .ed-body p{font-size:12.5px; color:var(--sub); margin-top:6px; line-height:1.55}
+  .ed-meta{font-size:11.5px; color:#b6aca4; margin-top:10px; font-weight:600}
+
+  /* ---------- survey ---------- */
+  .sv-head{display:flex; align-items:center; gap:12px; padding:12px 20px 4px}
+  .back{font-size:20px; cursor:pointer; color:#9a918a; width:32px; height:32px; display:flex; align-items:center; justify-content:center; border-radius:50%; flex:none}
+  .back:active{background:var(--chipbg)}
+  .pbar{flex:1; height:6px; background:#ece5de; border-radius:99px; overflow:hidden}
+  .pbar i{display:block; height:100%; background:var(--grad); border-radius:99px; transition:width .35s ease; width:10%}
+  .pstep{font-size:12px; font-weight:800; color:var(--sub); min-width:34px; text-align:right}
+  .profile-bar{
+    margin:8px 20px 0; background:#fff; border:1px solid var(--line); border-radius:12px;
+    padding:7px 12px; font-size:11px; color:var(--sub); display:flex; gap:7px; align-items:center;
+  }
+  .profile-bar b{color:#6b625b}
+  .profile-bar .fix{margin-left:auto; font-size:10px; font-weight:800; background:var(--chipbg); color:#a39990; padding:3px 8px; border-radius:6px; flex:none}
+  .sv-body{flex:1; padding:13px 22px 10px; display:flex; flex-direction:column; overflow-x:hidden}
+  .sv-body.locked .opt, .sv-body.locked .vcard, .sv-body.locked .chip{opacity:.55; cursor:default}
+  .sv-body.locked .opt.sel, .sv-body.locked .vcard.sel, .sv-body.locked .chip.sel{opacity:1}
+  .sv-body.fwd{animation:slideR .3s ease}
+  .sv-body.bwd{animation:slideL .3s ease}
+  @keyframes slideR{from{opacity:0; transform:translateX(46px)} to{opacity:1; transform:none}}
+  @keyframes slideL{from{opacity:0; transform:translateX(-46px)} to{opacity:1; transform:none}}
+  .goal-pill{
+    align-self:flex-start; background:#2a2522; color:#fff; font-size:12px; font-weight:700;
+    padding:7px 13px; border-radius:14px; margin-bottom:12px; max-width:100%;
+    line-height:1.5; word-break:keep-all;
+  }
+  .q-tag{font-size:12px; font-weight:800; color:var(--accent); letter-spacing:.06em}
+  .q-tag .vari{font-size:10px; font-weight:800; background:#eef2fd; color:#5b79d6; padding:3px 8px; border-radius:6px; margin-left:6px; letter-spacing:0}
+  .q-title{font-size:19px; font-weight:800; letter-spacing:-.6px; line-height:1.33; margin-top:6px; white-space:pre-line}
+  .q-sub{font-size:12.5px; color:var(--sub); margin-top:6px; line-height:1.5}
+  .opts{margin-top:15px; display:flex; flex-direction:column; gap:8px}
+  .opt{
+    background:#fff; border:1.5px solid var(--line); border-radius:14px; padding:10px 14px;
+    display:flex; align-items:center; gap:11px; cursor:pointer; transition:all .15s;
+  }
+  .opt .oi{font-size:19px}
+  .opt .ot{font-size:13.5px; font-weight:700}
+  .opt .od{font-size:11px; color:var(--sub); margin-top:1px; font-weight:500}
+  .opt .ck{width:20px; height:20px; border-radius:50%; border:2px solid #ddd3cb; display:flex; align-items:center; justify-content:center; font-size:11px; color:#fff; flex:none}
+  .opt.sel{border-color:var(--accent); background:var(--soft)}
+  .opt.sel .ck{background:var(--accent); border-color:var(--accent)}
+  .opts-grid{margin-top:15px; display:grid; grid-template-columns:1fr 1fr; gap:9px}
+  .vcard{
+    background:#fff; border:1.5px solid var(--line); border-radius:16px; padding:13px 11px; text-align:center; cursor:pointer; transition:all .15s;
+  }
+  .vcard .vi{font-size:27px}
+  .vcard .vt{font-size:13px; font-weight:800; margin-top:7px}
+  .vcard .vd{font-size:10.5px; color:var(--sub); margin-top:3px; line-height:1.35}
+  .vcard.sel{border-color:var(--accent); background:var(--soft); box-shadow:0 6px 16px rgba(255,93,115,.15)}
+  .chips-area{margin-top:15px; display:flex; flex-wrap:wrap; gap:8px}
+  .sv-foot{padding:0 22px 16px; display:flex; flex-direction:column; gap:4px}
+  .sv-foot .btn{padding:13px}
+  .sv-foot .btn-ghost{padding:9px; font-size:13px}
+  .multi-hint{font-size:11.5px; color:var(--sub); text-align:center; margin-bottom:2px}
+  .sv-lockbar{
+    background:#2a2522; color:#fff; border-radius:13px; padding:10px 13px; margin-bottom:12px;
+    display:flex; align-items:center; gap:9px; font-size:11.5px; font-weight:600;
+  }
+  .sv-lockbar span{flex:1; line-height:1.45; opacity:.92}
+  .sv-lockbar button{
+    flex:none; border:none; background:#fff; color:#2a2522; font-weight:800; font-size:12px;
+    padding:8px 13px; border-radius:9px; cursor:pointer; font-family:inherit;
+  }
+
+  /* ---------- loading ---------- */
+  .ld{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:24px; padding:40px}
+  .orb{
+    width:100px; height:100px; border-radius:50%; background:var(--grad);
+    display:flex; align-items:center; justify-content:center; font-size:44px;
+    animation:pulse 1.4s ease-in-out infinite; box-shadow:0 16px 40px rgba(255,93,115,.35);
+  }
+  @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+  .ld h3{font-size:18px; font-weight:800; letter-spacing:-.4px}
+  .ld p{font-size:13px; color:var(--sub); text-align:center; line-height:1.6; min-height:40px}
+
+  /* ---------- result ---------- */
+  .rs-body{padding:14px 20px 40px; display:flex; flex-direction:column; gap:18px}
+  .rs-head-card{background:#fff; border:1px solid var(--line); border-radius:20px; padding:18px}
+  .tpl-pill{
+    display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:800; color:var(--accent);
+    background:var(--soft); padding:5px 11px; border-radius:999px;
+  }
+  .rs-goal{font-size:17px; font-weight:800; letter-spacing:-.4px; margin-top:10px; line-height:1.4}
+  .rs-sum{font-size:12.5px; color:var(--sub); margin-top:8px; line-height:1.6}
+  .rs-sum b{color:#6b625b}
+  .sec-title{font-size:15.5px; font-weight:800; letter-spacing:-.3px}
+
+  /* 템플릿: 바르는 순서 */
+  .flow{display:flex; flex-direction:column}
+  .fstep{display:flex; gap:13px}
+  .fstep .rail{display:flex; flex-direction:column; align-items:center; flex:none; width:30px}
+  .fstep .nd{
+    width:30px; height:30px; border-radius:50%; background:var(--grad); color:#fff;
+    font-size:12px; font-weight:900; display:flex; align-items:center; justify-content:center; flex:none;
+  }
+  .fstep .ln{width:2px; flex:1; background:#f0e4dc; margin:4px 0}
+  .fstep:last-child .ln{background:transparent}
+  .fstep .fc{flex:1; padding-bottom:16px; min-width:0}
+  .fstep .fc-card{background:#fff; border:1px solid var(--line); border-radius:16px; padding:14px}
+  .fstep .fname{font-size:11.5px; font-weight:800; color:var(--accent)}
+  .fstep .frow{display:flex; gap:11px; align-items:center; margin-top:8px}
+  .fstep .fe{font-size:30px}
+  .fstep .fp{flex:1; min-width:0}
+  .fstep .fp b{font-size:13.5px; display:block; letter-spacing:-.2px}
+  .fstep .fp span{font-size:12px; color:var(--sub); font-weight:700}
+  .fgm{
+    flex:none; border:none; background:#ecf8ef; color:#1d9a45; font-size:11px; font-weight:800;
+    padding:8px 11px; border-radius:9px; cursor:pointer; font-family:inherit;
+  }
+  .ftip{margin-top:10px; background:var(--soft); border-radius:10px; padding:9px 12px; font-size:11.5px; color:#9c5e57; line-height:1.55}
+
+  /* 템플릿: 시간대별 루틴 */
+  .rtabs{display:flex; gap:7px}
+  .rtab{
+    flex:1; padding:11px 6px; border-radius:13px; border:1.5px solid var(--line); background:#fff;
+    font-size:12.5px; font-weight:800; color:#8a817a; cursor:pointer; font-family:inherit;
+  }
+  .rtab.on{background:var(--grad); color:#fff; border-color:transparent}
+  .rpanel{display:none; flex-direction:column; gap:10px; margin-top:13px}
+  .rpanel.on{display:flex; animation:fadein .25s ease}
+  .ritem{background:#fff; border:1px solid var(--line); border-radius:15px; padding:13px 15px; display:flex; gap:12px; align-items:center}
+  .ritem .re{font-size:26px}
+  .ritem .rt{flex:1; min-width:0}
+  .ritem .rt b{font-size:13.5px; display:block; letter-spacing:-.2px}
+  .ritem .rt span{font-size:11.5px; color:var(--sub)}
+  .ritem .rmin{flex:none; font-size:11px; font-weight:800; color:#5b79d6; background:#eef2fd; padding:4px 9px; border-radius:7px}
+
+  /* 템플릿: 파츠별 */
+  .part-h{font-size:13.5px; font-weight:800; margin-bottom:10px; display:flex; gap:6px; align-items:center}
+  .md-row{display:flex; gap:10px; overflow-x:auto; padding-bottom:6px; scrollbar-width:none}
+  .md-row::-webkit-scrollbar{display:none}
+  .md-card{flex:none; width:124px; background:#fff; border:1px solid var(--line); border-radius:16px; overflow:hidden; cursor:pointer; position:relative}
+  .md-card .mimg{height:76px; background:#f5efe9; display:flex; align-items:center; justify-content:center; font-size:30px}
+  .md-card .minfo{padding:10px}
+  .md-card .mn{font-size:11.5px; font-weight:700; line-height:1.3; height:30px; overflow:hidden}
+  .md-card .mp{font-size:12.5px; font-weight:900; margin-top:4px}
+  .md-card .mm{font-size:10.5px; font-weight:800; color:var(--accent); margin-top:2px}
+  .best-badge{
+    position:absolute; top:7px; left:7px; font-size:9.5px; font-weight:900; color:#fff;
+    background:var(--grad); padding:3px 8px; border-radius:999px; z-index:2;
+  }
+
+  /* 템플릿: 고민별 */
+  .pri{background:#fff; border:1px solid var(--line); border-radius:18px; padding:16px; position:relative}
+  .pri.p1{border:1.5px solid var(--accent); box-shadow:0 10px 24px rgba(255,93,115,.12)}
+  .pr-badge{font-size:10.5px; font-weight:900; color:#fff; background:#bdb3aa; padding:4px 10px; border-radius:999px}
+  .pri.p1 .pr-badge{background:var(--grad)}
+  .pri .prow{display:flex; gap:12px; align-items:center; margin-top:11px}
+  .pri .pe{font-size:34px}
+  .pri .pt{flex:1; min-width:0}
+  .pri .pt b{font-size:14px; display:block; letter-spacing:-.2px}
+  .pri .pt span{font-size:12px; color:var(--sub); font-weight:700}
+  .why-box{margin-top:11px; background:#f6faf2; border-radius:11px; padding:10px 13px; display:flex; flex-direction:column; gap:5px}
+  .why-box span{font-size:11.5px; color:#4c7a42; font-weight:700}
+
+  .fb{background:#fff; border:1px solid var(--line); border-radius:18px; padding:16px; text-align:center}
+  .fb h4{font-size:14px; font-weight:800}
+  .fb-btns{display:flex; gap:10px; margin-top:12px}
+  .fb-btn{
+    flex:1; padding:11px; border-radius:12px; border:1.5px solid var(--line); background:var(--bg);
+    font-size:13px; font-weight:700; cursor:pointer; font-family:inherit; color:#6b625b;
+  }
+  .fb-btn.sel{border-color:var(--accent); color:var(--accent); background:var(--soft)}
+
+  /* ---------- modal & bottom sheet ---------- */
+  .modal{
+    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%) scale(.94); width:82%;
+    background:#fff; border-radius:22px; padding:24px 20px; z-index:200; opacity:0; pointer-events:none;
+    transition:all .22s ease; text-align:center;
+  }
+  .modal.on{opacity:1; pointer-events:auto; transform:translate(-50%,-50%) scale(1)}
+  .modal .mi{font-size:36px}
+  .modal h3{font-size:16.5px; font-weight:800; margin-top:10px; letter-spacing:-.4px}
+  .modal p{font-size:12.5px; color:var(--sub); margin-top:8px; line-height:1.6}
+  .modal .mbtns{display:flex; gap:9px; margin-top:18px}
+  .modal .mb{
+    flex:1; padding:13px; border-radius:13px; border:none; font-size:14px; font-weight:800;
+    cursor:pointer; font-family:inherit;
+  }
+  .modal .mb.cancel{background:var(--chipbg); color:#8a817a}
+  .modal .mb.ok{background:var(--grad); color:#fff}
+  .sheet{
+    position:absolute; left:0; right:0; bottom:0; background:#fff; z-index:200;
+    border-radius:24px 24px 0 0; padding:14px 22px 30px; transform:translateY(105%);
+    transition:transform .28s cubic-bezier(.3,.8,.3,1);
+  }
+  .sheet.on{transform:none}
+  .sheet .grab{width:40px; height:4px; border-radius:99px; background:#e4dad1; margin:0 auto 16px}
+  .sheet .sk{font-size:11px; font-weight:800; color:var(--accent); letter-spacing:.06em}
+  .sheet h3{font-size:18px; font-weight:900; letter-spacing:-.4px; margin-top:6px}
+  .sheet p{font-size:13.5px; color:#6b625b; line-height:1.7; margin-top:10px}
+  .sheet .ex{margin-top:12px; background:var(--chipbg); border-radius:12px; padding:11px 14px; font-size:12px; color:var(--sub); line-height:1.6}
+</style>
+</head>
+<body>
+<div class="phone">
+
+  <!-- ===== 상단 네비게이션 바 ===== -->
+  <div class="topbar">
+    <span class="tb-ico" onclick="openDrawer()">☰</span>
+    <div class="stepper" id="stepper"></div>
+    <span class="tb-ico" onclick="newThreadGo()">＋</span>
+  </div>
+
+  <!-- ===== 쓰레드 사이드바 ===== -->
+  <div class="scrim" id="scrim" onclick="closeAll()"></div>
+  <div class="drawer" id="drawer">
+    <div class="dw-head">
+      <div class="logo">딱<em>!</em> 쓰레드</div>
+      <span class="tb-ico" onclick="closeAll()">✕</span>
+    </div>
+    <div class="dw-new" onclick="newThreadGo()">＋ 새로 찾아보기</div>
+    <div class="dw-label">내 쓰레드 내역</div>
+    <div class="dw-list" id="dw-list"></div>
+    <div class="dw-foot">쓰레드 = 검색 → 설문 → 결과 한 묶음이에요.<br>완료된 쓰레드는 🔒 잠기고, 복제로만 수정돼요.</div>
+  </div>
+
+  <!-- ===== HOME ===== -->
+  <section class="screen on" id="sc-home">
+    <div class="home-center">
+      <div class="h-logo">딱<em>!</em></div>
+      <p class="h-cap">필요한 걸 그냥 말해주세요</p>
+      <div class="s-box">
+        <input id="q-input" placeholder="예) 메이크업 순서 처음인데 알려줘" onkeydown="if(event.key==='Enter')searchGo()">
+        <button class="go" onclick="searchGo()">딱!</button>
+      </div>
+      <div class="kw-label">지금 딱 뜨는 검색</div>
+      <div class="kw-wrap">
+        <span class="kw" onclick="quickGo('메이크업 순서 처음인데 알려줘')"><b>#</b>메이크업순서</span>
+        <span class="kw" onclick="quickGo('아침저녁 스킨케어 루틴 짜줘')"><b>#</b>데일리루틴</span>
+        <span class="kw" onclick="quickGo('쿨톤 립 블러셔 세트로 추천해줘')"><b>#</b>쿨톤세트</span>
+        <span class="kw" onclick="quickGo('트러블 모공 고민이야')"><b>#</b>트러블케어</span>
+        <span class="kw" onclick="quickGo('올드머니 메이크업 하고 싶어')"><b>#</b>올드머니</span>
+      </div>
+    </div>
+    <div class="ed-sec">
+      <div class="ed-title">에디터가 골라온 이야기 <span>매일 업데이트</span></div>
+      <div class="ed-card" onclick="toast('📰 에디터 콘텐츠로 이동해요 (MVP: 뷰만)')">
+        <div class="ed-img" style="background:linear-gradient(135deg,#efe6d8,#e6d3bb)">🤎<span class="ed-tag">에디터 칼럼</span></div>
+        <div class="ed-body">
+          <h4><span class="term" onclick="openTerm('올드머니',event)">올드머니</span> 메이크업, 과하지 않게 시작하는 법</h4>
+          <p>차분한 베이스와 누드 톤만으로 분위기를 만드는 5가지 포인트.</p>
+          <div class="ed-meta">뷰티 에디터 수린 · 5분 읽기</div>
+        </div>
+      </div>
+      <div class="ed-card" onclick="toast('📰 에디터 콘텐츠로 이동해요 (MVP: 뷰만)')">
+        <div class="ed-img" style="background:linear-gradient(135deg,#ffe9e3,#ffd9cc)">💄<span class="ed-tag">비교 리뷰</span></div>
+        <div class="ed-body">
+          <h4><span class="term" onclick="openTerm('MLBB',event)">MLBB</span> 립 7종, 발색만 정직하게 비교했어요</h4>
+          <p>쿨톤·웜톤별로 나눠본 실착 발색 비교. 광고 없는 솔직 리뷰.</p>
+          <div class="ed-meta">뷰티 에디터 재인 · 7분 읽기</div>
+        </div>
+      </div>
+      <div class="ed-card" onclick="toast('📰 에디터 콘텐츠로 이동해요 (MVP: 뷰만)')">
+        <div class="ed-img" style="background:linear-gradient(135deg,#e3f0e6,#cfe6d8)">🌿<span class="ed-tag">가이드</span></div>
+        <div class="ed-body">
+          <h4>여름 수분장벽, 무너지기 전에 지키는 법</h4>
+          <p>에어컨 바람에 당기는 피부를 위한 <span class="term" onclick="openTerm('시카',event)">시카</span> 진정 루틴 가이드.</p>
+          <div class="ed-meta">뷰티 에디터 수린 · 4분 읽기</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== SURVEY ===== -->
+  <section class="screen" id="sc-survey">
+    <div class="sv-head">
+      <span class="back" onclick="prevQ()">‹</span>
+      <div class="pbar"><i id="pbar"></i></div>
+      <span class="pstep" id="pstep">1/4</span>
+    </div>
+    <div class="profile-bar">👤 <b>26세 · 여성 · 복합성</b> 프로필에서 가져왔어요 <span class="fix">고정 정보</span></div>
+    <div class="sv-body" id="sv-body"></div>
+    <div class="sv-foot">
+      <div class="multi-hint" id="multi-hint" style="display:none">여러 개 골라도 돼요</div>
+      <button class="btn btn-grad" id="btn-next" onclick="nextQ()" disabled style="opacity:.4">다음</button>
+      <button class="btn btn-ghost" id="btn-skip" onclick="skipQ()">잘 모르겠어요 → AI에게 맡기기</button>
+    </div>
+  </section>
+
+  <!-- ===== LOADING ===== -->
+  <section class="screen" id="sc-loading">
+    <div class="ld">
+      <div class="orb">✨</div>
+      <h3>딱 맞는 결과를 만드는 중...</h3>
+      <p id="ld-msg">검색 문장과 설문을 합치는 중</p>
+    </div>
+  </section>
+
+  <!-- ===== RESULT ===== -->
+  <section class="screen" id="sc-result">
+    <div class="rs-body" id="rs-body"></div>
+  </section>
+
+  <!-- ===== 복제 확인 모달 ===== -->
+  <div class="modal" id="dup-modal">
+    <div class="mi">🧬</div>
+    <h3>새로운 쓰레드로 복제할까요?</h3>
+    <p>완료된 쓰레드는 잠겨 있어 직접 수정할 수 없어요.<br>지금 상태 그대로 복제한 새 쓰레드에서<br>설문을 수정할 수 있어요.</p>
+    <div class="mbtns">
+      <button class="mb cancel" onclick="closeAll()">취소</button>
+      <button class="mb ok" onclick="confirmDup()">복제하기</button>
+    </div>
+  </div>
+
+  <!-- ===== 키워드 설명 바텀시트 ===== -->
+  <div class="sheet" id="term-sheet">
+    <div class="grab"></div>
+    <div class="sk">뷰티 용어 사전</div>
+    <h3 id="ts-title"></h3>
+    <p id="ts-desc"></p>
+    <div class="ex" id="ts-ex"></div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+/* ================= 공통 ================= */
+const $ = s => document.querySelector(s);
+let toastTimer;
+function toast(msg){
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(()=>t.classList.remove('show'), 2200);
+}
+function toGmarket(){ toast('🛒 G마켓 상품 페이지로 이동해요 (MVP: 외부 연결)'); }
+function show(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
+  const sc = $(id); sc.classList.add('on'); sc.scrollTop = 0;
+  curPage = id.replace('#sc-','');
+  renderStepper();
+}
+
+/* ================= 용어 사전 ================= */
+const TERMS = {
+  '올드머니': {d:'화려함 대신 "원래 잘 사는 집" 같은 차분하고 단정한 분위기를 추구하는 스타일. 메이크업에선 누드 톤, 옅은 블러셔, 정돈된 피부 표현이 핵심이에요.', e:'예) 올드머니 메이크업 = 과한 글리터 없이, 톤 다운된 립과 깔끔한 베이스'},
+  'MLBB': {d:'"My Lips But Better"의 줄임말. 내 입술 색이지만 더 예쁜, 자연스러운 립 컬러를 말해요.', e:'예) MLBB 립 = 바른 듯 안 바른 듯, 생기만 더해주는 데일리 립'},
+  '시카': {d:'병풀(Centella) 추출물 성분. 자극받은 피부를 진정시키고 장벽 회복을 돕는 대표 진정 성분이에요.', e:'예) 시카 크림 = 트러블·자극 후 진정 케어용 크림'},
+  '추구미': {d:'"추구하는 미(美)". 내가 되고 싶은 이미지·분위기를 뜻하는 신조어예요.', e:'예) 추구미가 올드머니다 = 차분하고 고급스러운 무드를 지향한다'},
+  '비건뷰티': {d:'동물성 원료를 쓰지 않고 동물실험도 하지 않은 화장품. 민감 피부에 순한 경우가 많아요.', e:'예) 비건 인증 마크가 있는 제품'},
+  '무기자차': {d:'무기(미네랄) 성분 자외선 차단제. 피부 위에 막을 만들어 빛을 반사해요. 자극이 적어 민감 피부에 좋아요.', e:'예) 징크옥사이드 성분 선크림'},
+  '글로우': {d:'촉촉하고 윤기 나는 피부 표현. 물광·속광이라고도 해요.', e:'예) 글로우 쿠션 = 윤기 마무리 쿠션'},
+};
+function openTerm(k, ev){
+  if(ev) ev.stopPropagation();
+  const t = TERMS[k]; if(!t) return;
+  $('#ts-title').textContent = k;
+  $('#ts-desc').textContent = t.d;
+  $('#ts-ex').textContent = t.e;
+  $('#term-sheet').classList.add('on');
+  $('#scrim').classList.add('on');
+}
+function term(k){ return `<span class="term" onclick="openTerm('${k}',event)">${k}</span>`; }
+
+/* ================= 쓰레드 ================= */
+let threads = [], seq = 0, cur = null, curPage = 'home';
+
+function newThread(){
+  seq++;
+  const t = {id:seq, goal:'', tpl:null, answers:{}, qIdx:0, locked:false, copied:false, time:nowStr()};
+  threads.unshift(t); cur = t;
+  renderSidebar();
+  return t;
+}
+function nowStr(){
+  const d = new Date();
+  return `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+function newThreadGo(){
+  closeAll();
+  if(cur && !cur.goal){ show('#sc-home'); return; } // 빈 쓰레드 재사용
+  newThread();
+  $('#q-input').value='';
+  show('#sc-home');
+  toast('🧵 새 쓰레드를 시작했어요');
+}
+function openDrawer(){ renderSidebar(); $('#drawer').classList.add('on'); $('#scrim').classList.add('on'); }
+function closeAll(){
+  $('#drawer').classList.remove('on');
+  $('#term-sheet').classList.remove('on');
+  $('#dup-modal').classList.remove('on');
+  $('#scrim').classList.remove('on');
+}
+function renderSidebar(){
+  $('#dw-list').innerHTML = threads.map(t=>{
+    const icon = t.tpl ? TPL[t.tpl].icon : '🔎';
+    const badge = t.locked ? '<span class="th-badge lock">🔒 완료</span>'
+      : (t.goal ? '<span class="th-badge ing">진행 중</span>' : '<span class="th-badge ing">새 쓰레드</span>');
+    const copy = t.copied ? '<span class="th-badge copy">↪ 복제됨</span>' : '';
+    return `<div class="th-item ${t===cur?'cur':''}" onclick="openThread(${t.id})">
+      <span class="ti">${icon}</span>
+      <span class="tt"><b>${t.goal || '아직 검색 전이에요'}</b><span>${t.time} ${badge}${copy}</span></span>
+    </div>`;
+  }).join('');
+}
+function openThread(id){
+  const t = threads.find(x=>x.id===id); if(!t) return;
+  cur = t; closeAll(); renderSidebar();
+  if(t.locked){ renderResult(); }
+  else if(t.goal){ renderQ('fwd'); show('#sc-survey'); }
+  else { $('#q-input').value=''; show('#sc-home'); }
+}
+
+/* ================= 상단 스테퍼 ================= */
+const STEPS = [
+  {key:'home', label:'홈'},
+  {key:'survey', label:'설문'},
+  {key:'result', label:'결과'},
+  /* 확장 예정: {key:'order', label:'주문'}, {key:'done', label:'주문완료'} */
+];
+function renderStepper(){
+  const pg = curPage==='loading' ? 'result' : curPage;
+  $('#stepper').innerHTML = STEPS.map((s,i)=>{
+    const reached = s.key==='home' || (s.key==='survey' && cur && cur.goal) || (s.key==='result' && cur && cur.locked);
+    const cls = s.key===pg ? 'on' : (reached ? 'done' : '');
+    return `${i?'<span class="stp-sep">›</span>':''}
+      <span class="stp ${cls}" onclick="navStep('${s.key}')"><span class="dot"></span>${s.label}</span>`;
+  }).join('');
+}
+function navStep(k){
+  if(k==='home'){ show('#sc-home'); return; }
+  if(k==='survey'){
+    if(!cur || !cur.goal){ toast('먼저 홈에서 검색해 주세요 🔎'); return; }
+    if(cur.locked){ cur.qIdx = 0; }   // 잠긴 쓰레드는 읽기 전용으로 열람
+    renderQ('fwd'); show('#sc-survey'); return;
+  }
+  if(k==='result'){
+    if(!cur || !cur.locked){ toast('설문을 끝내면 결과가 열려요 ✨'); return; }
+    renderResult();
+  }
+}
+
+/* ================= 결과 템플릿 정의 ================= */
+const TPL = {
+  order:  {icon:'💧', name:'바르는 순서',     kw:['순서','방법','어떻게','처음','단계']},
+  routine:{icon:'🌅', name:'시간대별 루틴',   kw:['루틴','아침','저녁','매일','관리']},
+  parts:  {icon:'🌸', name:'파츠별 추천',     kw:['추천','세트','아이','립','베이스','블러셔','치크']},
+  concern:{icon:'🎯', name:'고민별 집중 케어', kw:['고민','트러블','여드름','모공','칙칙','건조','민감']},
+};
+function detectTpl(goal){
+  for(const k of ['order','routine','concern','parts']){
+    if(TPL[k].kw.some(w=>goal.includes(w))) return k;
+  }
+  return 'parts';
+}
+
+/* ================= 설문 (변동 설문만) ================= */
+const CORE_Q = {
+  order:  {key:'core', type:'single', tag:'핵심 질문', title:'완성도에서\n뭐가 제일 중요해요?',
+    options:[
+      {v:'자연스러움', i:'🌿', t:'자연스러움', d:'안 한 듯 정돈된 느낌'},
+      {v:'지속력', i:'⏳', t:'지속력', d:'하루 종일 안 무너지게'},
+      {v:'시간 단축', i:'⚡', t:'시간 단축', d:'빠르고 간단하게'},
+      {v:'초보 난이도', i:'🐣', t:'쉬운 난이도', d:'처음이라 실패 없이'},
+    ]},
+  routine:{key:'core', type:'single', tag:'핵심 질문', title:'아침에 쓸 수 있는\n시간은 얼마나 돼요?',
+    options:[
+      {v:'5분', i:'⚡', t:'5분 이내', d:'최소한만, 빠르게'},
+      {v:'10분', i:'⏰', t:'10분 정도', d:'기본은 챙기고 싶어요'},
+      {v:'20분 이상', i:'🧖', t:'20분 이상', d:'아침 루틴이 즐거움'},
+      {v:'들쭉날쭉', i:'🎢', t:'들쭉날쭉', d:'그날그날 달라요'},
+    ]},
+  parts:  {key:'core', type:'single', tag:'핵심 질문', title:'특히 강조하고 싶은\n파츠가 있어요?',
+    options:[
+      {v:'베이스', i:'🫙', t:'베이스', d:'피부 표현이 절반'},
+      {v:'아이', i:'👁️', t:'아이', d:'눈매가 포인트'},
+      {v:'립', i:'💄', t:'립', d:'립이 살아야 산다'},
+      {v:'골고루', i:'🎨', t:'골고루', d:'밸런스 있게 전체'},
+    ]},
+  concern:{key:'core', type:'multi', tag:'핵심 질문', title:'지금 제일 신경 쓰이는\n고민은 뭐예요?',
+    options:[
+      {v:'트러블·진정', i:'🌋', t:'트러블·진정'},
+      {v:'모공·피지', i:'🕳️', t:'모공·피지'},
+      {v:'칙칙함', i:'🌫️', t:'칙칙한 톤'},
+      {v:'건조함', i:'🏜️', t:'건조·당김'},
+      {v:'민감함', i:'🌸', t:'민감·자극'},
+    ]},
+};
+const VAR_QS = [
+  {key:'aesthetic', type:'visual', tag:'추구미', vari:true,
+    title:'요즘 추구미는\n어느 쪽이에요?',
+    sub:'그때그때 달라져도 괜찮아요. 오늘 기준으로!',
+    options:[
+      {v:'올드머니', i:'🤎', t:'올드머니', tt:term('올드머니'), d:'차분하고 고급스럽게'},
+      {v:'청순 글로우', i:'🫧', t:'청순 글로우', tt:'청순 '+term('글로우'), d:'맑고 촉촉한 윤기'},
+      {v:'MLBB 데일리', i:'🌷', t:'MLBB 데일리', tt:term('MLBB')+' 데일리', d:'자연스러운 본판 강화'},
+      {v:'비비드 포인트', i:'🔥', t:'비비드 포인트', d:'또렷한 한 방'},
+    ]},
+  {key:'prefs', type:'chips', tag:'취향 키워드', vari:true,
+    title:'끌리는 키워드를\n골라주세요',
+    sub:'여러 개 골라도 돼요.',
+    options:[
+      {v:'향 없는'}, {v:'비건뷰티', tt:term('비건뷰티')+' 제품'}, {v:'가성비'}, {v:'백화점 브랜드'},
+      {v:'무기자차', tt:term('무기자차')+' 선크림'}, {v:'신상 위주'}, {v:'저자극'},
+    ]},
+  {key:'budget', type:'single', tag:'가격대', vari:true,
+    title:'한 제품에 어느 정도까지\n쓸 수 있어요?',
+    options:[
+      {v:'1만원 이하', i:'🪙', t:'1만원 이하'},
+      {v:'1~3만원', i:'💵', t:'1~3만원'},
+      {v:'3~5만원', i:'💳', t:'3~5만원'},
+      {v:'상관없어요', i:'🤷', t:'상관없어요'},
+    ]},
+];
+function buildQs(t){ t.qs = [CORE_Q[t.tpl], ...VAR_QS]; }
+
+/* ================= 검색 → 설문 ================= */
+function quickGo(text){ $('#q-input').value = text; searchGo(); }
+function searchGo(){
+  const goal = $('#q-input').value.trim();
+  if(!goal){ toast('✍️ 찾고 싶은 걸 한 줄로 적어주세요'); $('#q-input').focus(); return; }
+  if(!cur || cur.locked || cur.goal){ newThread(); }   // 잠겼거나 이미 쓴 쓰레드면 새로
+  cur.goal = goal;
+  cur.tpl = detectTpl(goal);
+  buildQs(cur);
+  cur.qIdx = 0;
+  renderSidebar();
+  renderQ('fwd'); show('#sc-survey');
+  toast(`${TPL[cur.tpl].icon} ${TPL[cur.tpl].name} 타입으로 분석할게요`);
+}
+
+let autoTimer = null;
+function renderQ(dir){
+  const q = cur.qs[cur.qIdx];
+  $('#pbar').style.width = ((cur.qIdx+1)/cur.qs.length*100)+'%';
+  $('#pstep').textContent = (cur.qIdx+1)+'/'+cur.qs.length;
+  $('#multi-hint').style.display = (q.type==='multi'||q.type==='chips') ? 'block' : 'none';
+
+  let html = '';
+  if(cur.locked){
+    html += `<div class="sv-lockbar">🔒<span>설문이 끝나 잠겼어요. 수정하려면 새 쓰레드로 복제하세요.</span><button onclick="openDup()">수정하기</button></div>`;
+  }
+  html += `<div class="goal-pill">🎯 ${cur.goal}</div>`;
+  html += `<div class="q-tag">Q${cur.qIdx+1} · ${q.tag}${q.vari?'<span class="vari">변동 설문</span>':''}</div>`;
+  html += `<h2 class="q-title">${q.title}</h2>`;
+  if(q.sub) html += `<p class="q-sub">${q.sub}</p>`;
+
+  if(q.type==='single' || q.type==='multi'){
+    html += '<div class="opts">' + q.options.map(o=>`
+      <div class="opt" data-v="${o.v}" onclick="pick(this)">
+        <span class="oi">${o.i}</span>
+        <span style="flex:1"><span class="ot">${o.t}</span>${o.d?`<div class="od">${o.d}</div>`:''}</span>
+        <span class="ck">✓</span>
+      </div>`).join('') + '</div>';
+  }
+  if(q.type==='visual'){
+    html += '<div class="opts-grid">' + q.options.map(o=>`
+      <div class="vcard" data-v="${o.v}" onclick="pick(this)">
+        <div class="vi">${o.i}</div>
+        <div class="vt">${o.tt||o.t}</div>
+        <div class="vd">${o.d}</div>
+      </div>`).join('') + '</div>';
+  }
+  if(q.type==='chips'){
+    html += '<div class="chips-area">' + q.options.map(o=>`
+      <span class="chip" data-v="${o.v}" onclick="pick(this)">${o.tt||o.v}</span>`).join('') + '</div>';
+  }
+  const body = $('#sv-body');
+  body.classList.remove('fwd','bwd'); void body.offsetWidth;  // 애니메이션 리셋
+  body.classList.add(dir);
+  body.classList.toggle('locked', !!cur.locked);
+  body.innerHTML = html;
+
+  // 이전 답(복제 쓰레드·잠긴 쓰레드) 미리 선택
+  const pre = cur.answers[q.key];
+  if(pre != null){
+    (Array.isArray(pre)?pre:[pre]).forEach(v=>{
+      const el = body.querySelector(`[data-v="${v}"]`); if(el) el.classList.add('sel');
+    });
+  }
+  const btn = $('#btn-next');
+  const last = cur.qIdx===cur.qs.length-1;
+  if(cur.locked){
+    // 읽기 전용 둘러보기 모드
+    $('#btn-skip').style.display = 'none';
+    $('#multi-hint').style.display = 'none';
+    btn.textContent = last ? '결과 다시 보기 ✨' : '다음 (읽기 전용)';
+    btn.disabled = false; btn.style.opacity = 1;
+  }else{
+    $('#btn-skip').style.display = 'flex';
+    const any = body.querySelectorAll('.sel').length>0;
+    btn.textContent = last ? '결과 보기 ✨' : '다음';
+    btn.disabled = !any; btn.style.opacity = any?1:.4;
+  }
+}
+function pick(el){
+  if(cur.locked) return;  // 잠긴 쓰레드는 수정 불가
+  const q = cur.qs[cur.qIdx];
+  if(q.type==='multi' || q.type==='chips'){
+    el.classList.toggle('sel');
+  }else{
+    el.parentElement.querySelectorAll('.sel').forEach(e=>e.classList.remove('sel'));
+    el.classList.add('sel');
+  }
+  const any = $('#sv-body').querySelectorAll('.sel').length>0;
+  const btn = $('#btn-next');
+  btn.disabled = !any; btn.style.opacity = any?1:.4;
+  if(q.type==='single'||q.type==='visual'){
+    clearTimeout(autoTimer);
+    autoTimer = setTimeout(()=>{ if(!btn.disabled) nextQ(); }, 280);
+  }
+}
+function collect(){
+  const q = cur.qs[cur.qIdx];
+  const sels = [...$('#sv-body').querySelectorAll('.sel')].map(e=>e.dataset.v);
+  cur.answers[q.key] = (q.type==='multi'||q.type==='chips') ? sels : sels[0];
+}
+function nextQ(){
+  clearTimeout(autoTimer);
+  if(cur.locked){  // 읽기 전용 둘러보기
+    if(cur.qIdx < cur.qs.length-1){ cur.qIdx++; renderQ('fwd'); }
+    else renderResult();
+    return;
+  }
+  collect();
+  if(cur.qIdx < cur.qs.length-1){ cur.qIdx++; renderQ('fwd'); }
+  else finishSurvey();
+}
+function skipQ(){
+  if(cur.locked) return;
+  cur.answers[cur.qs[cur.qIdx].key] = null;
+  if(cur.qIdx < cur.qs.length-1){ cur.qIdx++; renderQ('fwd'); }
+  else finishSurvey();
+}
+function prevQ(){
+  if(cur.qIdx===0){ show('#sc-home'); return; }
+  if(!cur.locked) collectSoft();
+  cur.qIdx--; renderQ('bwd');
+}
+function collectSoft(){
+  const sels = [...$('#sv-body').querySelectorAll('.sel')].map(e=>e.dataset.v);
+  if(sels.length){ const q = cur.qs[cur.qIdx]; cur.answers[q.key] = (q.type==='multi'||q.type==='chips')?sels:sels[0]; }
+}
+
+/* ================= 로딩 → 잠금 ================= */
+const LD_MSGS = ['검색 문장과 설문을 합치는 중','조건에 맞는 후보를 추리는 중','결과 카드를 채우는 중'];
+function finishSurvey(){
+  show('#sc-loading');
+  LD_MSGS.forEach((m,i)=>setTimeout(()=>{ $('#ld-msg').textContent = m; }, i*750));
+  setTimeout(()=>{
+    cur.locked = true;             // 🔒 설문 종료 → 쓰레드 잠금
+    renderSidebar();
+    renderResult();
+  }, 2400);
+}
+
+/* ================= 복제 ================= */
+function openDup(){ $('#dup-modal').classList.add('on'); $('#scrim').classList.add('on'); }
+function confirmDup(){
+  seq++;
+  const c = {
+    id:seq, goal:cur.goal, tpl:cur.tpl, qIdx:0,
+    answers:JSON.parse(JSON.stringify(cur.answers)),  // 상태 그대로 복제
+    locked:false, copied:true, time:nowStr(),
+  };
+  buildQs(c);
+  threads.unshift(c); cur = c;
+  closeAll(); renderSidebar();
+  renderQ('fwd'); show('#sc-survey');
+  toast('🧬 복제된 새 쓰레드예요. 답이 미리 채워져 있어요');
+}
+
+/* ================= 결과 ================= */
+function ansSummary(){
+  const a = cur.answers;
+  const parts = [];
+  if(a.core) parts.push(Array.isArray(a.core)?a.core.join('·'):a.core);
+  if(a.aesthetic) parts.push(a.aesthetic);
+  if(a.prefs && a.prefs.length) parts.push(a.prefs.slice(0,2).join('·'));
+  if(a.budget && a.budget!=='상관없어요') parts.push(a.budget);
+  return parts.length ? parts.map(p=>`<b>${p}</b>`).join(' · ') : '<b>AI 자동 추정</b>';
+}
+function renderResult(){
+  const t = TPL[cur.tpl];
+  $('#rs-body').innerHTML = `
+    <div class="rs-head-card">
+      <span class="tpl-pill">${t.icon} ${t.name} 템플릿</span>
+      <div class="rs-goal">🎯 ${cur.goal}</div>
+      <p class="rs-sum">${ansSummary()} 기준으로 정리했어요.</p>
+    </div>
+
+    ${TPL_RENDER[cur.tpl]()}
+
+    <div class="fb">
+      <h4>이 결과, 도움이 됐나요?</h4>
+      <div class="fb-btns">
+        <button class="fb-btn" onclick="feedback(this,true)">👍 딱이에요</button>
+        <button class="fb-btn" onclick="feedback(this,false)">👎 좀 아쉬워요</button>
+      </div>
+    </div>
+    <button class="btn btn-grad" onclick="toGmarket()">🛒 결과 상품 G마켓에서 한 번에 보기</button>
+    <p style="font-size:11.5px; color:var(--sub); text-align:center; line-height:1.6">🔒 이 결과의 설문은 잠겨 있어요.<br>상단 [설문] 단계에서 확인하거나 복제해서 수정할 수 있어요.</p>
+  `;
+  show('#sc-result');
+}
+function feedback(el, good){
+  el.parentElement.querySelectorAll('.fb-btn').forEach(b=>b.classList.remove('sel'));
+  el.classList.add('sel');
+  toast(good ? '고마워요! 다음 추천이 더 똑똑해져요 🧠' : '의견 반영해서 다시 배울게요 🙏');
+}
+
+/* ---- 템플릿별 본문 ---- */
+const TPL_RENDER = {
+  order(){
+    const steps = [
+      {n:'스킨 정돈', e:'🧴', p:'세라마이드 수분 토너', pr:'13,500원', tip:'손바닥으로 가볍게 눌러 흡수시키면 들뜸이 줄어요.'},
+      {n:'베이스', e:'🫙', p:'세미매트 커버 쿠션', pr:'22,800원', tip:'얇게 두 번! 한 번에 두껍게 바르면 무너져요.'},
+      {n:'아이 & 치크', e:'🍑', p:'소프트 무드 블러셔', pr:'13,900원', tip:'블러셔는 웃었을 때 볼록한 곳에 톡톡.'},
+      {n:'립', e:'💄', p:'MLBB 블러 매트 립 틴트', pr:'12,900원', tip:'안쪽부터 채우고 손가락으로 경계를 풀어주세요.'},
+    ];
+    return `<div><div class="sec-title" style="margin-bottom:14px">💧 이 순서대로만 따라하세요</div>
+      <div class="flow">${steps.map((s,i)=>`
+        <div class="fstep">
+          <div class="rail"><div class="nd">${i+1}</div><div class="ln"></div></div>
+          <div class="fc"><div class="fc-card">
+            <div class="fname">STEP ${i+1} · ${s.n}</div>
+            <div class="frow">
+              <span class="fe">${s.e}</span>
+              <span class="fp"><b>${s.p}</b><span>${s.pr}</span></span>
+              <button class="fgm" onclick="toGmarket()">G마켓</button>
+            </div>
+            <div class="ftip">💡 ${s.tip}</div>
+          </div></div>
+        </div>`).join('')}</div></div>`;
+  },
+  routine(){
+    const tabs = [
+      {l:'🌅 아침', items:[
+        {e:'💧', n:'저자극 약산성 클렌저', d:'미온수로 가볍게', m:'1분'},
+        {e:'🧴', n:'세라마이드 수분 토너', d:'결 정돈 + 보습', m:'1분'},
+        {e:'☀️', n:'무기자차 톤업 선크림', d:'600원 동전만큼 듬뿍', m:'2분'}]},
+      {l:'🌙 저녁', items:[
+        {e:'🫧', n:'딥 클렌징 오일', d:'선크림·노폐물 지우기', m:'2분'},
+        {e:'🌿', n:'시카 진정 세럼', d:'하루 자극 진정', m:'1분'},
+        {e:'🫙', n:'히알루론 수분크림', d:'마지막 보습 마무리', m:'1분'}]},
+      {l:'🧖 주 1~2회', items:[
+        {e:'🧖‍♀️', n:'수분 진정 마스크팩', d:'세럼 후, 크림 전', m:'15분'},
+        {e:'🕳️', n:'클레이 모공 팩', d:'T존 위주로만', m:'10분'}]},
+    ];
+    return `<div><div class="sec-title" style="margin-bottom:13px">🌅 시간대별 딱 맞는 루틴</div>
+      <div class="rtabs">${tabs.map((t,i)=>`<button class="rtab ${i===0?'on':''}" onclick="rtab(this,${i})">${t.l}</button>`).join('')}</div>
+      ${tabs.map((t,i)=>`<div class="rpanel ${i===0?'on':''}" id="rp-${i}">
+        ${t.items.map(x=>`<div class="ritem" onclick="toGmarket()">
+          <span class="re">${x.e}</span>
+          <span class="rt"><b>${x.n}</b><span>${x.d}</span></span>
+          <span class="rmin">${x.m}</span>
+        </div>`).join('')}
+      </div>`).join('')}</div>`;
+  },
+  parts(){
+    const parts = [
+      {h:'🫙 베이스', items:[{n:'세미매트 커버 쿠션', p:'22,800원', m:94},{n:'톤업 메이크업 베이스', p:'14,500원', m:88},{n:'블러 피니시 파우더', p:'11,900원', m:85}]},
+      {h:'👁️ 아이', items:[{n:'데일리 무드 섀도우 팔레트', p:'24,900원', m:92},{n:'슬림 젤 아이라이너', p:'9,800원', m:88},{n:'롱래시 마스카라', p:'13,500원', m:86}]},
+      {h:'💄 립', items:[{n:'MLBB 블러 매트 립 틴트', p:'12,900원', m:93},{n:'글로우 립 세럼', p:'9,800원', m:89},{n:'롱래스팅 립라이너', p:'7,400원', m:86}]},
+      {h:'🍑 치크', items:[{n:'소프트 무드 블러셔', p:'13,900원', m:93},{n:'멀티 하이라이터', p:'12,400원', m:88}]},
+    ];
+    const emo = ['🫙','👁️','💄','🍑'];
+    return `<div style="display:flex; flex-direction:column; gap:18px">
+      <div class="sec-title">🌸 파츠별로 딱 골라봤어요</div>
+      ${parts.map((pt,pi)=>`<div>
+        <div class="part-h">${pt.h}</div>
+        <div class="md-row">${pt.items.map((x,i)=>`
+          <div class="md-card" onclick="toGmarket()">
+            ${i===0?'<span class="best-badge">👑 BEST</span>':''}
+            <div class="mimg">${emo[pi]}</div>
+            <div class="minfo"><div class="mn">${x.n}</div><div class="mp">${x.p}</div><div class="mm">매칭 ${x.m}%</div></div>
+          </div>`).join('')}</div>
+      </div>`).join('')}</div>`;
+  },
+  concern(){
+    const pris = [
+      {b:'1순위', e:'🌿', n:'시카 진정 수분 세럼', p:'21,900원', why:['시카 4중 추출물 — 자극·붉은기 진정','저자극 테스트 완료 (민감 피부 적합)','리뷰 4.8 ★ "이틀 만에 가라앉았어요"']},
+      {b:'2순위', e:'🕳️', n:'BHA 모공 클리어 토너', p:'13,800원', why:['BHA 0.5% — 모공 속 각질 용해','논코메도제닉 — 트러블 유발 성분 배제']},
+      {b:'3순위', e:'🧴', n:'판테놀 장벽 크림', p:'17,800원', why:['판테놀 5% — 손상 장벽 회복','진정 후 마무리 보습 단계용']},
+    ];
+    return `<div style="display:flex; flex-direction:column; gap:12px">
+      <div class="sec-title">🎯 고민 우선순위로 정리했어요</div>
+      ${pris.map((x,i)=>`<div class="pri ${i===0?'p1':''}">
+        <span class="pr-badge">${x.b}</span>
+        <div class="prow">
+          <span class="pe">${x.e}</span>
+          <span class="pt"><b>${x.n}</b><span>${x.p}</span></span>
+          <button class="fgm" onclick="toGmarket()">G마켓</button>
+        </div>
+        <div class="why-box">${x.why.map(w=>`<span>✓ ${w}</span>`).join('')}</div>
+      </div>`).join('')}</div>`;
+  },
+};
+function rtab(el, i){
+  document.querySelectorAll('.rtab').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on');
+  document.querySelectorAll('.rpanel').forEach((p,j)=>p.classList.toggle('on', j===i));
+}
+
+/* ================= 시작 ================= */
+newThread();
+renderStepper();
+</script>
+</body>
+</html>

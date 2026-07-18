@@ -5,9 +5,9 @@ export default defineConfig({
   base: './',
   plugins: [react()],
   build: {
-    // 빌드 결과물을 저장소 루트의 studio/ 로 내보낸다.
-    // GitHub Pages(main 브랜치 서빙)에서 /gmkt-intent-home/studio/ 주소로 열린다.
-    outDir: '../studio',
+    // 표준 GitHub Pages 컨벤션: 빌드 산출물은 저장소 루트의 docs/ 로 내보낸다.
+    // (package.json build 스크립트가 legacy/ 도 docs/legacy 로 복사한다)
+    outDir: '../docs',
     emptyOutDir: true,
   },
 })

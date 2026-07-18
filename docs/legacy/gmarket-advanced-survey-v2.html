@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="ko" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beauty Brief</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="./gmarket-advanced.tailwind.js"></script>
+    <link rel="stylesheet" href="./gmarket-advanced.css">
+    <link rel="stylesheet" href="./gmarket-advanced-clean-home-v2.css?v=2">
+</head>
+<body class="clean-home-page">
+
+    <!-- Loading -->
+    <div id="page-loading-overlay">
+        <div class="ai-loading-icon">
+            <svg class="loading-mascot" style="color:#c9a0dc" viewBox="0 0 120 145" xmlns="http://www.w3.org/2000/svg">
+                <defs><filter id="soft-shadow-ld" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="2" dy="3" stdDeviation="4" flood-color="#000000" flood-opacity="0.15" /></filter></defs>
+                <g class="mascot-arm-think"><path d="M 40 85 Q 30 100 38 108" stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none" /><circle cx="38" cy="108" r="5" fill="currentColor" /></g>
+                <g class="mascot-arm-book"><path d="M 22 88 Q 12 108 16 128" stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none"/><circle cx="16" cy="128" r="5" fill="currentColor"/><path d="M 85 88 Q 96 108 92 128" stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none"/><circle cx="92" cy="128" r="5" fill="currentColor"/></g>
+                <g class="mascot-arm-write"><path d="M 28 88 Q 18 106 20 120" stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none"/><circle cx="20" cy="120" r="5" fill="currentColor"/><path d="M 80 88 Q 94 102 98 116" stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none"/><circle cx="98" cy="116" r="5" fill="currentColor"/><g class="mascot-pen"><rect x="96" y="114" width="5" height="18" rx="2" fill="#c9a0dc" transform="rotate(20, 98, 116)"/><rect x="96" y="112" width="5" height="5" rx="1" fill="#FDA4AF" transform="rotate(20, 98, 116)"/><polygon points="96,132 101,132 98.5,139" fill="#F97316" transform="rotate(20, 98, 116)"/></g></g>
+                <g class="mascot-arm-pay"><path d="M 22 88 Q 12 108 16 128" stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none"/><circle cx="16" cy="128" r="5" fill="currentColor"/><path d="M 85 88 Q 96 108 92 128" stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none"/><circle cx="92" cy="128" r="5" fill="currentColor"/></g>
+                <circle cx="55" cy="65" r="45" fill="currentColor" filter="url(#soft-shadow-ld)" />
+                <ellipse class="mascot-eye-l" cx="43" cy="52" rx="3.5" ry="5.5" fill="#1e293b"/><ellipse class="mascot-eye-r" cx="67" cy="52" rx="3.5" ry="5.5" fill="#1e293b"/>
+                <path d="M 40 68 Q 55 76 70 68" stroke="#1e293b" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+                <circle cx="40" cy="68" r="2.5" fill="#FF5F5F" opacity="0.35" /><circle cx="70" cy="68" r="2.5" fill="#FF5F5F" opacity="0.35" />
+                <circle class="think-dot d1" cx="85" cy="28" r="3.5" fill="#c9a0dc" opacity="0"/><circle class="think-dot d2" cx="96" cy="18" r="5" fill="#c9a0dc" opacity="0"/><circle class="think-dot d3" cx="110" cy="6" r="7" fill="#c9a0dc" opacity="0"/>
+            </svg>
+            <div class="ai-pulse-ring"></div>
+        </div>
+        <div id="loading-clipboard" class="hidden"><svg class="clipboard-svg" viewBox="0 0 90 80" xmlns="http://www.w3.org/2000/svg"><rect x="8" y="10" width="64" height="66" rx="5" fill="white" stroke="#CBD5E1" stroke-width="1.5"/><rect x="26" y="4" width="28" height="11" rx="4" fill="#94A3B8"/><rect x="32" y="7" width="16" height="5" rx="2" fill="#64748B"/><line class="cl cl1" x1="18" y1="28" x2="62" y2="28" stroke="#94A3B8" stroke-width="1.8" stroke-linecap="round"/><line class="cl cl2" x1="18" y1="38" x2="62" y2="38" stroke="#94A3B8" stroke-width="1.8" stroke-linecap="round"/><line class="cl cl3" x1="18" y1="48" x2="50" y2="48" stroke="#94A3B8" stroke-width="1.8" stroke-linecap="round"/><line class="cl cl4" x1="18" y1="58" x2="38" y2="58" stroke="#c9a0dc" stroke-width="2" stroke-linecap="round"/></svg></div>
+        <div id="loading-pay" class="hidden"><svg class="pay-svg" viewBox="0 0 148 82" xmlns="http://www.w3.org/2000/svg"><rect x="4" y="4" width="58" height="74" rx="7" fill="#1E293B"/><rect x="10" y="10" width="46" height="30" rx="3" fill="#0F172A"/><rect class="screen-flash" x="10" y="10" width="46" height="30" rx="3" fill="#c9a0dc" opacity="0"/><rect x="15" y="17" width="14" height="2.5" rx="1" fill="#334155"/><rect x="15" y="23" width="34" height="5" rx="1.5" fill="#E2E8F0"/><rect x="15" y="31" width="22" height="2" rx="1" fill="#334155"/><rect x="12" y="48" width="10" height="8" rx="2" fill="#334155"/><rect x="25" y="48" width="10" height="8" rx="2" fill="#334155"/><rect x="38" y="48" width="10" height="8" rx="2" fill="#334155"/><rect x="12" y="60" width="10" height="10" rx="2" fill="#334155"/><rect x="25" y="60" width="10" height="10" rx="2" fill="#22C55E"/><rect x="38" y="60" width="10" height="10" rx="2" fill="#EF4444"/><path class="cwave w1" d="M 68 35 Q 74 41 68 47" fill="none" stroke="#c9a0dc" stroke-width="2.2" stroke-linecap="round" opacity="0"/><path class="cwave w2" d="M 74 30 Q 83 41 74 52" fill="none" stroke="#c9a0dc" stroke-width="2.2" stroke-linecap="round" opacity="0"/><path class="cwave w3" d="M 80 25 Q 92 41 80 57" fill="none" stroke="#c9a0dc" stroke-width="2.2" stroke-linecap="round" opacity="0"/><g class="pay-card"><rect x="96" y="24" width="48" height="30" rx="5" fill="#c9a0dc"/><rect x="96" y="24" width="48" height="12" rx="5" fill="rgba(255,255,255,0.12)"/><rect x="104" y="33" width="12" height="9" rx="2" fill="#dbc4e8"/><line x1="104" y1="37" x2="116" y2="37" stroke="rgba(0,0,0,0.2)" stroke-width="1"/><line x1="110" y1="33" x2="110" y2="42" stroke="rgba(0,0,0,0.2)" stroke-width="1"/><line x1="104" y1="47" x2="138" y2="47" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" stroke-linecap="round"/></g></svg></div>
+        <div id="loading-book" class="hidden"><div class="book-wrap"><svg class="book-svg" viewBox="0 0 130 88" xmlns="http://www.w3.org/2000/svg"><path d="M62 6 Q40 6 12 11 L12 78 Q40 78 62 78 Z" fill="#FFFDF5" stroke="#E2E8F0" stroke-width="1.5"/><path d="M68 6 Q90 6 118 11 L118 78 Q90 78 68 78 Z" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5"/><rect x="60" y="4" width="10" height="76" fill="#94A3B8" rx="2"/><line x1="18" y1="24" x2="56" y2="24" stroke="#CBD5E1" stroke-width="1.2" stroke-linecap="round"/><line x1="18" y1="33" x2="56" y2="33" stroke="#CBD5E1" stroke-width="1.2" stroke-linecap="round"/><line x1="18" y1="42" x2="56" y2="42" stroke="#CBD5E1" stroke-width="1.2" stroke-linecap="round"/><line x1="18" y1="51" x2="48" y2="51" stroke="#CBD5E1" stroke-width="1.2" stroke-linecap="round"/><line x1="74" y1="24" x2="112" y2="24" stroke="#CBD5E1" stroke-width="1.2" stroke-linecap="round"/><line x1="74" y1="33" x2="112" y2="33" stroke="#CBD5E1" stroke-width="1.2" stroke-linecap="round"/><line x1="74" y1="42" x2="112" y2="42" stroke="#CBD5E1" stroke-width="1.2" stroke-linecap="round"/><line x1="74" y1="51" x2="102" y2="51" stroke="#CBD5E1" stroke-width="1.2" stroke-linecap="round"/></svg><div class="flip-stage"><div class="flip-page"><div class="flip-front"></div><div class="flip-back"></div></div></div></div></div>
+        <p id="page-loading-label" class="text-base font-medium text-slate-700"></p>
+        <p id="page-loading-sublabel" class="text-xs text-slate-400 font-medium"></p>
+        <div class="ai-progress-track"><div id="ai-progress-bar" class="ai-progress-fill"></div></div>
+    </div>
+
+    <!-- Sidebar (hidden original toggle for JS compat) -->
+    <button type="button" id="historySidebarToggle" class="hidden" aria-label="쇼핑 쓰레드 열기" aria-expanded="false" aria-controls="history-panel"></button>
+
+    <!-- Bottom floating bar -->
+    <nav id="v2-bottom-bar" class="v2-bottom-bar">
+        <button type="button" onclick="window.location.href='./gmarket-advanced-clean-home-v2.html'" class="v2-bottom-bar__item" aria-label="홈">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        </button>
+        <button type="button" id="v2-bottom-thread" class="v2-bottom-bar__item" onclick="document.getElementById('historySidebarToggle')?.click()" aria-label="쓰레드">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h12M4 17h8"/></svg>
+            <span id="v2-bottom-badge" class="v2-bottom-bar__badge hidden">0</span>
+        </button>
+        <button type="button" id="v2-bottom-chat" class="v2-bottom-bar__item" onclick="toggleV2PlanChat()" aria-label="채팅">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        </button>
+    </nav>
+    <aside id="history-panel" class="history-sidebar fixed left-0 top-0 z-[210] h-full w-[320px] max-w-[86vw] -translate-x-full lg:translate-x-0 border-r border-slate-200/80 bg-white/92 text-slate-900 transition-transform duration-300">
+        <div class="flex h-full flex-col">
+            <div class="sidebar-tabs flex items-center border-b border-slate-200/80">
+                <div class="sidebar-cart-control flex flex-1 items-center gap-2 px-3 py-3">
+                    <button type="button" id="cartTabBtn" class="sidebar-tab sidebar-tab-active flex-1 py-3 text-sm font-medium flex items-center justify-center gap-1.5 rounded-2xl border border-slate-200 bg-white">
+                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-width="2" d="M4 7h16M4 12h12M4 17h8"/></svg>
+                        <span class="sidebar-tab-label">쇼핑 쓰레드</span>
+                        <span id="cartBadge" class="hidden sidebar-tab-badge sidebar-tab-cart-badge bg-gmarket-blue text-white text-[10px] rounded-full min-w-[16px] h-4 px-1 font-bold">0</span>
+                    </button>
+                    <button type="button" id="newThreadBtn" class="new-thread-btn" aria-label="새 쇼핑 쓰레드 만들기">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M12 5v14M5 12h14"></path></svg>
+                    </button>
+                    <button type="button" id="collapseHistorySidebar" class="hidden lg:inline-flex shrink-0 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-slate-500 transition-colors">
+                        <svg id="collapseHistorySidebarIcon" class="w-4 h-4 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M15 19l-7-7 7-7"></path></svg>
+                    </button>
+                </div>
+            </div>
+            <div class="flex-1 overflow-y-auto px-3 py-4">
+                <div id="cart-tab-panel">
+                    <div id="cart-empty" class="history-empty rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm leading-relaxed text-slate-400 font-normal text-center">아직 담은 상품이 없어요.</div>
+                    <div id="cart-content" class="hidden"></div>
+                </div>
+            </div>
+        </div>
+    </aside>
+    <div id="history-sidebar-backdrop" class="history-sidebar-backdrop fixed inset-0 z-[205] hidden bg-slate-950/35 backdrop-blur-sm lg:hidden"></div>
+
+    <!-- Thread stepper -->
+    <nav id="thread-stepper" class="thread-stepper hidden" aria-label="쇼핑 쓰레드 단계 이동">
+        <button type="button" class="thread-stepper__step" data-thread-step="survey" onclick="goThreadPhase('survey')"><span class="thread-stepper__dot">1</span><span class="thread-stepper__label">설문</span></button>
+        <span class="thread-stepper__line" aria-hidden="true"></span>
+        <button type="button" class="thread-stepper__step" data-thread-step="solution" onclick="goThreadPhase('solution')"><span class="thread-stepper__dot">2</span><span class="thread-stepper__label">계획</span></button>
+    </nav>
+
+    <!-- Modals -->
+    <div id="survey-edit-confirm-modal" class="survey-confirm-modal hidden" role="dialog" aria-modal="true"><div class="survey-confirm-modal__backdrop" data-survey-confirm-cancel="true"></div><div class="survey-confirm-modal__panel"><div class="survey-confirm-modal__body"><h3 id="survey-edit-confirm-title">설문을 수정하시겠어요?</h3><p id="survey-edit-confirm-desc">설문을 수정하면 새로운 쓰레드가 생성됩니다.</p></div><div class="survey-confirm-modal__actions"><button type="button" id="survey-edit-cancel-btn" class="survey-confirm-modal__btn survey-confirm-modal__btn--ghost">취소</button><button type="button" id="survey-edit-confirm-btn" class="survey-confirm-modal__btn survey-confirm-modal__btn--primary">수정하기</button></div></div></div>
+    <div id="keyword-detail-modal" class="keyword-detail-modal hidden" role="dialog" aria-modal="true"><button type="button" class="keyword-detail-modal__backdrop" data-keyword-detail-close="true"></button><article class="keyword-detail-card"><div class="keyword-detail-card__head"><span id="keyword-detail-eyebrow">Keyword</span><button type="button" id="keyword-detail-close" class="keyword-detail-card__close" data-keyword-detail-close="true"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M6 18L18 6M6 6l12 12"></path></svg></button></div><h3 id="keyword-detail-title"></h3><p id="keyword-detail-desc"></p><ul id="keyword-detail-points"></ul></article></div>
+    <div id="ingredient-risk-modal" class="ingredient-risk-modal hidden" role="dialog" aria-modal="true"><button type="button" class="ingredient-risk-modal__backdrop" data-ingredient-risk-close="true"></button><article class="ingredient-risk-card"><div class="ingredient-risk-card__head"><span>Ingredient Alert</span><button type="button" id="ingredient-risk-close" class="ingredient-risk-card__close" data-ingredient-risk-close="true"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M6 18L18 6M6 6l12 12"></path></svg></button></div><h3 id="ingredient-risk-title">위험 성분 알림</h3><p id="ingredient-risk-desc"></p><div id="ingredient-risk-table" class="ingredient-risk-table-wrap"></div></article></div>
+
+    <div class="fixed top-[-10%] left-[-10%] w-[60%] h-[60%] rounded-full bg-gmarket-blue bg-blob"></div>
+    <div class="fixed bottom-[-10%] right-[-10%] w-[60%] h-[60%] rounded-full bg-gmarket bg-blob"></div>
+
+    <!-- Home (hidden stub for JS compatibility) -->
+    <section id="home-view" class="hidden">
+        <form id="searchForm"><textarea id="searchInput" class="hidden"></textarea></form>
+    </section>
+
+    <!-- Survey -->
+    <section id="info-view" class="hidden clean-info-view text-left">
+        <div class="clean-info-panel">
+            <div class="survey-fixed-top">
+                <div class="clean-info-header">
+                    <span class="clean-info-kicker">Personal Brief</span>
+                    <h2 id="info-title">가볍게 골라주시면<br>맞춤 플랜을 만들어드릴게요</h2>
+                </div>
+                <div id="saved-profile-section" class="saved-profile-section hidden"></div>
+                <div class="clean-survey-progress" aria-label="설문 진행률">
+                    <div class="clean-survey-progress__meta"><span id="survey-progress-label">1 / 1</span></div>
+                    <div class="clean-survey-progress__track"><div id="survey-progress-fill" class="clean-survey-progress__fill"></div></div>
+                </div>
+            </div>
+            <div class="survey-scroll-body">
+                <div id="questions-container" class="clean-question-list"></div>
+            </div>
+            <div class="survey-fixed-bottom">
+                <div class="clean-survey-nav">
+                    <button type="button" id="survey-prev-btn" class="clean-survey-nav-btn clean-survey-nav-btn--ghost" onclick="moveSurveyStep(-1)">이전</button>
+                    <button type="button" id="survey-next-btn" class="clean-survey-nav-btn" onclick="moveSurveyStep(1)">다음</button>
+                    <button type="button" id="survey-submit-btn" onclick="generatePlan()" class="clean-plan-submit">결과 보기</button>
+                    <button type="button" id="survey-edit-btn" onclick="confirmSurveyEdit()" class="clean-plan-submit hidden">설문 수정하기</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Solution -->
+    <section id="solution-view" class="hidden pt-12 pb-28 px-4 relative z-10 text-left">
+        <div class="max-w-4xl mx-auto text-left">
+            <div class="mb-16 text-left"><h2 id="intent-title" class="text-2xl md:text-4xl font-bold text-slate-800 mb-6 leading-snug">계획을 준비 중입니다...</h2></div>
+            <div id="survey-lock-summary" class="clean-survey-lock hidden"></div>
+            <div id="plan-container" class="space-y-24 text-left"></div>
+            <div id="solution-checkout-cta" class="hidden mt-10 rounded-[32px] border border-slate-200 bg-white/90 p-6 shadow-sm">
+                <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div><p id="solution-checkout-count" class="text-[11px] font-medium uppercase tracking-[0.2em] text-slate-400">0개 선택</p><p id="solution-checkout-price" class="mt-1 text-2xl font-bold text-slate-800">0원</p></div>
+                    <button type="button" onclick="handleBottomCheckout()" class="w-full rounded-2xl bg-gmarket-blue px-8 py-4 text-base font-bold text-white shadow-lg shadow-blue-100 transition-all hover:scale-[1.01] active:scale-95 md:w-auto">일괄 결제하고 완수하기</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Plan AI Chat -->
+    <aside id="plan-ai-chat" class="plan-ai-chat hidden" aria-label="계획 수정 AI 채팅">
+        <div class="plan-ai-chat__header"><div><span class="plan-ai-chat__eyebrow">Plan AI</span><h3>계획 조정 채팅</h3></div><button type="button" id="plan-chat-minimize-btn" class="plan-ai-chat__icon-btn" aria-label="계획 채팅 접기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14" stroke-width="2" stroke-linecap="round"></path></svg></button></div>
+        <div id="plan-chat-history" class="plan-ai-chat__history" aria-live="polite"></div>
+        <div class="plan-ai-chat__quick" aria-label="빠른 요청"><button type="button" data-plan-chat-prompt="예산을 조금 낮춰서 다시 잡아줘">예산 낮추기</button><button type="button" data-plan-chat-prompt="민감피부 기준을 각 단계에 추가해줘">민감피부 기준</button><button type="button" data-plan-chat-prompt="선물용으로 볼 때 확인할 포인트를 붙여줘">선물용 포인트</button></div>
+        <form id="plan-chat-form" class="plan-ai-chat__form"><input id="plan-chat-input" type="text" autocomplete="off" placeholder="예: 2단계에 저자극 성분 기준을 추가해줘"><button type="submit" aria-label="보내기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14M13 6l6 6-6 6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></button></form>
+    </aside>
+
+    <!-- PDP -->
+    <div id="pdp-overlay" class="fixed inset-0 z-[150] invisible opacity-0 pointer-events-none flex justify-end">
+        <div id="pdp-backdrop" class="absolute inset-0 bg-slate-900/10 backdrop-blur-sm opacity-0 pointer-events-none"></div>
+        <div id="pdp-floating-card" class="relative w-full max-w-full sm:max-w-2xl bg-white h-full pointer-events-auto flex flex-col overflow-hidden text-left shadow-2xl">
+            <div class="sticky top-0 bg-white border-b border-slate-100 z-[160] px-6 py-5 flex items-center justify-between shadow-sm"><div class="flex items-center gap-3"><button onclick="closePDP()" class="p-2 -ml-2 text-slate-400 hover:text-slate-800 transition-colors"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button><h3 class="font-semibold text-lg tracking-tight">상품 상세</h3></div></div>
+            <div id="pdp-ai-agent-panel" class="absolute top-20 right-3 sm:right-8 z-[120] flex flex-col items-end pointer-events-none">
+                <div onclick="toggleAISpeechBubble()" class="relative cursor-pointer group pointer-events-auto animate-float flex flex-col items-end">
+                    <div id="ai-status-text" class="text-[9px] font-medium text-slate-400 uppercase tracking-widest mb-4 bg-white/90 px-3 py-1 rounded-full shadow-sm border border-slate-100">G-Agent</div>
+                    <div class="relative w-20 h-20 flex items-center justify-center">
+                        <div id="aura-container" class="agent-aura-wrap"><div class="radial-equalizer" id="equalizer-rays"></div></div>
+                        <div id="ai-ready-badge" class="hidden absolute -top-1 -right-1 w-7 h-7 bg-red-500 border-2 border-white rounded-full z-[125] flex items-center justify-center animate-bounce"><span class="text-[11px] text-white font-bold">!</span></div>
+                        <div class="w-20 h-20 flex items-center justify-center overflow-visible transition-all duration-300 group-hover:scale-110 relative z-10">
+                            <svg class="w-16 h-16 overflow-visible" style="color:#c9a0dc" viewBox="0 0 120 120"><defs><filter id="soft-shadow-pdp-final" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="2" dy="3" stdDeviation="4" flood-color="#000000" flood-opacity="0.1" /></filter></defs><g><path d="M 88 80 Q 115 80 120 50" stroke="#1e293b" stroke-width="6" stroke-linecap="round" fill="none" /><circle cx="120" cy="50" r="5" fill="#1e293b" /><animateTransform attributeName="transform" type="rotate" values="0 88 80; 25 88 80; -15 88 80; 25 88 80; -15 88 80; 0 88 80; 0 88 80" keyTimes="0; 0.1; 0.2; 0.3; 0.4; 0.5; 1" dur="2.5s" repeatCount="indefinite" /></g><circle cx="55" cy="65" r="45" fill="currentColor" filter="url(#soft-shadow-pdp-final)"/><ellipse cx="46" cy="50" rx="3.5" ry="5.5" fill="#1e293b"/><ellipse cx="64" cy="50" rx="3.5" ry="5.5" fill="#1e293b"/><path d="M 35 63 Q 55 78 75 63" stroke="#1e293b" stroke-width="3.5" stroke-linecap="round" fill="none"/><circle cx="34" cy="63" r="2.5" fill="#FF5F5F" opacity="0.35" /><circle cx="76" cy="63" r="2.5" fill="#FF5F5F" opacity="0.35" /></svg>
+                        </div>
+                        <div id="ai-loading-ring" class="absolute -inset-2 border-2 border-dashed border-gmarket-blue rounded-full animate-spin-slow opacity-20"></div>
+                    </div>
+                </div>
+                <div id="ai-speech-bubble" class="hidden speech-bubble bg-white border border-slate-200 rounded-[20px] p-5 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.15)] mt-4 w-[calc(100vw-48px)] max-w-[580px] pointer-events-auto relative z-[150] mr-[-8px] max-h-[50vh] overflow-y-auto">
+                    <div class="flex items-center gap-3 mb-4 pb-3 border-b border-slate-100 text-left"><div class="w-2.5 h-2.5 rounded-full bg-gmarket-blue flex-shrink-0"></div><span class="text-[11px] font-medium text-slate-400 uppercase tracking-widest">G-Agent Report</span></div>
+                    <div class="space-y-4 text-left"><p class="text-sm text-slate-600 leading-relaxed" style="word-break:keep-all">"<span id="pdp-intent-reason-text" class="text-slate-900 font-semibold"></span>" 목표에 맞는 핵심 정보예요.</p><div id="pdp-ai-summary-list" class="space-y-4"></div></div>
+                </div>
+            </div>
+            <div class="flex-grow overflow-y-auto scrollbar-hide text-left">
+                <div class="px-4 py-6 sm:px-8 sm:py-10">
+                    <div class="flex flex-col gap-8 mb-12">
+                        <div class="aspect-square bg-slate-50 rounded-3xl overflow-hidden border border-slate-100 shadow-sm group"><img id="pdp-image" src="" alt="" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"></div>
+                        <div class="flex flex-col text-left">
+                            <div class="flex items-center gap-2 mb-4"><span class="bg-gmarket-blue text-white text-[10px] font-bold px-3 py-1 rounded-full tracking-tight">AI OPTIMIZED</span><span class="bg-slate-100 text-slate-600 text-[10px] font-medium px-3 py-1 rounded-full uppercase tracking-tight">Match <span id="pdp-match-score"></span>%</span><span id="pdp-marketplace-tag"></span></div>
+                            <h1 id="pdp-title" class="text-3xl font-bold text-slate-900 mb-6 leading-tight"></h1>
+                            <div class="flex items-center gap-3"><span class="text-red-500 text-4xl font-bold">25%</span><div class="flex flex-col"><div class="flex items-baseline gap-1"><span id="pdp-price" class="text-4xl font-bold tracking-tight"></span><span class="text-xl font-bold">원</span></div><span class="text-slate-300 text-base line-through font-medium" id="pdp-original-price"></span></div></div>
+                        </div>
+                    </div>
+                    <div class="border-t border-slate-100 mt-16 text-left"><div class="flex items-center justify-around border-b border-slate-100 mb-12"><button class="py-5 text-base font-medium tab-active">상세설명</button><button class="py-5 text-base font-medium text-slate-400">리뷰</button><button class="py-5 text-base font-medium text-slate-400">안내</button></div>
+                        <div class="space-y-20 pb-40 text-left"><div class="bg-slate-50 rounded-[32px] p-8 border border-slate-100 text-left"><h5 class="font-semibold mb-6 text-left text-slate-800 text-xl">상세 상품 정보</h5><div class="grid grid-cols-2 gap-4 text-xs text-left"><div class="p-5 bg-white rounded-2xl border border-slate-100 shadow-sm text-left"><p class="text-slate-400 mb-1.5 font-medium uppercase tracking-wider">Size</p><p id="pdp-spec-size" class="font-normal text-slate-800 text-sm">-</p></div><div class="p-5 bg-white rounded-2xl border border-slate-100 shadow-sm text-left"><p class="text-slate-400 mb-1.5 font-medium uppercase tracking-wider">Key Feature</p><p id="pdp-spec-feature" class="font-normal text-slate-800 text-sm">-</p></div></div></div></div>
+                    </div>
+                </div>
+            </div>
+            <div class="absolute bottom-0 left-0 w-full bg-white/95 backdrop-blur-md border-t border-slate-100 p-4 sm:p-8 flex gap-3 sm:gap-4 z-[140]"><button id="pdp-cart-btn" class="cart-add-btn flex-grow py-4 bg-slate-100 text-slate-800 rounded-2xl font-semibold text-sm transition-all hover:bg-slate-200">장바구니</button><button class="flex-grow-[2] py-4 bg-gmarket-blue text-white rounded-2xl font-bold text-sm shadow-2xl shadow-blue-100 transition-all hover:scale-[1.01] active:scale-95">바로구매</button></div>
+        </div>
+    </div>
+
+    <!-- Delivery -->
+    <div id="delivery-overlay" class="fixed inset-0 z-[150] invisible opacity-0 pointer-events-none flex justify-end">
+        <button type="button" id="delivery-backdrop" onclick="closeDeliveryPanel()" class="absolute inset-0 bg-slate-900/10 backdrop-blur-sm opacity-0 pointer-events-none"></button>
+        <div id="delivery-floating-card" class="relative w-full max-w-full sm:max-w-2xl bg-white h-full pointer-events-auto flex flex-col overflow-hidden text-left shadow-2xl">
+            <div class="sticky top-0 bg-white border-b border-slate-100 z-[160] px-6 py-5 flex items-center justify-between shadow-sm"><div class="flex items-center gap-3"><button type="button" onclick="closeDeliveryPanel()" class="p-2 -ml-2 text-slate-400 hover:text-slate-800"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button><div><p class="text-[11px] font-medium uppercase tracking-[0.22em] text-gmarket-blue">Delivery</p><h3 class="font-semibold text-lg">배송조회</h3></div></div><div class="text-right"><p class="text-[10px] font-medium uppercase tracking-[0.2em] text-slate-400">주문번호</p><p id="delivery-order-number" class="text-sm font-medium text-slate-800"></p></div></div>
+            <div class="flex-grow overflow-y-auto scrollbar-hide text-left"><div class="px-4 py-6 sm:px-8 sm:py-8 space-y-6"><div class="rounded-[28px] border border-slate-100 bg-slate-50/80 p-5"><div class="flex items-start gap-4"><img id="delivery-current-item-image" src="" alt="" class="w-20 h-20 rounded-3xl object-cover border border-slate-100 bg-white flex-shrink-0"><div class="min-w-0 flex-1"><div class="flex flex-wrap items-center gap-2 mb-2"><span id="delivery-current-status-badge" class="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold"></span><span id="delivery-current-step" class="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400"></span></div><h4 id="delivery-current-item-title" class="text-lg font-semibold text-slate-900 leading-snug break-words"></h4><p id="delivery-current-item-price" class="mt-2 text-sm font-medium text-gmarket-blue"></p><p id="delivery-current-message" class="mt-3 text-sm leading-relaxed text-slate-600"></p></div></div><div class="mt-5"><div class="flex items-center justify-between text-[11px] font-medium text-slate-400 uppercase tracking-[0.16em]"><span>배송 진행도</span><span id="delivery-current-progress-label"></span></div><div class="mt-2 h-2 rounded-full bg-slate-200 overflow-hidden"><div id="delivery-current-progress-bar" class="h-full rounded-full bg-gmarket-blue transition-all duration-500" style="width:0%"></div></div></div></div><div class="grid grid-cols-2 gap-3"><div class="rounded-[24px] border border-slate-100 bg-white p-4"><p class="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400 mb-2">도착 예정</p><p id="delivery-expected-date" class="text-base font-medium text-slate-800"></p></div><div class="rounded-[24px] border border-slate-100 bg-white p-4"><p class="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400 mb-2">송장 정보</p><p id="delivery-tracking-number" class="text-base font-medium text-slate-800"></p><p id="delivery-courier" class="mt-1 text-xs font-medium text-slate-400"></p></div></div><div class="rounded-[28px] border border-slate-100 bg-white p-5"><div class="flex items-center justify-between mb-4"><div><p class="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">현재 주문 상품</p><h4 class="text-lg font-semibold text-slate-900 mt-1">상품별 배송상태</h4></div><span id="delivery-item-count" class="text-xs font-medium text-slate-400"></span></div><div id="delivery-item-selector-list" class="space-y-3"></div></div><div class="rounded-[28px] border border-slate-100 bg-white p-5"><p class="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400 mb-4">배송 타임라인</p><div id="delivery-timeline" class="space-y-4"></div></div></div></div>
+        </div>
+    </div>
+
+    <!-- Order -->
+    <section id="order-view" class="hidden pt-12 pb-28 px-4 relative z-10">
+        <div class="max-w-2xl mx-auto w-full">
+            <div class="mb-10"><span class="text-xs font-medium text-gmarket-blue uppercase tracking-widest mb-2 block">Order</span><h2 class="text-2xl md:text-3xl font-bold text-slate-800">주문서</h2></div>
+            <div class="bg-white rounded-[28px] border border-slate-100 shadow-sm p-5 sm:p-7 mb-4"><h3 class="text-base font-bold text-slate-800 mb-5">배송지</h3><div class="space-y-3"><div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label class="text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-1.5 block">받는 분</label><input type="text" id="order-name" value="김유진" class="w-full px-4 py-3 rounded-2xl border border-slate-200 text-sm font-medium text-slate-800"></div><div><label class="text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-1.5 block">연락처</label><input type="tel" id="order-phone" value="010-1234-1234" class="w-full px-4 py-3 rounded-2xl border border-slate-200 text-sm font-medium text-slate-800"></div></div><div><label class="text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-1.5 block">주소</label><input type="text" id="order-postcode" value="06236" class="hidden"><input type="text" id="order-address" value="서울특별시 강남구 테헤란로 152" class="w-full px-4 py-3 rounded-2xl border border-slate-200 text-sm font-medium text-slate-800 mb-2"><input type="text" id="order-address-detail" value="37층" class="w-full px-4 py-3 rounded-2xl border border-slate-200 text-sm font-medium text-slate-800"></div><div><label class="text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-1.5 block">배송 메모</label><select id="order-memo" class="w-full px-4 py-3 rounded-2xl border border-slate-200 text-sm font-medium text-slate-700 bg-white"><option value="">선택해 주세요</option><option>문 앞에 놓아주세요</option><option>경비실에 맡겨주세요</option></select></div></div></div>
+            <div class="bg-white rounded-[28px] border border-slate-100 shadow-sm p-5 sm:p-7 mb-4"><h3 class="text-base font-bold text-slate-800 mb-5">주문 상품</h3><div id="order-items-list" class="space-y-3"></div></div>
+            <div class="bg-white rounded-[28px] border border-slate-100 shadow-sm p-5 sm:p-7 mb-4"><h3 class="text-base font-bold text-slate-800 mb-5">결제 수단</h3><div class="flex flex-col gap-3"><label class="payment-method-label flex items-center gap-4 p-4 rounded-2xl border-2 border-gmarket-blue bg-gmarket-blue/5 cursor-pointer"><input type="radio" name="payment-method" value="card" class="hidden" checked><div class="w-5 h-5 rounded-full border-2 border-gmarket-blue flex items-center justify-center flex-shrink-0"><div class="w-2.5 h-2.5 rounded-full bg-gmarket-blue"></div></div><p class="text-sm font-medium text-slate-800">신용/체크카드</p></label><label class="payment-method-label flex items-center gap-4 p-4 rounded-2xl border-2 border-slate-200 cursor-pointer hover:border-slate-300"><input type="radio" name="payment-method" value="smilepay" class="hidden"><div class="w-5 h-5 rounded-full border-2 border-slate-300 flex items-center justify-center flex-shrink-0"><div class="w-2.5 h-2.5 rounded-full bg-slate-300 hidden"></div></div><p class="text-sm font-medium text-slate-800">스마일페이</p></label></div></div>
+            <div class="bg-white rounded-[28px] border border-slate-100 shadow-sm p-5 sm:p-7 mb-6"><h3 class="text-base font-bold text-slate-800 mb-5">결제 금액</h3><div id="order-price-breakdown" class="space-y-3 text-sm font-bold"></div><div class="border-t border-slate-100 mt-4 pt-4 flex justify-between items-center"><span class="text-base font-bold text-slate-800">최종 결제 금액</span><span id="order-total-price" class="text-2xl font-bold text-gmarket-blue"></span></div></div>
+            <button id="order-submit-btn" onclick="submitOrder()" class="w-full py-5 bg-gmarket-blue text-white rounded-2xl font-bold text-lg shadow-2xl shadow-blue-100 transition-all hover:scale-[1.01] active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed">결제하기</button>
+        </div>
+    </section>
+
+    <!-- Order complete -->
+    <section id="order-complete-view" class="hidden pt-12 pb-28 px-4 relative z-10">
+        <div class="max-w-xl mx-auto w-full">
+            <div class="flex flex-col items-center justify-center py-16 text-center"><div class="w-24 h-24 rounded-full bg-gmarket-blue/10 flex items-center justify-center mb-6"><svg class="w-12 h-12 text-gmarket-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg></div><h2 class="text-2xl font-bold text-slate-900 mb-3">주문 완료!</h2><p class="text-slate-500 text-sm mb-1">주문번호 <span id="order-complete-number" class="text-gmarket-blue"></span></p></div>
+            <div class="bg-white rounded-[28px] border border-slate-100 shadow-sm p-7 mb-4"><p class="text-xs font-medium text-slate-400 uppercase tracking-widest mb-4">배송지</p><p class="font-medium text-slate-800 text-sm" id="complete-name"></p><p class="text-slate-500 text-sm" id="complete-phone"></p><p class="text-slate-500 text-sm" id="complete-address"></p></div>
+            <div class="bg-white rounded-[28px] border border-slate-100 shadow-sm p-7 mb-4"><p class="text-xs font-medium text-slate-400 uppercase tracking-widest mb-4">주문 상품</p><div id="complete-items-list" class="space-y-3"></div><div class="border-t border-slate-100 mt-4 pt-4 flex justify-between items-center"><span class="text-sm font-medium text-slate-600">결제 금액</span><span id="complete-total-price" class="text-xl font-bold text-gmarket-blue"></span></div></div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3"><button type="button" id="complete-delivery-btn" onclick="openDeliveryPanel()" class="py-4 bg-slate-100 text-slate-700 rounded-2xl font-semibold text-sm active:scale-95">배송조회</button><button type="button" id="complete-claim-btn" onclick="openOrderClaimFlow()" class="py-4 bg-slate-100 text-slate-700 rounded-2xl font-semibold text-sm active:scale-95">취소/반품/교환</button><button type="button" id="complete-confirm-btn" onclick="confirmPurchase()" class="py-4 bg-gmarket-blue text-white rounded-2xl font-bold text-sm shadow-xl shadow-blue-100 active:scale-95">구매확정</button></div>
+        </div>
+    </section>
+
+    <!-- Order claim -->
+    <section id="order-claim-view" class="hidden pt-12 pb-28 px-4 relative z-10">
+        <div class="max-w-xl mx-auto w-full">
+            <div class="mb-6"><p class="text-[11px] font-medium uppercase tracking-[0.18em] text-gmarket-blue">After Order Care</p><h2 class="text-2xl font-bold text-slate-900 mt-1">취소/반품/교환 신청</h2></div>
+            <div class="bg-white rounded-[28px] border border-slate-100 shadow-sm p-6 mb-4"><p class="text-sm font-medium text-slate-800 mb-1">주문번호 <span id="claim-order-number" class="text-gmarket-blue"></span></p></div>
+            <div class="bg-white rounded-[28px] border border-slate-100 shadow-sm p-6 mb-4"><p class="text-xs font-medium text-slate-400 uppercase tracking-widest mb-4">신청 유형</p><div class="grid grid-cols-3 gap-2 rounded-[24px] bg-slate-50 p-2"><button type="button" data-claim-type="cancel" onclick="selectClaimType('cancel')" class="claim-type-btn rounded-2xl px-4 py-4 text-left"><p class="text-sm font-medium text-slate-800">취소</p></button><button type="button" data-claim-type="return" onclick="selectClaimType('return')" class="claim-type-btn rounded-2xl px-4 py-4 text-left"><p class="text-sm font-medium text-slate-800">반품</p></button><button type="button" data-claim-type="exchange" onclick="selectClaimType('exchange')" class="claim-type-btn rounded-2xl px-4 py-4 text-left"><p class="text-sm font-medium text-slate-800">교환</p></button></div></div>
+            <div class="bg-white rounded-[28px] border border-slate-100 shadow-sm p-6 mb-4"><p class="text-xs font-medium text-slate-400 uppercase tracking-widest mb-4">주문 상품</p><div id="claim-items-list" class="space-y-3"></div></div>
+            <div class="bg-white rounded-[28px] border border-slate-100 shadow-sm p-6 mb-6">
+                <div data-claim-panel="cancel" class="claim-panel space-y-5"><div><label for="claim-cancel-reason" class="block text-xs font-medium text-slate-400 uppercase tracking-widest mb-3">취소 사유</label><select id="claim-cancel-reason" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 outline-none"><option value="단순 변심">단순 변심</option><option value="배송 지연">배송 지연</option></select></div><div><label for="claim-cancel-refund" class="block text-xs font-medium text-slate-400 uppercase tracking-widest mb-3">환불 방식</label><select id="claim-cancel-refund" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 outline-none"><option value="원 결제수단 환불">원 결제수단 환불</option></select></div><div><label for="claim-cancel-message" class="block text-xs font-medium text-slate-400 uppercase tracking-widest mb-3">메모</label><textarea id="claim-cancel-message" rows="3" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none resize-none" placeholder="메모"></textarea></div></div>
+                <div data-claim-panel="return" class="claim-panel hidden space-y-5"><div><label for="claim-return-reason" class="block text-xs font-medium text-slate-400 uppercase tracking-widest mb-3">반품 사유</label><select id="claim-return-reason" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 outline-none"><option value="상품 불량">상품 불량</option><option value="오배송">오배송</option></select></div><div><label for="claim-return-message" class="block text-xs font-medium text-slate-400 uppercase tracking-widest mb-3">상세</label><textarea id="claim-return-message" rows="3" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none resize-none" placeholder="반품 사유"></textarea></div></div>
+                <div data-claim-panel="exchange" class="claim-panel hidden space-y-5"><div><label for="claim-exchange-reason" class="block text-xs font-medium text-slate-400 uppercase tracking-widest mb-3">교환 사유</label><select id="claim-exchange-reason" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 outline-none"><option value="옵션 변경">옵션 변경</option><option value="상품 하자">상품 하자</option></select></div><div><label for="claim-exchange-option" class="block text-xs font-medium text-slate-400 uppercase tracking-widest mb-3">희망 옵션</label><input id="claim-exchange-option" type="text" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 outline-none" placeholder="예: 블랙 / L"></div><div><label for="claim-exchange-message" class="block text-xs font-medium text-slate-400 uppercase tracking-widest mb-3">상세</label><textarea id="claim-exchange-message" rows="3" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none resize-none" placeholder="교환 요청"></textarea></div></div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><button type="button" onclick="goBackToCompleteFromClaim()" class="py-4 bg-slate-100 text-slate-700 rounded-2xl font-semibold text-sm active:scale-95">이전으로</button><button type="button" id="claim-submit-btn" onclick="submitOrderClaim()" class="py-4 bg-gmarket-blue text-white rounded-2xl font-bold text-sm shadow-xl shadow-blue-100 active:scale-95">신청하기</button><button type="button" id="claim-status-btn" onclick="openClaimStatusPanel()" class="hidden sm:col-start-2 py-4 bg-slate-900 text-white rounded-2xl font-bold text-sm shadow-xl hover:bg-slate-800 active:scale-95">진행 상태</button></div>
+        </div>
+    </section>
+
+    <!-- Claim status overlay -->
+    <div id="claim-status-overlay" class="fixed inset-0 z-[150] invisible opacity-0 pointer-events-none flex justify-end">
+        <button type="button" id="claim-status-backdrop" onclick="closeClaimStatusPanel()" class="absolute inset-0 bg-slate-900/10 backdrop-blur-sm opacity-0 pointer-events-none"></button>
+        <div id="claim-status-floating-card" class="relative w-full max-w-full sm:max-w-2xl bg-white h-full pointer-events-auto flex flex-col overflow-hidden text-left shadow-2xl">
+            <div class="sticky top-0 bg-white border-b border-slate-100 z-[160] px-6 py-5 flex items-center justify-between shadow-sm"><div class="flex items-center gap-3"><button type="button" onclick="closeClaimStatusPanel()" class="p-2 -ml-2 text-slate-400 hover:text-slate-800"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button><div><p class="text-[11px] font-medium uppercase tracking-[0.22em] text-gmarket-blue">Claim Status</p><h3 id="claim-status-title" class="font-semibold text-lg">신청 진행 상태</h3></div></div><div class="text-right"><p class="text-[10px] font-medium uppercase tracking-[0.2em] text-slate-400">주문번호</p><p id="claim-status-order-number" class="text-sm font-medium text-slate-800"></p></div></div>
+            <div class="flex-grow overflow-y-auto scrollbar-hide text-left"><div class="px-4 py-6 sm:px-8 sm:py-8 space-y-6"><div class="rounded-[28px] border border-slate-100 bg-slate-50/80 p-5"><div class="flex flex-wrap items-center gap-2 mb-3"><span id="claim-status-badge" class="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold"></span><span id="claim-status-step" class="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400"></span></div><h4 id="claim-status-headline" class="text-lg font-semibold text-slate-900"></h4><p id="claim-status-message" class="mt-3 text-sm leading-relaxed text-slate-600"></p><div class="mt-5"><div class="flex items-center justify-between text-[11px] font-medium text-slate-400 uppercase tracking-[0.16em]"><span>처리 진행도</span><span id="claim-status-progress-label"></span></div><div class="mt-2 h-2 rounded-full bg-slate-200 overflow-hidden"><div id="claim-status-progress-bar" class="h-full rounded-full bg-gmarket-blue transition-all duration-500" style="width:0%"></div></div></div></div><div class="grid grid-cols-2 gap-3"><div class="rounded-[24px] border border-slate-100 bg-white p-4"><p class="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400 mb-2">신청 사유</p><p id="claim-status-reason" class="text-base font-medium text-slate-800"></p></div><div class="rounded-[24px] border border-slate-100 bg-white p-4"><p class="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400 mb-2">접수 일시</p><p id="claim-status-submitted-at" class="text-base font-medium text-slate-800"></p></div></div><div class="rounded-[28px] border border-slate-100 bg-white p-5"><p class="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400 mb-4">접수 정보</p><div id="claim-status-details" class="space-y-3"></div></div><div class="rounded-[28px] border border-slate-100 bg-white p-5"><p class="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400 mb-4">처리 타임라인</p><div id="claim-status-timeline" class="space-y-4"></div></div></div></div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('change', function(e) {
+            if (e.target && e.target.name === 'payment-method') {
+                document.querySelectorAll('.payment-method-label').forEach(function(label) {
+                    label.classList.remove('border-gmarket-blue', 'bg-gmarket-blue/5');
+                    label.classList.add('border-slate-200');
+                    var dot = label.querySelector('.w-2\\.5');
+                    if (dot) { dot.classList.add('hidden'); dot.classList.remove('bg-gmarket-blue'); dot.classList.add('bg-slate-300'); }
+                    var ring = label.querySelector('.rounded-full.border-2');
+                    if (ring) { ring.classList.remove('border-gmarket-blue'); ring.classList.add('border-slate-300'); }
+                });
+                var selectedLabel = e.target.closest('.payment-method-label');
+                if (selectedLabel) {
+                    selectedLabel.classList.add('border-gmarket-blue', 'bg-gmarket-blue/5');
+                    selectedLabel.classList.remove('border-slate-200');
+                    var dot = selectedLabel.querySelector('.w-2\\.5');
+                    if (dot) { dot.classList.remove('hidden', 'bg-slate-300'); dot.classList.add('bg-gmarket-blue'); }
+                    var ring = selectedLabel.querySelector('.rounded-full.border-2');
+                    if (ring) { ring.classList.remove('border-slate-300'); ring.classList.add('border-gmarket-blue'); }
+                }
+            }
+        });
+    </script>
+
+    <script>
+        if (!new URLSearchParams(window.location.search).get('q')) {
+            window.location.replace('./gmarket-advanced-clean-home-v2.html');
+        }
+        function toggleV2PlanChat() {
+            var chat = document.getElementById('plan-ai-chat');
+            if (!chat) return;
+            if (chat.classList.contains('hidden')) {
+                chat.classList.remove('hidden');
+                chat.classList.remove('is-minimized');
+            } else {
+                chat.classList.add('hidden');
+            }
+        }
+    </script>
+    <script src="./gmarket-advanced.mock.js"></script>
+    <script src="./gmarket-advanced.js?v=plan-chat-v52"></script>
+    <script src="./gmarket-thread-navigation.js"></script>
+
+</body>
+</html>
