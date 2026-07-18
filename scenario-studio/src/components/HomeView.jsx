@@ -42,9 +42,13 @@ export default function HomeView({ api }) {
   const submit = () => {
     const q = query.trim()
     if (!q) return
-    const hit = published.find(
-      (s) => s.title.includes(q) || s.chip.includes(q) || (s.query && s.query.includes(q)) || q.includes(s.chip)
-    )
+    // 공백/언더스코어 차이를 무시하고 매칭한다 ("나이트 루틴" ↔ "나이트_루틴")
+    const norm = (str) => String(str || '').toLowerCase().replace(/[\s_]+/g, '')
+    const nq = norm(q)
+    const hit = published.find((s) => {
+      const fields = [s.title, s.chip, s.query].map(norm).filter(Boolean)
+      return fields.some((f) => f.includes(nq) || nq.includes(f))
+    })
     if (hit) {
       api.playScenario(hit.id)
     } else {
@@ -149,6 +153,7 @@ export default function HomeView({ api }) {
                   <div className="sb-scenario-row__actions">
                     <button type="button" onClick={() => api.playScenario(s.id)}>시험</button>
                     <button type="button" onClick={() => api.openBuilder(s.id)}>편집</button>
+                    <button type="button" onClick={() => api.copyScenario(s.id)}>복제</button>
                     <button
                       type="button"
                       className="sb-danger"

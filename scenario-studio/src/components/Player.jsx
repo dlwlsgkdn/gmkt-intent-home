@@ -43,8 +43,8 @@ export default function Player({ api, scenario }) {
   ).length
   const questionCount = (scenario.stages.survey || []).filter((it) => it.type === 'surveyQuestion').length
 
-  /* 이 시나리오와 연관된 고정 설문 정보 (프로필) */
-  const allProfileItems = api.profile?.items || []
+  /* 이 시나리오와 연관된 고정 설문 정보 (프로필, 빈 라벨 항목 제외) */
+  const allProfileItems = (api.profile?.items || []).filter((it) => it.label && it.label.trim())
   const activeKeys = scenario.profileKeys ?? allProfileItems.map((it) => it.label)
   const profileItems = allProfileItems.filter((it) => activeKeys.includes(it.label))
   const includedProfile = profileItems.filter((it) => !excludedProfile.includes(it.label))

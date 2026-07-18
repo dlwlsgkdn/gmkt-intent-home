@@ -53,6 +53,28 @@ export default function App() {
     setRoute({ name: 'builder', id: s.id })
   }
 
+  /* 시나리오 복제 — 아이템 id까지 새로 발급해 완전한 사본을 만든다 */
+  const copyScenario = (id) => {
+    const src = scenarios.find((s) => s.id === id)
+    if (!src) return
+    const stages = {}
+    Object.keys(src.stages).forEach((k) => {
+      stages[k] = (src.stages[k] || []).map((it) => ({ ...it, id: uid(), props: { ...it.props } }))
+    })
+    const copy = {
+      ...src,
+      id: uid(),
+      title: `${src.title} 복사본`,
+      chip: src.chip ? `${src.chip}_복사` : '복사본',
+      status: 'draft',
+      stages,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+    setScenarios((prev) => [...prev, copy])
+    setToast(`"${copy.title}" 을(를) 만들었어요. (작성 중 상태)`)
+  }
+
   const importScenarios = (arr) => {
     if (!Array.isArray(arr)) {
       setToast('가져오기 실패: 시나리오 배열(JSON)이 아니에요.')
@@ -85,6 +107,7 @@ export default function App() {
     updateScenario,
     removeScenario,
     newScenario,
+    copyScenario,
     importScenarios,
     goHome: () => setRoute({ name: 'home' }),
     openBuilder: (id) => setRoute({ name: 'builder', id }),

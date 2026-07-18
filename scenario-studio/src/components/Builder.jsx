@@ -213,8 +213,8 @@ export default function Builder({ api, scenario }) {
   const canvasW = device.w
   const itemW = canvasW - PAD * 2
 
-  /* 프로필(고정 설문 정보) — 시나리오별 노출 항목 */
-  const profileItems = api.profile?.items || []
+  /* 프로필(고정 설문 정보) — 시나리오별 노출 항목 (빈 라벨 항목 제외) */
+  const profileItems = (api.profile?.items || []).filter((it) => it.label && it.label.trim())
   const activeProfileKeys = scenario.profileKeys ?? profileItems.map((it) => it.label)
   const toggleProfileKey = (label) => {
     api.updateScenario(scenario.id, (s) => {
@@ -342,6 +342,7 @@ export default function Builder({ api, scenario }) {
       x: src.x,
       y: src.y + (heightsRef.current[src.id] || 80) + GAP,
       w: src.w,
+      h: src.h,
       props: { ...src.props },
     }
     setItems((prev) => [...prev, copy])
@@ -557,8 +558,12 @@ export default function Builder({ api, scenario }) {
       )
       if (!ok) return
     }
-    api.updateScenario(scenario.id, (s) => ({ ...s, status: 'published' }))
-    api.showToast(`"#${scenario.chip}" 칩이 홈 탐색창 밑에 발행됐어요!`)
+    // 칩 라벨이 비어 있으면 제목에서 만들어 채운다 (빈 "✦#" 칩 방지)
+    const cleaned = (scenario.chip || '').replace(/^#+/, '').trim()
+    const fallback = (scenario.title || '').trim().replace(/\s+/g, '_') || '시나리오'
+    const finalChip = cleaned || fallback
+    api.updateScenario(scenario.id, (s) => ({ ...s, status: 'published', chip: finalChip }))
+    api.showToast(`"#${finalChip}" 칩이 홈 탐색창 밑에 발행됐어요!`)
     api.goHome()
   }
 
@@ -751,16 +756,29 @@ export default function Builder({ api, scenario }) {
           </div>
 
           {paletteTab === 'components' ? (
-            libraryForStage(stageKey).map((def) => (
-              <button key={def.type} type="button" className="sb-palette-card" onClick={() => addItem(def.type)}>
-                <span className="sb-palette-card__icon">{def.icon}</span>
-                <span className="sb-palette-card__text">
-                  <strong>{def.label}</strong>
-                  <small>{def.hint}</small>
-                </span>
-                <span className="sb-palette-card__add">+</span>
-              </button>
-            ))
+            <>
+              {libraryForStage(stageKey).map((def) => (
+                <button key={def.type} type="button" className="sb-palette-card" onClick={() => addItem(def.type)}>
+                  <span className="sb-palette-card__icon">{def.icon}</span>
+                  <span className="sb-palette-card__text">
+                    <strong>{def.label}</strong>
+                    <small>{def.hint}</small>
+                  </span>
+                  <span className="sb-palette-card__add">+</span>
+                </button>
+              ))}
+              <div className="sb-shortcut-hints">
+                <p className="sb-panel-label">단축키</p>
+                <dl>
+                  <div><dt>⌘Z / ⇧⌘Z</dt><dd>실행 취소 / 다시 실행</dd></div>
+                  <div><dt>⌘D</dt><dd>선택 컴포넌트 복제</dd></div>
+                  <div><dt>Delete</dt><dd>선택 컴포넌트 삭제</dd></div>
+                  <div><dt>방향키</dt><dd>8px 이동 (⇧: 1px)</dd></div>
+                  <div><dt>Esc</dt><dd>선택 해제</dd></div>
+                  <div><dt>더블클릭</dt><dd>바로 문구 편집</dd></div>
+                </dl>
+              </div>
+            </>
           ) : (
             <div className="sb-layer-list">
               {items.length === 0 && (

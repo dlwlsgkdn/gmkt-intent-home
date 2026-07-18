@@ -569,6 +569,31 @@
 }
 .sb-palette-card:hover .sb-palette-card__add { background: var(--sb-accent); color: #fff; }
 
+/* 단축키 안내 */
+.sb-shortcut-hints {
+  margin-top: 18px;
+  padding: 12px 12px 8px;
+  border-radius: 14px;
+  border: 1px dashed var(--sb-line);
+  background: #f8fafc;
+}
+.sb-shortcut-hints dl { margin: 0; }
+.sb-shortcut-hints dl > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.sb-shortcut-hints dt {
+  flex-shrink: 0;
+  min-width: 76px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  font-family: ui-monospace, monospace;
+}
+.sb-shortcut-hints dd { margin: 0; font-size: 11px; color: #94a3b8; }
+
 /* 캔버스 */
 .sb-canvas-wrap {
   padding: 24px;
