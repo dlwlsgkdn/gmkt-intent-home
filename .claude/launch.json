@@ -5,12 +5,18 @@
       "name": "scenario-studio",
       "runtimeExecutable": "/Users/jinhalee/.nvm/versions/node/v24.5.0/bin/node",
       "runtimeArgs": [
-        "/Users/jinhalee/wwwGmarket/gmkt-intent-home/scenario-builder/node_modules/vite/bin/vite.js",
-        "/Users/jinhalee/wwwGmarket/gmkt-intent-home/scenario-builder",
+        "/Users/jinhalee/wwwGmarket/gmkt-intent-home/scenario-studio/node_modules/vite/bin/vite.js",
+        "/Users/jinhalee/wwwGmarket/gmkt-intent-home/scenario-studio",
         "--port", "5173",
         "--strictPort"
       ],
       "port": 5173
+    },
+    {
+      "name": "pages-static",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8899", "--directory", "/Users/jinhalee/wwwGmarket/gmkt-intent-home"],
+      "port": 8899
     }
   ]
 }
