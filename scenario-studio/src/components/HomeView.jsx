@@ -1,12 +1,14 @@
 import React, { useRef, useState } from 'react'
 import { BgBlobs, FloatingBar, StudioFab, ViewerDeviceControl } from './Frame.jsx'
 import ExploreFrame from './ExploreFrame.jsx'
+import ThreadPanel from './ThreadPanel.jsx'
 import { TEMPLATES } from '../lib/templates.js'
 import { hexToRgba, DEVICE_PRESETS } from '../lib/store.js'
 
 export default function HomeView({ api }) {
   const [query, setQuery] = useState('')
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [threadOrigin, setThreadOrigin] = useState(null) // null=닫힘 | 'left'|'center'|'right'
   const [draggingChipId, setDraggingChipId] = useState(null)
   const importInputRef = useRef(null)
   const chipDragRef = useRef(null) // { id, startX, startY, moved }
@@ -94,9 +96,9 @@ export default function HomeView({ api }) {
       <BgBlobs />
       <FloatingBar
         active="home"
-        onHome={() => setDrawerOpen(false)}
+        onHome={() => { setDrawerOpen(false); setThreadOrigin(null) }}
         onMy={() => api.showToast('마이 페이지는 프로토타입에서 준비 중이에요.')}
-        onList={() => setDrawerOpen((v) => !v)}
+        onList={(origin) => setThreadOrigin((v) => (v ? null : origin || 'right'))}
       />
       <StudioFab onClick={() => setDrawerOpen(true)} />
       <ViewerDeviceControl deviceKey={api.viewerDevice} onChange={api.setViewerDevice} />
@@ -130,6 +132,9 @@ export default function HomeView({ api }) {
         />
         </div>
       </section>
+
+      {/* 쇼핑 쓰레드 히스토리 패널 — 햄버거 버튼 위치에서 등장 */}
+      <ThreadPanel api={api} open={!!threadOrigin} origin={threadOrigin || 'right'} onClose={() => setThreadOrigin(null)} />
 
       {/* 시나리오 관리 드로어 */}
       {drawerOpen && (

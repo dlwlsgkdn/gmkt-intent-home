@@ -160,6 +160,29 @@ export function saveKeywords(list) {
   }
 }
 
+/* ── 쇼핑 쓰레드 히스토리 — 시나리오 체험 1회 = 쓰레드 1개 ── */
+const THREADS_KEY = 'ddak-threads-v1'
+const THREADS_MAX = 30
+
+export function loadThreads() {
+  try {
+    const raw = localStorage.getItem(THREADS_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch (e) {
+    return []
+  }
+}
+
+export function saveThreads(threads) {
+  try {
+    localStorage.setItem(THREADS_KEY, JSON.stringify(threads.slice(0, THREADS_MAX)))
+  } catch (e) {
+    /* ignore */
+  }
+}
+
 const EXPLORE_KEY = 'ddak-explore-page-v1'
 
 export function loadExplore() {

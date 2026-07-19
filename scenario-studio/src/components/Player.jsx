@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react'
-import { STAGES, DEVICE_PRESETS, sortByPosition } from '../lib/store.js'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { STAGES, DEVICE_PRESETS, sortByPosition, uid } from '../lib/store.js'
 import { renderItem } from '../lib/registry.jsx'
 import { BgBlobs, FloatingBar, StudioFab, ViewerDeviceControl } from './Frame.jsx'
+import ThreadPanel from './ThreadPanel.jsx'
 
 export default function Player({ api, scenario }) {
   const [stageIdx, setStageIdx] = useState(0)
@@ -10,6 +11,8 @@ export default function Player({ api, scenario }) {
   const [cart, setCart] = useState([])
   const [excludedProfile, setExcludedProfile] = useState([]) // 이번 회차에서 뺀 프로필 항목
   const [keyword, setKeyword] = useState(null) // 점선 밑줄 키워드 클릭 → 설명 모달
+  const [completed, setCompleted] = useState(false)
+  const [threadOrigin, setThreadOrigin] = useState(null) // 쓰레드 히스토리 패널 (null=닫힘)
 
   const stage = STAGES[stageIdx]
   /* 숨김 처리된 컴포넌트는 실행에서 제외 */
@@ -24,9 +27,29 @@ export default function Player({ api, scenario }) {
     setAnswers({})
     setExcludedProfile([])
     setCart([])
+    setCompleted(false)
     setQuery(scenario.query || '')
     api.showToast('처음부터 다시 시작해요.')
   }
+
+  /* 이번 체험 회차 = 쓰레드 1개 — 단계 이동/담기/완료 때마다 히스토리에 기록 */
+  const threadIdRef = useRef(uid())
+  const startedAtRef = useRef(new Date().toISOString())
+  useEffect(() => {
+    api.recordThread({
+      id: threadIdRef.current,
+      scenarioId: scenario.id,
+      title: scenario.title,
+      chip: scenario.chip,
+      color: scenario.color,
+      stage: stage.key,
+      stageLabel: stage.label,
+      cart,
+      status: completed ? 'completed' : 'ongoing',
+      startedAt: startedAtRef.current,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stageIdx, cart, completed])
   /* 실행 화면은 전역 뷰어 기기 폭의 모바일 프레임으로 고정 (좌상단 컨트롤로 조절) */
   const viewer = DEVICE_PRESETS.find((d) => d.key === api.viewerDevice) || DEVICE_PRESETS.find((d) => d.key === 'iphone-15') || DEVICE_PRESETS[0]
 
@@ -65,6 +88,7 @@ export default function Player({ api, scenario }) {
       api.showToast(`"${name}" 을(를) 쓰레드에 담았어요.`)
     },
     complete: () => {
+      setCompleted(true)
       api.showToast('시나리오 체험 완료! 홈으로 돌아갑니다. 🎉')
       setTimeout(api.goHome, 900)
     },
@@ -97,7 +121,7 @@ export default function Player({ api, scenario }) {
       <FloatingBar
         onHome={api.goHome}
         onMy={() => api.showToast('마이 페이지는 프로토타입에서 준비 중이에요.')}
-        onList={api.goHome}
+        onList={(origin) => setThreadOrigin((v) => (v ? null : origin || 'right'))}
       />
       <StudioFab label="이 시나리오 편집" onClick={() => api.openBuilder(scenario.id)} />
       <ViewerDeviceControl deviceKey={api.viewerDevice} onChange={api.setViewerDevice} />
@@ -193,6 +217,9 @@ export default function Player({ api, scenario }) {
         )}
         </div>
       </section>
+
+      {/* 쇼핑 쓰레드 히스토리 패널 — 햄버거 버튼 위치에서 등장 */}
+      <ThreadPanel api={api} open={!!threadOrigin} origin={threadOrigin || 'right'} onClose={() => setThreadOrigin(null)} />
 
       {/* 키워드 설명 모달 (원본 keyword-detail 스타일 재사용) */}
       {keyword && (

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { loadScenarios, saveScenarios, createScenario, uid, loadExplore, saveExplore, loadProfile, saveProfile, loadKeywords, saveKeywords, loadViewerDevice, saveViewerDevice } from './lib/store.js'
+import { loadScenarios, saveScenarios, createScenario, uid, loadExplore, saveExplore, loadProfile, saveProfile, loadKeywords, saveKeywords, loadViewerDevice, saveViewerDevice, loadThreads, saveThreads } from './lib/store.js'
 import { readShareFromHash, clearShareHash } from './lib/share.js'
 import HomeView from './components/HomeView.jsx'
 import Builder from './components/Builder.jsx'
@@ -12,6 +12,7 @@ export default function App() {
   const [profile, setProfile] = useState(loadProfile)
   const [keywords, setKeywords] = useState(loadKeywords)
   const [viewerDevice, setViewerDevice] = useState(loadViewerDevice)
+  const [threads, setThreads] = useState(loadThreads)
   // 공유 링크(#s=...)로 들어온 경우: 저장하지 않고 바로 체험
   const [shared, setShared] = useState(readShareFromHash)
   // route: {name:'home'} | {name:'builder', id} | {name:'player', id} | {name:'explore-editor'}
@@ -37,6 +38,10 @@ export default function App() {
   useEffect(() => {
     saveViewerDevice(viewerDevice)
   }, [viewerDevice])
+
+  useEffect(() => {
+    saveThreads(threads)
+  }, [threads])
 
   useEffect(() => {
     if (!toast) return
@@ -128,6 +133,15 @@ export default function App() {
     [scenarios, route.id]
   )
 
+  /* 쓰레드 upsert — 같은 id가 있으면 갱신, 없으면 맨 앞에 추가 (최신순 유지) */
+  const recordThread = (entry) => {
+    setThreads((prev) => {
+      const rest = prev.filter((t) => t.id !== entry.id)
+      const existing = prev.find((t) => t.id === entry.id)
+      return [{ ...existing, ...entry, updatedAt: new Date().toISOString() }, ...rest]
+    })
+  }
+
   const api = {
     scenarios,
     setScenarios,
@@ -150,6 +164,10 @@ export default function App() {
     updateKeywords: setKeywords,
     viewerDevice,
     setViewerDevice,
+    threads,
+    recordThread,
+    removeThread: (id) => setThreads((prev) => prev.filter((t) => t.id !== id)),
+    clearThreads: () => setThreads([]),
     showToast: (msg) => setToast(msg),
   }
 

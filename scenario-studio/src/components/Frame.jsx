@@ -11,7 +11,20 @@ export function BgBlobs() {
   )
 }
 
-/* 하단 플로팅 바 — 원본 구성(홈/마이/쓰레드 목록) 유지 */
+/* 버튼이 그룹 안에서 왼쪽/가운데/오른쪽 어디에 있는지 판별 — 패널 등장 방향에 사용 */
+function fabOrigin(e) {
+  const btn = e.currentTarget.getBoundingClientRect()
+  const nav = e.currentTarget.closest('nav')
+  if (!nav) return 'right'
+  const bar = nav.getBoundingClientRect()
+  const center = btn.left + btn.width / 2
+  const barCenter = bar.left + bar.width / 2
+  if (center < barCenter - 8) return 'left'
+  if (center > barCenter + 8) return 'right'
+  return 'center'
+}
+
+/* 하단 플로팅 바 — 원본 구성(홈/마이/쓰레드 히스토리) 유지 */
 export function FloatingBar({ onHome, onMy, onList, active }) {
   return (
     <nav className="clean-floating-actionbar" aria-label="빠른 이동">
@@ -36,9 +49,9 @@ export function FloatingBar({ onHome, onMy, onList, active }) {
       <button
         type="button"
         className="clean-floating-actionbar__btn"
-        aria-label="시나리오 목록"
-        title="시나리오 목록"
-        onClick={onList}
+        aria-label="쇼핑 쓰레드 히스토리"
+        title="쇼핑 쓰레드 히스토리"
+        onClick={(e) => onList(fabOrigin(e))}
       >
         <svg aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M4 6h16M4 12h16M4 18h10" /></svg>
       </button>
