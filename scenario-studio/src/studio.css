@@ -947,7 +947,7 @@
   top: auto;
   bottom: auto;
 }
-.sb-canvas-item__content .beauty-greeting { font-size: clamp(19px, 2.2vw, 26px); }
+.sb-canvas-item__content .beauty-greeting { font-size: 24px; }
 .sb-canvas-item__content .clean-tag-row,
 .sb-player__item .clean-tag-row { justify-content: flex-start; text-align: left; margin-top: 0; }
 
@@ -1180,7 +1180,7 @@
   min-height: 540px;
   margin-bottom: 20px;
 }
-.sb-phone .beauty-greeting { font-size: clamp(19px, 6.4cqw, 27px); }
+.sb-phone .beauty-greeting { font-size: 24px; }
 .sb-phone .beauty-webzine {
   width: 100%;
   margin: 0;
@@ -1226,6 +1226,13 @@
   right: auto;
 }
 
+/* 스토리 카드 제목: 원본 vw clamp → 고정 */
+.sb-phone .beauty-story__body h2,
+.sb-canvas-item__content .beauty-story__body h2,
+.sb-player__item .beauty-story__body h2 {
+  font-size: 19px;
+}
+
 /* ── 모바일(좁은 컨테이너) 대응: 컴포넌트가 자기 폭에 반응 ── */
 .sb-canvas-item__content,
 .sb-player__item {
@@ -1235,21 +1242,21 @@
 /* 뷰포트(vw) 기준이던 타이포를 컨테이너 폭 기준으로 스케일 */
 .sb-canvas-item__content .clean-info-header h2,
 .sb-player__item .clean-info-header h2 {
-  font-size: clamp(20px, 9cqw, 40px);
+  font-size: 26px;
 }
 .sb-canvas-item__content .clean-info-header p,
 .sb-player__item .clean-info-header p {
-  font-size: clamp(13px, 4.6cqw, 15px);
+  font-size: 14px;
 }
 .sb-canvas-item__content .sb-plan-title,
 .sb-player__item .sb-plan-title {
-  font-size: clamp(20px, 8cqw, 34px);
+  font-size: 24px;
 }
 
 /* 질문 라벨: 원본은 vw 기준 — 좁은 캔버스에서는 컨테이너 기준으로 보정 */
 .sb-canvas-item__content .clean-question-list label,
 .sb-player__item .clean-question-list label {
-  font-size: clamp(17px, 7cqw, 28px) !important;
+  font-size: 22px !important;
 }
 
 /* 설문 옵션: nowrap 해제 — 긴 선택지도 카드 안에서 줄바꿈 */
@@ -1674,7 +1681,7 @@ button.sb-info-chip:hover { border-color: #94a3b8; background: #f8fafc; }
 }
 .sb-player__head h2 {
   margin: 8px 0 0;
-  font-size: clamp(24px, 3.4vw, 38px);
+  font-size: 28px;
   font-weight: 300;
   color: var(--sb-ink);
   line-height: 1.3;
