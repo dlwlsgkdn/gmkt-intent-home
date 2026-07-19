@@ -1010,6 +1010,7 @@
   top: -14px;
   right: 0;
   z-index: 60;
+  width: max-content; /* 내용에 딱 맞게 */
   display: inline-flex;
   align-items: center;
   gap: 1px;
@@ -1054,6 +1055,8 @@
 }
 .sb-seltb__color:hover { transform: scale(1.25); }
 .sb-seltb__kw .keyword-detail-text { font-size: 11px; }
+/* 캔버스 툴바: 인라인 left/transform 사용 — 공용 클래스의 right:0이 폭을 늘리지 않도록 해제 */
+.sb-seltb--canvas { right: auto; }
 
 /* 인스펙터: 폰트 탭 */
 .sb-font-tabs {
