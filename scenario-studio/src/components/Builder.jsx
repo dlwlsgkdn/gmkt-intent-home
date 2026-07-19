@@ -151,6 +151,7 @@ export default function Builder({ api, scenario }) {
     h: src.h,
     locked: false,
     hidden: src.hidden,
+    style: src.style ? { ...src.style } : undefined,
     props: { ...src.props },
   })
 
@@ -792,6 +793,7 @@ export default function Builder({ api, scenario }) {
           duplicateItem={duplicateItem}
           removeItem={removeItem}
           alignSelected={alignSelected}
+          keywords={api.keywords || []}
         />
       </div>
     </div>

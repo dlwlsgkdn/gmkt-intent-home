@@ -965,6 +965,83 @@
 .sb-image-card img { width: 100%; height: auto; display: block; }
 
 
+/* ── 컴포넌트 텍스트 스타일 강제 상속 ──
+   원본 CSS가 .clean-home-page * 에 !important 폰트를 걸어두므로
+   더 높은 특이도(.clean-home-page + 클래스)로 이긴다 */
+.clean-home-page .sb-style-font,
+.clean-home-page .sb-style-font :where(*) { font-family: var(--sb-font) !important; }
+.clean-home-page .sb-style-color,
+.clean-home-page .sb-style-color :where(*) { color: var(--sb-color) !important; }
+.clean-home-page .sb-style-size,
+.clean-home-page .sb-style-size :where(*) { font-size: var(--sb-size) !important; }
+.clean-home-page .sb-style-bold,
+.clean-home-page .sb-style-bold :where(*) { font-weight: 700 !important; }
+
+/* 인스펙터: 폰트 탭 */
+.sb-font-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: #f1f5f9;
+}
+.sb-font-tabs button {
+  padding: 7px 4px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  transition: all 0.13s ease;
+}
+.sb-font-tabs .sb-font-tab--active {
+  background: #fff;
+  color: var(--sb-ink);
+  box-shadow: 0 2px 8px -3px rgba(15, 23, 42, 0.2);
+}
+
+/* 인스펙터: 글자 색 스와치 */
+.sb-text-colors { display: flex; gap: 6px; flex-wrap: wrap; }
+.sb-text-color {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  transition: transform 0.13s ease;
+}
+.sb-text-color:hover { transform: scale(1.15); }
+.sb-text-color--active { border-color: var(--sb-ink); box-shadow: 0 0 0 2px #fff inset; }
+.sb-text-color--none {
+  background: #fff;
+  border: 1px solid var(--sb-line);
+  position: relative;
+}
+.sb-text-color--none::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  top: 50%;
+  height: 1.5px;
+  background: #cbd5e1;
+  transform: rotate(-45deg);
+}
+.sb-text-color--none.sb-text-color--active { border-color: var(--sb-ink); }
+
+/* 인스펙터: 키워드 연결 토글 */
+.sb-kw-toggles { display: flex; flex-wrap: wrap; gap: 6px; }
+.sb-kw-toggle {
+  padding: 6px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--sb-line);
+  background: #fff;
+  font-size: 12px;
+  color: #475569;
+  transition: all 0.13s ease;
+}
+.sb-kw-toggle:disabled { opacity: 0.35; cursor: not-allowed; }
+.sb-kw-toggle--on { border-color: var(--sb-accent); background: var(--sb-accent-soft); color: var(--sb-accent); font-weight: 700; }
+
 /* ── 실행 화면 모바일 프레임 (탐색/설문/계획 공통) ── */
 .sb-phone {
   max-width: 100%;

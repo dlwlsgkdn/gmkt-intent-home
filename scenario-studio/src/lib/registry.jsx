@@ -743,8 +743,39 @@ export function libraryForStage(stageKey) {
     .map(([type, def]) => ({ type, ...def }))
 }
 
+/* 컴포넌트 인스턴스별 텍스트 스타일 (item.style = { font, size, color, bold }) */
+export const FONT_OPTIONS = [
+  { key: null, label: '기본', stack: null },
+  { key: 'serif', label: '명조', stack: "'Nanum Myeongjo', 'Noto Serif KR', 'AppleMyungjo', serif" },
+  { key: 'mono', label: '모노', stack: 'ui-monospace, SFMono-Regular, Menlo, monospace' },
+]
+
+export const TEXT_COLORS = [
+  { key: null, label: '기본', color: null },
+  { key: 'ink', label: '잉크', color: '#1f2933' },
+  { key: 'muted', label: '뮤트', color: '#64748b' },
+  { key: 'rose', label: '로즈', color: '#b45a6b' },
+  { key: 'blue', label: '블루', color: '#3b5bdb' },
+  { key: 'green', label: '그린', color: '#00996b' },
+  { key: 'amber', label: '앰버', color: '#a9762c' },
+]
+
 export function renderItem(item, ctx) {
   const def = LIBRARY[item.type]
   if (!def) return <div className="text-xs text-red-400">알 수 없는 컴포넌트: {item.type}</div>
-  return def.render(item.props, { ...ctx, itemId: item.id })
+  const el = def.render(item.props, { ...ctx, itemId: item.id })
+
+  /* 텍스트 스타일이 지정된 경우 래퍼로 감싸 강제 상속시킨다 */
+  const st = item.style || {}
+  const hasStyle = st.font || st.size || st.color || st.bold
+  if (!hasStyle) return el
+
+  const fontStack = FONT_OPTIONS.find((f) => f.key === st.font)?.stack || null
+  const cls = ['sb-styled']
+  const style = {}
+  if (fontStack) { style['--sb-font'] = fontStack; cls.push('sb-style-font') }
+  if (st.color) { style['--sb-color'] = st.color; cls.push('sb-style-color') }
+  if (st.size) { style['--sb-size'] = `${st.size}px`; cls.push('sb-style-size') }
+  if (st.bold) cls.push('sb-style-bold')
+  return <div className={cls.join(' ')} style={style}>{el}</div>
 }
