@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { STAGES, DEVICE_PRESETS, sortByPosition } from '../lib/store.js'
 import { renderItem } from '../lib/registry.jsx'
-import { BgBlobs, FloatingBar, StudioFab } from './Frame.jsx'
+import { BgBlobs, FloatingBar, StudioFab, ViewerDeviceControl } from './Frame.jsx'
 
 export default function Player({ api, scenario }) {
   const [stageIdx, setStageIdx] = useState(0)
@@ -27,9 +27,8 @@ export default function Player({ api, scenario }) {
     setQuery(scenario.query || '')
     api.showToast('처음부터 다시 시작해요.')
   }
-  /* 시나리오가 모바일 기기 폭으로 설계됐다면 플레이어도 그 폭으로 보여준다 */
-  const device = DEVICE_PRESETS.find((d) => d.key === (scenario.device || 'desktop'))
-  const deviceStyle = device && device.w < 760 ? { maxWidth: device.w } : undefined
+  /* 실행 화면은 전역 뷰어 기기 폭의 모바일 프레임으로 고정 (좌상단 컨트롤로 조절) */
+  const viewer = DEVICE_PRESETS.find((d) => d.key === api.viewerDevice) || DEVICE_PRESETS.find((d) => d.key === 'iphone-15') || DEVICE_PRESETS[0]
 
   const next = () => setStageIdx((i) => Math.min(STAGES.length - 1, i + 1))
   const prev = () => setStageIdx((i) => Math.max(0, i - 1))
@@ -101,6 +100,7 @@ export default function Player({ api, scenario }) {
         onList={api.goHome}
       />
       <StudioFab label="이 시나리오 편집" onClick={() => api.openBuilder(scenario.id)} />
+      <ViewerDeviceControl deviceKey={api.viewerDevice} onChange={api.setViewerDevice} />
 
       {/* 단계 스테퍼 */}
       <nav className="sb-player-stepper" aria-label="시나리오 단계">
@@ -124,6 +124,7 @@ export default function Player({ api, scenario }) {
       </nav>
 
       <section className="sb-player min-h-screen relative z-10">
+        <div className="sb-phone sb-phone--player" style={{ width: viewer.w }}>
         <div className="sb-player__head">
           <div className="sb-player__head-row">
             <p className="sb-eyebrow">#{scenario.chip} 칩으로 진입 · 탐색 완료</p>
@@ -148,7 +149,7 @@ export default function Player({ api, scenario }) {
         </div>
 
 
-        <div className="sb-player__stack" style={deviceStyle}>
+        <div className="sb-player__stack">
           {items.length === 0 && (
             <div className="sb-player__empty">
               이 단계에 배치된 컴포넌트가 없어요.<br />
@@ -166,7 +167,7 @@ export default function Player({ api, scenario }) {
           ))}
         </div>
 
-        <div className="clean-survey-nav sb-player__nav" style={deviceStyle}>
+        <div className="clean-survey-nav sb-player__nav">
           {stageIdx > 0 ? (
             <button type="button" className="clean-survey-nav-btn clean-survey-nav-btn--ghost" onClick={prev}>
               이전 단계
@@ -190,6 +191,7 @@ export default function Player({ api, scenario }) {
         {cart.length > 0 && (
           <p className="sb-player__cart">🧺 담은 상품 {cart.length}개</p>
         )}
+        </div>
       </section>
 
       {/* 키워드 설명 모달 (원본 keyword-detail 스타일 재사용) */}

@@ -1,4 +1,5 @@
-import React from 'react'
+import React, { useState } from 'react'
+import { DEVICE_PRESETS } from '../lib/store.js'
 
 /* 원본 clean-home 프레임: 배경 블롭 + 플로팅 액션바 */
 export function BgBlobs() {
@@ -42,6 +43,38 @@ export function FloatingBar({ onHome, onMy, onList, active }) {
         <svg aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M4 6h16M4 12h16M4 18h10" /></svg>
       </button>
     </nav>
+  )
+}
+
+/* 좌상단 뷰어 기기(화면 폭) 선택 컨트롤 — 탐색/설문/계획 실행 화면 공통 */
+export function ViewerDeviceControl({ deviceKey, onChange }) {
+  const [open, setOpen] = useState(false)
+  const device = DEVICE_PRESETS.find((d) => d.key === deviceKey) || DEVICE_PRESETS[0]
+  return (
+    <div className="sb-viewer-ctl">
+      <button type="button" className="sb-viewer-ctl__btn" onClick={() => setOpen((v) => !v)} title="화면 크기 선택">
+        {device.icon} {device.w}px
+        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" /></svg>
+      </button>
+      {open && (
+        <>
+          <div className="sb-menu-backdrop" onClick={() => setOpen(false)} />
+          <div className="sb-menu sb-viewer-ctl__menu">
+            {DEVICE_PRESETS.map((p) => (
+              <button
+                key={p.key}
+                type="button"
+                className={'sb-menu__item' + (p.key === device.key ? ' sb-menu__item--active' : '')}
+                onClick={() => { onChange(p.key); setOpen(false) }}
+              >
+                <strong>{p.icon} {p.label}</strong>
+                <small>화면 폭 {p.w}px{p.key === device.key ? ' · 사용 중' : ''}</small>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
   )
 }
 

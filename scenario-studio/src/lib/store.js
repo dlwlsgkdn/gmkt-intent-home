@@ -100,6 +100,26 @@ export function saveProfile(profile) {
   }
 }
 
+/* ── 뷰어 기기 설정 — 탐색/설문/계획 실행 화면의 모바일 프레임 폭 ── */
+const VIEWER_KEY = 'ddak-viewer-device-v1'
+
+export function loadViewerDevice() {
+  try {
+    const key = localStorage.getItem(VIEWER_KEY)
+    return DEVICE_PRESETS.some((d) => d.key === key) ? key : 'iphone-15'
+  } catch (e) {
+    return 'iphone-15'
+  }
+}
+
+export function saveViewerDevice(key) {
+  try {
+    localStorage.setItem(VIEWER_KEY, key)
+  } catch (e) {
+    /* ignore */
+  }
+}
+
 /* ── 키워드 사전 — 텍스트 안 [[키워드]]에 점선 밑줄 + 클릭 시 설명 모달 ── */
 export const DEFAULT_KEYWORDS = [
   {

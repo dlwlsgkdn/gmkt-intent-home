@@ -1,8 +1,8 @@
 import React, { useRef, useState } from 'react'
-import { BgBlobs, FloatingBar, StudioFab } from './Frame.jsx'
+import { BgBlobs, FloatingBar, StudioFab, ViewerDeviceControl } from './Frame.jsx'
 import ExploreFrame from './ExploreFrame.jsx'
 import { TEMPLATES } from '../lib/templates.js'
-import { hexToRgba } from '../lib/store.js'
+import { hexToRgba, DEVICE_PRESETS } from '../lib/store.js'
 
 export default function HomeView({ api }) {
   const [query, setQuery] = useState('')
@@ -99,8 +99,13 @@ export default function HomeView({ api }) {
         onList={() => setDrawerOpen((v) => !v)}
       />
       <StudioFab onClick={() => setDrawerOpen(true)} />
+      <ViewerDeviceControl deviceKey={api.viewerDevice} onChange={api.setViewerDevice} />
 
       <section className="clean-home min-h-screen relative z-10">
+        <div
+          className="sb-phone"
+          style={{ width: (DEVICE_PRESETS.find((d) => d.key === api.viewerDevice) || DEVICE_PRESETS[0]).w }}
+        >
         <ExploreFrame
           config={api.explore}
           searchValue={query}
@@ -123,6 +128,7 @@ export default function HomeView({ api }) {
             )
           })}
         />
+        </div>
       </section>
 
       {/* 시나리오 관리 드로어 */}
