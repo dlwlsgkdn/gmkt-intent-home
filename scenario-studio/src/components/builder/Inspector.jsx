@@ -174,7 +174,7 @@ export default function Inspector({
         <button type="button" className="sb-seltb__kw" title="점선 밑줄 + 설명 모달 연결" onClick={() => applyMark('kw')}>
           <span className="keyword-detail-text">밑줄</span>
         </button>
-        <button type="button" title="선택 구간 서식 지우기" onClick={clearMarks}>지우기</button>
+        <button type="button" title="선택 구간 서식 지우기" onClick={clearMarks}><s>가</s></button>
       </div>
     ) : null
 
