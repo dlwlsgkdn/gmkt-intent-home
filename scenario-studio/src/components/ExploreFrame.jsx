@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useLayoutEffect, useRef } from 'react'
 
 const FALLBACK_IMG = './makeup-clone-assets/d9b261330f3ffccf.avif'
 
@@ -12,6 +12,19 @@ export default function ExploreFrame({
   onSubmit,
   interactive = true,
 }) {
+  /* 검색창 긴 텍스트 처리: 'ellipsis' = 한 줄 input + 말줄임, 'multiline' = 자동으로 늘어나는 textarea.
+     원본 CSS는 textarea에 ellipsis를 걸었지만 textarea에는 적용되지 않아 텍스트가 버튼 밑까지 흘렀다. */
+  const multiline = config?.searchOverflow === 'multiline'
+  const taRef = useRef(null)
+  useLayoutEffect(() => {
+    const el = taRef.current
+    if (!el || !multiline) return
+    // field-sizing 지원 브라우저는 CSS만으로 자동 확장 (플레이스홀더 줄바꿈 포함)
+    if (window.CSS && CSS.supports && CSS.supports('field-sizing', 'content')) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [multiline, searchValue, config?.searchPlaceholder])
+
   if (!config) return null
 
   const submit = (e) => {
@@ -28,20 +41,38 @@ export default function ExploreFrame({
 
         <form className="clean-search group" onSubmit={submit}>
           <div className="clean-search__box">
-            <textarea
-              rows={1}
-              placeholder={config.searchPlaceholder}
-              className="resize-none overflow-hidden"
-              value={searchValue}
-              readOnly={!interactive}
-              onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
-              onKeyDown={(e) => {
-                if (interactive && e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault()
-                  onSubmit && onSubmit()
-                }
-              }}
-            />
+            {multiline ? (
+              <textarea
+                ref={taRef}
+                rows={1}
+                placeholder={config.searchPlaceholder}
+                className="resize-none overflow-hidden clean-search__field--multiline"
+                value={searchValue}
+                readOnly={!interactive}
+                onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (interactive && e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    onSubmit && onSubmit()
+                  }
+                }}
+              />
+            ) : (
+              <input
+                type="text"
+                placeholder={config.searchPlaceholder}
+                className="clean-search__field--ellipsis"
+                value={searchValue}
+                readOnly={!interactive}
+                onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (interactive && e.key === 'Enter') {
+                    e.preventDefault()
+                    onSubmit && onSubmit()
+                  }
+                }}
+              />
+            )}
             <button
               type="submit"
               id="submitBtn"

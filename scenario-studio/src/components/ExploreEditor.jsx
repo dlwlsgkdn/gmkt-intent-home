@@ -90,6 +90,30 @@ export default function ExploreEditor({ api }) {
             <label>검색창 플레이스홀더</label>
             <input type="text" value={cfg.searchPlaceholder} onChange={(e) => set({ searchPlaceholder: e.target.value })} />
           </div>
+          <div className="sb-field">
+            <label>검색창 긴 텍스트 처리</label>
+            <div className="sb-seg" role="radiogroup" aria-label="검색창 긴 텍스트 처리">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={cfg.searchOverflow !== 'multiline'}
+                className={'sb-seg__btn' + (cfg.searchOverflow !== 'multiline' ? ' sb-seg__btn--active' : '')}
+                onClick={() => set({ searchOverflow: 'ellipsis' })}
+              >
+                한 줄 · 말줄임(…)
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={cfg.searchOverflow === 'multiline'}
+                className={'sb-seg__btn' + (cfg.searchOverflow === 'multiline' ? ' sb-seg__btn--active' : '')}
+                onClick={() => set({ searchOverflow: 'multiline' })}
+              >
+                여러 줄로 표시
+              </button>
+            </div>
+            <p className="sb-profile-config__hint">검색 버튼을 넘는 긴 문구를 …으로 줄일지, 줄을 바꿔 모두 보여줄지 정해요.</p>
+          </div>
 
           <div className="sb-explore-story-fields">
             <p className="sb-panel-label">사용자 프로필 (고정 설문 정보)</p>

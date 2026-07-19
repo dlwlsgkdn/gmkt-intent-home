@@ -42,6 +42,7 @@ export const STAGES = [
 export const DEFAULT_EXPLORE = {
   greeting: '유진님, 오늘은 피부결이 먼저 보이는 베이스 루틴을 가볍게 정리해볼까요?',
   searchPlaceholder: '예: 출근 전에 10분 안에 안 무너지는 데일리 메이크업',
+  searchOverflow: 'ellipsis', // 검색창 긴 텍스트 처리: 'ellipsis'(한 줄 말줄임) | 'multiline'(여러 줄)
   stories: [
     {
       kicker: 'Base Notes',

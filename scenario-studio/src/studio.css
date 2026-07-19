@@ -962,6 +962,30 @@
 .sb-field input[type='text']:focus,
 .sb-field textarea:focus { border-color: var(--sb-accent); }
 .sb-field input[type='range'] { width: 100%; accent-color: var(--sb-accent); }
+/* 두 갈래 선택 세그먼트 (예: 검색창 긴 텍스트 처리) */
+.sb-seg {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--sb-line);
+  border-radius: 10px;
+  background: #f8fafc;
+}
+.sb-seg__btn {
+  flex: 1;
+  padding: 7px 8px;
+  border-radius: 7px;
+  font-size: 12px;
+  color: #64748b;
+  transition: all 0.15s ease;
+}
+.sb-seg__btn:hover { color: var(--sb-ink); }
+.sb-seg__btn--active {
+  background: #fff;
+  color: var(--sb-ink);
+  font-weight: 600;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12);
+}
 .sb-toggle {
   display: inline-flex;
   align-items: center;
@@ -999,6 +1023,45 @@
   bottom: auto;
 }
 .sb-canvas-item__content .beauty-greeting { font-size: 24px; }
+
+/* ── 탐색 검색창 긴 텍스트 처리 ──
+   한 줄 모드: textarea 대신 input을 쓴다 (textarea에는 text-overflow가 안 먹혀
+   텍스트가 오른쪽 패딩(검색 버튼 아래)까지 흘렀다). 원본 textarea 룩을 미러링. */
+.clean-search input.clean-search__field--ellipsis {
+  width: 100%;
+  height: 62px;
+  padding: 18px 68px 18px 0;
+  border: 0;
+  border-bottom: 1px solid rgba(31, 41, 51, 0.58);
+  border-radius: 0;
+  background: transparent;
+  color: var(--beauty-ink);
+  box-shadow: none;
+  font-size: 18px;
+  font-weight: 300;
+  line-height: 26px;
+  outline: none;
+  text-overflow: ellipsis;
+  transition: border-color 0.16s ease;
+}
+.clean-search input.clean-search__field--ellipsis::placeholder {
+  color: #9aa4b1;
+  font-weight: 300;
+  text-overflow: ellipsis;
+}
+.clean-search input.clean-search__field--ellipsis:focus {
+  border-color: var(--beauty-rose);
+  box-shadow: none;
+}
+/* 여러 줄 모드: 원본의 62px 고정 높이·nowrap을 풀고 내용만큼 늘어난다 */
+.clean-search textarea.clean-search__field--multiline {
+  height: auto;
+  min-height: 62px;
+  max-height: none;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  field-sizing: content;
+}
 .sb-canvas-item__content .clean-tag-row,
 .sb-player__item .clean-tag-row { justify-content: flex-start; text-align: left; margin-top: 0; }
 
