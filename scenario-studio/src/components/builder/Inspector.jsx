@@ -2,8 +2,6 @@ import React from 'react'
 import { LIBRARY, FONT_OPTIONS, TEXT_COLORS } from '../../lib/registry.jsx'
 import { MIN_ITEM_W } from '../../lib/layout.js'
 
-const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-
 /* 오른쪽 패널: 선택 컴포넌트 속성 편집 / 다중 선택 도구 */
 export default function Inspector({
   stageKey,
@@ -20,8 +18,11 @@ export default function Inspector({
   duplicateItem,
   removeItem,
   alignSelected,
-  keywords = [],
+  ensureKeyword,
 }) {
+  /* 드래그 선택 → 플로팅 서식 툴바 상태 (훅은 조기 return보다 앞에) */
+  const [sel, setSel] = React.useState(null) // { key, start, end, list }
+
   /* 다중 선택: 정렬 도구 + 일괄 작업 */
   if (selectedIds.length > 1) {
     return (
@@ -69,30 +70,113 @@ export default function Inspector({
 
   /* 단일 선택: 필드 편집 */
   const def = LIBRARY[selected.type]
-  const st = selected.style || {}
-  const setStyle = (patch) => updateItem(selected.id, { style: { ...st, ...patch } })
-
-  /* 텍스트 필드(문구)들만 대상으로 키워드 [[..]] 래핑 토글 */
-  const textFieldKeys = (def?.fields || [])
-    .filter((f) => f.kind === 'text' || f.kind === 'textarea')
-    .map((f) => f.key)
-  const hasKeyword = (word) =>
-    textFieldKeys.some((k) => String(selected.props[k] || '').includes(`[[${word}]]`))
-  const wordExists = (word) =>
-    textFieldKeys.some((k) => String(selected.props[k] || '').includes(word))
-  const toggleKeyword = (word) => {
-    const wrapped = hasKeyword(word)
-    textFieldKeys.forEach((k) => {
-      const val = String(selected.props[k] || '')
-      if (!val.includes(word)) return
-      const next = wrapped
-        ? val.split(`[[${word}]]`).join(word)
-        : val.replace(new RegExp(`\\[\\[${escapeRegExp(word)}\\]\\]|${escapeRegExp(word)}`, 'g'), (m) =>
-            m.startsWith('[[') ? m : `[[${word}]]`
-          )
-      if (next !== val) updateProps(selected.id, k, next)
-    })
+  /* ── 드래그 선택 → 플로팅 서식 툴바 ──
+     선택 구간을 {{서식|텍스트}} 또는 [[키워드]] 마크업으로 감싼다 */
+  const onFieldSelect = (key, el, list) => {
+    if (el.selectionStart != null && el.selectionEnd > el.selectionStart) {
+      setSel({ key, start: el.selectionStart, end: el.selectionEnd, list: !!list })
+    } else {
+      setSel((s2) => (s2 && s2.key === key ? null : s2))
+    }
   }
+
+  const mergeOpts = (existing, opt) => {
+    const list = existing.split(',').map((x) => x.trim()).filter(Boolean)
+    const kind = opt === 'b' ? 'b' : opt === 'kw' ? 'kw' : opt[0]
+    const filtered = list.filter((o) =>
+      o === 'b' ? kind !== 'b' : o === 'kw' ? kind !== 'kw' : o[0] !== kind
+    )
+    if (opt === 'b' && list.includes('b')) return filtered.join(',') // 볼드는 토글
+    return [...filtered, opt].join(',')
+  }
+
+  const applyMark = (opt) => {
+    if (!sel) return
+    const val = String(selected.props[sel.key] ?? '')
+    const before = val.slice(0, sel.start)
+    const inner = val.slice(sel.start, sel.end)
+    const after = val.slice(sel.end)
+    if (!inner.trim()) return
+    let newVal
+    const enc = before.match(/\{\{([^|{}]*)\|$/)
+    if (enc && after.startsWith('}}')) {
+      // 이미 감싸진 구간을 통째로 선택 → 옵션 병합
+      const merged = mergeOpts(enc[1], opt)
+      newVal = merged
+        ? before.slice(0, before.length - enc[0].length) + '{{' + merged + '|' + inner + after
+        : before.slice(0, before.length - enc[0].length) + inner + after.slice(2)
+    } else if (opt === 'kw' && !/[,|{}\[\]]/.test(inner)) {
+      newVal = before + '[[' + inner + ']]' + after
+    } else {
+      newVal = before + '{{' + opt + '|' + inner + '}}' + after
+    }
+    if (opt === 'kw' && ensureKeyword) ensureKeyword(inner.trim())
+    updateProps(selected.id, sel.key, newVal)
+    setSel(null)
+  }
+
+  const clearMarks = () => {
+    if (!sel) return
+    const val = String(selected.props[sel.key] ?? '')
+    const before = val.slice(0, sel.start)
+    let inner = val.slice(sel.start, sel.end)
+    let head = before
+    let tail = val.slice(sel.end)
+    // 감싸고 있는 래퍼 제거
+    const enc = head.match(/\{\{([^|{}]*)\|$/)
+    if (enc && tail.startsWith('}}')) {
+      head = head.slice(0, head.length - enc[0].length)
+      tail = tail.slice(2)
+    }
+    // 선택 구간 내부 마크업 해제
+    inner = inner
+      .replace(/\{\{[^|{}]*\|([^{}]*?)\}\}/g, '$1')
+      .replace(/\[\[([^\]]+)\]\]/g, '$1')
+    updateProps(selected.id, sel.key, head + inner + tail)
+    setSel(null)
+  }
+
+  const selToolbar = (f) =>
+    sel && sel.key === f.key ? (
+      <div className="sb-seltb" onMouseDown={(e) => { if (e.target.tagName !== 'SELECT') e.preventDefault() }}>
+        {!sel.list && (
+          <>
+            <button type="button" title="볼드" onClick={() => applyMark('b')}><b>B</b></button>
+            {FONT_OPTIONS.filter((fo) => fo.key).map((fo) => (
+              <button key={fo.key} type="button" title={fo.label} style={{ fontFamily: fo.stack }} onClick={() => applyMark('f' + fo.key)}>
+                {fo.label}
+              </button>
+            ))}
+            <select
+              className="sb-seltb__size"
+              value=""
+              onChange={(e) => { if (e.target.value) applyMark('s' + e.target.value) }}
+            >
+              <option value="">크기</option>
+              {[12, 14, 16, 18, 20, 24, 28].map((n) => (
+                <option key={n} value={n}>{n}px</option>
+              ))}
+            </select>
+            <span className="sb-seltb__sep" />
+            {TEXT_COLORS.filter((c) => c.color).map((c) => (
+              <button
+                key={c.key}
+                type="button"
+                title={c.label}
+                className="sb-seltb__color"
+                style={{ background: c.color }}
+                onClick={() => applyMark('c' + c.color)}
+              />
+            ))}
+            <span className="sb-seltb__sep" />
+          </>
+        )}
+        <button type="button" className="sb-seltb__kw" title="점선 밑줄 + 설명 모달 연결" onClick={() => applyMark('kw')}>
+          <span className="keyword-detail-text">밑줄</span>
+        </button>
+        <button type="button" title="선택 구간 서식 지우기" onClick={clearMarks}>지우기</button>
+      </div>
+    ) : null
 
   return (
     <aside className="sb-inspector">
@@ -102,13 +186,16 @@ export default function Inspector({
         {selected.hidden ? ' · 🚫 실행 시 숨김' : ''}
       </p>
       {def?.fields.map((f) => (
-        <div key={f.key} className="sb-field">
+        <div key={f.key} className="sb-field sb-field--rel">
           <label>{f.label}</label>
+          {selToolbar(f)}
           {f.kind === 'textarea' ? (
             <textarea
               rows={3}
               value={selected.props[f.key] ?? ''}
               onChange={(e) => updateProps(selected.id, f.key, e.target.value)}
+              onSelect={(e) => onFieldSelect(f.key, e.target, f.list)}
+              onBlur={() => {}}
             />
           ) : f.kind === 'toggle' ? (
             <button
@@ -124,107 +211,14 @@ export default function Inspector({
               type="text"
               value={selected.props[f.key] ?? ''}
               onChange={(e) => updateProps(selected.id, f.key, e.target.value)}
+              onSelect={(e) => onFieldSelect(f.key, e.target, f.list)}
             />
           )}
         </div>
       ))}
-
-      {/* 텍스트 스타일 */}
-      <p className="sb-panel-label" style={{ marginTop: 18 }}>텍스트 스타일</p>
-      <div className="sb-field">
-        <label>폰트</label>
-        <div className="sb-font-tabs">
-          {FONT_OPTIONS.map((f) => (
-            <button
-              key={String(f.key)}
-              type="button"
-              className={(st.font || null) === f.key ? 'sb-font-tab--active' : ''}
-              style={f.stack ? { fontFamily: f.stack } : undefined}
-              onClick={() => setStyle({ font: f.key })}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="sb-field">
-        <label>글자 크기 — {st.size ? `${st.size}px` : '기본'}</label>
-        <input
-          type="range"
-          min={11}
-          max={34}
-          step={1}
-          value={st.size || 15}
-          onChange={(e) => setStyle({ size: Number(e.target.value) })}
-        />
-        {st.size ? (
-          <button type="button" className="sb-btn sb-btn--ghost sb-btn--small" onClick={() => setStyle({ size: null })}>
-            기본 크기로
-          </button>
-        ) : null}
-      </div>
-      <div className="sb-field">
-        <label>글자 색</label>
-        <div className="sb-text-colors">
-          {TEXT_COLORS.map((c) => (
-            <button
-              key={String(c.key)}
-              type="button"
-              title={c.label}
-              className={
-                'sb-text-color' +
-                ((st.color || null) === c.color ? ' sb-text-color--active' : '') +
-                (c.color ? '' : ' sb-text-color--none')
-              }
-              style={c.color ? { background: c.color } : undefined}
-              onClick={() => setStyle({ color: c.color })}
-            />
-          ))}
-        </div>
-      </div>
-      <div className="sb-field">
-        <label>굵기</label>
-        <button
-          type="button"
-          className={'sb-toggle' + (st.bold ? ' sb-toggle--on' : '')}
-          onClick={() => setStyle({ bold: !st.bold })}
-        >
-          <span className="sb-toggle__knob" />
-          {st.bold ? '볼드 전체 적용' : '기본 굵기'}
-        </button>
-      </div>
-
-      {/* 키워드 밑줄 연결 */}
-      {keywords.length > 0 && (
-        <>
-          <p className="sb-panel-label" style={{ marginTop: 18 }}>키워드 밑줄 연결</p>
-          <p className="sb-profile-config__hint">
-            문구에 포함된 단어를 켜면 점선 밑줄 + 설명 모달이 연결돼요.
-            (직접 <code>[[단어]]</code>로 써도 동일) 사전은 탐색 편집기에서 관리.
-          </p>
-          <div className="sb-kw-toggles">
-            {keywords
-              .filter((k) => k.word && k.word.trim())
-              .map((k) => {
-                const present = wordExists(k.word)
-                const on = hasKeyword(k.word)
-                return (
-                  <button
-                    key={k.word}
-                    type="button"
-                    disabled={!present}
-                    title={present ? (on ? '밑줄 해제' : '점선 밑줄 + 모달 연결') : '이 컴포넌트 문구에 없는 단어예요'}
-                    className={'sb-kw-toggle' + (on ? ' sb-kw-toggle--on' : '')}
-                    onClick={() => toggleKeyword(k.word)}
-                  >
-                    <span className="keyword-detail-text">{k.word}</span>
-                    {on ? ' ✓' : ''}
-                  </button>
-                )
-              })}
-          </div>
-        </>
-      )}
+      <p className="sb-profile-config__hint">
+        ✍️ 문구를 드래그로 선택하면 서식 툴바가 떠요 — 볼드/폰트/크기/색, 그리고 점선 밑줄(설명 모달 연결).
+      </p>
 
       <div className="sb-field">
         <label>너비 — {selected.w}px</label>

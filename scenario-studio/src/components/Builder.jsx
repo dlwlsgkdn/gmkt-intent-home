@@ -793,7 +793,12 @@ export default function Builder({ api, scenario }) {
           duplicateItem={duplicateItem}
           removeItem={removeItem}
           alignSelected={alignSelected}
-          keywords={api.keywords || []}
+          ensureKeyword={(word) => {
+            if (!word) return
+            if ((api.keywords || []).some((k) => k.word === word)) return
+            api.updateKeywords([...(api.keywords || []), { word, desc: '', points: '' }])
+            api.showToast(`"${word}" 키워드를 사전에 추가했어요. 탐색 편집기에서 설명을 채워주세요.`)
+          }}
         />
       </div>
     </div>

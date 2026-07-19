@@ -977,6 +977,60 @@
 .clean-home-page .sb-style-bold,
 .clean-home-page .sb-style-bold :where(*) { font-weight: 700 !important; }
 
+/* 부분 서식 스팬: 원본 !important 규칙들을 특이도(클래스 2개)로 극복 */
+.clean-home-page .sb-rich-font { font-family: var(--sb-font) !important; }
+.clean-home-page .sb-rich-b { font-weight: 700 !important; }
+.clean-home-page .sb-rich-size { font-size: var(--sb-size) !important; }
+.clean-home-page .sb-rich-color { color: var(--sb-color) !important; }
+
+/* ── 선택 서식 툴바 (필드 위 플로팅) ── */
+.sb-field--rel { position: relative; }
+.sb-seltb {
+  position: absolute;
+  top: -14px;
+  right: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 5px 7px;
+  border-radius: 12px;
+  border: 1px solid var(--sb-line);
+  background: #fff;
+  box-shadow: 0 14px 30px -14px rgba(15, 23, 42, 0.4);
+  animation: sb-menu-in 0.12s ease;
+}
+.sb-seltb > button {
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #334155;
+  transition: background 0.12s ease;
+  white-space: nowrap;
+}
+.sb-seltb > button:hover { background: #f1f5f9; }
+.sb-seltb__size {
+  height: 26px;
+  border: 1px solid var(--sb-line);
+  border-radius: 8px;
+  font-size: 11px;
+  color: #334155;
+  background: #fff;
+}
+.sb-seltb__sep { width: 1px; height: 16px; background: var(--sb-line); margin: 0 2px; }
+.sb-seltb__color {
+  width: 16px !important;
+  min-width: 16px !important;
+  height: 16px !important;
+  border-radius: 50% !important;
+  padding: 0 !important;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+.sb-seltb__color:hover { transform: scale(1.2); }
+.sb-seltb__kw .keyword-detail-text { font-size: 12px; }
+
 /* 인스펙터: 폰트 탭 */
 .sb-font-tabs {
   display: grid;

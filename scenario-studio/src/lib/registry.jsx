@@ -17,30 +17,61 @@ function Img({ src, alt }) {
 
 /* 텍스트 안의 [[키워드]]를 점선 밑줄로 렌더 — 플레이어에서 클릭하면 설명 모달.
    사전은 탐색 페이지 편집기의 '키워드 사전'에서 관리한다. */
+/* 인라인 서식 옵션 파서: "b,s18,c#b45a6b,fserif,kw" */
+function parseRichOpts(optsStr) {
+  const spec = {}
+  String(optsStr || '').split(',').map((s) => s.trim()).filter(Boolean).forEach((o) => {
+    if (o === 'b') spec.bold = true
+    else if (o === 'kw') spec.kw = true
+    else if (/^s\d+$/.test(o)) spec.size = Number(o.slice(1))
+    else if (/^c#[0-9a-fA-F]{3,8}$/.test(o)) spec.color = o.slice(1)
+    else if (/^f(serif|mono)$/.test(o)) spec.font = o.slice(1)
+  })
+  return spec
+}
+
+function RichSpan({ optsStr, content, ctx, i }) {
+  const spec = parseRichOpts(optsStr)
+  // 원본 CSS의 !important 규칙들을 이기기 위해 클래스+CSS변수 조합 사용
+  const cls = ['sb-rich']
+  const style = {}
+  if (spec.bold) cls.push('sb-rich-b')
+  if (spec.size) { cls.push('sb-rich-size'); style['--sb-size'] = `${spec.size}px` }
+  if (spec.color) { cls.push('sb-rich-color'); style['--sb-color'] = spec.color }
+  if (spec.font) {
+    const stack = FONT_OPTIONS.find((f) => f.key === spec.font)?.stack
+    if (stack) { cls.push('sb-rich-font'); style['--sb-font'] = stack }
+  }
+  if (spec.kw) cls.push('keyword-detail-text')
+  return (
+    <span
+      key={i}
+      className={cls.join(' ')}
+      style={style}
+      role={spec.kw ? 'button' : undefined}
+      onClick={spec.kw ? (e) => {
+        if (ctx && ctx.mode === 'player' && ctx.player.showKeyword) {
+          e.stopPropagation()
+          ctx.player.showKeyword(content)
+        }
+      } : undefined}
+    >
+      {content}
+    </span>
+  )
+}
+
+/* 텍스트 렌더러: [[키워드]] 점선 밑줄 + {{서식|텍스트}} 부분 서식 */
 export function kText(text, ctx) {
   const str = String(text ?? '')
-  if (!str.includes('[[')) return str
-  const parts = str.split(/(\[\[[^\]]+\]\])/g)
+  if (!str.includes('[[') && !str.includes('{{')) return str
+  const parts = str.split(/(\{\{[^|{}]*\|[^{}]*?\}\}|\[\[[^\]]+\]\])/g)
   return parts.map((part, i) => {
-    const m = part.match(/^\[\[([^\]]+)\]\]$/)
-    if (!m) return part
-    const word = m[1]
-    return (
-      <span
-        key={i}
-        role="button"
-        tabIndex={0}
-        className="keyword-detail-text"
-        onClick={(e) => {
-          if (ctx && ctx.mode === 'player' && ctx.player.showKeyword) {
-            e.stopPropagation()
-            ctx.player.showKeyword(word)
-          }
-        }}
-      >
-        {word}
-      </span>
-    )
+    const kw = part.match(/^\[\[([^\]]+)\]\]$/)
+    if (kw) return <RichSpan key={i} optsStr="kw" content={kw[1]} ctx={ctx} i={i} />
+    const rich = part.match(/^\{\{([^|{}]*)\|([^{}]*?)\}\}$/)
+    if (rich) return <RichSpan key={i} optsStr={rich[1]} content={rich[2]} ctx={ctx} i={i} />
+    return part
   })
 }
 
@@ -108,7 +139,7 @@ export const LIBRARY = {
     icon: '🏷️',
     hint: '검색창 아래 해시태그 칩. 쉼표로 구분',
     defaults: { tags: '출근_10분룩, AI_페이스룩, 립스틱_전색발색, 성분_궁합체크' },
-    fields: [{ key: 'tags', label: '칩 목록 (쉼표로 구분)', kind: 'textarea' }],
+    fields: [{ key: 'tags', label: '칩 목록 (쉼표로 구분)', kind: 'textarea', list: true }],
     render: (p, ctx) => (
       <div className="clean-tag-row sb-static">
         {splitList(p.tags).map((tag, i) => (
@@ -231,7 +262,7 @@ export const LIBRARY = {
     },
     fields: [
       { key: 'question', label: '질문 문구', kind: 'textarea' },
-      { key: 'options', label: '선택지 (메인|서브, 쉼표 구분)', kind: 'textarea' },
+      { key: 'options', label: '선택지 (메인|서브, 쉼표 구분)', kind: 'textarea', list: true },
       { key: 'multi', label: '복수 선택 허용', kind: 'toggle' },
     ],
     render: (p, ctx) => {
@@ -292,7 +323,7 @@ export const LIBRARY = {
     },
     fields: [
       { key: 'hint', label: '우측 안내 문구', kind: 'text' },
-      { key: 'hidden', label: '숨길 항목 라벨 (쉼표 구분 · 캔버스 배지 클릭과 동기화)', kind: 'text' },
+      { key: 'hidden', label: '숨길 항목 라벨 (쉼표 구분 · 캔버스 배지 클릭과 동기화)', kind: 'text', list: true },
     ],
     render: (p, ctx) => {
       const profile = ctx.profile || { name: '사용자', items: [] }
@@ -424,7 +455,7 @@ export const LIBRARY = {
       { key: 'no', label: '단계 번호', kind: 'text' },
       { key: 'title', label: '단계 제목', kind: 'text' },
       { key: 'desc', label: '설명', kind: 'textarea' },
-      { key: 'points', label: '체크포인트 (쉼표 구분)', kind: 'textarea' },
+      { key: 'points', label: '체크포인트 (쉼표 구분)', kind: 'textarea', list: true },
     ],
     render: (p, ctx) => {
       // 구버전 데이터 호환: badge('STEP 2')만 있으면 숫자를 추출
@@ -630,7 +661,7 @@ export const LIBRARY = {
     },
     fields: [
       { key: 'title', label: '제목', kind: 'text' },
-      { key: 'items', label: '항목 (쉼표 구분)', kind: 'textarea' },
+      { key: 'items', label: '항목 (쉼표 구분)', kind: 'textarea', list: true },
     ],
     render: (p, ctx) => (
       <div className="rounded-[28px] border border-slate-100 bg-slate-50/80 p-6">
