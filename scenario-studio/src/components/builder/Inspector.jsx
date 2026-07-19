@@ -52,7 +52,7 @@ export default function Inspector({
   /* 선택 없음 */
   if (!selected) {
     return (
-      <aside className="sb-inspector">
+      <aside className="sb-inspector sb-inspector--idle">
         <div className="sb-inspector__empty">
           <p className="sb-panel-label">편집</p>
           캔버스에서 컴포넌트를 선택하면<br />플레이스홀더를 편집할 수 있어요.<br />
