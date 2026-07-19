@@ -10,6 +10,7 @@ import Dropdown from './ui/Dropdown.jsx'
 import CanvasItem from './builder/CanvasItem.jsx'
 import Palette from './builder/Palette.jsx'
 import Inspector from './builder/Inspector.jsx'
+import CanvasTextToolbar from './builder/CanvasTextToolbar.jsx'
 
 const SNAP = 6
 
@@ -21,6 +22,7 @@ export default function Builder({ api, scenario }) {
   const [openMenu, setOpenMenu] = useState(null) // 'device' | 'layout' | 'color' | 'version'
   const [guides, setGuides] = useState([]) // 드래그 중 스냅 가이드라인
   const [focusTick, setFocusTick] = useState(0) // 더블클릭 → 인스펙터 포커스 신호
+  const [inlineEdit, setInlineEdit] = useState(null) // 캔버스 인라인 텍스트 편집 {itemId, key}
   const [, setHistVer] = useState(0) // undo/redo 버튼 활성화 갱신용
   const dragPosRef = useRef(null)
   const dragStartRef = useRef(null) // 그룹 드래그 시작 시점의 위치들
@@ -105,6 +107,7 @@ export default function Builder({ api, scenario }) {
     setSelectedIds([])
     setDragPos(null)
     setSizeDraft(null)
+    setInlineEdit(null)
   }, [stageKey])
 
   const addItem = (type) => {
@@ -528,6 +531,13 @@ export default function Builder({ api, scenario }) {
     })
   )
 
+  const ensureKeyword = (word) => {
+    if (!word) return
+    if ((api.keywords || []).some((k) => k.word === word)) return
+    api.updateKeywords([...(api.keywords || []), { word, desc: '', points: '' }])
+    api.showToast(`"${word}" 키워드를 사전에 추가했어요. 탐색 편집기에서 설명을 채워주세요.`)
+  }
+
   /* 캔버스 렌더 컨텍스트: 프로필 데이터, 배지 클릭 토글, 계획 요약 미리보기 */
   const profileItems = (api.profile?.items || []).filter((it) => it.label && it.label.trim())
   const hiddenProfileLabels = (scenario.stages.survey || [])
@@ -537,6 +547,16 @@ export default function Builder({ api, scenario }) {
     mode: 'canvas',
     profile: api.profile,
     updateProps: (id, key, value) => updateProps(id, key, value),
+    /* 컴포넌트 안 더블클릭 인라인 편집 */
+    editing: inlineEdit,
+    beginEdit: (id, key) => {
+      setSelectedIds([id])
+      setInlineEdit({ itemId: id, key })
+    },
+    commitEdit: (id, key, raw) => {
+      updateProps(id, key, raw)
+      setInlineEdit(null)
+    },
     summaryPreview: {
       profile: profileItems.filter((it) => !hiddenProfileLabels.includes(it.label)),
       questions: (scenario.stages.survey || [])
@@ -793,13 +813,10 @@ export default function Builder({ api, scenario }) {
           duplicateItem={duplicateItem}
           removeItem={removeItem}
           alignSelected={alignSelected}
-          ensureKeyword={(word) => {
-            if (!word) return
-            if ((api.keywords || []).some((k) => k.word === word)) return
-            api.updateKeywords([...(api.keywords || []), { word, desc: '', points: '' }])
-            api.showToast(`"${word}" 키워드를 사전에 추가했어요. 탐색 편집기에서 설명을 채워주세요.`)
-          }}
+          ensureKeyword={ensureKeyword}
         />
+
+        <CanvasTextToolbar active={!!inlineEdit} ensureKeyword={ensureKeyword} />
       </div>
     </div>
   )

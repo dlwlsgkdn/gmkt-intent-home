@@ -1,5 +1,8 @@
 import React from 'react'
 import { splitList, splitOptions } from './store.js'
+import { FONT_OPTIONS, TEXT_COLORS, TOKEN_RE, parseRichOpts, richSpanPresentation, InlineEditor } from './richtext.jsx'
+
+export { FONT_OPTIONS, TEXT_COLORS }
 
 /*
  * 컴포넌트 레지스트리
@@ -17,32 +20,8 @@ function Img({ src, alt }) {
 
 /* 텍스트 안의 [[키워드]]를 점선 밑줄로 렌더 — 플레이어에서 클릭하면 설명 모달.
    사전은 탐색 페이지 편집기의 '키워드 사전'에서 관리한다. */
-/* 인라인 서식 옵션 파서: "b,s18,c#b45a6b,fserif,kw" */
-function parseRichOpts(optsStr) {
-  const spec = {}
-  String(optsStr || '').split(',').map((s) => s.trim()).filter(Boolean).forEach((o) => {
-    if (o === 'b') spec.bold = true
-    else if (o === 'kw') spec.kw = true
-    else if (/^s\d+$/.test(o)) spec.size = Number(o.slice(1))
-    else if (/^c#[0-9a-fA-F]{3,8}$/.test(o)) spec.color = o.slice(1)
-    else if (/^f(serif|mono)$/.test(o)) spec.font = o.slice(1)
-  })
-  return spec
-}
-
 function RichSpan({ optsStr, content, ctx, i }) {
-  const spec = parseRichOpts(optsStr)
-  // 원본 CSS의 !important 규칙들을 이기기 위해 클래스+CSS변수 조합 사용
-  const cls = ['sb-rich']
-  const style = {}
-  if (spec.bold) cls.push('sb-rich-b')
-  if (spec.size) { cls.push('sb-rich-size'); style['--sb-size'] = `${spec.size}px` }
-  if (spec.color) { cls.push('sb-rich-color'); style['--sb-color'] = spec.color }
-  if (spec.font) {
-    const stack = FONT_OPTIONS.find((f) => f.key === spec.font)?.stack
-    if (stack) { cls.push('sb-rich-font'); style['--sb-font'] = stack }
-  }
-  if (spec.kw) cls.push('keyword-detail-text')
+  const { spec, cls, style } = richSpanPresentation(optsStr)
   return (
     <span
       key={i}
@@ -61,18 +40,39 @@ function RichSpan({ optsStr, content, ctx, i }) {
   )
 }
 
-/* 텍스트 렌더러: [[키워드]] 점선 밑줄 + {{서식|텍스트}} 부분 서식 */
-export function kText(text, ctx) {
+/* 텍스트 렌더러: [[키워드]] 점선 밑줄 + {{서식|텍스트}} 부분 서식.
+   fieldKey를 넘기면 캔버스에서 더블클릭 → 컴포넌트 안에서 바로 편집(WYSIWYG) */
+export function kText(text, ctx, fieldKey) {
   const str = String(text ?? '')
-  if (!str.includes('[[') && !str.includes('{{')) return str
-  const parts = str.split(/(\{\{[^|{}]*\|[^{}]*?\}\}|\[\[[^\]]+\]\])/g)
-  return parts.map((part, i) => {
+  const parts = str.split(TOKEN_RE).map((part, i) => {
     const kw = part.match(/^\[\[([^\]]+)\]\]$/)
     if (kw) return <RichSpan key={i} optsStr="kw" content={kw[1]} ctx={ctx} i={i} />
     const rich = part.match(/^\{\{([^|{}]*)\|([^{}]*?)\}\}$/)
     if (rich) return <RichSpan key={i} optsStr={rich[1]} content={rich[2]} ctx={ctx} i={i} />
     return part
   })
+
+  // 캔버스 인라인 편집
+  if (fieldKey && ctx && ctx.mode === 'canvas' && ctx.beginEdit) {
+    const editingThis = ctx.editing && ctx.editing.itemId === ctx.itemId && ctx.editing.key === fieldKey
+    if (editingThis) {
+      return <InlineEditor raw={str} onCommit={(v) => ctx.commitEdit(ctx.itemId, fieldKey, v)} />
+    }
+    return (
+      <span
+        className="sb-editable"
+        title="더블클릭해서 바로 편집"
+        onDoubleClick={(e) => {
+          e.stopPropagation()
+          e.preventDefault()
+          ctx.beginEdit(ctx.itemId, fieldKey)
+        }}
+      >
+        {parts}
+      </span>
+    )
+  }
+  return parts
 }
 
 export const LIBRARY = {
@@ -244,8 +244,8 @@ export const LIBRARY = {
     render: (p, ctx) => (
       <div className="clean-info-header sb-static">
         <span className="clean-info-kicker">{p.kicker}</span>
-        <h2>{kText(p.title, ctx)}</h2>
-        <p>{kText(p.desc, ctx)}</p>
+        <h2>{kText(p.title, ctx, 'title')}</h2>
+        <p>{kText(p.desc, ctx, 'desc')}</p>
       </div>
     ),
   },
@@ -276,7 +276,7 @@ export const LIBRARY = {
       return (
         <div className="clean-question-list">
           <div>
-            <label className="text-sm font-medium text-slate-400 mb-3 block">{kText(p.question, ctx)}</label>
+            <label className="text-sm font-medium text-slate-400 mb-3 block">{kText(p.question, ctx, 'question')}</label>
             <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 pt-2 -mt-2">
               {opts.map((opt, i) => {
                 const selected = selectedSet.has(opt.main)
@@ -435,7 +435,7 @@ export const LIBRARY = {
     render: (p, ctx) => (
       <div className="sb-static">
         <span className="text-xs font-medium text-gmarket-blue uppercase tracking-widest mb-2 block">{p.kicker}</span>
-        <h2 className="sb-plan-title text-2xl md:text-4xl font-bold text-slate-800 leading-snug">{kText(p.title, ctx)}</h2>
+        <h2 className="sb-plan-title text-2xl md:text-4xl font-bold text-slate-800 leading-snug">{kText(p.title, ctx, 'title')}</h2>
       </div>
     ),
   },
@@ -466,9 +466,9 @@ export const LIBRARY = {
             <span className="w-10 h-10 rounded-full bg-slate-900 shadow-xl flex items-center justify-center font-bold text-white border-4 border-slate-50 flex-shrink-0">
               {no}
             </span>
-            <h3 className="text-2xl font-bold text-slate-800 leading-snug">{kText(p.title, ctx)}</h3>
+            <h3 className="text-2xl font-bold text-slate-800 leading-snug">{kText(p.title, ctx, 'title')}</h3>
           </div>
-          <p className="text-slate-500 text-sm leading-relaxed mt-3">{kText(p.desc, ctx)}</p>
+          <p className="text-slate-500 text-sm leading-relaxed mt-3">{kText(p.desc, ctx, 'desc')}</p>
           {splitList(p.points).length ? (
             <ul className="mt-4 space-y-2">
               {splitList(p.points).map((pt, i) => (
@@ -533,7 +533,7 @@ export const LIBRARY = {
                 </span>
               )}
             </div>
-            <h4 className="text-sm font-bold text-slate-800 mb-1.5 leading-tight sb-media-card__title">{kText(p.name, ctx)}</h4>
+            <h4 className="text-sm font-bold text-slate-800 mb-1.5 leading-tight sb-media-card__title">{kText(p.name, ctx, 'name')}</h4>
             <div className="flex items-baseline mb-3 text-left">
               <span className="text-lg font-bold text-gmarket-blue">{p.price}</span>
               <span className="text-xs font-medium text-slate-400 ml-0.5">원</span>
@@ -602,7 +602,7 @@ export const LIBRARY = {
           <div className="sb-media-card__tags">
             <span className="sb-market-tag sb-market-tag--external">{p.source}</span>
           </div>
-          <p className="sb-media-card__title">{kText(p.title, ctx)}</p>
+          <p className="sb-media-card__title">{kText(p.title, ctx, 'title')}</p>
           {p.channel ? <p className="sb-media-card__sub">{p.channel}</p> : null}
         </div>
       </div>
@@ -642,8 +642,8 @@ export const LIBRARY = {
           <div className="sb-media-card__tags">
             <span className="sb-market-tag sb-market-tag--external">{p.source}</span>
           </div>
-          <p className="sb-media-card__title">{kText(p.title, ctx)}</p>
-          {p.snippet ? <p className="sb-media-card__sub sb-article-card__snippet">{kText(p.snippet, ctx)}</p> : null}
+          <p className="sb-media-card__title">{kText(p.title, ctx, 'title')}</p>
+          {p.snippet ? <p className="sb-media-card__sub sb-article-card__snippet">{kText(p.snippet, ctx, 'snippet')}</p> : null}
           {p.author ? <p className="sb-media-card__meta">{p.author}</p> : null}
         </div>
       </div>
@@ -723,8 +723,8 @@ export const LIBRARY = {
     render: (p, ctx) => (
       <div className="sb-static">
         {p.kicker ? <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400 block mb-2">{p.kicker}</span> : null}
-        {p.title ? <h3 className="text-xl font-semibold text-slate-900 mb-2">{kText(p.title, ctx)}</h3> : null}
-        {p.body ? <p className="text-sm leading-relaxed text-slate-600 whitespace-pre-wrap">{kText(p.body, ctx)}</p> : null}
+        {p.title ? <h3 className="text-xl font-semibold text-slate-900 mb-2">{kText(p.title, ctx, 'title')}</h3> : null}
+        {p.body ? <p className="text-sm leading-relaxed text-slate-600 whitespace-pre-wrap">{kText(p.body, ctx, 'body')}</p> : null}
       </div>
     ),
   },
@@ -742,7 +742,7 @@ export const LIBRARY = {
     render: (p, ctx) => (
       <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-5 py-5 text-sm leading-relaxed text-slate-500">
         <p className="font-semibold text-slate-700 mb-1">{p.title}</p>
-        <p className="whitespace-pre-wrap">{kText(p.body, ctx)}</p>
+        <p className="whitespace-pre-wrap">{kText(p.body, ctx, 'body')}</p>
       </div>
     ),
   },
@@ -773,23 +773,6 @@ export function libraryForStage(stageKey) {
     .filter(([, def]) => def.stage === stageKey || def.stage === 'common')
     .map(([type, def]) => ({ type, ...def }))
 }
-
-/* 컴포넌트 인스턴스별 텍스트 스타일 (item.style = { font, size, color, bold }) */
-export const FONT_OPTIONS = [
-  { key: null, label: '기본', stack: null },
-  { key: 'serif', label: '명조', stack: "'Nanum Myeongjo', 'Noto Serif KR', 'AppleMyungjo', serif" },
-  { key: 'mono', label: '모노', stack: 'ui-monospace, SFMono-Regular, Menlo, monospace' },
-]
-
-export const TEXT_COLORS = [
-  { key: null, label: '기본', color: null },
-  { key: 'ink', label: '잉크', color: '#1f2933' },
-  { key: 'muted', label: '뮤트', color: '#64748b' },
-  { key: 'rose', label: '로즈', color: '#b45a6b' },
-  { key: 'blue', label: '블루', color: '#3b5bdb' },
-  { key: 'green', label: '그린', color: '#00996b' },
-  { key: 'amber', label: '앰버', color: '#a9762c' },
-]
 
 export function renderItem(item, ctx) {
   const def = LIBRARY[item.type]
