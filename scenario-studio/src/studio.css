@@ -387,43 +387,42 @@
 }
 .sb-drawer__empty span { font-size: 12px; }
 
-/* ── 쇼핑 쓰레드 히스토리 패널 — 여는 버튼 위치에 따라 좌/우/중앙에서 등장 ── */
+/* ── 쇼핑 쓰레드 히스토리 패널 — 여는 버튼 위치에 따라 좌/우/중앙에서 등장.
+   내부 룩은 원본 clean-home의 history-sidebar(#history-panel) CSS를 그대로 재사용하고,
+   이 래퍼는 위치·등장 애니메이션·그림자만 담당한다 ── */
 .sb-thread-panel {
   position: fixed;
   z-index: 250;
-  display: flex;
-  flex-direction: column;
-  background: #fff;
-  padding: 22px 20px;
+  overflow: hidden;
 }
 .sb-thread-panel--right {
   top: 0;
   right: 0;
   height: 100vh;
-  width: min(400px, 92vw);
-  border-left: 1px solid var(--sb-line);
-  box-shadow: -24px 0 60px -30px rgba(15, 23, 42, 0.25);
+  width: min(320px, 86vw);
+  border-left: 1px solid rgba(31, 41, 51, 0.1);
+  box-shadow: -24px 0 60px -30px rgba(15, 23, 42, 0.18);
   animation: sb-thread-in-right 0.24s ease;
 }
 .sb-thread-panel--left {
   top: 0;
   left: 0;
   height: 100vh;
-  width: min(400px, 92vw);
-  border-right: 1px solid var(--sb-line);
-  box-shadow: 24px 0 60px -30px rgba(15, 23, 42, 0.25);
+  width: min(320px, 86vw);
+  border-right: 1px solid rgba(31, 41, 51, 0.1);
+  box-shadow: 24px 0 60px -30px rgba(15, 23, 42, 0.18);
   animation: sb-thread-in-left 0.24s ease;
 }
 .sb-thread-panel--center {
   left: 50%;
   bottom: 0;
   transform: translateX(-50%);
-  width: min(440px, 94vw);
-  max-height: 72vh;
-  border: 1px solid var(--sb-line);
+  width: min(360px, 94vw);
+  height: 72vh;
+  border: 1px solid rgba(31, 41, 51, 0.1);
   border-bottom: none;
   border-radius: 24px 24px 0 0;
-  box-shadow: 0 -24px 60px -30px rgba(15, 23, 42, 0.3);
+  box-shadow: 0 -24px 60px -30px rgba(15, 23, 42, 0.22);
   animation: sb-thread-in-center 0.26s ease;
 }
 @keyframes sb-thread-in-right {
@@ -438,81 +437,6 @@
   from { transform: translate(-50%, 48px); opacity: 0; }
   to { transform: translate(-50%, 0); opacity: 1; }
 }
-.sb-thread-panel__head-actions { display: flex; align-items: center; gap: 8px; }
-.sb-thread-panel__clear {
-  font-size: 11px;
-  color: #94a3b8;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--sb-line);
-  background: #fff;
-  transition: all 0.15s ease;
-}
-.sb-thread-panel__clear:hover { color: #b45a6b; border-color: #e5b8c1; background: #fdf5f7; }
-.sb-thread-panel__list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
-.sb-thread-card {
-  position: relative;
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 12px 14px;
-  border: 1px solid var(--sb-line);
-  border-radius: 16px;
-  background: #fff;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-.sb-thread-card:hover { border-color: var(--sb-accent); box-shadow: 0 8px 24px -18px rgba(15, 23, 42, 0.4); }
-.sb-thread-card__top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; padding-right: 22px; }
-.sb-thread-card__chip {
-  font-size: 11px;
-  font-weight: 700;
-  padding: 3px 9px;
-  border-radius: 999px;
-  border: 1px solid;
-  max-width: 60%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.sb-thread-card__status { font-size: 10.5px; color: #94a3b8; white-space: nowrap; }
-.sb-thread-card__status--done { color: var(--sb-accent); font-weight: 600; }
-.sb-thread-card__title {
-  margin: 0;
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--sb-ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.sb-thread-card__meta { margin: 3px 0 0; font-size: 11px; color: #94a3b8; }
-.sb-thread-card__cart {
-  margin: 6px 0 0;
-  font-size: 11px;
-  color: #64748b;
-  background: #f8fafc;
-  border-radius: 10px;
-  padding: 6px 9px;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.sb-thread-card__remove {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  color: #cbd5e1;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-.sb-thread-card__remove:hover { color: #b45a6b; background: #fdf5f7; }
 .sb-scenario-row {
   padding: 14px 16px;
   border-radius: 18px;
@@ -1941,8 +1865,6 @@ button.sb-info-chip:hover { border-color: #94a3b8; background: #f8fafc; }
   .sb-player { padding: 116px 12px 60px; }
   .sb-phone { border-inline: 0; padding: 0 12px 32px; }
   .sb-drawer { width: 100vw; max-width: 100vw; }
-  .sb-thread-panel--left,
-  .sb-thread-panel--right { width: 100vw; }
   .sb-template-grid { grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); }
 }
 
