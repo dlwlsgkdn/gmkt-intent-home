@@ -1058,6 +1058,43 @@
 /* 캔버스 툴바: 인라인 left/transform 사용 — 공용 클래스의 right:0이 폭을 늘리지 않도록 해제 */
 .sb-seltb--canvas { right: auto; }
 
+/* 크기 서브메뉴 */
+.sb-seltb__sizemenu { position: relative; display: inline-flex; }
+.sb-seltb__sizemenu > button {
+  min-width: 21px;
+  height: 21px;
+  padding: 0 4px;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1;
+  color: #334155;
+  display: inline-flex;
+  align-items: center;
+}
+.sb-seltb__sizemenu > button:hover { background: #f1f5f9; }
+.sb-seltb__sizes {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 1px;
+  padding: 3px 4px;
+  border-radius: 9px;
+  border: 1px solid var(--sb-line);
+  background: #fff;
+  box-shadow: 0 12px 26px -12px rgba(15, 23, 42, 0.4);
+  animation: sb-menu-in 0.1s ease;
+}
+.sb-seltb__sizes button {
+  min-width: 22px;
+  height: 20px;
+  border-radius: 5px;
+  font-size: 10.5px;
+  color: #334155;
+}
+.sb-seltb__sizes button:hover { background: #f1f5f9; }
+
 /* 인스펙터: 폰트 탭 */
 .sb-font-tabs {
   display: grid;

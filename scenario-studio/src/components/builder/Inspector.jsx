@@ -1,5 +1,6 @@
 import React from 'react'
-import { LIBRARY, FONT_OPTIONS, TEXT_COLORS } from '../../lib/registry.jsx'
+import { LIBRARY } from '../../lib/registry.jsx'
+import { FONT_OPTIONS, TEXT_COLORS, SizeMenu, applyOptToRaw } from '../../lib/richtext.jsx'
 import { MIN_ITEM_W } from '../../lib/layout.js'
 
 /* 오른쪽 패널: 선택 컴포넌트 속성 편집 / 다중 선택 도구 */
@@ -80,65 +81,28 @@ export default function Inspector({
     }
   }
 
-  const mergeOpts = (existing, opt) => {
-    const list = existing.split(',').map((x) => x.trim()).filter(Boolean)
-    const kind = opt === 'b' ? 'b' : opt === 'kw' ? 'kw' : opt[0]
-    const filtered = list.filter((o) =>
-      o === 'b' ? kind !== 'b' : o === 'kw' ? kind !== 'kw' : o[0] !== kind
-    )
-    if (opt === 'b' && list.includes('b')) return filtered.join(',') // 볼드는 토글
-    return [...filtered, opt].join(',')
-  }
-
   const applyMark = (opt) => {
     if (!sel) return
     const val = String(selected.props[sel.key] ?? '')
-    const before = val.slice(0, sel.start)
     const inner = val.slice(sel.start, sel.end)
-    const after = val.slice(sel.end)
     if (!inner.trim()) return
-    let newVal
-    const enc = before.match(/\{\{([^|{}]*)\|$/)
-    if (enc && after.startsWith('}}')) {
-      // 이미 감싸진 구간을 통째로 선택 → 옵션 병합
-      const merged = mergeOpts(enc[1], opt)
-      newVal = merged
-        ? before.slice(0, before.length - enc[0].length) + '{{' + merged + '|' + inner + after
-        : before.slice(0, before.length - enc[0].length) + inner + after.slice(2)
-    } else if (opt === 'kw' && !/[,|{}\[\]]/.test(inner)) {
-      newVal = before + '[[' + inner + ']]' + after
-    } else {
-      newVal = before + '{{' + opt + '|' + inner + '}}' + after
-    }
-    if (opt === 'kw' && ensureKeyword) ensureKeyword(inner.trim())
-    updateProps(selected.id, sel.key, newVal)
-    setSel(null)
-  }
-
-  const clearMarks = () => {
-    if (!sel) return
-    const val = String(selected.props[sel.key] ?? '')
-    const before = val.slice(0, sel.start)
-    let inner = val.slice(sel.start, sel.end)
-    let head = before
-    let tail = val.slice(sel.end)
-    // 감싸고 있는 래퍼 제거
-    const enc = head.match(/\{\{([^|{}]*)\|$/)
-    if (enc && tail.startsWith('}}')) {
-      head = head.slice(0, head.length - enc[0].length)
-      tail = tail.slice(2)
-    }
-    // 선택 구간 내부 마크업 해제
-    inner = inner
-      .replace(/\{\{[^|{}]*\|([^{}]*?)\}\}/g, '$1')
-      .replace(/\[\[([^\]]+)\]\]/g, '$1')
-    updateProps(selected.id, sel.key, head + inner + tail)
-    setSel(null)
+    if (opt === 'kw' && ensureKeyword && !/[,|{}\[\]\n]/.test(inner)) ensureKeyword(inner.trim())
+    const res = applyOptToRaw(val, sel.start, sel.end, opt)
+    updateProps(selected.id, sel.key, res.value)
+    // 적용 구간을 유지해 연속 적용 가능하게
+    setSel({ ...sel, start: res.start, end: res.end })
+    setTimeout(() => {
+      const el = document.querySelector(`.sb-inspector [data-fkey="${sel.key}"]`)
+      if (el && el.setSelectionRange) {
+        el.focus()
+        el.setSelectionRange(res.start, res.end)
+      }
+    }, 60)
   }
 
   const selToolbar = (f) =>
     sel && sel.key === f.key ? (
-      <div className="sb-seltb" onMouseDown={(e) => { if (e.target.tagName !== 'SELECT') e.preventDefault() }}>
+      <div className="sb-seltb" onMouseDown={(e) => e.preventDefault()}>
         {!sel.list && (
           <>
             <button type="button" title="볼드" onClick={() => applyMark('b')}><b>B</b></button>
@@ -147,16 +111,7 @@ export default function Inspector({
                 {fo.label}
               </button>
             ))}
-            <select
-              className="sb-seltb__size"
-              value=""
-              onChange={(e) => { if (e.target.value) applyMark('s' + e.target.value) }}
-            >
-              <option value="">크기</option>
-              {[12, 14, 16, 18, 20, 24, 28].map((n) => (
-                <option key={n} value={n}>{n}px</option>
-              ))}
-            </select>
+            <SizeMenu onPick={(n) => applyMark('s' + n)} />
             <span className="sb-seltb__sep" />
             {TEXT_COLORS.filter((c) => c.color).map((c) => (
               <button
@@ -174,7 +129,7 @@ export default function Inspector({
         <button type="button" className="sb-seltb__kw" title="점선 밑줄 + 설명 모달 연결" onClick={() => applyMark('kw')}>
           <span className="keyword-detail-text">밑줄</span>
         </button>
-        <button type="button" title="선택 구간 서식 지우기" onClick={clearMarks}><s>가</s></button>
+        <button type="button" title="선택 구간 서식 지우기" onClick={() => applyMark('clear')}><s>가</s></button>
       </div>
     ) : null
 
@@ -192,10 +147,10 @@ export default function Inspector({
           {f.kind === 'textarea' ? (
             <textarea
               rows={3}
+              data-fkey={f.key}
               value={selected.props[f.key] ?? ''}
               onChange={(e) => updateProps(selected.id, f.key, e.target.value)}
               onSelect={(e) => onFieldSelect(f.key, e.target, f.list)}
-              onBlur={() => {}}
             />
           ) : f.kind === 'toggle' ? (
             <button
@@ -209,6 +164,7 @@ export default function Inspector({
           ) : (
             <input
               type="text"
+              data-fkey={f.key}
               value={selected.props[f.key] ?? ''}
               onChange={(e) => updateProps(selected.id, f.key, e.target.value)}
               onSelect={(e) => onFieldSelect(f.key, e.target, f.list)}

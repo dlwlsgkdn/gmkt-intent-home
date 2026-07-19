@@ -136,30 +136,73 @@ export function mergeOpts(existing, opt) {
   return [...filtered, opt].join(',')
 }
 
-/* 마크업 문자열의 [s,e) 구간에 서식 적용/해제. 반환: 새 문자열 */
+/* 마크업 문자열의 [s,e) 구간에 서식 적용/해제.
+   반환: { value, start, end } — start/end는 결과 토큰(또는 텍스트)의 위치 (재선택용) */
 export function applyOptToRaw(raw, s, e, opt) {
   ;[s, e] = snapRange(raw, s, e)
   const before = raw.slice(0, s)
   const range = raw.slice(s, e)
   const after = raw.slice(e)
-  if (!range.trim()) return raw
+  if (!range.trim()) return { value: raw, start: s, end: e }
+  const done = (mid) => ({ value: before + mid + after, start: s, end: s + mid.length })
 
   // 선택이 정확히 토큰 하나면 옵션 병합
   const single = range.match(/^\{\{([^|{}]*)\|([^{}]*?)\}\}$/)
   if (single) {
     const merged = opt === 'clear' ? '' : mergeOpts(single[1], opt)
-    return before + (merged ? `{{${merged}|${single[2]}}}` : single[2]) + after
+    return done(merged ? `{{${merged}|${single[2]}}}` : single[2])
   }
   const singleKw = range.match(/^\[\[([^\]]+)\]\]$/)
   if (singleKw) {
-    if (opt === 'clear' || opt === 'kw') return before + singleKw[1] + after
-    return before + `{{${mergeOpts('kw', opt)}|${singleKw[1]}}}` + after
+    if (opt === 'clear' || opt === 'kw') return done(singleKw[1])
+    return done(`{{${mergeOpts('kw', opt)}|${singleKw[1]}}}`)
   }
 
   const cleaned = unwrapAll(range)
-  if (opt === 'clear') return before + cleaned + after
-  if (opt === 'kw' && !/[,|{}[\]\n]/.test(cleaned)) return before + `[[${cleaned}]]` + after
-  return before + `{{${opt}|${cleaned}}}` + after
+  if (opt === 'clear') return done(cleaned)
+  if (opt === 'kw' && !/[,|{}[\]\n]/.test(cleaned)) return done(`[[${cleaned}]]`)
+  return done(`{{${opt}|${cleaned}}}`)
+}
+
+/* 마크업 오프셋 → contentEditable DOM 경계 (토큰 경계는 에디터 자식 인덱스로) */
+export function rawToBoundary(editor, pos) {
+  let acc = 0
+  const nodes = [...editor.childNodes]
+  for (let i = 0; i < nodes.length; i++) {
+    const c = nodes[i]
+    let len
+    if (c.nodeType === 3) len = c.textContent.length
+    else if (c.nodeName === 'BR') len = 1
+    else if (c.dataset && c.dataset.kw != null) len = c.textContent.length + 4
+    else if (c.dataset && c.dataset.opts != null) len = c.textContent.length + c.dataset.opts.length + 3
+    else len = (c.textContent || '').length
+    if (pos <= acc + len) {
+      if (c.nodeType === 3) return { node: c, offset: Math.min(pos - acc, c.textContent.length) }
+      // 요소(토큰) 내부/경계 → 요소 앞·뒤 경계로
+      return { node: editor, offset: pos - acc <= 0 ? i : i + 1 }
+    }
+    acc += len
+  }
+  return { node: editor, offset: nodes.length }
+}
+
+/* 크기 선택 서브메뉴 — 네이티브 select 대신 툴바와 같은 mousedown-보존 방식 */
+export function SizeMenu({ onPick }) {
+  const [open, setOpen] = React.useState(false)
+  return (
+    <span className="sb-seltb__sizemenu">
+      <button type="button" title="글자 크기" onClick={() => setOpen((v) => !v)}>
+        크기<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ width: 9, height: 9, marginLeft: 1 }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
+      </button>
+      {open && (
+        <span className="sb-seltb__sizes">
+          {[12, 14, 16, 18, 20, 24, 28].map((n) => (
+            <button key={n} type="button" onClick={() => { setOpen(false); onPick(n) }}>{n}</button>
+          ))}
+        </span>
+      )}
+    </span>
+  )
 }
 
 /* 캔버스 인라인 에디터 (contentEditable) */
