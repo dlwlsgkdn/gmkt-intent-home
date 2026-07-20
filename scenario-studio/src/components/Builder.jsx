@@ -858,35 +858,8 @@ export default function Builder({ api, scenario }) {
         </div>
         </div>
 
-        {/* 2행: 단계 탭(왼쪽) + 편집 도구 그룹(오른쪽, 구분선 분리) */}
+        {/* 2행: 편집 도구 그룹 (구분선 분리) */}
         <div className="sb-topbar__row sb-topbar__row--tools">
-          <div className="sb-stage-tabs">
-            <button
-              type="button"
-              className="sb-stage-tab sb-stage-tab--common"
-              title="모든 시나리오가 공유하는 공통 탐색(홈) 페이지 편집"
-              onClick={api.openExploreEditor}
-            >
-              <span className="sb-stage-tab__num">🧭</span>
-              탐색
-              <span className="sb-stage-tab__count">공통</span>
-            </button>
-            <span className="sb-stage-tabs__divider" aria-hidden="true" />
-            {STAGES.map((s, i) => (
-              <button
-                key={s.key}
-                type="button"
-                className={'sb-stage-tab' + (stageKey === s.key ? ' sb-stage-tab--active' : '')}
-                title={s.desc}
-                onClick={() => setStageKey(s.key)}
-              >
-                <span className="sb-stage-tab__num">{i + 1}</span>
-                {s.label}
-                <span className="sb-stage-tab__count">{(scenario.stages[s.key] || []).length}</span>
-              </button>
-            ))}
-          </div>
-          <span className="sb-tb-spacer" aria-hidden="true" />
           <div className="sb-tb-group" role="group" aria-label="히스토리">
             <button type="button" className="sb-icon-btn" title="실행 취소 (⌘Z)" aria-label="실행 취소" disabled={historyRef.current.past.length === 0} onClick={undo}>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M9 14L4 9l5-5M4 9h10a6 6 0 010 12h-3" /></svg>
@@ -981,6 +954,36 @@ export default function Builder({ api, scenario }) {
             <button type="button" className="sb-icon-btn" title="공유 링크 복사 — 링크만 열면 바로 체험" aria-label="공유 링크 복사" onClick={copyShareLink}>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5M10.172 13.828a4 4 0 010-5.656l3-3a4 4 0 015.656 5.656l-1.5 1.5" /></svg>
             </button>
+          </div>
+        </div>
+
+        {/* 3행: 단계 탭 */}
+        <div className="sb-topbar__row sb-topbar__row--tabs">
+          <div className="sb-stage-tabs">
+            <button
+              type="button"
+              className="sb-stage-tab sb-stage-tab--common"
+              title="모든 시나리오가 공유하는 공통 탐색(홈) 페이지 편집"
+              onClick={api.openExploreEditor}
+            >
+              <span className="sb-stage-tab__num">🧭</span>
+              탐색
+              <span className="sb-stage-tab__count">공통</span>
+            </button>
+            <span className="sb-stage-tabs__divider" aria-hidden="true" />
+            {STAGES.map((s, i) => (
+              <button
+                key={s.key}
+                type="button"
+                className={'sb-stage-tab' + (stageKey === s.key ? ' sb-stage-tab--active' : '')}
+                title={s.desc}
+                onClick={() => setStageKey(s.key)}
+              >
+                <span className="sb-stage-tab__num">{i + 1}</span>
+                {s.label}
+                <span className="sb-stage-tab__count">{(scenario.stages[s.key] || []).length}</span>
+              </button>
+            ))}
           </div>
         </div>
       </div>
