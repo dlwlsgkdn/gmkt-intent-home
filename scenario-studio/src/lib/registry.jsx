@@ -43,6 +43,7 @@ function ChildShell({ item, ctx, children }) {
       className={
         'sb-child' +
         (selected ? ' sb-child--selected' : '') +
+        (ctx.draggingChildId === item.id ? ' sb-child--dragging' : '') +
         (item.hidden ? ' sb-child--hidden' : '')
       }
       data-child-id={item.id}

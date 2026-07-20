@@ -1243,6 +1243,13 @@
 .sb-child:hover { outline-color: #cbd5e1; }
 .sb-child--selected { outline: 1.5px solid var(--sb-accent) !important; outline-offset: 2px; }
 .sb-child--hidden { opacity: 0.45; }
+/* 컨테이너 안 재정렬 드래그 중 — 들어올린 느낌 */
+.sb-child--dragging {
+  outline: 1.5px solid var(--sb-accent) !important;
+  box-shadow: 0 14px 30px -14px rgba(15, 23, 42, 0.45);
+  opacity: 0.9;
+  cursor: grabbing;
+}
 
 /* ── 캔버스 편집/미리보기 모드 (Figma clip-무시 + Webflow 미리보기 토글 패턴) ──
    편집 모드: 컨테이너 경계를 반투명 점선으로 표시, 클리핑 해제로 자식을 온전히 표시 */

@@ -49,6 +49,7 @@ export default function Builder({ api, scenario }) {
   const topItems = items.filter((it) => !it.parentId)
   const heightOf = (it) => it.h || heightsRef.current[it.id] || 80
   const [dropTargetId, setDropTargetId] = useState(null) // 드래그 중 컨테이너 드롭 대상 하이라이트
+  const [draggingChildId, setDraggingChildId] = useState(null) // 컨테이너 안 재정렬 중인 자식 (시각 피드백)
   /* (x, y) 캔버스 좌표를 덮는 컨테이너 아이템 */
   const containerAt = (x, y, excludeId) =>
     topItems.find((it) => {
@@ -289,7 +290,7 @@ export default function Builder({ api, scenario }) {
     const startX = e.clientX
     const startY = e.clientY
     const shift = e.shiftKey
-    const MARGIN = 14
+    const MARGIN = 24
     let phase = 'idle' // 'idle' → 'reorder'(컨테이너 안) → 'out'(꺼내진 일반 드래그)
     let lastSlot = -1
 
@@ -297,15 +298,22 @@ export default function Builder({ api, scenario }) {
       const rect = canvasRef.current.getBoundingClientRect()
       return { cx: (ev.clientX - rect.left) / zoom, cy: (ev.clientY - rect.top) / zoom }
     }
-    const insideParent = (cx, cy) => {
-      if (!parent) return false
-      const hh = parent.h || heightsRef.current[parent.id] || 80
-      return (
-        cx >= parent.x - MARGIN &&
-        cx <= parent.x + parent.w + MARGIN &&
-        cy >= parent.y - MARGIN &&
-        cy <= parent.y + hh + MARGIN
-      )
+    /* "안"의 기준은 컨테이너 박스가 아니라 카드(슬롯) 밴드 —
+       편집 모드에선 컨테이너가 클리핑 해제로 실제보다 크게 펼쳐지므로,
+       슬롯 영역에서 일정 거리 이상 벗어나면 즉시 꺼내진다 (화면 좌표로 판정) */
+    const insideParent = (clientX, clientY) => {
+      if (!parent || !canvasRef.current) return false
+      const slots = [...canvasRef.current.querySelectorAll(`[data-child-of="${parent.id}"]`)]
+      if (slots.length === 0) return false
+      return slots.some((el) => {
+        const r = el.getBoundingClientRect()
+        return (
+          clientX >= r.left - MARGIN &&
+          clientX <= r.right + MARGIN &&
+          clientY >= r.top - MARGIN &&
+          clientY <= r.bottom + MARGIN
+        )
+      })
     }
     const popOut = (cx, cy) => {
       phase = 'out'
@@ -335,9 +343,10 @@ export default function Builder({ api, scenario }) {
       }
       const { cx, cy } = toCanvas(ev)
       if (phase === 'reorder') {
-        if (insideParent(cx, cy)) {
+        if (insideParent(ev.clientX, ev.clientY)) {
           // 컨테이너 안: 포인터 위치의 슬롯으로 실시간 재정렬
           setDropTargetId(parent ? parent.id : null)
+          setDraggingChildId(childId)
           const idx = slotIndexAt(parent.id, parent.type, cx, cy)
           if (idx !== lastSlot) {
             lastSlot = idx
@@ -345,8 +354,9 @@ export default function Builder({ api, scenario }) {
           }
           return
         }
-        // 경계를 벗어남 → 자동으로 꺼내서 일반 드래그로 전환
+        // 슬롯 밴드를 벗어남 → 자동으로 꺼내서 일반 드래그로 전환 (가이드/겹침/컴팩트 활성)
         setDropTargetId(null)
+        setDraggingChildId(null)
         popOut(cx, cy)
       }
       if (phase === 'out') {
@@ -356,6 +366,7 @@ export default function Builder({ api, scenario }) {
     const up = () => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
+      setDraggingChildId(null)
       if (phase === 'out') onDragEnd(childId)
       else if (phase === 'reorder') setDropTargetId(null)
       else handleSelect(childId, shift)
@@ -1082,6 +1093,7 @@ export default function Builder({ api, scenario }) {
     canvasView, // 'edit' = 컨테이너 클리핑 해제, 'preview' = 실사용 모습
     allItems: items, // 컨테이너가 자식을 찾아 렌더할 때 사용
     selectedIds, // 자식 셸의 선택 표시
+    draggingChildId, // 컨테이너 안 재정렬 중인 자식 강조
     childPointerDown, // 자식 클릭 선택 / 드래그 꺼내기
     childResizeDown, // 자식 리사이즈 핸들
     inspectChild: (id) => {
