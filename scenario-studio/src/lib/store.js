@@ -161,6 +161,57 @@ export function saveKeywords(list) {
   }
 }
 
+/* ── 사용자 프로필별 워크스페이스(계정) ──
+   계정 = 프로필 + 탐색(DDAK) 페이지 + 시나리오 + 쓰레드 묶음.
+   프로필을 전환하면 네 가지가 함께 바뀐다. */
+const ACCOUNTS_KEY = 'ddak-accounts-v1'
+
+export function createAccount(partial = {}) {
+  return {
+    id: uid(),
+    profile: JSON.parse(JSON.stringify(DEFAULT_PROFILE)),
+    explore: JSON.parse(JSON.stringify(DEFAULT_EXPLORE)),
+    scenarios: [],
+    threads: [],
+    createdAt: new Date().toISOString(),
+    ...partial,
+  }
+}
+
+export function loadAccounts() {
+  try {
+    const raw = localStorage.getItem(ACCOUNTS_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (parsed && Array.isArray(parsed.accounts) && parsed.accounts.length > 0) {
+        const accounts = parsed.accounts.map((a) => ({ ...createAccount(), ...a }))
+        const activeId = accounts.some((a) => a.id === parsed.activeId)
+          ? parsed.activeId
+          : accounts[0].id
+        return { accounts, activeId }
+      }
+    }
+  } catch (e) {
+    /* 손상 시 아래 마이그레이션 경로로 */
+  }
+  // 최초 실행: 기존 단일 저장소(v1 키들)를 첫 계정으로 마이그레이션 (원본 키는 남겨둠)
+  const first = createAccount({
+    profile: loadProfile(),
+    explore: loadExplore(),
+    scenarios: loadScenarios(),
+    threads: loadThreads(),
+  })
+  return { accounts: [first], activeId: first.id }
+}
+
+export function saveAccounts(accounts, activeId) {
+  try {
+    localStorage.setItem(ACCOUNTS_KEY, JSON.stringify({ accounts, activeId }))
+  } catch (e) {
+    /* ignore */
+  }
+}
+
 /* ── 쇼핑 쓰레드 히스토리 — 시나리오 체험 1회 = 쓰레드 1개 ── */
 const THREADS_KEY = 'ddak-threads-v1'
 const THREADS_MAX = 30

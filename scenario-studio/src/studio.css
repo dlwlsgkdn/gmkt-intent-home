@@ -269,6 +269,75 @@
   margin-bottom: 18px;
 }
 .sb-drawer__head h3 { margin: 4px 0 0; font-size: 20px; font-weight: 600; color: var(--sb-ink); }
+/* 사용자 프로필(계정) 전환 목록 */
+.sb-account-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.sb-account-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--sb-line);
+  border-radius: 14px;
+  background: #fff;
+  padding: 4px 8px 4px 4px;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.sb-account-row--active { border-color: var(--sb-accent); background: var(--sb-accent-soft); }
+.sb-account-row__main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px;
+  min-width: 0;
+  text-align: left;
+}
+.sb-account-row__avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #eef2f6;
+  color: var(--sb-ink);
+  font-size: 13px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.sb-account-row--active .sb-account-row__avatar { background: var(--sb-accent); color: #fff; }
+.sb-account-row__meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.sb-account-row__meta strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sb-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sb-account-row__meta small { font-size: 11px; color: #94a3b8; }
+.sb-account-row__check { color: var(--sb-accent); flex-shrink: 0; }
+.sb-account-row__remove {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #cbd5e1;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+.sb-account-row__remove:hover { color: #b45a6b; background: #fdf5f7; }
+.sb-account-add {
+  padding: 9px;
+  border: 1px dashed var(--sb-line);
+  border-radius: 14px;
+  font-size: 12px;
+  color: #94a3b8;
+  transition: all 0.15s ease;
+}
+.sb-account-add:hover { color: var(--sb-ink); border-color: #94a3b8; background: #f8fafc; }
+
 /* 탐색 페이지 편집 진입 버튼 */
 .sb-explore-btn {
   display: flex;
@@ -1076,6 +1145,64 @@
 .sb-story--feature .beauty-story__media { aspect-ratio: 4 / 3; }
 
 .sb-product-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* ── 가로 스크롤 패널 ── */
+.sb-hscroll { min-width: 0; }
+.sb-hscroll__title {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sb-ink);
+}
+.sb-hscroll__track {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 2px 2px 10px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+.sb-hscroll__track::-webkit-scrollbar { height: 6px; }
+.sb-hscroll__track::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; }
+.sb-hscroll__track::-webkit-scrollbar-track { background: transparent; }
+.sb-hscroll__card {
+  flex: 0 0 auto;
+  border: 1px solid #f1f5f9;
+  border-radius: 18px;
+  background: #fff;
+  padding: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.sb-hscroll__card:hover { border-color: #e2e8f0; box-shadow: 0 10px 24px -18px rgba(15, 23, 42, 0.35); }
+.sb-hscroll__thumb {
+  aspect-ratio: 4 / 3;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #f8fafc;
+  margin-bottom: 8px;
+}
+.sb-hscroll__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sb-hscroll__name {
+  margin: 0 2px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--sb-ink);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.sb-hscroll__sub {
+  margin: 2px 2px 2px;
+  font-size: 11px;
+  color: #94a3b8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .sb-image-card img { width: 100%; height: auto; display: block; }
 
 

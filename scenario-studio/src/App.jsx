@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { loadScenarios, saveScenarios, createScenario, uid, loadExplore, saveExplore, loadProfile, saveProfile, loadKeywords, saveKeywords, loadViewerDevice, saveViewerDevice, loadThreads, saveThreads } from './lib/store.js'
+import { createScenario, uid, loadKeywords, saveKeywords, loadViewerDevice, saveViewerDevice, loadAccounts, saveAccounts, createAccount } from './lib/store.js'
 import { readShareFromHash, clearShareHash } from './lib/share.js'
 import HomeView from './components/HomeView.jsx'
 import Builder from './components/Builder.jsx'
@@ -7,12 +7,27 @@ import Player from './components/Player.jsx'
 import ExploreEditor from './components/ExploreEditor.jsx'
 
 export default function App() {
-  const [scenarios, setScenarios] = useState(loadScenarios)
-  const [explore, setExplore] = useState(loadExplore)
-  const [profile, setProfile] = useState(loadProfile)
+  /* 프로필별 워크스페이스(계정): 프로필 + 탐색 페이지 + 시나리오 + 쓰레드 묶음 */
+  const [init] = useState(loadAccounts)
+  const [accounts, setAccounts] = useState(init.accounts)
+  const [activeAccountId, setActiveAccountId] = useState(init.activeId)
   const [keywords, setKeywords] = useState(loadKeywords)
   const [viewerDevice, setViewerDevice] = useState(loadViewerDevice)
-  const [threads, setThreads] = useState(loadThreads)
+
+  const active = accounts.find((a) => a.id === activeAccountId) || accounts[0]
+  const { scenarios, explore, profile, threads } = active
+
+  /* 활성 계정의 일부 필드만 갱신 — 값 또는 함수 업데이터 모두 지원 */
+  const patchActive = (key, v) =>
+    setAccounts((prev) =>
+      prev.map((a) =>
+        a.id === activeAccountId ? { ...a, [key]: typeof v === 'function' ? v(a[key]) : v } : a
+      )
+    )
+  const setScenarios = (v) => patchActive('scenarios', v)
+  const setExplore = (v) => patchActive('explore', v)
+  const setProfile = (v) => patchActive('profile', v)
+  const setThreads = (v) => patchActive('threads', v)
   // 공유 링크(#s=...)로 들어온 경우: 저장하지 않고 바로 체험
   const [shared, setShared] = useState(readShareFromHash)
   // route: {name:'home'} | {name:'builder', id} | {name:'player', id} | {name:'explore-editor'}
@@ -20,16 +35,8 @@ export default function App() {
   const [toast, setToast] = useState(null)
 
   useEffect(() => {
-    saveScenarios(scenarios)
-  }, [scenarios])
-
-  useEffect(() => {
-    saveExplore(explore)
-  }, [explore])
-
-  useEffect(() => {
-    saveProfile(profile)
-  }, [profile])
+    saveAccounts(accounts, activeAccountId)
+  }, [accounts, activeAccountId])
 
   useEffect(() => {
     saveKeywords(keywords)
@@ -38,10 +45,6 @@ export default function App() {
   useEffect(() => {
     saveViewerDevice(viewerDevice)
   }, [viewerDevice])
-
-  useEffect(() => {
-    saveThreads(threads)
-  }, [threads])
 
   useEffect(() => {
     if (!toast) return
@@ -142,6 +145,39 @@ export default function App() {
     })
   }
 
+  /* ── 프로필(계정) 관리 ── */
+  const switchAccount = (id) => {
+    const acc = accounts.find((a) => a.id === id)
+    if (!acc || id === activeAccountId) return
+    setActiveAccountId(id)
+    setRoute({ name: 'home' })
+    setToast(`"${acc.profile.name}" 프로필로 전환했어요.`)
+  }
+
+  const addAccount = (name) => {
+    const nm = String(name || '').trim() || `사용자 ${accounts.length + 1}`
+    const acc = createAccount()
+    acc.profile = { ...acc.profile, name: nm }
+    acc.explore = { ...acc.explore, greeting: `${nm}님, 오늘은 어떤 쇼핑을 도와드릴까요?` }
+    setAccounts((prev) => [...prev, acc])
+    setActiveAccountId(acc.id)
+    setRoute({ name: 'home' })
+    setToast(`"${nm}" 프로필을 만들었어요. 탐색 페이지와 시나리오가 새로 시작돼요.`)
+  }
+
+  const removeAccount = (id) => {
+    if (accounts.length <= 1) {
+      setToast('마지막 프로필은 삭제할 수 없어요.')
+      return
+    }
+    const rest = accounts.filter((a) => a.id !== id)
+    setAccounts(rest)
+    if (id === activeAccountId) {
+      setActiveAccountId(rest[0].id)
+      setRoute({ name: 'home' })
+    }
+  }
+
   const api = {
     scenarios,
     setScenarios,
@@ -164,6 +200,11 @@ export default function App() {
     updateKeywords: setKeywords,
     viewerDevice,
     setViewerDevice,
+    accounts,
+    activeAccountId,
+    switchAccount,
+    addAccount,
+    removeAccount,
     threads,
     recordThread,
     removeThread: (id) => setThreads((prev) => prev.filter((t) => t.id !== id)),

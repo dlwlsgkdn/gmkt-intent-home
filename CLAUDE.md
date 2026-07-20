@@ -51,7 +51,8 @@ cd scenario-studio && npm run build   # vite build && cp -R ../legacy ../docs/le
 - **겹침 해소**: `resolveCollision(items, movedIds[], heights)` — 이동한 아이템은 고정, 겹치는 다른 아이템이 아래로 밀림. 드래그 중 실시간 적용
 - **아이템 모델**: `{ id, type, x, y, w, h(null=자동), props }`, 높이는 ResizeObserver로 heightsRef에 측정
 - **원본 룩 유지**: `public/`에 원본 CSS(gmarket-advanced*.css) 복사본 + Tailwind CDN. 원본 클래스 그대로 재사용
-- **localStorage 키**: `ddak-scenarios-v1`, `ddak-explore-page-v1`, `ddak-profile-v1` (발행은 브라우저 로컬 한정)
+- **프로필별 워크스페이스(계정)**: `ddak-accounts-v1`에 `{accounts[], activeId}` — 계정 = 프로필+탐색 페이지+시나리오+쓰레드 묶음. 프로필 전환은 홈 드로어. 구 단일 키(`ddak-scenarios-v1`, `ddak-explore-page-v1`, `ddak-profile-v1`, `ddak-threads-v1`)는 최초 1회 첫 계정으로 마이그레이션 (발행은 브라우저 로컬 한정)
+- **컴포넌트 텍스트는 kText()로 렌더**: 인스펙터 서식 툴바가 모든 텍스트 필드에 `{{서식|텍스트}}` 마크업을 넣을 수 있으므로, 레지스트리에서 사용자 노출 텍스트 prop은 반드시 `kText(p.x, ctx, 'x')`로 감쌀 것 (안 그러면 마크업 원문이 그대로 노출됨)
 
 ## 주의사항
 

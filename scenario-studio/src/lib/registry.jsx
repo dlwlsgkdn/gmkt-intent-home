@@ -84,9 +84,9 @@ export const LIBRARY = {
     hint: '홈 상단의 그라데이션 밑줄 인사 문구',
     defaults: { text: '유진님, 오늘은 피부결이 먼저 보이는 베이스 루틴을 가볍게 정리해볼까요?' },
     fields: [{ key: 'text', label: '인사말 문구', kind: 'textarea' }],
-    render: (p) => (
+    render: (p, ctx) => (
       <div className="beauty-greeting sb-static">
-        <span>{p.text}</span>
+        <span>{kText(p.text, ctx, 'text')}</span>
       </div>
     ),
   },
@@ -151,7 +151,7 @@ export const LIBRARY = {
               if (ctx.mode === 'player') ctx.player.setQuery(tag.replace(/_/g, ' '))
             }}
           >
-            #{tag}
+            #{kText(tag, ctx)}
           </button>
         ))}
       </div>
@@ -185,9 +185,9 @@ export const LIBRARY = {
           <Img src={p.imageUrl} alt={p.title} />
         </span>
         <div className="beauty-story__body">
-          <span>{p.kicker}</span>
-          <h2>{p.title}</h2>
-          {p.desc ? <p>{p.desc}</p> : null}
+          <span>{kText(p.kicker, ctx, 'kicker')}</span>
+          <h2>{kText(p.title, ctx, 'title')}</h2>
+          {p.desc ? <p>{kText(p.desc, ctx, 'desc')}</p> : null}
         </div>
       </article>
     ),
@@ -218,8 +218,8 @@ export const LIBRARY = {
           <Img src={p.imageUrl} alt={p.title} />
         </span>
         <div className="beauty-story__body">
-          <span>{p.kicker}</span>
-          <h2>{p.title}</h2>
+          <span>{kText(p.kicker, ctx, 'kicker')}</span>
+          <h2>{kText(p.title, ctx, 'title')}</h2>
         </div>
       </article>
     ),
@@ -243,7 +243,7 @@ export const LIBRARY = {
     ],
     render: (p, ctx) => (
       <div className="clean-info-header sb-static">
-        <span className="clean-info-kicker">{p.kicker}</span>
+        <span className="clean-info-kicker">{kText(p.kicker, ctx, 'kicker')}</span>
         <h2>{kText(p.title, ctx, 'title')}</h2>
         <p>{kText(p.desc, ctx, 'desc')}</p>
       </div>
@@ -341,7 +341,7 @@ export const LIBRARY = {
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
             </span>
             <span className="saved-profile-section__title">{profile.name}님에 대해 이미 알고 있어요</span>
-            <span className="saved-profile-section__hint">{isPlayer ? p.hint : '배지를 눌러 이 시나리오 노출을 켜고 끄세요'}</span>
+            <span className="saved-profile-section__hint">{isPlayer ? kText(p.hint, ctx) : '배지를 눌러 이 시나리오 노출을 켜고 끄세요'}</span>
           </div>
           <div className="saved-profile-section__chips">
             {visible.length === 0 && (
@@ -434,7 +434,7 @@ export const LIBRARY = {
     ],
     render: (p, ctx) => (
       <div className="sb-static">
-        <span className="text-xs font-medium text-gmarket-blue uppercase tracking-widest mb-2 block">{p.kicker}</span>
+        <span className="text-xs font-medium text-gmarket-blue uppercase tracking-widest mb-2 block">{kText(p.kicker, ctx, 'kicker')}</span>
         <h2 className="sb-plan-title text-2xl md:text-4xl font-bold text-slate-800 leading-snug">{kText(p.title, ctx, 'title')}</h2>
       </div>
     ),
@@ -535,7 +535,7 @@ export const LIBRARY = {
             </div>
             <h4 className="text-sm font-bold text-slate-800 mb-1.5 leading-tight sb-media-card__title">{kText(p.name, ctx, 'name')}</h4>
             <div className="flex items-baseline mb-3 text-left">
-              <span className="text-lg font-bold text-gmarket-blue">{p.price}</span>
+              <span className="text-lg font-bold text-gmarket-blue">{kText(p.price, ctx, 'price')}</span>
               <span className="text-xs font-medium text-slate-400 ml-0.5">원</span>
             </div>
             <div className="flex gap-2">
@@ -603,7 +603,7 @@ export const LIBRARY = {
             <span className="sb-market-tag sb-market-tag--external">{p.source}</span>
           </div>
           <p className="sb-media-card__title">{kText(p.title, ctx, 'title')}</p>
-          {p.channel ? <p className="sb-media-card__sub">{p.channel}</p> : null}
+          {p.channel ? <p className="sb-media-card__sub">{kText(p.channel, ctx, 'channel')}</p> : null}
         </div>
       </div>
     ),
@@ -644,7 +644,7 @@ export const LIBRARY = {
           </div>
           <p className="sb-media-card__title">{kText(p.title, ctx, 'title')}</p>
           {p.snippet ? <p className="sb-media-card__sub sb-article-card__snippet">{kText(p.snippet, ctx, 'snippet')}</p> : null}
-          {p.author ? <p className="sb-media-card__meta">{p.author}</p> : null}
+          {p.author ? <p className="sb-media-card__meta">{kText(p.author, ctx, 'author')}</p> : null}
         </div>
       </div>
     ),
@@ -665,7 +665,7 @@ export const LIBRARY = {
     ],
     render: (p, ctx) => (
       <div className="rounded-[28px] border border-slate-100 bg-slate-50/80 p-6">
-        <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400 mb-3">{p.title}</p>
+        <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400 mb-3">{kText(p.title, ctx, 'title')}</p>
         <ul className="space-y-2.5">
           {splitList(p.items).map((it, i) => (
             <li key={i} className="flex items-start gap-2.5 text-sm text-slate-700">
@@ -693,15 +693,15 @@ export const LIBRARY = {
       <div className="sb-cta-bar rounded-[32px] border border-slate-200 bg-white/90 p-6 shadow-sm">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-slate-400">{p.countLabel}</p>
-            <p className="mt-1 text-2xl font-bold text-slate-800">{p.price}</p>
+            <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-slate-400">{kText(p.countLabel, ctx, 'countLabel')}</p>
+            <p className="mt-1 text-2xl font-bold text-slate-800">{kText(p.price, ctx, 'price')}</p>
           </div>
           <button
             type="button"
             className="w-full rounded-2xl bg-gmarket-blue px-8 py-4 text-base font-bold text-white shadow-lg shadow-blue-100 transition-all hover:scale-[1.01] active:scale-95 md:w-auto"
             onClick={() => { if (ctx.mode === 'player') ctx.player.complete() }}
           >
-            {p.buttonText}
+            {kText(p.buttonText, ctx, 'buttonText')}
           </button>
         </div>
       </div>
@@ -722,7 +722,7 @@ export const LIBRARY = {
     ],
     render: (p, ctx) => (
       <div className="sb-static">
-        {p.kicker ? <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400 block mb-2">{p.kicker}</span> : null}
+        {p.kicker ? <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400 block mb-2">{kText(p.kicker, ctx, 'kicker')}</span> : null}
         {p.title ? <h3 className="text-xl font-semibold text-slate-900 mb-2">{kText(p.title, ctx, 'title')}</h3> : null}
         {p.body ? <p className="text-sm leading-relaxed text-slate-600 whitespace-pre-wrap">{kText(p.body, ctx, 'body')}</p> : null}
       </div>
@@ -741,10 +741,60 @@ export const LIBRARY = {
     ],
     render: (p, ctx) => (
       <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-5 py-5 text-sm leading-relaxed text-slate-500">
-        <p className="font-semibold text-slate-700 mb-1">{p.title}</p>
+        <p className="font-semibold text-slate-700 mb-1">{kText(p.title, ctx, 'title')}</p>
         <p className="whitespace-pre-wrap">{kText(p.body, ctx, 'body')}</p>
       </div>
     ),
+  },
+
+  hscroll: {
+    label: '가로 스크롤 패널',
+    stage: 'common',
+    icon: '↔️',
+    hint: '카드를 가로로 넘겨 보는 패널. 카드는 "제목|설명|이미지URL" 형태로 쉼표 구분',
+    defaults: {
+      title: '함께 보면 좋아요',
+      cardW: '168',
+      items:
+        '수분 프라이머|피부결 정돈 1단계|./makeup-clone-assets/8e01e19fb7cf7c96.avif, 톤업 쿠션|얇게 두 번 레이어|./makeup-clone-assets/d9b261330f3ffccf.avif, 세팅 픽서|마무리 고정|./makeup-clone-assets/42072b0ad4be9333.avif, 립 밤|무너짐 없는 마무리|',
+    },
+    fields: [
+      { key: 'title', label: '패널 제목 (비우면 숨김)', kind: 'text' },
+      { key: 'items', label: '카드 목록 (제목|설명|이미지URL, 쉼표 구분)', kind: 'textarea', list: true },
+      { key: 'cardW', label: '카드 너비(px)', kind: 'text' },
+    ],
+    render: (p, ctx) => {
+      const cards = splitList(p.items).map((chunk) => {
+        const [title, sub, imageUrl] = chunk.split('|').map((s) => s.trim())
+        return { title: title || '', sub: sub || '', imageUrl: imageUrl || '' }
+      })
+      const cardW = Math.max(96, Number(p.cardW) || 168)
+      return (
+        <div className="sb-hscroll">
+          {p.title ? <p className="sb-hscroll__title">{kText(p.title, ctx, 'title')}</p> : null}
+          <div className="sb-hscroll__track">
+            {cards.length === 0 && (
+              <span className="sb-pinned-panel__empty">카드 목록이 비어 있어요. "제목|설명|이미지URL" 형태로 입력하세요.</span>
+            )}
+            {cards.map((c, i) => (
+              <div
+                key={i}
+                className="sb-hscroll__card"
+                style={{ width: cardW }}
+                role="button"
+                onClick={() => { if (ctx.mode === 'player') ctx.player.openExternal(c.title) }}
+              >
+                <div className="sb-hscroll__thumb">
+                  <Img src={c.imageUrl} alt={c.title} />
+                </div>
+                <p className="sb-hscroll__name">{kText(c.title, ctx)}</p>
+                {c.sub ? <p className="sb-hscroll__sub">{kText(c.sub, ctx)}</p> : null}
+              </div>
+            ))}
+          </div>
+        </div>
+      )
+    },
   },
 
   imageCard: {
@@ -757,12 +807,12 @@ export const LIBRARY = {
       { key: 'imageUrl', label: '이미지 URL', kind: 'text' },
       { key: 'caption', label: '캡션', kind: 'text' },
     ],
-    render: (p) => (
+    render: (p, ctx) => (
       <figure className="sb-static">
         <div className="rounded-[28px] overflow-hidden border border-slate-100 shadow-sm bg-slate-50 sb-image-card">
           <Img src={p.imageUrl} alt={p.caption} />
         </div>
-        {p.caption ? <figcaption className="mt-2 text-xs text-slate-400 text-center">{p.caption}</figcaption> : null}
+        {p.caption ? <figcaption className="mt-2 text-xs text-slate-400 text-center">{kText(p.caption, ctx, 'caption')}</figcaption> : null}
       </figure>
     ),
   },
