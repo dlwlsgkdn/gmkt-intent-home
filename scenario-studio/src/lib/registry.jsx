@@ -848,6 +848,154 @@ export const LIBRARY = {
     },
   },
 
+  gridPanel: {
+    label: '그리드 패널',
+    stage: 'common',
+    icon: '🔲',
+    hint: 'N열 카드 그리드. 카드는 "제목|설명|이미지URL" 쉼표 구분',
+    defaults: {
+      title: '카테고리 둘러보기',
+      cols: '2',
+      items:
+        '수분 프라이머|피부결 정돈 1단계|./makeup-clone-assets/8e01e19fb7cf7c96.avif, 톤업 쿠션|얇게 두 번 레이어|./makeup-clone-assets/d9b261330f3ffccf.avif, 세팅 픽서|마무리 고정|./makeup-clone-assets/42072b0ad4be9333.avif, 립 밤|무너짐 없는 마무리|',
+    },
+    fields: [
+      { key: 'title', label: '패널 제목 (비우면 숨김)', kind: 'text' },
+      { key: 'items', label: '카드 목록 (제목|설명|이미지URL, 쉼표 구분)', kind: 'textarea', list: true },
+      { key: 'cols', label: '열 수 (1~4)', kind: 'text' },
+    ],
+    render: (p, ctx) => {
+      const cards = parseCards(p.items)
+      const cols = Math.max(1, Math.min(4, Number(p.cols) || 2))
+      return (
+        <div className="sb-gridpanel">
+          {p.title ? <p className="sb-hscroll__title">{kText(p.title, ctx, 'title')}</p> : null}
+          <div className="sb-gridpanel__grid" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+            {cards.length === 0 && (
+              <span className="sb-pinned-panel__empty">카드 목록이 비어 있어요. "제목|설명|이미지URL" 형태로 입력하세요.</span>
+            )}
+            {cards.map((c, i) => (
+              <div
+                key={i}
+                className="sb-hscroll__card sb-gridpanel__card"
+                role="button"
+                onClick={() => { if (ctx.mode === 'player') ctx.player.openExternal(c.title) }}
+              >
+                <div className="sb-hscroll__thumb">
+                  <Img src={c.imageUrl} alt={c.title} />
+                </div>
+                <p className="sb-hscroll__name">{kText(c.title, ctx)}</p>
+                {c.sub ? <p className="sb-hscroll__sub">{kText(c.sub, ctx)}</p> : null}
+              </div>
+            ))}
+          </div>
+        </div>
+      )
+    },
+  },
+
+  carousel: {
+    label: '싱글 스크롤 캐러셀',
+    stage: 'common',
+    icon: '🎠',
+    hint: '한 장씩 스냅되며 넘겨 보는 가로 카드. "제목|설명|이미지URL" 쉼표 구분',
+    defaults: {
+      title: '',
+      scrollbar: false,
+      items:
+        '속광은 남기고 유분만 덜어내는 베이스|최근 쓰레드 반복 키워드: 무너짐·들뜸|./makeup-clone-assets/d9b261330f3ffccf.avif, 맑은 로즈 한 끗|퍼스널 컬러 맞춤 포인트|./makeup-clone-assets/8e01e19fb7cf7c96.avif, 1박 2일 파우치 최소 구성|여행 전 체크|./makeup-clone-assets/42072b0ad4be9333.avif',
+    },
+    fields: [
+      { key: 'title', label: '패널 제목 (비우면 숨김)', kind: 'text' },
+      { key: 'items', label: '카드 목록 (제목|설명|이미지URL, 쉼표 구분)', kind: 'textarea', list: true },
+      { key: 'scrollbar', label: '스크롤바 상시 표시', kind: 'toggle' },
+    ],
+    render: (p, ctx) => {
+      const cards = parseCards(p.items)
+      return (
+        <div className="sb-carousel">
+          {p.title ? <p className="sb-hscroll__title">{kText(p.title, ctx, 'title')}</p> : null}
+          <div className={'sb-carousel__track' + scrollCls(p.scrollbar)}>
+            {cards.length === 0 && (
+              <span className="sb-pinned-panel__empty">카드 목록이 비어 있어요. "제목|설명|이미지URL" 형태로 입력하세요.</span>
+            )}
+            {cards.map((c, i) => (
+              <div
+                key={i}
+                className="sb-carousel__card"
+                role="button"
+                onClick={() => { if (ctx.mode === 'player') ctx.player.openExternal(c.title) }}
+              >
+                <div className="sb-carousel__thumb">
+                  <Img src={c.imageUrl} alt={c.title} />
+                </div>
+                <p className="sb-hscroll__name">{kText(c.title, ctx)}</p>
+                {c.sub ? <p className="sb-hscroll__sub">{kText(c.sub, ctx)}</p> : null}
+              </div>
+            ))}
+          </div>
+          {cards.length > 1 && (
+            <p className="sb-carousel__hint" aria-hidden="true">← 옆으로 넘겨보세요 · {cards.length}장 →</p>
+          )}
+        </div>
+      )
+    },
+  },
+
+  tablePanel: {
+    label: '테이블',
+    stage: 'common',
+    icon: '📊',
+    hint: '헤더 + 행 표. 셀은 "|", 행은 줄바꿈으로 구분 (셀 안 쉼표 사용 가능)',
+    defaults: {
+      title: '용량별 가격 비교',
+      headers: '제품|용량|가격',
+      rows: '수분광 프라이머|30ml|18,900원\n톤업 쿠션|15g|24,900원\n세팅 픽서|100ml|12,500원',
+    },
+    fields: [
+      { key: 'title', label: '표 제목 (비우면 숨김)', kind: 'text' },
+      { key: 'headers', label: '헤더 (| 구분)', kind: 'text' },
+      { key: 'rows', label: '행 목록 (셀은 |, 행은 줄바꿈 — 줄바꿈이 없으면 쉼표)', kind: 'textarea', list: true },
+    ],
+    render: (p, ctx) => {
+      const headers = String(p.headers || '').split('|').map((s) => s.trim()).filter(Boolean)
+      // 행 구분: 줄바꿈 우선(셀 안 쉼표 허용), 줄바꿈이 없으면 쉼표
+      const raw = String(p.rows || '')
+      const rows = (raw.includes('\n') ? raw.split('\n') : raw.split(','))
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((row) => row.split('|').map((s) => s.trim()))
+      return (
+        <div className="sb-table">
+          {p.title ? <p className="sb-hscroll__title">{kText(p.title, ctx, 'title')}</p> : null}
+          <div className="sb-table__scroll">
+            <table>
+              {headers.length > 0 && (
+                <thead>
+                  <tr>
+                    {headers.map((h, i) => <th key={i}>{kText(h, ctx)}</th>)}
+                  </tr>
+                </thead>
+              )}
+              <tbody>
+                {rows.length === 0 && (
+                  <tr><td colSpan={Math.max(1, headers.length)} className="sb-table__empty">행을 입력하세요 — 예: 이름|용량|가격</td></tr>
+                )}
+                {rows.map((cells, ri) => (
+                  <tr key={ri}>
+                    {(headers.length ? headers : cells).map((_, ci) => (
+                      <td key={ci}>{kText(cells[ci] || '', ctx)}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )
+    },
+  },
+
   vscroll: {
     label: '세로 스크롤 패널',
     stage: 'common',
