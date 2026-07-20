@@ -129,11 +129,12 @@ export default function Builder({ api, scenario }) {
     applySnapshot(snap)
   }
 
-  /* ── 아이템 변경 — 탐색은 계정 공유 페이지에, 설문/계획은 시나리오에 저장 ── */
+  /* ── 아이템 변경 — 탐색은 계정 공유 페이지에, 설문/계획은 시나리오에 저장 ──
+     탐색은 함수 업데이터 필수: setTimeout 커밋(드래그/보정)이 낡은 클로저로 덮어쓰지 않게 */
   const setItems = (updater) => {
     pushHistory()
     if (isExplore) {
-      api.updateExplore({ ...api.explore, items: updater(api.explore.items || []) })
+      api.updateExplore((prev) => ({ ...prev, items: updater(prev.items || []) }))
     } else {
       api.updateScenario(scenario.id, (s) => ({
         ...s,
@@ -148,6 +149,27 @@ export default function Builder({ api, scenario }) {
     setSizeDraft(null)
     setInlineEdit(null)
   }, [stageKey])
+
+  /* 탐색 아이템은 계정 공유라 시나리오 기기 폭과 무관하게 저장됨 —
+     현재 캔버스보다 넓은 아이템은 진입/기기 변경 시 폭에 맞게 보정 */
+  useEffect(() => {
+    if (!isExplore) return
+    const cur = api.explore.items || []
+    if (!cur.some((it) => it.w > itemW || it.x + it.w > canvasW - PAD)) return
+    api.updateExplore((prev) => ({
+      ...prev,
+      items: (prev.items || []).map((it) => {
+        const w = Math.min(it.w, itemW)
+        const x = Math.max(0, Math.min(canvasW - PAD - w, it.x))
+        return { ...it, w, x }
+      }),
+    }))
+    // 폭 변경으로 높이가 다시 측정된 뒤 겹침 없이 재배치
+    setTimeout(() => {
+      setItems((prev) => layoutCompactUp(prev, heightsRef.current))
+    }, 200)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isExplore, canvasW])
 
   const addItem = (type) => {
     const def = LIBRARY[type]

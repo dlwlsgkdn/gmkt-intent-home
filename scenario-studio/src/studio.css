@@ -1184,12 +1184,67 @@
   overflow-x: auto;
   padding: 2px 2px 10px;
   -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 transparent;
 }
-.sb-hscroll__track::-webkit-scrollbar { height: 6px; }
-.sb-hscroll__track::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; }
-.sb-hscroll__track::-webkit-scrollbar-track { background: transparent; }
+
+/* 스크롤바 표시 유틸 — 가로/세로 스크롤 패널 공용 */
+.sb-scroll-hide { scrollbar-width: none; }
+.sb-scroll-hide::-webkit-scrollbar { display: none; }
+.sb-scroll-bar { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
+.sb-scroll-bar::-webkit-scrollbar { width: 6px; height: 6px; }
+.sb-scroll-bar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; }
+.sb-scroll-bar::-webkit-scrollbar-track { background: transparent; }
+
+/* ── 세로 스크롤 패널 ── */
+.sb-vscroll { min-width: 0; }
+.sb-vscroll__list {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 6px 2px 2px;
+  -webkit-overflow-scrolling: touch;
+}
+.sb-vscroll__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid #f1f5f9;
+  border-radius: 14px;
+  background: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.sb-vscroll__row:hover { border-color: #e2e8f0; box-shadow: 0 8px 20px -16px rgba(15, 23, 42, 0.35); }
+.sb-vscroll__thumb {
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f8fafc;
+  flex-shrink: 0;
+}
+.sb-vscroll__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sb-vscroll__body { flex: 1; min-width: 0; }
+.sb-vscroll__name {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sb-ink);
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sb-vscroll__sub {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  color: #94a3b8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .sb-hscroll__card {
   flex: 0 0 auto;
   border: 1px solid #f1f5f9;

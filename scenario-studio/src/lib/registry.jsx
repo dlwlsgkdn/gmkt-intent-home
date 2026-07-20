@@ -16,6 +16,17 @@ function Img({ src, alt }) {
   return <img src={src || FALLBACK_IMG} alt={alt || ''} onError={(e) => { e.currentTarget.src = FALLBACK_IMG }} />
 }
 
+/* "제목|설명|이미지URL" 쉼표 목록 파싱 — 가로/세로 스크롤 패널 공용 */
+function parseCards(text) {
+  return splitList(text).map((chunk) => {
+    const [title, sub, imageUrl] = chunk.split('|').map((s) => s.trim())
+    return { title: title || '', sub: sub || '', imageUrl: imageUrl || '' }
+  })
+}
+
+/* 스크롤 컨테이너의 스크롤바 표시 유틸 클래스 */
+const scrollCls = (show) => (show ? ' sb-scroll-bar' : ' sb-scroll-hide')
+
 /* 텍스트 안의 [[키워드]]를 점선 밑줄로 렌더 — 플레이어에서 클릭하면 설명 모달.
    사전은 탐색 페이지 편집기의 '키워드 사전'에서 관리한다. */
 function RichSpan({ optsStr, content, ctx, i }) {
@@ -796,6 +807,7 @@ export const LIBRARY = {
     defaults: {
       title: '함께 보면 좋아요',
       cardW: '168',
+      scrollbar: false,
       items:
         '수분 프라이머|피부결 정돈 1단계|./makeup-clone-assets/8e01e19fb7cf7c96.avif, 톤업 쿠션|얇게 두 번 레이어|./makeup-clone-assets/d9b261330f3ffccf.avif, 세팅 픽서|마무리 고정|./makeup-clone-assets/42072b0ad4be9333.avif, 립 밤|무너짐 없는 마무리|',
     },
@@ -803,17 +815,15 @@ export const LIBRARY = {
       { key: 'title', label: '패널 제목 (비우면 숨김)', kind: 'text' },
       { key: 'items', label: '카드 목록 (제목|설명|이미지URL, 쉼표 구분)', kind: 'textarea', list: true },
       { key: 'cardW', label: '카드 너비(px)', kind: 'text' },
+      { key: 'scrollbar', label: '스크롤바 상시 표시', kind: 'toggle' },
     ],
     render: (p, ctx) => {
-      const cards = splitList(p.items).map((chunk) => {
-        const [title, sub, imageUrl] = chunk.split('|').map((s) => s.trim())
-        return { title: title || '', sub: sub || '', imageUrl: imageUrl || '' }
-      })
+      const cards = parseCards(p.items)
       const cardW = Math.max(96, Number(p.cardW) || 168)
       return (
         <div className="sb-hscroll">
           {p.title ? <p className="sb-hscroll__title">{kText(p.title, ctx, 'title')}</p> : null}
-          <div className="sb-hscroll__track">
+          <div className={'sb-hscroll__track' + scrollCls(p.scrollbar)}>
             {cards.length === 0 && (
               <span className="sb-pinned-panel__empty">카드 목록이 비어 있어요. "제목|설명|이미지URL" 형태로 입력하세요.</span>
             )}
@@ -830,6 +840,56 @@ export const LIBRARY = {
                 </div>
                 <p className="sb-hscroll__name">{kText(c.title, ctx)}</p>
                 {c.sub ? <p className="sb-hscroll__sub">{kText(c.sub, ctx)}</p> : null}
+              </div>
+            ))}
+          </div>
+        </div>
+      )
+    },
+  },
+
+  vscroll: {
+    label: '세로 스크롤 패널',
+    stage: 'common',
+    icon: '↕️',
+    hint: '고정 높이 안에서 카드를 세로로 스크롤. 카드는 "제목|설명|이미지URL" 쉼표 구분',
+    defaults: {
+      title: '더 볼만한 항목',
+      panelH: '280',
+      scrollbar: true,
+      items:
+        '수분 프라이머|피부결 정돈 1단계|./makeup-clone-assets/8e01e19fb7cf7c96.avif, 톤업 쿠션|얇게 두 번 레이어|./makeup-clone-assets/d9b261330f3ffccf.avif, 세팅 픽서|마무리 고정|./makeup-clone-assets/42072b0ad4be9333.avif, 립 밤|무너짐 없는 마무리|, 쿨링 미스트|오후 수분 보충|',
+    },
+    fields: [
+      { key: 'title', label: '패널 제목 (비우면 숨김)', kind: 'text' },
+      { key: 'items', label: '카드 목록 (제목|설명|이미지URL, 쉼표 구분)', kind: 'textarea', list: true },
+      { key: 'panelH', label: '스크롤 영역 높이(px)', kind: 'text' },
+      { key: 'scrollbar', label: '스크롤바 상시 표시', kind: 'toggle' },
+    ],
+    render: (p, ctx) => {
+      const cards = parseCards(p.items)
+      const panelH = Math.max(120, Number(p.panelH) || 280)
+      return (
+        <div className="sb-vscroll">
+          {p.title ? <p className="sb-hscroll__title">{kText(p.title, ctx, 'title')}</p> : null}
+          <div className={'sb-vscroll__list' + scrollCls(p.scrollbar)} style={{ height: panelH }}>
+            {cards.length === 0 && (
+              <span className="sb-pinned-panel__empty">카드 목록이 비어 있어요. "제목|설명|이미지URL" 형태로 입력하세요.</span>
+            )}
+            {cards.map((c, i) => (
+              <div
+                key={i}
+                className="sb-vscroll__row"
+                role="button"
+                onClick={() => { if (ctx.mode === 'player') ctx.player.openExternal(c.title) }}
+              >
+                <div className="sb-vscroll__thumb">
+                  <Img src={c.imageUrl} alt={c.title} />
+                </div>
+                <div className="sb-vscroll__body">
+                  <p className="sb-vscroll__name">{kText(c.title, ctx)}</p>
+                  {c.sub ? <p className="sb-vscroll__sub">{kText(c.sub, ctx)}</p> : null}
+                </div>
               </div>
             ))}
           </div>
