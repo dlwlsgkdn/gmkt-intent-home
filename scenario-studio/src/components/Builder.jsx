@@ -196,14 +196,11 @@ export default function Builder({ api, scenario }) {
     const baseX = at ? at.x : PAD
     const baseY = at ? at.y : bottom + GAP
     const copies = clip.map((c) => ({
-      ...createItem(c.type, c.props),
-      x: Math.max(0, Math.min(canvasW - c.w, Math.round(baseX + c.relX))),
-      y: Math.max(0, Math.round(baseY + c.relY)),
+      ...cloneItem(c, {
+        x: Math.max(0, Math.min(canvasW - c.w, Math.round(baseX + c.relX))),
+        y: Math.max(0, Math.round(baseY + c.relY)),
+      }),
       w: Math.min(c.w, itemW),
-      h: c.h,
-      hidden: c.hidden,
-      style: c.style ? { ...c.style } : undefined,
-      props: JSON.parse(JSON.stringify(c.props)),
     }))
     setItems((prev) => settle([...prev, ...copies], copies.map((c) => c.id)))
     setSelectedIds(copies.map((c) => c.id))
@@ -300,17 +297,21 @@ export default function Builder({ api, scenario }) {
     setSelectedIds([])
   }
 
-  const cloneOf = (src) => ({
+  /* 아이템 사본 생성 — id 재발급 + props/style 딥카피 (복제·붙여넣기 공용) */
+  const cloneItem = (src, pos) => ({
     ...createItem(src.type, src.props),
-    x: src.x,
-    y: src.y + (src.h || heightsRef.current[src.id] || 80) + GAP,
+    x: pos.x,
+    y: pos.y,
     w: src.w,
     h: src.h,
     locked: false,
     hidden: src.hidden,
     style: src.style ? { ...src.style } : undefined,
-    props: { ...src.props },
+    props: JSON.parse(JSON.stringify(src.props)),
   })
+
+  const cloneOf = (src) =>
+    cloneItem(src, { x: src.x, y: src.y + (src.h || heightsRef.current[src.id] || 80) + GAP })
 
   const duplicateItem = (id) => {
     const src = items.find((it) => it.id === id)

@@ -6,6 +6,16 @@ export const PAD = 24
 export const GAP = 14
 export const MIN_ITEM_W = 160
 
+/* 공용: box가 placed 중 하나와 겹치면 그 아이템을 반환 */
+const hitOf = (placed, box, h) =>
+  placed.find(
+    (p) =>
+      box.x < p.x + p.w &&
+      box.x + box.w > p.x &&
+      box.y < p.y + h(p) &&
+      box.y + h(box) > p.y
+  )
+
 /* 겹침 해소: 이동한 아이템(들)과 잠긴 아이템은 제자리를 지키고,
    겹치는 나머지 아이템들이 아래로 밀린다 */
 export function resolveCollision(items, movedIds, heights) {
@@ -21,13 +31,7 @@ export function resolveCollision(items, movedIds, heights) {
   for (const it of others) {
     const cur = { ...it }
     for (let guard = 0; guard < 100; guard++) {
-      const hit = placed.find(
-        (p) =>
-          cur.x < p.x + p.w &&
-          cur.x + cur.w > p.x &&
-          cur.y < p.y + h(p) &&
-          cur.y + h(cur) > p.y
-      )
+      const hit = hitOf(placed, cur, h)
       if (!hit) break
       cur.y = hit.y + h(hit) + GAP
     }
@@ -66,27 +70,9 @@ export function layoutTwoColumns(items, heights, ctx) {
   return items.map((it) => ({ ...it, ...positioned[it.id] }))
 }
 
-/* 위로 컴팩트: x/너비는 유지한 채 빈 공간 없이 위로 끌어올리기 (겹침도 함께 해소) */
+/* 위로 컴팩트: compactItems(vertical)의 별칭 — 자동 정렬/레이어 순서 변경에서 사용 */
 export function layoutCompactUp(items, heights) {
-  const h = (it) => it.h || heights[it.id] || 80
-  const sorted = sortByPosition(items)
-  const placed = []
-  for (const it of sorted) {
-    let y = PAD
-    for (let guard = 0; guard < 200; guard++) {
-      const hit = placed.find(
-        (p) =>
-          it.x < p.x + p.w &&
-          it.x + it.w > p.x &&
-          y < p.y + h(p) &&
-          y + h(it) > p.y
-      )
-      if (!hit) break
-      y = hit.y + h(hit) + GAP
-    }
-    placed.push({ ...it, y })
-  }
-  return items.map((it) => placed.find((p) => p.id === it.id) || it)
+  return compactItems(items, heights, { direction: 'vertical' })
 }
 
 /* 컴팩트(compact) — react-grid-layout의 compactType 컨벤션.
@@ -101,14 +87,7 @@ export const COMPACT_TYPES = [
 export function compactItems(items, heights, { direction = 'vertical', pinnedIds = [], canvasW = Infinity } = {}) {
   if (direction === 'none') return items
   const h = (it) => it.h || heights[it.id] || 80
-  const overlaps = (placed, box) =>
-    placed.find(
-      (p) =>
-        box.x < p.x + p.w &&
-        box.x + box.w > p.x &&
-        box.y < p.y + h(p) &&
-        box.y + h(box) > p.y
-    )
+  const overlaps = (placed, box) => hitOf(placed, box, h)
   const pinned = new Set(pinnedIds)
   const fixed = items.filter((it) => pinned.has(it.id) || it.locked)
   const movableSrc = items.filter((it) => !pinned.has(it.id) && !it.locked)

@@ -1,8 +1,6 @@
 import React from 'react'
 import { splitList, splitOptions } from './store.js'
-import { FONT_OPTIONS, TEXT_COLORS, TOKEN_RE, parseRichOpts, richSpanPresentation, InlineEditor } from './richtext.jsx'
-
-export { FONT_OPTIONS, TEXT_COLORS }
+import { FONT_OPTIONS, TOKEN_RE, richSpanPresentation, InlineEditor } from './richtext.jsx'
 
 /*
  * 컴포넌트 레지스트리
