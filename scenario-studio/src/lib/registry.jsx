@@ -862,8 +862,15 @@ export const LIBRARY = {
           {p.title ? <p className="sb-hscroll__title">{kText(p.title, ctx, 'title')}</p> : null}
           <div className={'sb-hscroll__track' + scrollCls(p.scrollbar) + (edit ? ' sb-hscroll__track--edit' : '')}>
             {kids.length > 0 ? (
+              /* 자식은 편집자가 정한 자체 너비 유지 (없으면 카드 너비), 높이 지정 시 그대로 */
               kids.map((c) => (
-                <div key={c.key} className="sb-hscroll__slot" style={{ width: cardW }}>{c.node}</div>
+                <div
+                  key={c.key}
+                  className="sb-hscroll__slot"
+                  style={{ width: c.item.w || cardW, height: c.item.h || undefined }}
+                >
+                  {c.node}
+                </div>
               ))
             ) : (
               <>
@@ -917,7 +924,16 @@ export const LIBRARY = {
         <div className={'sb-gridpanel' + (isEditView(ctx) ? ' sb-container-edit' : '')}>
           {p.title ? <p className="sb-hscroll__title">{kText(p.title, ctx, 'title')}</p> : null}
           <div className="sb-gridpanel__grid" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
-            {kids.length > 0 && kids.map((c) => <div key={c.key} className="sb-gridpanel__slot">{c.node}</div>)}
+            {kids.length > 0 &&
+              kids.map((c) => (
+                <div
+                  key={c.key}
+                  className="sb-gridpanel__slot"
+                  style={{ width: c.item.w || undefined, maxWidth: '100%', height: c.item.h || undefined }}
+                >
+                  {c.node}
+                </div>
+              ))}
             {kids.length === 0 && cards.length === 0 && <EmptyDropZone ctx={ctx} />}
             {kids.length === 0 && cards.map((c, i) => (
               <div
@@ -1084,7 +1100,16 @@ export const LIBRARY = {
                 실제 표시 높이 {panelH}px
               </span>
             )}
-            {kids.length > 0 && kids.map((c) => <div key={c.key} className="sb-vscroll__slot">{c.node}</div>)}
+            {kids.length > 0 &&
+              kids.map((c) => (
+                <div
+                  key={c.key}
+                  className="sb-vscroll__slot"
+                  style={{ width: c.item.w || undefined, maxWidth: '100%', height: c.item.h || undefined }}
+                >
+                  {c.node}
+                </div>
+              ))}
             {kids.length === 0 && cards.length === 0 && <EmptyDropZone ctx={ctx} />}
             {kids.length === 0 && cards.map((c, i) => (
               <div
@@ -1154,6 +1179,7 @@ export function renderItem(item, ctx) {
     )
     renderCtx.children = kids.map((k) => ({
       key: k.id,
+      item: k, // 슬롯이 자식의 고유 크기(w/h)를 존중할 수 있도록 전달
       node:
         isEditView(ctx) && ctx.childPointerDown ? (
           <ChildShell item={k} ctx={ctx}>{renderItem(k, ctx)}</ChildShell>

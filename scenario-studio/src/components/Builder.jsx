@@ -248,58 +248,97 @@ export default function Builder({ api, scenario }) {
       return
     }
     const idx = at ? slotIndexAt(parentId, at.containerType, at.cx, at.cy) : Infinity
-    const item = { ...createItem(type, def.defaults), x: 0, y: 0 }
+    // 컨테이너 안 기본 너비: 컴포넌트 고유 기본값(카드류) 또는 320px — 이후 인스펙터에서 자유 조절
+    const item = { ...createItem(type, def.defaults), x: 0, y: 0, w: Math.min(def.defaultW || 320, itemW) }
     setItems((prev) => placeChild([...prev, item], item.id, parentId, idx))
     setSelectedIds([item.id])
     api.showToast(`${def.label}을(를) 레이아웃 안에 배치했어요.`)
   }
 
-  /* 캔버스에서 컨테이너 자식 직접 조작: 클릭 = 선택, 드래그 = 꺼내서 일반 드래그로 전환
-     (컨테이너 위에 다시 놓으면 그 위치 슬롯으로 — 재정렬/이동/꺼내기 모두 가능) */
+  /* 캔버스에서 컨테이너 자식 직접 조작 (2단계 드래그):
+     클릭 = 선택 · 컨테이너 안에서 드래그 = 실시간 슬롯 재정렬 ·
+     포인터가 컨테이너 경계를 벗어나면 자동으로 꺼내져 일반 드래그로 전환
+     (다시 컨테이너 위에 놓으면 그 위치 슬롯으로 복귀) */
   const childPointerDown = (e, childId) => {
     if (e.button !== 0) return
     if (e.target.closest && e.target.closest('.sb-inline-editor')) return
     e.stopPropagation()
     const child = items.find((it) => it.id === childId)
     if (!child) return
+    const parent = items.find((it) => it.id === child.parentId)
     const w = Math.min(child.w || 320, itemW)
     const startX = e.clientX
     const startY = e.clientY
     const shift = e.shiftKey
-    let dragging = false
-    const move = (ev) => {
-      if (!dragging && Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY) > 6) {
-        dragging = true
-        const rect = canvasRef.current.getBoundingClientRect()
-        const cx = (ev.clientX - rect.left) / zoom
-        const cy = (ev.clientY - rect.top) / zoom
-        // 컨테이너에서 꺼내 포인터를 따라가는 일반 드래그로 전환
-        setItems((prev) =>
-          prev.map((it) =>
-            it.id === childId
-              ? {
-                  ...it,
-                  parentId: undefined,
-                  slot: undefined,
-                  w,
-                  x: Math.max(0, Math.round(cx - w / 2)),
-                  y: Math.max(0, Math.round(cy - 20)),
-                }
-              : it
-          )
+    const MARGIN = 14
+    let phase = 'idle' // 'idle' → 'reorder'(컨테이너 안) → 'out'(꺼내진 일반 드래그)
+    let lastSlot = -1
+
+    const toCanvas = (ev) => {
+      const rect = canvasRef.current.getBoundingClientRect()
+      return { cx: (ev.clientX - rect.left) / zoom, cy: (ev.clientY - rect.top) / zoom }
+    }
+    const insideParent = (cx, cy) => {
+      if (!parent) return false
+      const hh = parent.h || heightsRef.current[parent.id] || 80
+      return (
+        cx >= parent.x - MARGIN &&
+        cx <= parent.x + parent.w + MARGIN &&
+        cy >= parent.y - MARGIN &&
+        cy <= parent.y + hh + MARGIN
+      )
+    }
+    const popOut = (cx, cy) => {
+      phase = 'out'
+      setItems((prev) =>
+        prev.map((it) =>
+          it.id === childId
+            ? {
+                ...it,
+                parentId: undefined,
+                slot: undefined,
+                w,
+                x: Math.max(0, Math.round(cx - w / 2)),
+                y: Math.max(0, Math.round(cy - 20)),
+              }
+            : it
         )
+      )
+      setSelectedIds([childId])
+      dragStartRef.current = null
+    }
+
+    const move = (ev) => {
+      if (phase === 'idle') {
+        if (Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY) <= 6) return
+        phase = 'reorder'
         setSelectedIds([childId])
-        dragStartRef.current = null
       }
-      if (dragging) {
-        const rect = canvasRef.current.getBoundingClientRect()
-        onDrag(childId, (ev.clientX - rect.left) / zoom - w / 2, (ev.clientY - rect.top) / zoom - 20, ev.clientX, ev.clientY)
+      const { cx, cy } = toCanvas(ev)
+      if (phase === 'reorder') {
+        if (insideParent(cx, cy)) {
+          // 컨테이너 안: 포인터 위치의 슬롯으로 실시간 재정렬
+          setDropTargetId(parent ? parent.id : null)
+          const idx = slotIndexAt(parent.id, parent.type, cx, cy)
+          if (idx !== lastSlot) {
+            lastSlot = idx
+            setItems((prev) => placeChild(prev, childId, parent.id, idx))
+          }
+          return
+        }
+        // 경계를 벗어남 → 자동으로 꺼내서 일반 드래그로 전환
+        setDropTargetId(null)
+        popOut(cx, cy)
+      }
+      if (phase === 'out') {
+        onDrag(childId, cx - w / 2, cy - 20, ev.clientX, ev.clientY)
       }
     }
     const up = () => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
-      if (dragging) onDragEnd(childId)
+      if (phase === 'out') onDragEnd(childId)
+      else if (phase === 'reorder') setDropTargetId(null)
       else handleSelect(childId, shift)
     }
     window.addEventListener('pointermove', move)

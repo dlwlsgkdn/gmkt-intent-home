@@ -175,7 +175,9 @@ export default function Inspector({
 
       {selected.parentId && (
         <>
-          <p className="sb-profile-config__hint">📦 레이아웃 컴포넌트 안에 배치되어 있어요. 크기·위치는 레이아웃이 정해요.</p>
+          <p className="sb-profile-config__hint">
+            📦 레이아웃 컴포넌트 안에 배치되어 있어요 — 크기는 아래 슬라이더로 그대로 유지되고, 순서는 드래그나 레이어 패널로 바꿔요.
+          </p>
           <div className="sb-inspector__actions">
             <button type="button" className="sb-btn" onClick={() => unnestItem(selected.id)}>
               ⤴ 레이아웃에서 꺼내기
@@ -184,8 +186,6 @@ export default function Inspector({
         </>
       )}
 
-      {!selected.parentId && (
-      <>
       <div className="sb-field">
         <label>너비 — {selected.w}px</label>
         <input
@@ -224,8 +224,6 @@ export default function Inspector({
           </button>
         ) : null}
       </div>
-      </>
-      )}
 
       <div className="sb-inspector__actions">
         <button
