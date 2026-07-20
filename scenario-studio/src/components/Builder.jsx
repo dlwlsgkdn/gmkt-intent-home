@@ -766,8 +766,11 @@ export default function Builder({ api, scenario }) {
 
   return (
     <div className="sb-builder">
-      {/* 상단 바 */}
+      {/* 상단 영역(상단 바 + 단계 탭)을 한 덩어리로 고정 — 상단 바 높이가 가변이어도 겹치지 않게 */}
+      <div className="sb-builder-head">
+      {/* 상단 바 — 1행: 문서 정보 + 발행, 2행: 편집 도구 그룹 */}
       <div className="sb-topbar">
+        <div className="sb-topbar__row">
         <button type="button" className="sb-icon-btn" onClick={api.goHome} aria-label="홈으로">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M15 19l-7-7 7-7" /></svg>
         </button>
@@ -825,23 +828,61 @@ export default function Builder({ api, scenario }) {
         </span>
 
         <div className="sb-topbar__actions">
-          <button type="button" className="sb-icon-btn" title="실행 취소 (⌘Z)" aria-label="실행 취소" disabled={historyRef.current.past.length === 0} onClick={undo}>
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M9 14L4 9l5-5M4 9h10a6 6 0 010 12h-3" /></svg>
-          </button>
-          <button type="button" className="sb-icon-btn" title="다시 실행 (⇧⌘Z)" aria-label="다시 실행" disabled={historyRef.current.future.length === 0} onClick={redo}>
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M15 14l5-5-5-5M20 9H10a6 6 0 000 12h3" /></svg>
-          </button>
-          <div className="sb-zoom-ctl" role="group" aria-label="캔버스 줌">
-            <button type="button" title="축소 (⌘-)" aria-label="축소" onClick={() => zoomBy(-1)}>−</button>
-            <button type="button" className="sb-zoom-ctl__val" title="100%로 (⌘0)" onClick={() => setZoom(1)}>
-              {Math.round(zoom * 100)}%
-            </button>
-            <button type="button" title="확대 (⌘+)" aria-label="확대" onClick={() => zoomBy(1)}>+</button>
-          </div>
-          <button type="button" className="sb-icon-btn" title="공유 링크 복사 — 링크만 열면 바로 체험" aria-label="공유 링크 복사" onClick={copyShareLink}>
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5M10.172 13.828a4 4 0 010-5.656l3-3a4 4 0 015.656 5.656l-1.5 1.5" /></svg>
-          </button>
+          <button type="button" className="sb-btn" onClick={() => api.playScenario(scenario.id)}>시험해보기</button>
 
+          {(scenario.versions || []).length > 0 && (
+            <Dropdown
+              open={openMenu === 'version'}
+              onClose={() => setOpenMenu(null)}
+              button={
+                <button type="button" className={'sb-btn' + (openMenu === 'version' ? ' sb-btn--open' : '')} onClick={() => toggleMenu('version')} title="발행 시점 버전 복원">
+                  버전 {(scenario.versions || []).length}
+                </button>
+              }
+            >
+              {[...(scenario.versions || [])].reverse().map((v, i, arr) => (
+                <button key={v.at} type="button" className="sb-menu__item" onClick={() => restoreVersion(v)}>
+                  <strong>발행 v{arr.length - i}</strong>
+                  <small>
+                    {new Date(v.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    {' · '}설문 {(v.stages.survey || []).length} · 계획 {(v.stages.plan || []).length}
+                  </small>
+                </button>
+              ))}
+            </Dropdown>
+          )}
+
+          {scenario.status === 'published' && (
+            <button type="button" className="sb-btn sb-btn--ghost" onClick={unpublish}>발행 취소</button>
+          )}
+          <button type="button" className="sb-btn sb-btn--primary" onClick={publish}>
+            {scenario.status === 'published' ? '변경사항 재발행' : '발행하기'}
+          </button>
+        </div>
+        </div>
+
+        {/* 2행: 편집 도구 — 연관 도구끼리 그룹, 구분선으로 분리 */}
+        <div className="sb-topbar__row sb-topbar__row--tools">
+          <div className="sb-tb-group" role="group" aria-label="히스토리">
+            <button type="button" className="sb-icon-btn" title="실행 취소 (⌘Z)" aria-label="실행 취소" disabled={historyRef.current.past.length === 0} onClick={undo}>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M9 14L4 9l5-5M4 9h10a6 6 0 010 12h-3" /></svg>
+            </button>
+            <button type="button" className="sb-icon-btn" title="다시 실행 (⇧⌘Z)" aria-label="다시 실행" disabled={historyRef.current.future.length === 0} onClick={redo}>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M15 14l5-5-5-5M20 9H10a6 6 0 000 12h3" /></svg>
+            </button>
+          </div>
+          <span className="sb-tb-sep" aria-hidden="true" />
+          <div className="sb-tb-group" role="group" aria-label="캔버스 줌">
+            <div className="sb-zoom-ctl">
+              <button type="button" title="축소 (⌘-)" aria-label="축소" onClick={() => zoomBy(-1)}>−</button>
+              <button type="button" className="sb-zoom-ctl__val" title="100%로 (⌘0)" onClick={() => setZoom(1)}>
+                {Math.round(zoom * 100)}%
+              </button>
+              <button type="button" title="확대 (⌘+)" aria-label="확대" onClick={() => zoomBy(1)}>+</button>
+            </div>
+          </div>
+          <span className="sb-tb-sep" aria-hidden="true" />
+          <div className="sb-tb-group" role="group" aria-label="레이아웃">
           <Dropdown
             open={openMenu === 'device'}
             onClose={() => setOpenMenu(null)}
@@ -910,37 +951,13 @@ export default function Builder({ api, scenario }) {
               </button>
             ))}
           </Dropdown>
-
-          <button type="button" className="sb-btn" onClick={() => api.playScenario(scenario.id)}>시험해보기</button>
-
-          {(scenario.versions || []).length > 0 && (
-            <Dropdown
-              open={openMenu === 'version'}
-              onClose={() => setOpenMenu(null)}
-              button={
-                <button type="button" className={'sb-btn' + (openMenu === 'version' ? ' sb-btn--open' : '')} onClick={() => toggleMenu('version')} title="발행 시점 버전 복원">
-                  버전 {(scenario.versions || []).length}
-                </button>
-              }
-            >
-              {[...(scenario.versions || [])].reverse().map((v, i, arr) => (
-                <button key={v.at} type="button" className="sb-menu__item" onClick={() => restoreVersion(v)}>
-                  <strong>발행 v{arr.length - i}</strong>
-                  <small>
-                    {new Date(v.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                    {' · '}설문 {(v.stages.survey || []).length} · 계획 {(v.stages.plan || []).length}
-                  </small>
-                </button>
-              ))}
-            </Dropdown>
-          )}
-
-          {scenario.status === 'published' && (
-            <button type="button" className="sb-btn sb-btn--ghost" onClick={unpublish}>발행 취소</button>
-          )}
-          <button type="button" className="sb-btn sb-btn--primary" onClick={publish}>
-            {scenario.status === 'published' ? '변경사항 재발행' : '발행하기'}
-          </button>
+          </div>
+          <span className="sb-tb-sep" aria-hidden="true" />
+          <div className="sb-tb-group" role="group" aria-label="공유">
+            <button type="button" className="sb-icon-btn" title="공유 링크 복사 — 링크만 열면 바로 체험" aria-label="공유 링크 복사" onClick={copyShareLink}>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5M10.172 13.828a4 4 0 010-5.656l3-3a4 4 0 015.656 5.656l-1.5 1.5" /></svg>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -970,6 +987,7 @@ export default function Builder({ api, scenario }) {
           </button>
         ))}
         <p className="sb-stage-desc">{stageMeta?.desc}</p>
+      </div>
       </div>
 
       <div className="sb-workspace">
