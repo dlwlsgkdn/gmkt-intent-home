@@ -78,7 +78,8 @@ export const DEFAULT_PROFILE = {
 
 const PROFILE_KEY = 'ddak-profile-v1'
 
-export function loadProfile() {
+/* 구(v1 단일 키) 프로필 — loadAccounts 마이그레이션 전용 */
+function loadLegacyProfile() {
   try {
     const raw = localStorage.getItem(PROFILE_KEY)
     if (!raw) return DEFAULT_PROFILE
@@ -93,12 +94,14 @@ export function loadProfile() {
   }
 }
 
-export function saveProfile(profile) {
-  try {
-    localStorage.setItem(PROFILE_KEY, JSON.stringify(profile))
-  } catch (e) {
-    /* ignore */
-  }
+/* 프로필 요약 패널 기준 노출 프로필 항목 —
+   설문 단계 profilePanel 컴포넌트들이 숨긴 라벨을 제외한다 (플레이어·빌더 요약 공용) */
+export function visibleProfileItems(profile, scenario) {
+  const items = ((profile && profile.items) || []).filter((it) => it.label && it.label.trim())
+  const hidden = (scenario.stages.survey || [])
+    .filter((it) => it.type === 'profilePanel')
+    .flatMap((it) => String(it.props.hidden || '').split(',').map((s) => s.trim()).filter(Boolean))
+  return items.filter((it) => !hidden.includes(it.label))
 }
 
 /* ── 뷰어 기기 설정 — 탐색/설문/계획 실행 화면의 모바일 프레임 폭 ── */
@@ -196,10 +199,10 @@ export function loadAccounts() {
   }
   // 최초 실행: 기존 단일 저장소(v1 키들)를 첫 계정으로 마이그레이션 (원본 키는 남겨둠)
   const first = createAccount({
-    profile: loadProfile(),
-    explore: loadExplore(),
-    scenarios: loadScenarios(),
-    threads: loadThreads(),
+    profile: loadLegacyProfile(),
+    explore: loadLegacyExplore(),
+    scenarios: loadLegacyScenarios(),
+    threads: loadLegacyThreads(),
   })
   return { accounts: [first], activeId: first.id }
 }
@@ -212,11 +215,10 @@ export function saveAccounts(accounts, activeId) {
   }
 }
 
-/* ── 쇼핑 쓰레드 히스토리 — 시나리오 체험 1회 = 쓰레드 1개 ── */
+/* 구(v1 단일 키) 쓰레드 — loadAccounts 마이그레이션 전용 */
 const THREADS_KEY = 'ddak-threads-v1'
-const THREADS_MAX = 30
 
-export function loadThreads() {
+function loadLegacyThreads() {
   try {
     const raw = localStorage.getItem(THREADS_KEY)
     if (!raw) return []
@@ -227,17 +229,10 @@ export function loadThreads() {
   }
 }
 
-export function saveThreads(threads) {
-  try {
-    localStorage.setItem(THREADS_KEY, JSON.stringify(threads.slice(0, THREADS_MAX)))
-  } catch (e) {
-    /* ignore */
-  }
-}
-
+/* 구(v1 단일 키) 탐색 페이지 — loadAccounts 마이그레이션 전용 */
 const EXPLORE_KEY = 'ddak-explore-page-v1'
 
-export function loadExplore() {
+function loadLegacyExplore() {
   try {
     const raw = localStorage.getItem(EXPLORE_KEY)
     if (!raw) return DEFAULT_EXPLORE
@@ -251,14 +246,6 @@ export function loadExplore() {
     }
   } catch (e) {
     return DEFAULT_EXPLORE
-  }
-}
-
-export function saveExplore(cfg) {
-  try {
-    localStorage.setItem(EXPLORE_KEY, JSON.stringify(cfg))
-  } catch (e) {
-    /* ignore */
   }
 }
 
@@ -291,7 +278,8 @@ export function createItem(type, defaults, index = 0) {
   }
 }
 
-export function loadScenarios() {
+/* 구(v1 단일 키) 시나리오 — loadAccounts 마이그레이션 전용 */
+function loadLegacyScenarios() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return []
@@ -299,14 +287,6 @@ export function loadScenarios() {
     return Array.isArray(parsed) ? parsed : []
   } catch (e) {
     return []
-  }
-}
-
-export function saveScenarios(scenarios) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(scenarios))
-  } catch (e) {
-    /* storage full or unavailable — mockup tool, ignore */
   }
 }
 

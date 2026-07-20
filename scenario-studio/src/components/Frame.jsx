@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { DEVICE_PRESETS } from '../lib/store.js'
+import Dropdown from './ui/Dropdown.jsx'
 
 /* 원본 clean-home 프레임: 배경 블롭 + 플로팅 액션바 */
 export function BgBlobs() {
@@ -65,28 +66,29 @@ export function ViewerDeviceControl({ deviceKey, onChange }) {
   const device = DEVICE_PRESETS.find((d) => d.key === deviceKey) || DEVICE_PRESETS[0]
   return (
     <div className="sb-viewer-ctl">
-      <button type="button" className="sb-viewer-ctl__btn" onClick={() => setOpen((v) => !v)} title="화면 크기 선택">
-        {device.icon} {device.w}px
-        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" /></svg>
-      </button>
-      {open && (
-        <>
-          <div className="sb-menu-backdrop" onClick={() => setOpen(false)} />
-          <div className="sb-menu sb-viewer-ctl__menu">
-            {DEVICE_PRESETS.map((p) => (
-              <button
-                key={p.key}
-                type="button"
-                className={'sb-menu__item' + (p.key === device.key ? ' sb-menu__item--active' : '')}
-                onClick={() => { onChange(p.key); setOpen(false) }}
-              >
-                <strong>{p.icon} {p.label}</strong>
-                <small>화면 폭 {p.w}px{p.key === device.key ? ' · 사용 중' : ''}</small>
-              </button>
-            ))}
-          </div>
-        </>
-      )}
+      <Dropdown
+        open={open}
+        onClose={() => setOpen(false)}
+        menuClass="sb-viewer-ctl__menu"
+        button={
+          <button type="button" className="sb-viewer-ctl__btn" onClick={() => setOpen((v) => !v)} title="화면 크기 선택">
+            {device.icon} {device.w}px
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" /></svg>
+          </button>
+        }
+      >
+        {DEVICE_PRESETS.map((p) => (
+          <button
+            key={p.key}
+            type="button"
+            className={'sb-menu__item' + (p.key === device.key ? ' sb-menu__item--active' : '')}
+            onClick={() => { onChange(p.key); setOpen(false) }}
+          >
+            <strong>{p.icon} {p.label}</strong>
+            <small>화면 폭 {p.w}px{p.key === device.key ? ' · 사용 중' : ''}</small>
+          </button>
+        ))}
+      </Dropdown>
     </div>
   )
 }
@@ -98,16 +100,19 @@ export function ProfileControl({ api }) {
   const name = (api.profile && api.profile.name) || '사용자'
   return (
     <div className="sb-viewer-ctl sb-profile-ctl">
-      <button type="button" className="sb-viewer-ctl__btn" onClick={() => setOpen((v) => !v)} title="사용자 프로필 전환">
-        <span className="sb-profile-ctl__avatar">{name.slice(0, 1)}</span>
-        {name}
-        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" /></svg>
-      </button>
-      {open && (
-        <>
-          <div className="sb-menu-backdrop" onClick={() => setOpen(false)} />
-          <div className="sb-menu sb-viewer-ctl__menu sb-profile-ctl__menu">
-            {api.accounts.map((a) => {
+      <Dropdown
+        open={open}
+        onClose={() => setOpen(false)}
+        menuClass="sb-viewer-ctl__menu sb-profile-ctl__menu"
+        button={
+          <button type="button" className="sb-viewer-ctl__btn" onClick={() => setOpen((v) => !v)} title="사용자 프로필 전환">
+            <span className="sb-profile-ctl__avatar">{name.slice(0, 1)}</span>
+            {name}
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" /></svg>
+          </button>
+        }
+      >
+        {api.accounts.map((a) => {
               const isActive = a.id === api.activeAccountId
               return (
                 <div key={a.id} className="sb-profile-ctl__row">
@@ -137,23 +142,21 @@ export function ProfileControl({ api }) {
                 </div>
               )
             })}
-            <button
-              type="button"
-              className="sb-menu__item sb-profile-ctl__add"
-              onClick={() => {
-                const nm = window.prompt('새 프로필 이름을 입력하세요', '')
-                if (nm != null) {
-                  setOpen(false)
-                  api.addAccount(nm)
-                }
-              }}
-            >
-              <strong>+ 새 프로필</strong>
-              <small>탐색 페이지·시나리오를 새로 시작해요</small>
-            </button>
-          </div>
-        </>
-      )}
+        <button
+          type="button"
+          className="sb-menu__item sb-profile-ctl__add"
+          onClick={() => {
+            const nm = window.prompt('새 프로필 이름을 입력하세요', '')
+            if (nm != null) {
+              setOpen(false)
+              api.addAccount(nm)
+            }
+          }}
+        >
+          <strong>+ 새 프로필</strong>
+          <small>탐색 페이지·시나리오를 새로 시작해요</small>
+        </button>
+      </Dropdown>
     </div>
   )
 }

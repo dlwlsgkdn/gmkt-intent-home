@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { STAGES, DEVICE_PRESETS, sortByPosition, uid } from '../lib/store.js'
+import { STAGES, DEVICE_PRESETS, sortByPosition, uid, visibleProfileItems } from '../lib/store.js'
 import { renderItem } from '../lib/registry.jsx'
 import { BgBlobs, FloatingBar, StudioFab, ViewerDeviceControl } from './Frame.jsx'
 import ThreadPanel from './ThreadPanel.jsx'
@@ -57,11 +57,7 @@ export default function Player({ api, scenario }) {
   const prev = () => setStageIdx((i) => Math.max(0, i - 1))
 
   /* 프로필(고정 설문 정보): 설문 단계의 프로필 요약 패널 컴포넌트가 숨긴 항목 제외 */
-  const allProfileItems = (api.profile?.items || []).filter((it) => it.label && it.label.trim())
-  const hiddenLabels = (scenario.stages.survey || [])
-    .filter((it) => it.type === 'profilePanel')
-    .flatMap((it) => String(it.props.hidden || '').split(',').map((s) => s.trim()).filter(Boolean))
-  const profileItems = allProfileItems.filter((it) => !hiddenLabels.includes(it.label))
+  const profileItems = visibleProfileItems(api.profile, scenario)
   const includedProfile = profileItems.filter((it) => !excludedProfile.includes(it.label))
 
   const toggleProfileItem = (label) => {

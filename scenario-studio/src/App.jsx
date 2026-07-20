@@ -136,12 +136,12 @@ export default function App() {
     [scenarios, route.id]
   )
 
-  /* 쓰레드 upsert — 같은 id가 있으면 갱신, 없으면 맨 앞에 추가 (최신순 유지) */
+  /* 쓰레드 upsert — 같은 id가 있으면 갱신, 없으면 맨 앞에 추가 (최신순, 최근 30개 유지) */
   const recordThread = (entry) => {
     setThreads((prev) => {
       const rest = prev.filter((t) => t.id !== entry.id)
       const existing = prev.find((t) => t.id === entry.id)
-      return [{ ...existing, ...entry, updatedAt: new Date().toISOString() }, ...rest]
+      return [{ ...existing, ...entry, updatedAt: new Date().toISOString() }, ...rest].slice(0, 30)
     })
   }
 

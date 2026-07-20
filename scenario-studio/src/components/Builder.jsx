@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { STAGES, DEVICE_PRESETS, CHIP_COLORS, createItem } from '../lib/store.js'
+import { STAGES, DEVICE_PRESETS, CHIP_COLORS, createItem, visibleProfileItems } from '../lib/store.js'
 import { LIBRARY } from '../lib/registry.jsx'
 import {
   PAD, GAP, MIN_ITEM_W,
@@ -11,6 +11,7 @@ import CanvasItem from './builder/CanvasItem.jsx'
 import Palette from './builder/Palette.jsx'
 import Inspector from './builder/Inspector.jsx'
 import CanvasTextToolbar from './builder/CanvasTextToolbar.jsx'
+import ContextMenu from './builder/ContextMenu.jsx'
 
 const SNAP = 6
 
@@ -701,10 +702,6 @@ export default function Builder({ api, scenario }) {
   }
 
   /* 캔버스 렌더 컨텍스트: 프로필 데이터, 배지 클릭 토글, 계획 요약 미리보기 */
-  const profileItems = (api.profile?.items || []).filter((it) => it.label && it.label.trim())
-  const hiddenProfileLabels = (scenario.stages.survey || [])
-    .filter((it) => it.type === 'profilePanel')
-    .flatMap((it) => String(it.props.hidden || '').split(',').map((s) => s.trim()).filter(Boolean))
   const canvasCtx = {
     mode: 'canvas',
     profile: api.profile,
@@ -720,7 +717,7 @@ export default function Builder({ api, scenario }) {
       setInlineEdit(null)
     },
     summaryPreview: {
-      profile: profileItems.filter((it) => !hiddenProfileLabels.includes(it.label)),
+      profile: visibleProfileItems(api.profile, scenario),
       questions: (scenario.stages.survey || [])
         .filter((it) => it.type === 'surveyQuestion')
         .map((q) => ({ q: q.props.question, a: '아무거나' })),
@@ -1013,58 +1010,18 @@ export default function Builder({ api, scenario }) {
         <CanvasTextToolbar active={!!inlineEdit} ensureKeyword={ensureKeyword} />
 
         {/* 우클릭 컨텍스트 메뉴 (Figma/Canva식) */}
-        {ctxMenu && (
-          <>
-            <div
-              className="sb-menu-backdrop"
-              onClick={() => setCtxMenu(null)}
-              onContextMenu={(e) => { e.preventDefault(); setCtxMenu(null) }}
-            />
-            <div className="sb-menu sb-ctx-menu" style={{ left: ctxMenu.sx, top: ctxMenu.sy }}>
-              {ctxMenu.itemId ? (
-                <>
-                  <button type="button" onClick={() => { setCtxMenu(null); duplicateSelected() }}>
-                    복제 <kbd>⌘D</kbd>
-                  </button>
-                  <button type="button" onClick={() => { setCtxMenu(null); copySelected() }}>
-                    복사 <kbd>⌘C</kbd>
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!clipboardRef.current || clipboardRef.current.length === 0}
-                    onClick={() => { setCtxMenu(null); pasteClipboard({ x: ctxMenu.cx, y: ctxMenu.cy }) }}
-                  >
-                    붙여넣기 <kbd>⌘V</kbd>
-                  </button>
-                  <span className="sb-ctx-menu__sep" />
-                  <button type="button" onClick={() => { setCtxMenu(null); toggleSelected('locked') }}>
-                    {items.find((it) => it.id === ctxMenu.itemId)?.locked ? '잠금 해제' : '위치 잠금'}
-                  </button>
-                  <button type="button" onClick={() => { setCtxMenu(null); toggleSelected('hidden') }}>
-                    {items.find((it) => it.id === ctxMenu.itemId)?.hidden ? '실행 시 보이기' : '실행 시 숨기기'}
-                  </button>
-                  <span className="sb-ctx-menu__sep" />
-                  <button type="button" className="sb-ctx-menu__danger" onClick={() => { setCtxMenu(null); removeSelected() }}>
-                    삭제 <kbd>Del</kbd>
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    disabled={!clipboardRef.current || clipboardRef.current.length === 0}
-                    onClick={() => { setCtxMenu(null); pasteClipboard({ x: ctxMenu.cx, y: ctxMenu.cy }) }}
-                  >
-                    여기에 붙여넣기 <kbd>⌘V</kbd>
-                  </button>
-                  <button type="button" onClick={() => { setCtxMenu(null); setSelectedIds(items.map((it) => it.id)) }}>
-                    전체 선택 <kbd>⌘A</kbd>
-                  </button>
-                </>
-              )}
-            </div>
-          </>
-        )}
+        <ContextMenu
+          menu={ctxMenu}
+          items={items}
+          hasClipboard={!!(clipboardRef.current && clipboardRef.current.length > 0)}
+          onClose={() => setCtxMenu(null)}
+          onDuplicate={duplicateSelected}
+          onCopy={copySelected}
+          onPaste={pasteClipboard}
+          onToggle={toggleSelected}
+          onRemove={removeSelected}
+          onSelectAll={() => setSelectedIds(items.map((it) => it.id))}
+        />
       </div>
     </div>
   )
