@@ -41,10 +41,11 @@ export default function Player({ api, scenario, resume }) {
       return () => clearTimeout(t)
     }
   }, [stageIdx])
-  /* 숨김 처리된 컴포넌트는 실행에서 제외 */
+  /* 숨김·컨테이너 자식 제외한 최상위만 스택 렌더 (자식은 컨테이너가 렌더) */
+  const stageItems = scenario.stages[stage.key] || []
   const items = useMemo(
-    () => sortByPosition(scenario.stages[stage.key] || []).filter((it) => !it.hidden),
-    [scenario, stage.key]
+    () => sortByPosition(stageItems).filter((it) => !it.hidden && !it.parentId),
+    [scenario, stage.key] // eslint-disable-line react-hooks/exhaustive-deps
   )
 
   /* 처음부터 다시 체험 */
@@ -211,7 +212,7 @@ export default function Player({ api, scenario, resume }) {
               className="sb-player__item"
               style={{ maxWidth: it.w, height: it.h || undefined, overflow: it.h ? 'hidden' : undefined }}
             >
-              {renderItem(it, { mode: 'player', player: playerApi, profile: api.profile })}
+              {renderItem(it, { mode: 'player', player: playerApi, profile: api.profile, allItems: stageItems })}
             </div>
           ))}
         </div>

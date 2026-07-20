@@ -802,8 +802,10 @@ export const LIBRARY = {
   hscroll: {
     label: '가로 스크롤 패널',
     stage: 'common',
+    category: 'layout',
+    container: true,
     icon: '↔️',
-    hint: '카드를 가로로 넘겨 보는 패널. 카드는 "제목|설명|이미지URL" 형태로 쉼표 구분',
+    hint: '가로 스크롤 레이아웃 — 다른 컴포넌트를 끌어다 안에 배치. 비어 있으면 카드 목록 표시',
     defaults: {
       title: '함께 보면 좋아요',
       cardW: '168',
@@ -820,28 +822,37 @@ export const LIBRARY = {
     render: (p, ctx) => {
       const cards = parseCards(p.items)
       const cardW = Math.max(96, Number(p.cardW) || 168)
+      const kids = ctx.children || []
       return (
         <div className="sb-hscroll">
           {p.title ? <p className="sb-hscroll__title">{kText(p.title, ctx, 'title')}</p> : null}
           <div className={'sb-hscroll__track' + scrollCls(p.scrollbar)}>
-            {cards.length === 0 && (
-              <span className="sb-pinned-panel__empty">카드 목록이 비어 있어요. "제목|설명|이미지URL" 형태로 입력하세요.</span>
+            {kids.length > 0 ? (
+              kids.map((c) => (
+                <div key={c.key} className="sb-hscroll__slot" style={{ width: cardW }}>{c.node}</div>
+              ))
+            ) : (
+              <>
+                {cards.length === 0 && (
+                  <span className="sb-pinned-panel__empty">컴포넌트를 끌어다 놓거나 카드 목록("제목|설명|이미지URL")을 입력하세요.</span>
+                )}
+                {cards.map((c, i) => (
+                  <div
+                    key={i}
+                    className="sb-hscroll__card"
+                    style={{ width: cardW }}
+                    role="button"
+                    onClick={() => { if (ctx.mode === 'player') ctx.player.openExternal(c.title) }}
+                  >
+                    <div className="sb-hscroll__thumb">
+                      <Img src={c.imageUrl} alt={c.title} />
+                    </div>
+                    <p className="sb-hscroll__name">{kText(c.title, ctx)}</p>
+                    {c.sub ? <p className="sb-hscroll__sub">{kText(c.sub, ctx)}</p> : null}
+                  </div>
+                ))}
+              </>
             )}
-            {cards.map((c, i) => (
-              <div
-                key={i}
-                className="sb-hscroll__card"
-                style={{ width: cardW }}
-                role="button"
-                onClick={() => { if (ctx.mode === 'player') ctx.player.openExternal(c.title) }}
-              >
-                <div className="sb-hscroll__thumb">
-                  <Img src={c.imageUrl} alt={c.title} />
-                </div>
-                <p className="sb-hscroll__name">{kText(c.title, ctx)}</p>
-                {c.sub ? <p className="sb-hscroll__sub">{kText(c.sub, ctx)}</p> : null}
-              </div>
-            ))}
           </div>
         </div>
       )
@@ -851,8 +862,10 @@ export const LIBRARY = {
   gridPanel: {
     label: '그리드 패널',
     stage: 'common',
+    category: 'layout',
+    container: true,
     icon: '🔲',
-    hint: 'N열 카드 그리드. 카드는 "제목|설명|이미지URL" 쉼표 구분',
+    hint: 'N열 그리드 레이아웃 — 다른 컴포넌트를 끌어다 안에 배치. 비어 있으면 카드 목록 표시',
     defaults: {
       title: '카테고리 둘러보기',
       cols: '2',
@@ -867,14 +880,16 @@ export const LIBRARY = {
     render: (p, ctx) => {
       const cards = parseCards(p.items)
       const cols = Math.max(1, Math.min(4, Number(p.cols) || 2))
+      const kids = ctx.children || []
       return (
         <div className="sb-gridpanel">
           {p.title ? <p className="sb-hscroll__title">{kText(p.title, ctx, 'title')}</p> : null}
           <div className="sb-gridpanel__grid" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
-            {cards.length === 0 && (
-              <span className="sb-pinned-panel__empty">카드 목록이 비어 있어요. "제목|설명|이미지URL" 형태로 입력하세요.</span>
+            {kids.length > 0 && kids.map((c) => <div key={c.key} className="sb-gridpanel__slot">{c.node}</div>)}
+            {kids.length === 0 && cards.length === 0 && (
+              <span className="sb-pinned-panel__empty">컴포넌트를 끌어다 놓거나 카드 목록("제목|설명|이미지URL")을 입력하세요.</span>
             )}
-            {cards.map((c, i) => (
+            {kids.length === 0 && cards.map((c, i) => (
               <div
                 key={i}
                 className="sb-hscroll__card sb-gridpanel__card"
@@ -897,8 +912,10 @@ export const LIBRARY = {
   carousel: {
     label: '싱글 스크롤 캐러셀',
     stage: 'common',
+    category: 'layout',
+    container: true,
     icon: '🎠',
-    hint: '한 장씩 스냅되며 넘겨 보는 가로 카드. "제목|설명|이미지URL" 쉼표 구분',
+    hint: '한 장씩 스냅되는 캐러셀 레이아웃 — 다른 컴포넌트를 끌어다 슬라이드로. 비어 있으면 카드 목록',
     defaults: {
       title: '',
       scrollbar: false,
@@ -912,14 +929,17 @@ export const LIBRARY = {
     ],
     render: (p, ctx) => {
       const cards = parseCards(p.items)
+      const kids = ctx.children || []
+      const slideCount = kids.length > 0 ? kids.length : cards.length
       return (
         <div className="sb-carousel">
           {p.title ? <p className="sb-hscroll__title">{kText(p.title, ctx, 'title')}</p> : null}
           <div className={'sb-carousel__track' + scrollCls(p.scrollbar)}>
-            {cards.length === 0 && (
-              <span className="sb-pinned-panel__empty">카드 목록이 비어 있어요. "제목|설명|이미지URL" 형태로 입력하세요.</span>
+            {kids.length > 0 && kids.map((c) => <div key={c.key} className="sb-carousel__slot">{c.node}</div>)}
+            {kids.length === 0 && cards.length === 0 && (
+              <span className="sb-pinned-panel__empty">컴포넌트를 끌어다 놓거나 카드 목록("제목|설명|이미지URL")을 입력하세요.</span>
             )}
-            {cards.map((c, i) => (
+            {kids.length === 0 && cards.map((c, i) => (
               <div
                 key={i}
                 className="sb-carousel__card"
@@ -934,8 +954,8 @@ export const LIBRARY = {
               </div>
             ))}
           </div>
-          {cards.length > 1 && (
-            <p className="sb-carousel__hint" aria-hidden="true">← 옆으로 넘겨보세요 · {cards.length}장 →</p>
+          {slideCount > 1 && (
+            <p className="sb-carousel__hint" aria-hidden="true">← 옆으로 넘겨보세요 · {slideCount}장 →</p>
           )}
         </div>
       )
@@ -945,6 +965,7 @@ export const LIBRARY = {
   tablePanel: {
     label: '테이블',
     stage: 'common',
+    category: 'layout',
     icon: '📊',
     hint: '헤더 + 행 표. 셀은 "|", 행은 줄바꿈으로 구분 (셀 안 쉼표 사용 가능)',
     defaults: {
@@ -999,8 +1020,10 @@ export const LIBRARY = {
   vscroll: {
     label: '세로 스크롤 패널',
     stage: 'common',
+    category: 'layout',
+    container: true,
     icon: '↕️',
-    hint: '고정 높이 안에서 카드를 세로로 스크롤. 카드는 "제목|설명|이미지URL" 쉼표 구분',
+    hint: '고정 높이 세로 스크롤 레이아웃 — 다른 컴포넌트를 끌어다 안에 배치. 비어 있으면 카드 목록',
     defaults: {
       title: '더 볼만한 항목',
       panelH: '280',
@@ -1017,14 +1040,16 @@ export const LIBRARY = {
     render: (p, ctx) => {
       const cards = parseCards(p.items)
       const panelH = Math.max(120, Number(p.panelH) || 280)
+      const kids = ctx.children || []
       return (
         <div className="sb-vscroll">
           {p.title ? <p className="sb-hscroll__title">{kText(p.title, ctx, 'title')}</p> : null}
           <div className={'sb-vscroll__list' + scrollCls(p.scrollbar)} style={{ height: panelH }}>
-            {cards.length === 0 && (
-              <span className="sb-pinned-panel__empty">카드 목록이 비어 있어요. "제목|설명|이미지URL" 형태로 입력하세요.</span>
+            {kids.length > 0 && kids.map((c) => <div key={c.key} className="sb-vscroll__slot">{c.node}</div>)}
+            {kids.length === 0 && cards.length === 0 && (
+              <span className="sb-pinned-panel__empty">컴포넌트를 끌어다 놓거나 카드 목록("제목|설명|이미지URL")을 입력하세요.</span>
             )}
-            {cards.map((c, i) => (
+            {kids.length === 0 && cards.map((c, i) => (
               <div
                 key={i}
                 className="sb-vscroll__row"
@@ -1073,10 +1098,26 @@ export function libraryForStage(stageKey) {
     .map(([type, def]) => ({ type, ...def }))
 }
 
+/* 컨테이너(레이아웃) 컴포넌트의 자식 아이템 — 같은 스테이지 배열에 parentId로 저장 */
+export function childrenOf(items, parentId) {
+  return (items || [])
+    .filter((it) => it.parentId === parentId)
+    .sort((a, b) => (a.slot || 0) - (b.slot || 0))
+}
+
 export function renderItem(item, ctx) {
   const def = LIBRARY[item.type]
   if (!def) return <div className="text-xs text-red-400">알 수 없는 컴포넌트: {item.type}</div>
-  const el = def.render(item.props, { ...ctx, itemId: item.id })
+
+  /* 컨테이너면 자식들을 먼저 렌더해 ctx.children으로 공급 (ctx.allItems 필요) */
+  let renderCtx = { ...ctx, itemId: item.id }
+  if (def.container) {
+    const kids = childrenOf(ctx.allItems, item.id).filter(
+      (k) => !(ctx.mode === 'player' && k.hidden)
+    )
+    renderCtx.children = kids.map((k) => ({ key: k.id, node: renderItem(k, ctx) }))
+  }
+  const el = def.render(item.props, renderCtx)
 
   /* 텍스트 스타일이 지정된 경우 래퍼로 감싸 강제 상속시킨다 */
   const st = item.style || {}

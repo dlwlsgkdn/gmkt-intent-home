@@ -5,6 +5,7 @@ import { LIBRARY, renderItem } from '../../lib/registry.jsx'
 export default function CanvasItem({
   item,
   zoom = 1,
+  dropTarget = false,
   selected,
   dragPos,
   sizeDraft,
@@ -104,7 +105,8 @@ export default function CanvasItem({
         (dragging ? ' sb-canvas-item--dragging' : '') +
         (resizing ? ' sb-canvas-item--resizing' : '') +
         (locked ? ' sb-canvas-item--locked' : '') +
-        (item.hidden ? ' sb-canvas-item--hidden' : '')
+        (item.hidden ? ' sb-canvas-item--hidden' : '') +
+        (dropTarget ? ' sb-canvas-item--drop-target' : '')
       }
       style={{ left: x, top: y, width: w, height: h || 'auto' }}
       onPointerDown={onPointerDown}

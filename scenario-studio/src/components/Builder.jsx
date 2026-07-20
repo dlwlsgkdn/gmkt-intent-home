@@ -44,6 +44,19 @@ export default function Builder({ api, scenario }) {
   const canvasRef = useRef(null)
 
   const items = isExplore ? (api.explore.items || []) : (scenario.stages[stageKey] || [])
+  /* 컨테이너(레이아웃) 안의 자식은 캔버스 절대배치 대상이 아니다 — 캔버스/레이아웃 연산은 최상위만 */
+  const topItems = items.filter((it) => !it.parentId)
+  const heightOf = (it) => it.h || heightsRef.current[it.id] || 80
+  const [dropTargetId, setDropTargetId] = useState(null) // 드래그 중 컨테이너 드롭 대상 하이라이트
+  /* (x, y) 캔버스 좌표를 덮는 컨테이너 아이템 */
+  const containerAt = (x, y, excludeId) =>
+    topItems.find((it) => {
+      if (it.id === excludeId) return false
+      if (!LIBRARY[it.type]?.container) return false
+      return x >= it.x && x <= it.x + it.w && y >= it.y && y <= it.y + heightOf(it)
+    })
+  const nextSlot = (list, parentId) =>
+    list.filter((it) => it.parentId === parentId).reduce((m, it) => Math.max(m, it.slot || 0), 0) + 1
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
   const selected = items.find((it) => it.id === selectedId) || null
   const chipColor = scenario.color || '#5f7465'
@@ -60,16 +73,25 @@ export default function Builder({ api, scenario }) {
   const compactType = scenario.compact || (scenario.gravity === false ? 'none' : 'vertical')
   const compactOn = compactType !== 'none'
   const compactOpts = (pinnedIds = []) => ({ direction: compactType, pinnedIds, canvasW })
-  const settle = (list, movedIds) => {
-    const resolved = resolveCollision(list, movedIds, heightsRef.current)
-    return compactOn ? compactItems(resolved, heightsRef.current, compactOpts()) : resolved
+  /* 레이아웃 연산(fn)을 최상위 아이템에만 적용하고 자식은 그대로 통과 */
+  const withTopOnly = (list, fn) => {
+    const top = list.filter((it) => !it.parentId)
+    const kids = list.filter((it) => it.parentId)
+    return [...fn(top), ...kids]
   }
+  const settle = (list, movedIds) =>
+    withTopOnly(list, (top) => {
+      const resolved = resolveCollision(top, movedIds, heightsRef.current)
+      return compactOn ? compactItems(resolved, heightsRef.current, compactOpts()) : resolved
+    })
+  const compactTop = (list) =>
+    withTopOnly(list, (top) => (compactOn ? compactItems(top, heightsRef.current, compactOpts()) : top))
   const changeCompact = (type) => {
     setOpenMenu(null)
     if (type.key === compactType) return
     api.updateScenario(scenario.id, (s) => ({ ...s, compact: type.key }))
     if (type.key !== 'none') {
-      setItems((prev) => compactItems(prev, heightsRef.current, { direction: type.key, canvasW }))
+      setItems((prev) => withTopOnly(prev, (top) => compactItems(top, heightsRef.current, { direction: type.key, canvasW })))
     }
     api.showToast(`${type.label} — ${type.desc}`)
   }
@@ -159,6 +181,7 @@ export default function Builder({ api, scenario }) {
     api.updateExplore((prev) => ({
       ...prev,
       items: (prev.items || []).map((it) => {
+        if (it.parentId) return it
         const w = Math.min(it.w, itemW)
         const x = Math.max(0, Math.min(canvasW - PAD - w, it.x))
         return { ...it, w, x }
@@ -166,7 +189,7 @@ export default function Builder({ api, scenario }) {
     }))
     // 폭 변경으로 높이가 다시 측정된 뒤 겹침 없이 재배치
     setTimeout(() => {
-      setItems((prev) => layoutCompactUp(prev, heightsRef.current))
+      setItems((prev) => withTopOnly(prev, (top) => layoutCompactUp(top, heightsRef.current)))
     }, 200)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isExplore, canvasW])
@@ -177,14 +200,41 @@ export default function Builder({ api, scenario }) {
     // 컴포넌트별 기본 폭 (예: 상품/영상/게시글 카드는 세로형으로 시작)
     const w = Math.min(def.defaultW || itemW, itemW)
     setItems((prev) => {
-      const bottom = prev.reduce(
-        (max, it) => Math.max(max, it.y + (heightsRef.current[it.id] || 80)),
-        PAD - GAP
-      )
-      const next = [...prev, { ...item, x: PAD, y: bottom + GAP, w }]
-      return compactOn ? compactItems(next, heightsRef.current, compactOpts()) : next
+      const bottom = prev
+        .filter((it) => !it.parentId)
+        .reduce((max, it) => Math.max(max, it.y + (heightsRef.current[it.id] || 80)), PAD - GAP)
+      return compactTop([...prev, { ...item, x: PAD, y: bottom + GAP, w }])
     })
     setSelectedIds([item.id])
+  }
+
+  /* 컨테이너(레이아웃) 안에 자식으로 추가 — 팔레트 드래그를 컨테이너 위에 놓았을 때 */
+  const addChild = (type, parentId) => {
+    const def = LIBRARY[type]
+    if (!def || def.container) {
+      api.showToast('레이아웃 안에 레이아웃은 넣을 수 없어요.')
+      return
+    }
+    const item = { ...createItem(type, def.defaults), x: 0, y: 0 }
+    setItems((prev) => [...prev, { ...item, parentId, slot: nextSlot(prev, parentId) }])
+    setSelectedIds([item.id])
+    api.showToast(`${def.label}을(를) 레이아웃 안에 배치했어요.`)
+  }
+
+  /* 컨테이너에서 꺼내 캔버스 맨 아래로 */
+  const unnestItem = (id) => {
+    setItems((prev) => {
+      const bottom = prev
+        .filter((it) => !it.parentId)
+        .reduce((max, it) => Math.max(max, it.y + (heightsRef.current[it.id] || 80)), PAD - GAP)
+      const updated = prev.map((it) =>
+        it.id === id
+          ? { ...it, parentId: undefined, slot: undefined, x: PAD, y: bottom + GAP, w: Math.min(it.w || itemW, itemW) }
+          : it
+      )
+      return settle(updated, [id])
+    })
+    api.showToast('레이아웃에서 꺼내 캔버스 맨 아래에 놓았어요.')
   }
 
   /* 팔레트에서 캔버스로 드래그해 원하는 위치에 바로 배치 */
@@ -199,21 +249,27 @@ export default function Builder({ api, scenario }) {
     setSelectedIds([item.id])
   }
 
-  /* ── 복사 / 붙여넣기 (⌘C/⌘X/⌘V — 단계를 건너 붙여넣기 가능) ── */
+  /* ── 복사 / 붙여넣기 (⌘C/⌘X/⌘V — 단계를 건너 붙여넣기 가능, 컨테이너는 자식 포함) ── */
+  const itemPayload = (it) => ({
+    type: it.type,
+    w: it.w,
+    h: it.h,
+    hidden: it.hidden,
+    slot: it.slot,
+    style: it.style ? { ...it.style } : undefined,
+    props: JSON.parse(JSON.stringify(it.props)),
+  })
+
   const copySelected = () => {
     const srcs = items.filter((it) => selectedIds.includes(it.id))
     if (srcs.length === 0) return false
     const minX = Math.min(...srcs.map((it) => it.x))
     const minY = Math.min(...srcs.map((it) => it.y))
     clipboardRef.current = srcs.map((it) => ({
-      type: it.type,
-      w: it.w,
-      h: it.h,
-      hidden: it.hidden,
-      style: it.style ? { ...it.style } : undefined,
-      props: JSON.parse(JSON.stringify(it.props)),
-      relX: it.x - minX,
-      relY: it.y - minY,
+      ...itemPayload(it),
+      relX: it.parentId ? 0 : it.x - minX,
+      relY: it.parentId ? 0 : it.y - minY,
+      children: items.filter((k) => k.parentId === it.id).map(itemPayload),
     }))
     api.showToast(`${srcs.length}개 컴포넌트를 복사했어요. ⌘V로 붙여넣어요.`)
     return true
@@ -223,21 +279,30 @@ export default function Builder({ api, scenario }) {
   const pasteClipboard = (at) => {
     const clip = clipboardRef.current
     if (!clip || clip.length === 0) return
-    const bottom = items.reduce(
+    const bottom = topItems.reduce(
       (max, it) => Math.max(max, it.y + (heightsRef.current[it.id] || 80)),
       PAD - GAP
     )
     const baseX = at ? at.x : PAD
     const baseY = at ? at.y : bottom + GAP
-    const copies = clip.map((c) => ({
-      ...cloneItem(c, {
-        x: Math.max(0, Math.min(canvasW - c.w, Math.round(baseX + c.relX))),
-        y: Math.max(0, Math.round(baseY + c.relY)),
-      }),
-      w: Math.min(c.w, itemW),
-    }))
-    setItems((prev) => settle([...prev, ...copies], copies.map((c) => c.id)))
-    setSelectedIds(copies.map((c) => c.id))
+    const groups = clip.map((c) => {
+      const top = {
+        ...cloneItem(c, {
+          x: Math.max(0, Math.min(canvasW - c.w, Math.round(baseX + c.relX))),
+          y: Math.max(0, Math.round(baseY + c.relY)),
+        }),
+        w: Math.min(c.w, itemW),
+      }
+      const kids = (c.children || []).map((k) => ({
+        ...cloneItem(k, { x: 0, y: 0 }),
+        parentId: top.id,
+        slot: k.slot,
+      }))
+      return [top, ...kids]
+    })
+    const flat = groups.flat()
+    setItems((prev) => settle([...prev, ...flat], groups.map((g) => g[0].id)))
+    setSelectedIds(groups.map((g) => g[0].id))
   }
 
   /* ── 캔버스 줌 ── */
@@ -264,7 +329,7 @@ export default function Builder({ api, scenario }) {
       const box = { x: Math.min(sx, cx), y: Math.min(sy, cy), w: Math.abs(cx - sx), h: Math.abs(cy - sy) }
       if (box.w < 3 && box.h < 3) return
       setMarquee(box)
-      const hit = items
+      const hit = topItems
         .filter((it) => {
           const ih = it.h || heightsRef.current[it.id] || 80
           return it.x < box.x + box.w && it.x + it.w > box.x && it.y < box.y + box.h && it.y + ih > box.y
@@ -314,20 +379,15 @@ export default function Builder({ api, scenario }) {
     )
   }
 
+  /* 삭제 — 컨테이너를 지우면 안의 자식도 함께 */
   const removeItem = (id) => {
-    setItems((prev) => {
-      const next = prev.filter((it) => it.id !== id)
-      return compactOn ? compactItems(next, heightsRef.current, compactOpts()) : next
-    })
+    setItems((prev) => compactTop(prev.filter((it) => it.id !== id && it.parentId !== id)))
     setSelectedIds((prev) => prev.filter((x) => x !== id))
   }
 
   const removeSelected = () => {
     const ids = new Set(selectedIds)
-    setItems((prev) => {
-      const next = prev.filter((it) => !ids.has(it.id))
-      return compactOn ? compactItems(next, heightsRef.current, compactOpts()) : next
-    })
+    setItems((prev) => compactTop(prev.filter((it) => !ids.has(it.id) && !ids.has(it.parentId))))
     setSelectedIds([])
   }
 
@@ -347,21 +407,34 @@ export default function Builder({ api, scenario }) {
   const cloneOf = (src) =>
     cloneItem(src, { x: src.x, y: src.y + (src.h || heightsRef.current[src.id] || 80) + GAP })
 
+  /* 사본 그룹: 컨테이너면 자식까지, 자식이면 같은 컨테이너 안 다음 슬롯으로 */
+  const cloneGroup = (src, list) => {
+    if (src.parentId) {
+      return [{ ...cloneItem(src, { x: 0, y: 0 }), parentId: src.parentId, slot: nextSlot(list, src.parentId) }]
+    }
+    const copy = cloneOf(src)
+    const kids = list
+      .filter((k) => k.parentId === src.id)
+      .map((k) => ({ ...cloneItem(k, { x: 0, y: 0 }), parentId: copy.id, slot: k.slot }))
+    return [copy, ...kids]
+  }
+
   const duplicateItem = (id) => {
     const src = items.find((it) => it.id === id)
     if (!src) return
-    const copy = cloneOf(src)
-    setItems((prev) => settle([...prev, copy], [copy.id]))
-    setSelectedIds([copy.id])
+    const group = cloneGroup(src, items)
+    setItems((prev) => settle([...prev, ...group], [group[0].id]))
+    setSelectedIds([group[0].id])
   }
 
   /* 선택된 모든 컴포넌트 복제 (⌘D) */
   const duplicateSelected = () => {
     const srcs = items.filter((it) => selectedIds.includes(it.id))
     if (srcs.length === 0) return
-    const copies = srcs.map(cloneOf)
-    setItems((prev) => settle([...prev, ...copies], copies.map((c) => c.id)))
-    setSelectedIds(copies.map((c) => c.id))
+    const groups = srcs.map((s) => cloneGroup(s, items))
+    const flat = groups.flat()
+    setItems((prev) => settle([...prev, ...flat], groups.map((g) => g[0].id)))
+    setSelectedIds(groups.map((g) => g[0].id))
   }
 
   /* ── 드래그 / 리사이즈 ── */
@@ -397,6 +470,7 @@ export default function Builder({ api, scenario }) {
       dragPosRef.current = pos
       setDragPos(pos)
       setGuides([])
+      setDropTargetId(null)
       return
     }
 
@@ -413,7 +487,7 @@ export default function Builder({ api, scenario }) {
       [(canvasW - w) / 2, canvasW / 2],
       [canvasW - PAD - w, canvasW - PAD],
     ]
-    items.forEach((o) => {
+    topItems.forEach((o) => {
       if (o.id === id) return
       vCands.push([o.x, o.x])
       vCands.push([o.x + o.w - w, o.x + o.w])
@@ -427,7 +501,7 @@ export default function Builder({ api, scenario }) {
     }
 
     const hCands = [[PAD, PAD]]
-    items.forEach((o) => {
+    topItems.forEach((o) => {
       if (o.id === id) return
       const oh = o.h || heightsRef.current[o.id] || 80
       hCands.push([o.y, o.y])
@@ -443,6 +517,9 @@ export default function Builder({ api, scenario }) {
     }
 
     setGuides(activeGuides)
+    // 컨테이너 위에 있으면 "안에 배치" 드롭 대상 하이라이트 (레이아웃끼리 중첩은 불가)
+    const hover = !LIBRARY[it?.type]?.container ? containerAt(nx + w / 2, ny + hh / 2, id) : null
+    setDropTargetId(hover ? hover.id : null)
     const pos = { id, positions: { [id]: { x: nx, y: ny } } }
     dragPosRef.current = pos
     setDragPos(pos)
@@ -453,12 +530,37 @@ export default function Builder({ api, scenario }) {
     dragPosRef.current = null
     dragStartRef.current = null
     setGuides([])
+    setDropTargetId(null)
     // 진행 중인 React 렌더와 커밋이 겹치지 않도록 다음 틱으로 미룬다
     setTimeout(() => {
       if (pos && pos.id === id) {
         setItems((prev) => {
+          const draggedIds = Object.keys(pos.positions)
+          // 단일 드래그를 컨테이너 위에 놓으면 안으로 배치
+          if (draggedIds.length === 1) {
+            const dId = draggedIds[0]
+            const dragged = prev.find((it) => it.id === dId)
+            if (dragged && !LIBRARY[dragged.type]?.container) {
+              const p2 = pos.positions[dId]
+              const cx = p2.x + dragged.w / 2
+              const cy = p2.y + (dragged.h || heightsRef.current[dId] || 80) / 2
+              const target = prev.find((it) => {
+                if (it.id === dId || it.parentId || !LIBRARY[it.type]?.container) return false
+                const hh = it.h || heightsRef.current[it.id] || 80
+                return cx >= it.x && cx <= it.x + it.w && cy >= it.y && cy <= it.y + hh
+              })
+              if (target) {
+                const slot = nextSlot(prev, target.id)
+                const nested = prev.map((it) =>
+                  it.id === dId ? { ...it, parentId: target.id, slot } : it
+                )
+                api.showToast(`${LIBRARY[dragged.type]?.label}을(를) ${LIBRARY[target.type]?.label} 안에 배치했어요.`)
+                return settle(nested, [])
+              }
+            }
+          }
           const movedList = prev.map((it) => (pos.positions[it.id] ? { ...it, ...pos.positions[it.id] } : it))
-          return settle(movedList, Object.keys(pos.positions))
+          return settle(movedList, draggedIds)
         })
       }
       setDragPos(null)
@@ -505,7 +607,9 @@ export default function Builder({ api, scenario }) {
 
   /* 방향키 미세 이동 (다중 선택 지원, 잠긴 것 제외) */
   const nudgeSelected = (dx, dy) => {
-    const ids = new Set(items.filter((it) => selectedIds.includes(it.id) && !it.locked).map((it) => it.id))
+    const ids = new Set(
+      items.filter((it) => selectedIds.includes(it.id) && !it.locked && !it.parentId).map((it) => it.id)
+    )
     if (ids.size === 0) return
     setItems((prev) => {
       const moved = prev.map((it) =>
@@ -525,25 +629,44 @@ export default function Builder({ api, scenario }) {
   /* 다중 선택 정렬 도구 */
   const alignSelected = (mode) => {
     if (selectedIds.length < 2) return
-    setItems((prev) => {
-      const aligned = alignItems(prev, selectedIds, mode, { canvasW }, heightsRef.current)
-      return compactOn ? compactItems(aligned, heightsRef.current, compactOpts()) : aligned
-    })
+    setItems((prev) =>
+      withTopOnly(prev, (top) => {
+        const aligned = alignItems(top, selectedIds, mode, { canvasW }, heightsRef.current)
+        return compactOn ? compactItems(aligned, heightsRef.current, compactOpts()) : aligned
+      })
+    )
   }
 
-  /* 레이어 패널에서 순서 바꾸기: 이웃과 자리를 교환하고 컴팩트 정리 */
+  /* 레이어 패널에서 순서 바꾸기 — 최상위는 자리 교환+컴팩트, 컨테이너 자식은 슬롯 순서 교환 */
   const moveLayer = (id, dir) => {
     setItems((prev) => {
-      const sorted = [...prev].sort((a, b) => (a.y - b.y) || (a.x - b.x))
-      const idx = sorted.findIndex((it) => it.id === id)
-      const j = idx + dir
-      if (idx < 0 || j < 0 || j >= sorted.length) return prev
-      const a = sorted[idx]
-      const b = sorted[j]
-      const swapped = prev.map((it) =>
-        it.id === a.id ? { ...it, x: b.x, y: b.y } : it.id === b.id ? { ...it, x: a.x, y: a.y } : it
-      )
-      return layoutCompactUp(swapped, heightsRef.current)
+      const target = prev.find((it) => it.id === id)
+      if (target && target.parentId) {
+        const sibs = prev
+          .filter((it) => it.parentId === target.parentId)
+          .sort((a, b) => (a.slot || 0) - (b.slot || 0))
+        const idx = sibs.findIndex((it) => it.id === id)
+        const j = idx + dir
+        if (idx < 0 || j < 0 || j >= sibs.length) return prev
+        const order = sibs.map((s) => s.id)
+        ;[order[idx], order[j]] = [order[j], order[idx]]
+        return prev.map((it) => {
+          const k = order.indexOf(it.id)
+          return k >= 0 ? { ...it, slot: k + 1 } : it
+        })
+      }
+      return withTopOnly(prev, (top) => {
+        const sorted = [...top].sort((a, b) => (a.y - b.y) || (a.x - b.x))
+        const idx = sorted.findIndex((it) => it.id === id)
+        const j = idx + dir
+        if (idx < 0 || j < 0 || j >= sorted.length) return top
+        const a = sorted[idx]
+        const b = sorted[j]
+        const swapped = top.map((it) =>
+          it.id === a.id ? { ...it, x: b.x, y: b.y } : it.id === b.id ? { ...it, x: a.x, y: a.y } : it
+        )
+        return layoutCompactUp(swapped, heightsRef.current)
+      })
     })
   }
 
@@ -559,7 +682,7 @@ export default function Builder({ api, scenario }) {
       }
       if (meta && e.key.toLowerCase() === 'a') {
         e.preventDefault()
-        setSelectedIds(items.map((it) => it.id))
+        setSelectedIds(topItems.map((it) => it.id))
         return
       }
       if (meta && e.key.toLowerCase() === 'd' && selectedIds.length > 0) {
@@ -667,11 +790,11 @@ export default function Builder({ api, scenario }) {
 
   const runAutoLayout = (mode) => {
     setOpenMenu(null)
-    setItems((prev) => mode.fn(prev, heightsRef.current, { itemW, canvasW }))
+    setItems((prev) => withTopOnly(prev, (top) => mode.fn(top, heightsRef.current, { itemW, canvasW })))
     // 너비가 바뀌는 정렬은 높이가 다시 측정된 뒤 한 번 더 컴팩트하게 보정한다
     if (mode.key !== 'compact') {
       setTimeout(() => {
-        setItems((prev) => layoutCompactUp(prev, heightsRef.current))
+        setItems((prev) => withTopOnly(prev, (top) => layoutCompactUp(top, heightsRef.current)))
       }, 180)
     }
     api.showToast(`${mode.label}로 겹침 없이 배치했어요.`)
@@ -752,8 +875,10 @@ export default function Builder({ api, scenario }) {
       dragPos.positions[it.id] ? { ...it, ...dragPos.positions[it.id] } : it
     )
     const draggedIds = Object.keys(dragPos.positions)
-    const resolved = resolveCollision(moved, draggedIds, heightsRef.current)
-    displayItems = compactOn ? compactItems(resolved, heightsRef.current, compactOpts(draggedIds)) : resolved
+    displayItems = withTopOnly(moved, (top) => {
+      const resolved = resolveCollision(top, draggedIds, heightsRef.current)
+      return compactOn ? compactItems(resolved, heightsRef.current, compactOpts(draggedIds)) : resolved
+    })
   }
 
   const canvasHeight = Math.max(
@@ -774,6 +899,7 @@ export default function Builder({ api, scenario }) {
   /* 캔버스 렌더 컨텍스트: 프로필 데이터, 배지 클릭 토글, 계획 요약 미리보기 */
   const canvasCtx = {
     mode: 'canvas',
+    allItems: items, // 컨테이너가 자식을 찾아 렌더할 때 사용
     profile: api.profile,
     updateProps: (id, key, value) => updateProps(id, key, value),
     /* 컴포넌트 안 더블클릭 인라인 편집 */
@@ -1032,6 +1158,7 @@ export default function Builder({ api, scenario }) {
           onRemove={removeItem}
           onToggleLock={(id) => updateItem(id, { locked: !items.find((it) => it.id === id)?.locked })}
           onToggleHide={(id) => updateItem(id, { hidden: !items.find((it) => it.id === id)?.hidden })}
+          onUnnest={unnestItem}
         />
 
         {/* 캔버스 */}
@@ -1048,14 +1175,23 @@ export default function Builder({ api, scenario }) {
                   if ([...e.dataTransfer.types].includes('text/sb-type')) {
                     e.preventDefault()
                     e.dataTransfer.dropEffect = 'copy'
+                    const rect = canvasRef.current.getBoundingClientRect()
+                    const hover = containerAt((e.clientX - rect.left) / zoom, (e.clientY - rect.top) / zoom)
+                    setDropTargetId(hover ? hover.id : null)
                   }
                 }}
                 onDrop={(e) => {
                   const type = e.dataTransfer.getData('text/sb-type')
                   if (!type) return
                   e.preventDefault()
+                  setDropTargetId(null)
                   const rect = canvasRef.current.getBoundingClientRect()
-                  addItemAt(type, (e.clientX - rect.left) / zoom, (e.clientY - rect.top) / zoom)
+                  const cx = (e.clientX - rect.left) / zoom
+                  const cy = (e.clientY - rect.top) / zoom
+                  // 컨테이너 위에 놓으면 그 안의 자식으로 배치
+                  const target = !LIBRARY[type]?.container && containerAt(cx, cy)
+                  if (target) addChild(type, target.id)
+                  else addItemAt(type, cx, cy)
                 }}
               >
                 {items.length === 0 && (
@@ -1077,11 +1213,12 @@ export default function Builder({ api, scenario }) {
                     style={{ left: marquee.x, top: marquee.y, width: marquee.w, height: marquee.h }}
                   />
                 )}
-                {displayItems.map((it) => (
+                {displayItems.filter((it) => !it.parentId).map((it) => (
                   <CanvasItem
                     key={it.id}
                     item={it}
                     zoom={zoom}
+                    dropTarget={dropTargetId === it.id}
                     selected={selectedIds.includes(it.id)}
                     dragPos={dragPos && dragPos.positions[it.id] ? dragPos.positions[it.id] : null}
                     sizeDraft={sizeDraft && sizeDraft.id === it.id ? sizeDraft : null}
@@ -1118,6 +1255,7 @@ export default function Builder({ api, scenario }) {
           removeItem={removeItem}
           alignSelected={alignSelected}
           ensureKeyword={ensureKeyword}
+          unnestItem={unnestItem}
         />
 
         <CanvasTextToolbar active={!!inlineEdit} ensureKeyword={ensureKeyword} />

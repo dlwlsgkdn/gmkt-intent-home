@@ -1199,6 +1199,39 @@
 .sb-gridpanel__grid { display: grid; gap: 12px; }
 .sb-gridpanel__card { width: auto; }
 
+/* ── 컨테이너(레이아웃) 자식 슬롯 ── */
+.sb-hscroll__slot { flex: 0 0 auto; min-width: 0; }
+.sb-vscroll__slot { flex-shrink: 0; min-width: 0; }
+.sb-gridpanel__slot { min-width: 0; }
+.sb-carousel__slot { flex: 0 0 100%; scroll-snap-align: center; min-width: 0; }
+
+/* 드래그 중 "안에 배치" 드롭 대상 하이라이트 */
+.sb-canvas-item--drop-target {
+  outline: 2px dashed var(--sb-accent);
+  outline-offset: 3px;
+  border-radius: 14px;
+}
+.sb-canvas-item--drop-target::after {
+  content: '여기에 놓으면 안에 배치';
+  position: absolute;
+  top: -22px;
+  right: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--sb-accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  z-index: 5;
+}
+
+/* 팔레트 카테고리 라벨 / 레이아웃 카드 강조 / 레이어 자식 들여쓰기 */
+.sb-palette-cat { margin-top: 12px; }
+.sb-palette-card--layout { border-style: dashed; }
+.sb-layer--child { margin-left: 18px; }
+.sb-layer__branch { color: #cbd5e1; font-size: 12px; flex-shrink: 0; }
+
 /* ── 싱글 스크롤 캐러셀 (한 장씩 스냅) ── */
 .sb-carousel { min-width: 0; }
 .sb-carousel__track {

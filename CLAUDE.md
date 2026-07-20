@@ -64,6 +64,7 @@ cd scenario-studio && npm run build   # vite build && cp -R ../legacy ../docs/le
 - **프로필/설문 요약 패널은 일반 컴포넌트** (`profilePanel`, `surveySummary`) — 고정 아님, 드래그 배치. 노출 항목은 컴포넌트 props.hidden (캔버스에서 배지 클릭으로 토글)
 - **겹침 해소 + 컴팩트**: `resolveCollision(items, movedIds[], heights)` — 이동한 아이템은 고정, 겹치는 다른 아이템이 아래로 밀림. 드래그 중 실시간 적용. 시나리오별 `compact`('vertical' 기본 | 'horizontal' | 'none')에 따라 모든 배치 커밋 후 `compactItems`로 스택(빌더의 `settle()` 경유, 드래그 중엔 드래그 아이템만 핀 고정). 구버전 `gravity: false`는 'none'으로 해석
 - **아이템 모델**: `{ id, type, x, y, w, h(null=자동), props }`, 높이는 ResizeObserver로 heightsRef에 측정
+- **컨테이너(레이아웃) 컴포넌트**: 가로/세로 스크롤·그리드·캐러셀은 `container: true` — 다른 컴포넌트를 자식으로 수용. 자식은 같은 스테이지 배열에 `parentId + slot`으로 저장(플랫 유지), 캔버스 절대배치·레이아웃 연산은 최상위만(빌더 `withTopOnly`). 팔레트/캔버스 드래그를 컨테이너 위에 놓으면 중첩, 꺼내기는 인스펙터·레이어 패널. 삭제·복제·복사는 자식 연쇄. 레이아웃끼리 중첩 불가. 팔레트는 `category`(content/layout)로 그룹 표시. **주의: 아이템 id 재발급 시 parentId 매핑 필수** (App.copyScenario 참고)
 - **원본 룩 유지**: `public/`에 원본 CSS(gmarket-advanced*.css) 복사본 + Tailwind CDN. 원본 클래스 그대로 재사용
 - **프로필별 워크스페이스(계정)**: `ddak-accounts-v1`에 `{accounts[], activeId}` — 계정 = 프로필+탐색 페이지+시나리오+쓰레드 묶음. 프로필 전환은 홈 드로어. 구 단일 키(`ddak-scenarios-v1`, `ddak-explore-page-v1`, `ddak-profile-v1`, `ddak-threads-v1`)는 최초 1회 첫 계정으로 마이그레이션 (발행은 브라우저 로컬 한정)
 - **컴포넌트 텍스트는 kText()로 렌더**: 인스펙터 서식 툴바가 모든 텍스트 필드에 `{{서식|텍스트}}` 마크업을 넣을 수 있으므로, 레지스트리에서 사용자 노출 텍스트 prop은 반드시 `kText(p.x, ctx, 'x')`로 감쌀 것 (안 그러면 마크업 원문이 그대로 노출됨)

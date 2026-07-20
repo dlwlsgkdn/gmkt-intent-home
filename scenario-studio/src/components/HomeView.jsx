@@ -93,8 +93,9 @@ export default function HomeView({ api }) {
     )
   })
 
-  /* 탐색 아이템(캔버스 배치) — 숨김 제외, 위→아래 순서로 스택 */
-  const exploreItems = sortByPosition(api.explore.items || []).filter((it) => !it.hidden)
+  /* 탐색 아이템(캔버스 배치) — 숨김·컨테이너 자식 제외한 최상위만, 위→아래 순서로 스택 */
+  const allExploreItems = api.explore.items || []
+  const exploreItems = sortByPosition(allExploreItems).filter((it) => !it.hidden && !it.parentId)
 
   const submit = () => {
     const q = query.trim()
@@ -161,7 +162,7 @@ export default function HomeView({ api }) {
                 className="sb-player__item"
                 style={{ maxWidth: it.w, height: it.h || undefined, overflow: it.h ? 'hidden' : undefined }}
               >
-                {renderItem(it, { mode: 'player', player: homePlayer, profile: api.profile, chips })}
+                {renderItem(it, { mode: 'player', player: homePlayer, profile: api.profile, chips, allItems: allExploreItems })}
               </div>
             ))}
           </div>

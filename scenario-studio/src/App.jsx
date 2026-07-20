@@ -94,7 +94,16 @@ export default function App() {
     if (!src) return
     const stages = {}
     Object.keys(src.stages).forEach((k) => {
-      stages[k] = (src.stages[k] || []).map((it) => ({ ...it, id: uid(), props: { ...it.props } }))
+      // id 재발급 시 컨테이너 자식의 parentId도 새 id로 매핑
+      const list = src.stages[k] || []
+      const idMap = {}
+      list.forEach((it) => { idMap[it.id] = uid() })
+      stages[k] = list.map((it) => ({
+        ...it,
+        id: idMap[it.id],
+        parentId: it.parentId ? idMap[it.parentId] : undefined,
+        props: { ...it.props },
+      }))
     })
     const copy = {
       ...src,

@@ -20,6 +20,7 @@ export default function Inspector({
   removeItem,
   alignSelected,
   ensureKeyword,
+  unnestItem,
 }) {
   /* 드래그 선택 → 플로팅 서식 툴바 상태 (훅은 조기 return보다 앞에) */
   const [sel, setSel] = React.useState(null) // { key, start, end, list }
@@ -172,6 +173,19 @@ export default function Inspector({
         ✍️ 문구를 드래그로 선택하면 서식 툴바가 떠요 — 볼드/폰트/크기/색, 그리고 점선 밑줄(설명 모달 연결).
       </p>
 
+      {selected.parentId && (
+        <>
+          <p className="sb-profile-config__hint">📦 레이아웃 컴포넌트 안에 배치되어 있어요. 크기·위치는 레이아웃이 정해요.</p>
+          <div className="sb-inspector__actions">
+            <button type="button" className="sb-btn" onClick={() => unnestItem(selected.id)}>
+              ⤴ 레이아웃에서 꺼내기
+            </button>
+          </div>
+        </>
+      )}
+
+      {!selected.parentId && (
+      <>
       <div className="sb-field">
         <label>너비 — {selected.w}px</label>
         <input
@@ -210,6 +224,8 @@ export default function Inspector({
           </button>
         ) : null}
       </div>
+      </>
+      )}
 
       <div className="sb-inspector__actions">
         <button
