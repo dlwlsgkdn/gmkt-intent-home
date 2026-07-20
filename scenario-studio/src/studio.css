@@ -975,6 +975,10 @@
 .sb-canvas-item:hover .sb-resize-handle,
 .sb-canvas-item--selected .sb-resize-handle { opacity: 1; }
 .sb-resize-handle:hover { transform: scale(1.15); }
+/* 컨테이너 자식의 리사이즈 핸들 — 셸 호버/선택 시 표시 */
+.sb-child__resize { right: -5px; bottom: -5px; width: 13px; height: 13px; }
+.sb-child:hover .sb-child__resize,
+.sb-child--selected .sb-child__resize { opacity: 1; }
 
 .sb-btn--small { margin-top: 8px; padding: 6px 12px; font-size: 12px; }
 .sb-btn--open { border-color: var(--sb-accent); color: var(--sb-accent); }
@@ -1281,6 +1285,55 @@
   font-size: 10.5px;
   color: rgba(95, 116, 101, 0.85);
 }
+
+/* 컨테이너 삽입 위치 가이드 라인 (인서트 캐럿) */
+.sb-insert-line {
+  position: absolute;
+  z-index: 46;
+  background: var(--sb-accent);
+  border-radius: 999px;
+  pointer-events: none;
+  box-shadow: 0 0 0 2px rgba(95, 116, 101, 0.2);
+}
+.sb-insert-line--v { width: 3px; }
+.sb-insert-line--h { height: 3px; }
+.sb-insert-line::before,
+.sb-insert-line::after {
+  content: '';
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--sb-accent);
+}
+.sb-insert-line--v::before { top: -4px; left: -2px; }
+.sb-insert-line--v::after { bottom: -4px; left: -2px; }
+.sb-insert-line--h::before { left: -4px; top: -2px; }
+.sb-insert-line--h::after { right: -4px; top: -2px; }
+
+/* 가로 트랙 래퍼 + 좌우 화살표 버튼 */
+.sb-track-wrap { position: relative; min-width: 0; }
+.sb-track-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 6;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--sb-line);
+  box-shadow: 0 8px 20px -10px rgba(15, 23, 42, 0.4);
+  color: #475569;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+.sb-track-arrow svg { width: 16px; height: 16px; }
+.sb-track-arrow:hover { background: #fff; color: var(--sb-ink); transform: translateY(-50%) scale(1.06); }
+.sb-track-arrow--prev { left: 6px; }
+.sb-track-arrow--next { right: 6px; }
 
 /* 미리보기 모드: 편집 크롬(태그·리사이즈 핸들) 숨김 — 사용자 실사용 모습 */
 .sb-canvas--preview .sb-canvas-item__tag,

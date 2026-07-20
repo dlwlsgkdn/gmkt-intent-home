@@ -27,7 +27,7 @@ function parseCards(text) {
 /* 스크롤 컨테이너의 스크롤바 표시 유틸 클래스 */
 const scrollCls = (show) => (show ? ' sb-scroll-bar' : ' sb-scroll-hide')
 
-/* 캔버스에서 컨테이너 자식을 감싸는 셸 — 클릭 선택/더블클릭 편집/드래그로 꺼내기·재배치 */
+/* 캔버스에서 컨테이너 자식을 감싸는 셸 — 클릭 선택/더블클릭 편집/드래그 재배치/리사이즈 핸들 */
 function ChildShell({ item, ctx, children }) {
   const selected = ctx.selectedIds && ctx.selectedIds.includes(item.id)
   return (
@@ -46,6 +46,81 @@ function ChildShell({ item, ctx, children }) {
       }}
     >
       {children}
+      {ctx.childResizeDown && (
+        <span
+          className="sb-resize-handle sb-child__resize"
+          title="크기 조절"
+          onPointerDown={(e) => ctx.childResizeDown(e, item.id)}
+        />
+      )}
+    </div>
+  )
+}
+
+/* 가로 스크롤 트랙 — 데스크탑 마우스 드래그 스크롤 + 옵션 좌우 화살표 (스냅 유지) */
+function ScrollTrack({ className, children, interactive, arrows, slideGap = 12 }) {
+  const ref = React.useRef(null)
+  const draggedRef = React.useRef(false)
+
+  const onPointerDown = (e) => {
+    const el = ref.current
+    if (!el || e.button !== 0) return
+    const startX = e.clientX
+    const startLeft = el.scrollLeft
+    const prevSnap = el.style.scrollSnapType
+    let moved = false
+    const move = (ev) => {
+      const dx = ev.clientX - startX
+      if (!moved && Math.abs(dx) > 5) {
+        moved = true
+        draggedRef.current = true
+        el.style.scrollSnapType = 'none' // 드래그 중엔 스냅 해제
+      }
+      if (moved) el.scrollLeft = startLeft - dx
+    }
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      if (moved) {
+        el.style.scrollSnapType = prevSnap // 복원 → 가장 가까운 슬라이드로 스냅
+        setTimeout(() => { draggedRef.current = false }, 120)
+      }
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
+
+  const page = (dir) => {
+    const el = ref.current
+    if (el) el.scrollBy({ left: dir * (el.clientWidth + slideGap), behavior: 'smooth' })
+  }
+
+  return (
+    <div className="sb-track-wrap">
+      <div
+        ref={ref}
+        className={className}
+        onPointerDown={interactive ? onPointerDown : undefined}
+        onClickCapture={(e) => {
+          // 드래그 직후의 클릭은 카드 클릭으로 취급하지 않는다
+          if (draggedRef.current) {
+            e.preventDefault()
+            e.stopPropagation()
+          }
+        }}
+      >
+        {children}
+      </div>
+      {arrows && (
+        <>
+          <button type="button" className="sb-track-arrow sb-track-arrow--prev" aria-label="이전" onClick={() => page(-1)}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" /></svg>
+          </button>
+          <button type="button" className="sb-track-arrow sb-track-arrow--next" aria-label="다음" onClick={() => page(1)}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" /></svg>
+          </button>
+        </>
+      )}
     </div>
   )
 }
@@ -860,7 +935,10 @@ export const LIBRARY = {
       return (
         <div className={'sb-hscroll' + (edit ? ' sb-container-edit' : '')}>
           {p.title ? <p className="sb-hscroll__title">{kText(p.title, ctx, 'title')}</p> : null}
-          <div className={'sb-hscroll__track' + scrollCls(p.scrollbar) + (edit ? ' sb-hscroll__track--edit' : '')}>
+          <ScrollTrack
+            interactive={ctx.mode === 'player'}
+            className={'sb-hscroll__track' + scrollCls(p.scrollbar) + (edit ? ' sb-hscroll__track--edit' : '')}
+          >
             {kids.length > 0 ? (
               /* 자식은 편집자가 정한 자체 너비 유지 (없으면 카드 너비), 높이 지정 시 그대로 */
               kids.map((c) => (
@@ -892,7 +970,7 @@ export const LIBRARY = {
                 ))}
               </>
             )}
-          </div>
+          </ScrollTrack>
         </div>
       )
     },
@@ -966,11 +1044,13 @@ export const LIBRARY = {
     defaults: {
       title: '',
       scrollbar: false,
+      arrows: true,
       items: '',
     },
     fields: [
       { key: 'title', label: '패널 제목 (비우면 숨김)', kind: 'text' },
       { key: 'items', label: '카드 목록 (제목|설명|이미지URL, 쉼표 구분)', kind: 'textarea', list: true },
+      { key: 'arrows', label: '좌우 화살표 버튼', kind: 'toggle' },
       { key: 'scrollbar', label: '스크롤바 상시 표시', kind: 'toggle' },
     ],
     render: (p, ctx) => {
@@ -982,7 +1062,11 @@ export const LIBRARY = {
         <div className={'sb-carousel' + (edit ? ' sb-container-edit' : '')}>
           {p.title ? <p className="sb-hscroll__title">{kText(p.title, ctx, 'title')}</p> : null}
           {edit && slideCount > 1 && <p className="sb-edit-note">편집 모드 — 슬라이드를 모두 펼쳐 표시 중 (실사용은 한 장씩 스냅)</p>}
-          <div className={'sb-carousel__track' + scrollCls(p.scrollbar) + (edit ? ' sb-carousel__track--edit' : '')}>
+          <ScrollTrack
+            interactive={ctx.mode === 'player'}
+            arrows={!edit && !!p.arrows && slideCount > 1}
+            className={'sb-carousel__track' + scrollCls(p.scrollbar) + (edit ? ' sb-carousel__track--edit' : '')}
+          >
             {kids.length > 0 && kids.map((c) => <div key={c.key} className="sb-carousel__slot">{c.node}</div>)}
             {kids.length === 0 && cards.length === 0 && <EmptyDropZone ctx={ctx} />}
             {kids.length === 0 && cards.map((c, i) => (
@@ -999,7 +1083,7 @@ export const LIBRARY = {
                 {c.sub ? <p className="sb-hscroll__sub">{kText(c.sub, ctx)}</p> : null}
               </div>
             ))}
-          </div>
+          </ScrollTrack>
           {slideCount > 1 && (
             <p className="sb-carousel__hint" aria-hidden="true">← 옆으로 넘겨보세요 · {slideCount}장 →</p>
           )}

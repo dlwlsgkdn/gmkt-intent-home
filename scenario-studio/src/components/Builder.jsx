@@ -76,6 +76,25 @@ export default function Builder({ api, scenario }) {
     return idx
   }
 
+  /* 컨테이너 안 삽입 위치 가이드 라인 (Notion/Framer식 인서트 캐럿) — 캔버스 좌표 */
+  const [insertHint, setInsertHint] = useState(null) // { dir:'v'|'h', x, y, len }
+  const insertHintAt = (container, cx, cy) => {
+    if (!canvasRef.current || !container) return null
+    const els = [...canvasRef.current.querySelectorAll(`[data-child-of="${container.id}"]`)]
+    if (els.length === 0) return null
+    const rect = canvasRef.current.getBoundingClientRect()
+    const horizontal = LIBRARY[container.type]?.flow === 'x'
+    const idx = slotIndexAt(container.id, container.type, cx, cy)
+    const t = els[Math.min(idx, els.length - 1)].getBoundingClientRect()
+    const after = idx >= els.length
+    if (horizontal) {
+      const sx = after ? t.right + 6 : t.left - 6
+      return { dir: 'v', x: (sx - rect.left) / zoom, y: (t.top - rect.top) / zoom, len: t.height / zoom }
+    }
+    const sy = after ? t.bottom + 6 : t.top - 6
+    return { dir: 'h', x: (t.left - rect.left) / zoom, y: (sy - rect.top) / zoom, len: t.width / zoom }
+  }
+
   /* childId를 containerId의 index 위치에 끼워 넣고 형제 슬롯을 1..n으로 재부여 */
   const placeChild = (list, childId, containerId, index) => {
     const sibs = list
@@ -340,6 +359,33 @@ export default function Builder({ api, scenario }) {
       if (phase === 'out') onDragEnd(childId)
       else if (phase === 'reorder') setDropTargetId(null)
       else handleSelect(childId, shift)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
+
+  /* 자식 리사이즈 핸들 — 바깥 컴포넌트와 동일하게 우하단 드래그로 너비/높이 조절 */
+  const childResizeDown = (e, childId) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    e.stopPropagation()
+    setSelectedIds([childId])
+    const child = items.find((it) => it.id === childId)
+    if (!child) return
+    const shellEl = e.target.closest && e.target.closest('.sb-child')
+    const r = shellEl ? shellEl.getBoundingClientRect() : null
+    const origW = child.w || (r ? Math.round(r.width / zoom) : 320)
+    const origH = child.h || (r ? Math.round(r.height / zoom) : 120)
+    const sx = e.clientX
+    const sy = e.clientY
+    const move = (ev) => {
+      const w = Math.max(MIN_ITEM_W, Math.min(itemW, Math.round(origW + (ev.clientX - sx) / zoom)))
+      const h = Math.max(48, Math.round(origH + (ev.clientY - sy) / zoom))
+      setItems((prev) => prev.map((it) => (it.id === childId ? { ...it, w, h } : it)))
+    }
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
@@ -649,10 +695,11 @@ export default function Builder({ api, scenario }) {
     }
 
     setGuides(activeGuides)
-    // 컨테이너 위에 있으면 "안에 배치" 드롭 대상 하이라이트 (레이아웃끼리 중첩은 불가)
+    // 컨테이너 위에 있으면 "안에 배치" 드롭 대상 하이라이트 + 삽입 위치 가이드 라인
     const probe = pointer || { x: nx + w / 2, y: ny + hh / 2 }
     const hover = !LIBRARY[it?.type]?.container ? containerAt(probe.x, probe.y, id) : null
     setDropTargetId(hover ? hover.id : null)
+    setInsertHint(hover ? insertHintAt(hover, probe.x, probe.y) : null)
     const pos = { id, positions: { [id]: { x: nx, y: ny } }, pointer: probe }
     dragPosRef.current = pos
     setDragPos(pos)
@@ -664,6 +711,7 @@ export default function Builder({ api, scenario }) {
     dragStartRef.current = null
     setGuides([])
     setDropTargetId(null)
+    setInsertHint(null)
     // 진행 중인 React 렌더와 커밋이 겹치지 않도록 다음 틱으로 미룬다
     setTimeout(() => {
       if (pos && pos.id === id) {
@@ -1035,6 +1083,7 @@ export default function Builder({ api, scenario }) {
     allItems: items, // 컨테이너가 자식을 찾아 렌더할 때 사용
     selectedIds, // 자식 셸의 선택 표시
     childPointerDown, // 자식 클릭 선택 / 드래그 꺼내기
+    childResizeDown, // 자식 리사이즈 핸들
     inspectChild: (id) => {
       setSelectedIds([id])
       setFocusTick((t) => t + 1)
@@ -1325,8 +1374,11 @@ export default function Builder({ api, scenario }) {
                     e.preventDefault()
                     e.dataTransfer.dropEffect = 'copy'
                     const rect = canvasRef.current.getBoundingClientRect()
-                    const hover = containerAt((e.clientX - rect.left) / zoom, (e.clientY - rect.top) / zoom)
+                    const cx = (e.clientX - rect.left) / zoom
+                    const cy = (e.clientY - rect.top) / zoom
+                    const hover = containerAt(cx, cy)
                     setDropTargetId(hover ? hover.id : null)
+                    setInsertHint(hover ? insertHintAt(hover, cx, cy) : null)
                   }
                 }}
                 onDrop={(e) => {
@@ -1334,6 +1386,7 @@ export default function Builder({ api, scenario }) {
                   if (!type) return
                   e.preventDefault()
                   setDropTargetId(null)
+                  setInsertHint(null)
                   const rect = canvasRef.current.getBoundingClientRect()
                   const cx = (e.clientX - rect.left) / zoom
                   const cy = (e.clientY - rect.top) / zoom
@@ -1356,6 +1409,16 @@ export default function Builder({ api, scenario }) {
                     style={g.type === 'v' ? { left: g.pos } : { top: g.pos }}
                   />
                 ))}
+                {insertHint && (
+                  <div
+                    className={'sb-insert-line sb-insert-line--' + insertHint.dir}
+                    style={
+                      insertHint.dir === 'v'
+                        ? { left: insertHint.x, top: insertHint.y, height: insertHint.len }
+                        : { left: insertHint.x, top: insertHint.y, width: insertHint.len }
+                    }
+                  />
+                )}
                 {marquee && (
                   <div
                     className="sb-marquee"
