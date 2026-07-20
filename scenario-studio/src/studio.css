@@ -1313,6 +1313,10 @@
 
 /* 가로 트랙 래퍼 + 좌우 화살표 버튼 */
 .sb-track-wrap { position: relative; min-width: 0; }
+/* 드래그 스크롤 중 이미지 고스트·텍스트 선택 방지 */
+.sb-track-wrap img { -webkit-user-drag: none; user-drag: none; }
+.sb-hscroll__track,
+.sb-carousel__track { user-select: none; -webkit-user-select: none; }
 .sb-track-arrow {
   position: absolute;
   top: 50%;

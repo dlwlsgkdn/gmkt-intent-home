@@ -13,7 +13,15 @@ import { FONT_OPTIONS, TOKEN_RE, richSpanPresentation, InlineEditor } from './ri
 const FALLBACK_IMG = './makeup-clone-assets/d9b261330f3ffccf.avif'
 
 function Img({ src, alt }) {
-  return <img src={src || FALLBACK_IMG} alt={alt || ''} onError={(e) => { e.currentTarget.src = FALLBACK_IMG }} />
+  // draggable=false: 브라우저 기본 이미지 드래그(고스트)가 트랙 드래그 스크롤을 가로채지 않게
+  return (
+    <img
+      src={src || FALLBACK_IMG}
+      alt={alt || ''}
+      draggable={false}
+      onError={(e) => { e.currentTarget.src = FALLBACK_IMG }}
+    />
+  )
 }
 
 /* "제목|설명|이미지URL" 쉼표 목록 파싱 — 가로/세로 스크롤 패널 공용 */
@@ -101,6 +109,7 @@ function ScrollTrack({ className, children, interactive, arrows, slideGap = 12 }
         ref={ref}
         className={className}
         onPointerDown={interactive ? onPointerDown : undefined}
+        onDragStart={(e) => e.preventDefault()} // 이미지/링크의 네이티브 드래그 차단
         onClickCapture={(e) => {
           // 드래그 직후의 클릭은 카드 클릭으로 취급하지 않는다
           if (draggedRef.current) {
