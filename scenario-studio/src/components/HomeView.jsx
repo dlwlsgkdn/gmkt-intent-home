@@ -3,7 +3,8 @@ import { BgBlobs, FloatingBar, StudioFab, ViewerDeviceControl, ProfileControl } 
 import ExploreFrame from './ExploreFrame.jsx'
 import ThreadPanel from './ThreadPanel.jsx'
 import { TEMPLATES } from '../lib/templates.js'
-import { hexToRgba, DEVICE_PRESETS } from '../lib/store.js'
+import { hexToRgba, DEVICE_PRESETS, sortByPosition } from '../lib/store.js'
+import { renderItem } from '../lib/registry.jsx'
 
 export default function HomeView({ api }) {
   const [query, setQuery] = useState('')
@@ -74,6 +75,27 @@ export default function HomeView({ api }) {
     e.target.value = ''
   }
 
+  /* 발행 칩 목록 — 탐색 아이템의 "발행 칩 목록" 컴포넌트 자리에 렌더된다 */
+  const chips = published.map((s) => {
+    const c = s.color || '#5f7465'
+    return (
+      <button
+        key={s.id}
+        type="button"
+        data-chip-id={s.id}
+        className={'suggestion-tag sb-chip-scenario' + (draggingChipId === s.id ? ' sb-chip-scenario--dragging' : '')}
+        title={s.title + ' (드래그로 순서 변경)'}
+        style={{ color: c, borderColor: hexToRgba(c, 0.45), background: hexToRgba(c, 0.08) }}
+        onPointerDown={(e) => onChipPointerDown(e, s.id)}
+      >
+        <span className="sb-chip-scenario__spark">✦</span>#{s.chip}
+      </button>
+    )
+  })
+
+  /* 탐색 아이템(캔버스 배치) — 숨김 제외, 위→아래 순서로 스택 */
+  const exploreItems = sortByPosition(api.explore.items || []).filter((it) => !it.hidden)
+
   const submit = () => {
     const q = query.trim()
     if (!q) return
@@ -89,6 +111,25 @@ export default function HomeView({ api }) {
     } else {
       api.showToast('일치하는 시나리오가 없어요. 스튜디오에서 새로 만들어보세요!')
     }
+  }
+
+  /* 탐색 아이템에 공급하는 실행 컨텍스트 — 검색/칩/키워드만 실제 동작, 나머지는 목업 */
+  const homePlayer = {
+    query,
+    setQuery,
+    submitQuery: submit,
+    answers: {},
+    setAnswer: () => {},
+    addToCart: () => {},
+    complete: () => {},
+    openExternal: (label) => api.showToast(`${label}(으)로 이동하는 목업이에요.`),
+    showKeyword: (word) => {
+      const hit = (api.keywords || []).find((k) => k.word === word)
+      api.showToast(hit && hit.desc ? `${word} — ${hit.desc}` : `"${word}" 설명은 키워드 사전에서 채울 수 있어요.`)
+    },
+    excludedProfile: [],
+    toggleProfileItem: () => {},
+    summary: { profile: [], questions: [] },
   }
 
   return (
@@ -111,28 +152,29 @@ export default function HomeView({ api }) {
           className="sb-phone"
           style={{ width: (DEVICE_PRESETS.find((d) => d.key === api.viewerDevice) || DEVICE_PRESETS[0]).w }}
         >
-        <ExploreFrame
-          config={api.explore}
-          searchValue={query}
-          onSearchChange={setQuery}
-          onSubmit={submit}
-          chips={published.map((s) => {
-            const c = s.color || '#5f7465'
-            return (
-              <button
-                key={s.id}
-                type="button"
-                data-chip-id={s.id}
-                className={'suggestion-tag sb-chip-scenario' + (draggingChipId === s.id ? ' sb-chip-scenario--dragging' : '')}
-                title={s.title + ' (드래그로 순서 변경)'}
-                style={{ color: c, borderColor: hexToRgba(c, 0.45), background: hexToRgba(c, 0.08) }}
-                onPointerDown={(e) => onChipPointerDown(e, s.id)}
+        {exploreItems.length > 0 ? (
+          /* 탐색 페이지 = 캔버스 아이템 스택 (빌더 탐색 탭에서 자유 배치·편집) */
+          <div className="sb-player__stack sb-home-stack">
+            {exploreItems.map((it) => (
+              <div
+                key={it.id}
+                className="sb-player__item"
+                style={{ maxWidth: it.w, height: it.h || undefined, overflow: it.h ? 'hidden' : undefined }}
               >
-                <span className="sb-chip-scenario__spark">✦</span>#{s.chip}
-              </button>
-            )
-          })}
-        />
+                {renderItem(it, { mode: 'player', player: homePlayer, profile: api.profile, chips })}
+              </div>
+            ))}
+          </div>
+        ) : (
+          /* 안전망: 아이템이 없으면 구버전 설정 기반 렌더 */
+          <ExploreFrame
+            config={api.explore}
+            searchValue={query}
+            onSearchChange={setQuery}
+            onSubmit={submit}
+            chips={chips}
+          />
+        )}
         </div>
       </section>
 
@@ -155,10 +197,10 @@ export default function HomeView({ api }) {
             </div>
 
             <button type="button" className="sb-explore-btn" onClick={api.openExploreEditor}>
-              <span className="sb-explore-btn__icon">🧭</span>
+              <span className="sb-explore-btn__icon">🪪</span>
               <span className="sb-explore-btn__text">
-                <strong>탐색 페이지 편집</strong>
-                <small>모든 시나리오가 공유하는 공통 홈 화면</small>
+                <strong>프로필 · 키워드 사전</strong>
+                <small>고정 설문 정보와 밑줄 키워드 설명 (탐색 페이지는 빌더의 "탐색" 탭)</small>
               </span>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M9 5l7 7-7 7" /></svg>
             </button>

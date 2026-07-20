@@ -94,8 +94,14 @@ export const LIBRARY = {
     stage: 'explore',
     icon: '🔍',
     hint: '시나리오의 시작 질문을 입력받는 검색창',
-    defaults: { placeholder: '예: 출근 전에 10분 안에 안 무너지는 데일리 메이크업' },
-    fields: [{ key: 'placeholder', label: '플레이스홀더 문구', kind: 'text' }],
+    defaults: {
+      placeholder: '예: 출근 전에 10분 안에 안 무너지는 데일리 메이크업',
+      multiline: false,
+    },
+    fields: [
+      { key: 'placeholder', label: '플레이스홀더 문구', kind: 'text' },
+      { key: 'multiline', label: '긴 텍스트를 여러 줄로 (끄면 말줄임)', kind: 'toggle' },
+    ],
     render: (p, ctx) => {
       const isPlayer = ctx.mode === 'player'
       const value = isPlayer ? ctx.player.query : ''
@@ -108,14 +114,31 @@ export const LIBRARY = {
           }}
         >
           <div className="clean-search__box">
-            <textarea
-              rows={1}
-              placeholder={p.placeholder}
-              className="resize-none overflow-hidden"
-              value={value}
-              readOnly={!isPlayer}
-              onChange={(e) => isPlayer && ctx.player.setQuery(e.target.value)}
-            />
+            {p.multiline ? (
+              <textarea
+                rows={1}
+                placeholder={p.placeholder}
+                className="resize-none overflow-hidden clean-search__field--multiline"
+                value={value}
+                readOnly={!isPlayer}
+                onChange={(e) => isPlayer && ctx.player.setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (isPlayer && e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    if (value.trim()) ctx.player.submitQuery()
+                  }
+                }}
+              />
+            ) : (
+              <input
+                type="text"
+                placeholder={p.placeholder}
+                className="clean-search__field--ellipsis"
+                value={value}
+                readOnly={!isPlayer}
+                onChange={(e) => isPlayer && ctx.player.setQuery(e.target.value)}
+              />
+            )}
             <button
               type="submit"
               id="submitBtn"
@@ -129,6 +152,26 @@ export const LIBRARY = {
         </form>
       )
     },
+  },
+
+  scenarioChips: {
+    label: '발행 칩 목록',
+    stage: 'explore',
+    icon: '✦',
+    hint: '발행된 시나리오 칩이 표시될 자리 (내용은 자동)',
+    defaults: {},
+    fields: [],
+    render: (p, ctx) => (
+      <div className="clean-tag-row sb-static">
+        {ctx.chips && ctx.chips.length > 0 ? (
+          ctx.chips
+        ) : (
+          <span className="suggestion-tag sb-chip-scenario sb-chip-scenario--sample">
+            <span className="sb-chip-scenario__spark">✦</span>#발행된_시나리오_칩_자리
+          </span>
+        )}
+      </div>
+    ),
   },
 
   tagRow: {

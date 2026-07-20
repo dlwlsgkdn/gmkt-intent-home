@@ -44,8 +44,8 @@ cd scenario-studio && npm run build   # vite build && cp -R ../legacy ../docs/le
 - `components/ThreadPanel.jsx` — 쇼핑 쓰레드 히스토리 패널 (원본 history-sidebar 룩, 좌/우/중앙 등장, 아코디언 카드, 이어보기/삭제)
 - `components/Player.jsx` — 시나리오 실행(설문→계획 스테퍼). 기기 폭 반영, hidden 아이템 제외, 다시 시작, 응답/프로필 제외 상태를 ctx.player로 공급, **쓰레드 자동 기록**(체험 1회 = 쓰레드 1개)
 - `components/HomeView.jsx` — 홈. 발행 칩(색상/드래그 순서변경/클릭 실행), 좌상단 기기+프로필 컨트롤, 시나리오 드로어(템플릿·복제·JSON 입출력), 쓰레드 패널
-- `components/ExploreFrame.jsx` — 공통 탐색(홈) 렌더러 (홈과 편집기가 공유). 검색창 한 줄 말줄임(input)/여러 줄(textarea+field-sizing) 모드
-- `components/ExploreEditor.jsx` — 탐색 페이지 + 사용자 프로필 + 키워드 사전 편집기 (라이브 미리보기)
+- `components/ExploreFrame.jsx` — 구버전 설정 기반 탐색 렌더러 (explore.items가 없을 때의 안전망 전용)
+- `components/ExploreEditor.jsx` — 사용자 프로필 + 키워드 사전 편집기 (탐색 콘텐츠 편집은 빌더 "탐색" 탭으로 이동)
 - `studio.css` — 스튜디오 전용 스타일 (`sb-` 접두사) + 원본 CSS 클래스의 절대배치 무력화 오버라이드
 
 ## 기능 현황 (2026-07 기준 — 상세는 FEATURES.md)
@@ -60,7 +60,7 @@ cd scenario-studio && npm run build   # vite build && cp -R ../legacy ../docs/le
 
 ## 핵심 설계 결정
 
-- **탐색은 공통 페이지** (시나리오 소유 아님). 칩 클릭 = 탐색 완료 → 플레이어는 설문부터 시작
+- **탐색은 공통 페이지** (시나리오 소유 아님, 계정 소유). 칩 클릭 = 탐색 완료 → 플레이어는 설문부터 시작. **탐색 콘텐츠도 아이템 기반**: `explore.items[]`를 빌더의 "탐색" 탭에서 설문/계획처럼 캔버스 편집(자동 저장·즉시 홈 반영). 구버전 설정(greeting/stories 등)은 `exploreItemsFrom()`으로 최초 1회 아이템 변환. 발행 칩은 `scenarioChips` 컴포넌트 자리에 렌더
 - **프로필/설문 요약 패널은 일반 컴포넌트** (`profilePanel`, `surveySummary`) — 고정 아님, 드래그 배치. 노출 항목은 컴포넌트 props.hidden (캔버스에서 배지 클릭으로 토글)
 - **겹침 해소 + 컴팩트**: `resolveCollision(items, movedIds[], heights)` — 이동한 아이템은 고정, 겹치는 다른 아이템이 아래로 밀림. 드래그 중 실시간 적용. 시나리오별 `compact`('vertical' 기본 | 'horizontal' | 'none')에 따라 모든 배치 커밋 후 `compactItems`로 스택(빌더의 `settle()` 경유, 드래그 중엔 드래그 아이템만 핀 고정). 구버전 `gravity: false`는 'none'으로 해석
 - **아이템 모델**: `{ id, type, x, y, w, h(null=자동), props }`, 높이는 ResizeObserver로 heightsRef에 측정

@@ -164,21 +164,50 @@ export function saveKeywords(list) {
   }
 }
 
+/* ── 탐색(홈) 페이지의 캔버스 아이템 ──
+   탐색 콘텐츠도 설문/계획과 같은 아이템 모델로 자유 배치·편집한다.
+   구버전 설정(greeting/searchPlaceholder/stories)은 최초 1회 아이템으로 변환 */
+export function exploreItemsFrom(config) {
+  const cfg = { ...DEFAULT_EXPLORE, ...(config || {}) }
+  const stories = Array.isArray(cfg.stories) && cfg.stories.length === 3 ? cfg.stories : DEFAULT_EXPLORE.stories
+  const mk = (type, y, props, w = 672) => ({ id: uid(), type, x: 24, y, w, h: null, props })
+  return [
+    mk('greeting', 24, { text: cfg.greeting }),
+    mk('searchBox', 170, { placeholder: cfg.searchPlaceholder, multiline: cfg.searchOverflow === 'multiline' }),
+    mk('scenarioChips', 290, {}),
+    mk('storyFeature', 380, { ...stories[0] }),
+    mk('storyCard', 900, { kicker: stories[1].kicker, title: stories[1].title, imageUrl: stories[1].imageUrl }),
+    mk('storyCard', 1300, { kicker: stories[2].kicker, title: stories[2].title, imageUrl: stories[2].imageUrl }),
+  ]
+}
+
 /* ── 사용자 프로필별 워크스페이스(계정) ──
    계정 = 프로필 + 탐색(DDAK) 페이지 + 시나리오 + 쓰레드 묶음.
    프로필을 전환하면 네 가지가 함께 바뀐다. */
 const ACCOUNTS_KEY = 'ddak-accounts-v1'
 
 export function createAccount(partial = {}) {
+  const explore = JSON.parse(JSON.stringify(DEFAULT_EXPLORE))
+  explore.items = exploreItemsFrom(explore)
   return {
     id: uid(),
     profile: JSON.parse(JSON.stringify(DEFAULT_PROFILE)),
-    explore: JSON.parse(JSON.stringify(DEFAULT_EXPLORE)),
+    explore,
     scenarios: [],
     threads: [],
     createdAt: new Date().toISOString(),
     ...partial,
   }
+}
+
+/* 계정 보정: 탐색 페이지에 아이템이 없으면 기존 설정으로부터 생성 */
+function normalizeAccount(a) {
+  const acc = { ...createAccount(), ...a }
+  if (!acc.explore || typeof acc.explore !== 'object') acc.explore = JSON.parse(JSON.stringify(DEFAULT_EXPLORE))
+  if (!Array.isArray(acc.explore.items) || acc.explore.items.length === 0) {
+    acc.explore = { ...acc.explore, items: exploreItemsFrom(acc.explore) }
+  }
+  return acc
 }
 
 export function loadAccounts() {
@@ -187,7 +216,7 @@ export function loadAccounts() {
     if (raw) {
       const parsed = JSON.parse(raw)
       if (parsed && Array.isArray(parsed.accounts) && parsed.accounts.length > 0) {
-        const accounts = parsed.accounts.map((a) => ({ ...createAccount(), ...a }))
+        const accounts = parsed.accounts.map(normalizeAccount)
         const activeId = accounts.some((a) => a.id === parsed.activeId)
           ? parsed.activeId
           : accounts[0].id
@@ -198,7 +227,7 @@ export function loadAccounts() {
     /* 손상 시 아래 마이그레이션 경로로 */
   }
   // 최초 실행: 기존 단일 저장소(v1 키들)를 첫 계정으로 마이그레이션 (원본 키는 남겨둠)
-  const first = createAccount({
+  const first = normalizeAccount({
     profile: loadLegacyProfile(),
     explore: loadLegacyExplore(),
     scenarios: loadLegacyScenarios(),

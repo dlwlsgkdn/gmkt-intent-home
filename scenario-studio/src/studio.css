@@ -490,6 +490,23 @@
 .sb-tb-spacer { flex: 1; min-width: 8px; }
 /* 3행: 단계 탭 — 도구 행 아래 별도 라인 */
 .sb-topbar__row--tabs { gap: 6px; }
+.sb-stage-tabs__note { margin-left: 10px; font-size: 11.5px; color: var(--sb-accent); white-space: nowrap; }
+.sb-stage-tab--common.sb-stage-tab--active {
+  background: rgba(95, 116, 101, 0.2);
+  color: var(--sb-accent);
+}
+
+/* 홈: 탐색 아이템 스택 */
+.sb-home-stack { padding: 92px 0 120px; gap: 20px; }
+
+/* 프로필·키워드 편집기: 미리보기 없는 단일 컬럼 */
+.sb-explore-workspace--single {
+  display: block;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 20px;
+}
+.sb-explore-workspace--single .sb-inspector { width: 100%; max-height: none; }
 .sb-topbar__meta { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .sb-title-input {
   border: none;

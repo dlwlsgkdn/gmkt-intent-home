@@ -15,8 +15,15 @@ import ContextMenu from './builder/ContextMenu.jsx'
 
 const SNAP = 6
 
+/* 빌더에서 편집 가능한 단계: 공통 탐색(계정 소유, 자동 반영) + 시나리오 소유 설문/계획 */
+const BUILD_STAGES = [
+  { key: 'explore', label: '탐색', desc: '모든 시나리오가 공유하는 공통 탐색(홈) 페이지 — 저장 즉시 홈에 반영', common: true },
+  ...STAGES,
+]
+
 export default function Builder({ api, scenario }) {
   const [stageKey, setStageKey] = useState(STAGES[0].key)
+  const isExplore = stageKey === 'explore'
   const [selectedIds, setSelectedIds] = useState([]) // 다중 선택 (⇧+클릭)
   const [dragPos, setDragPos] = useState(null) // { id, positions: {id:{x,y}} }
   const [sizeDraft, setSizeDraft] = useState(null) // {id, w, h}
@@ -36,7 +43,7 @@ export default function Builder({ api, scenario }) {
   const clipboardRef = useRef(null) // ⌘C 복사한 컴포넌트 스냅샷 (단계 간 붙여넣기 가능)
   const canvasRef = useRef(null)
 
-  const items = scenario.stages[stageKey] || []
+  const items = isExplore ? (api.explore.items || []) : (scenario.stages[stageKey] || [])
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
   const selected = items.find((it) => it.id === selectedId) || null
   const chipColor = scenario.color || '#5f7465'
@@ -77,8 +84,9 @@ export default function Builder({ api, scenario }) {
     })
   }
 
-  /* ── 히스토리 (Undo/Redo) ── */
-  const takeSnapshot = () => JSON.stringify({ stages: scenario.stages, device: scenario.device })
+  /* ── 히스토리 (Undo/Redo) — 시나리오 단계 + 공통 탐색 아이템을 함께 스냅샷 ── */
+  const takeSnapshot = () =>
+    JSON.stringify({ stages: scenario.stages, device: scenario.device, exploreItems: api.explore.items || [] })
   const applySnapshot = (snap) => {
     const data = JSON.parse(snap)
     setSelectedIds([])
@@ -87,6 +95,7 @@ export default function Builder({ api, scenario }) {
       stages: data.stages || data,
       device: data.device || s.device,
     }))
+    if (data.exploreItems) api.updateExplore({ ...api.explore, items: data.exploreItems })
   }
 
   const pushHistory = () => {
@@ -120,13 +129,17 @@ export default function Builder({ api, scenario }) {
     applySnapshot(snap)
   }
 
-  /* ── 아이템 변경 ── */
+  /* ── 아이템 변경 — 탐색은 계정 공유 페이지에, 설문/계획은 시나리오에 저장 ── */
   const setItems = (updater) => {
     pushHistory()
-    api.updateScenario(scenario.id, (s) => ({
-      ...s,
-      stages: { ...s.stages, [stageKey]: updater(s.stages[stageKey] || []) },
-    }))
+    if (isExplore) {
+      api.updateExplore({ ...api.explore, items: updater(api.explore.items || []) })
+    } else {
+      api.updateScenario(scenario.id, (s) => ({
+        ...s,
+        stages: { ...s.stages, [stageKey]: updater(s.stages[stageKey] || []) },
+      }))
+    }
   }
 
   useEffect(() => {
@@ -957,33 +970,31 @@ export default function Builder({ api, scenario }) {
           </div>
         </div>
 
-        {/* 3행: 단계 탭 */}
+        {/* 3행: 단계 탭 — 탐색(공통 캔버스)도 설문/계획처럼 직접 편집 */}
         <div className="sb-topbar__row sb-topbar__row--tabs">
           <div className="sb-stage-tabs">
-            <button
-              type="button"
-              className="sb-stage-tab sb-stage-tab--common"
-              title="모든 시나리오가 공유하는 공통 탐색(홈) 페이지 편집"
-              onClick={api.openExploreEditor}
-            >
-              <span className="sb-stage-tab__num">🧭</span>
-              탐색
-              <span className="sb-stage-tab__count">공통</span>
-            </button>
-            <span className="sb-stage-tabs__divider" aria-hidden="true" />
-            {STAGES.map((s, i) => (
-              <button
-                key={s.key}
-                type="button"
-                className={'sb-stage-tab' + (stageKey === s.key ? ' sb-stage-tab--active' : '')}
-                title={s.desc}
-                onClick={() => setStageKey(s.key)}
-              >
-                <span className="sb-stage-tab__num">{i + 1}</span>
-                {s.label}
-                <span className="sb-stage-tab__count">{(scenario.stages[s.key] || []).length}</span>
-              </button>
+            {BUILD_STAGES.map((s, i) => (
+              <React.Fragment key={s.key}>
+                {i === 1 && <span className="sb-stage-tabs__divider" aria-hidden="true" />}
+                <button
+                  type="button"
+                  className={
+                    'sb-stage-tab' +
+                    (s.common ? ' sb-stage-tab--common' : '') +
+                    (stageKey === s.key ? ' sb-stage-tab--active' : '')
+                  }
+                  title={s.desc}
+                  onClick={() => setStageKey(s.key)}
+                >
+                  <span className="sb-stage-tab__num">{s.common ? '🧭' : i}</span>
+                  {s.label}
+                  <span className="sb-stage-tab__count">
+                    {s.common ? (api.explore.items || []).length : (scenario.stages[s.key] || []).length}
+                  </span>
+                </button>
+              </React.Fragment>
             ))}
+            {isExplore && <span className="sb-stage-tabs__note">공통 페이지 · 모든 시나리오 홈에 즉시 반영</span>}
           </div>
         </div>
       </div>
