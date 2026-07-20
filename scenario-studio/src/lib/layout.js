@@ -89,28 +89,69 @@ export function layoutCompactUp(items, heights) {
   return items.map((it) => placed.find((p) => p.id === it.id) || it)
 }
 
-/* 중력: x/너비는 유지한 채, 핀(드래그 중)·잠금 아이템만 제자리에 두고
-   나머지를 위로 끌어올려 스택시킨다 (겹침도 함께 해소) */
-export function applyGravity(items, heights, pinnedIds = []) {
+/* 컴팩트(compact) — react-grid-layout의 compactType 컨벤션.
+   direction: 'vertical'(위로 스택) | 'horizontal'(왼쪽으로 스택) | 'none'
+   핀(드래그 중)·잠금 아이템은 제자리에 두고 나머지를 스택시킨다 (겹침도 함께 해소) */
+export const COMPACT_TYPES = [
+  { key: 'vertical', label: '세로 컴팩트', desc: '컴포넌트가 위로 차곡차곡 붙어요 (기본)' },
+  { key: 'horizontal', label: '가로 컴팩트', desc: '같은 줄에서 왼쪽으로 붙어요' },
+  { key: 'none', label: '컴팩트 끄기', desc: '빈 공간을 두고 자유롭게 배치해요' },
+]
+
+export function compactItems(items, heights, { direction = 'vertical', pinnedIds = [], canvasW = Infinity } = {}) {
+  if (direction === 'none') return items
   const h = (it) => it.h || heights[it.id] || 80
+  const overlaps = (placed, box) =>
+    placed.find(
+      (p) =>
+        box.x < p.x + p.w &&
+        box.x + box.w > p.x &&
+        box.y < p.y + h(p) &&
+        box.y + h(box) > p.y
+    )
   const pinned = new Set(pinnedIds)
   const fixed = items.filter((it) => pinned.has(it.id) || it.locked)
-  const movable = sortByPosition(items.filter((it) => !pinned.has(it.id) && !it.locked))
+  const movableSrc = items.filter((it) => !pinned.has(it.id) && !it.locked)
+  const movable =
+    direction === 'horizontal'
+      ? [...movableSrc].sort((a, b) => (a.x - b.x) || (a.y - b.y))
+      : sortByPosition(movableSrc)
   const placed = [...fixed]
+
   for (const it of movable) {
-    let y = PAD
-    for (let guard = 0; guard < 200; guard++) {
-      const hit = placed.find(
-        (p) =>
-          it.x < p.x + p.w &&
-          it.x + it.w > p.x &&
-          y < p.y + h(p) &&
-          y + h(it) > p.y
-      )
-      if (!hit) break
-      y = hit.y + h(hit) + GAP
+    if (direction === 'horizontal') {
+      // 같은 세로 구간(줄)에서 왼쪽으로 당긴다. 줄이 꽉 차면 x는 유지하고 세로 겹침만 해소
+      let x = PAD
+      let overflow = false
+      for (let guard = 0; guard < 200; guard++) {
+        const hit = overlaps(placed, { ...it, x })
+        if (!hit) break
+        x = hit.x + hit.w + GAP
+        if (x + it.w > canvasW - PAD) {
+          overflow = true
+          break
+        }
+      }
+      if (!overflow) {
+        placed.push({ ...it, x })
+      } else {
+        let y = it.y
+        for (let guard = 0; guard < 200; guard++) {
+          const hit = overlaps(placed, { ...it, y })
+          if (!hit) break
+          y = hit.y + h(hit) + GAP
+        }
+        placed.push({ ...it, y })
+      }
+    } else {
+      let y = PAD
+      for (let guard = 0; guard < 200; guard++) {
+        const hit = overlaps(placed, { ...it, y })
+        if (!hit) break
+        y = hit.y + h(hit) + GAP
+      }
+      placed.push({ ...it, y })
     }
-    placed.push({ ...it, y })
   }
   return items.map((it) => placed.find((p) => p.id === it.id) || it)
 }

@@ -3,7 +3,7 @@ import { STAGES, DEVICE_PRESETS, CHIP_COLORS, createItem, visibleProfileItems } 
 import { LIBRARY } from '../lib/registry.jsx'
 import {
   PAD, GAP, MIN_ITEM_W,
-  resolveCollision, layoutCompactUp, alignItems, applyGravity, LAYOUT_MODES,
+  resolveCollision, layoutCompactUp, alignItems, compactItems, COMPACT_TYPES, LAYOUT_MODES,
 } from '../lib/layout.js'
 import { buildShareUrl } from '../lib/share.js'
 import Dropdown from './ui/Dropdown.jsx'
@@ -47,22 +47,25 @@ export default function Builder({ api, scenario }) {
   const canvasW = device.w
   const itemW = canvasW - PAD * 2
 
-  /* 캔버스 중력 (기본 켜짐): 배치가 바뀔 때마다 컴포넌트를 위로 스택.
-     settle = 겹침 해소 후 중력 적용 — 모든 커밋 경로가 이걸 통과한다 */
-  const gravityOn = scenario.gravity !== false
+  /* 컴팩트(compactType — 업계 컨벤션): 배치가 바뀔 때마다 빈 공간 없이 스택.
+     'vertical'(기본, 위로) | 'horizontal'(왼쪽으로) | 'none'(자유 배치).
+     settle = 겹침 해소 후 컴팩트 — 모든 커밋 경로가 이걸 통과한다.
+     (구버전 gravity: false 데이터는 'none'으로 해석) */
+  const compactType = scenario.compact || (scenario.gravity === false ? 'none' : 'vertical')
+  const compactOn = compactType !== 'none'
+  const compactOpts = (pinnedIds = []) => ({ direction: compactType, pinnedIds, canvasW })
   const settle = (list, movedIds) => {
     const resolved = resolveCollision(list, movedIds, heightsRef.current)
-    return gravityOn ? applyGravity(resolved, heightsRef.current) : resolved
+    return compactOn ? compactItems(resolved, heightsRef.current, compactOpts()) : resolved
   }
-  const toggleGravity = () => {
-    const next = !gravityOn
-    api.updateScenario(scenario.id, (s) => ({ ...s, gravity: next }))
-    if (next) {
-      setItems((prev) => applyGravity(prev, heightsRef.current))
-      api.showToast('중력 켜짐 — 컴포넌트가 위로 차곡차곡 쌓여요.')
-    } else {
-      api.showToast('중력 꺼짐 — 빈 공간을 두고 자유롭게 배치할 수 있어요.')
+  const changeCompact = (type) => {
+    setOpenMenu(null)
+    if (type.key === compactType) return
+    api.updateScenario(scenario.id, (s) => ({ ...s, compact: type.key }))
+    if (type.key !== 'none') {
+      setItems((prev) => compactItems(prev, heightsRef.current, { direction: type.key, canvasW }))
     }
+    api.showToast(`${type.label} — ${type.desc}`)
   }
 
   const toggleMenu = (key) => setOpenMenu((cur) => (cur === key ? null : key))
@@ -145,7 +148,7 @@ export default function Builder({ api, scenario }) {
         PAD - GAP
       )
       const next = [...prev, { ...item, x: PAD, y: bottom + GAP, w }]
-      return gravityOn ? applyGravity(next, heightsRef.current) : next
+      return compactOn ? compactItems(next, heightsRef.current, compactOpts()) : next
     })
     setSelectedIds([item.id])
   }
@@ -283,7 +286,7 @@ export default function Builder({ api, scenario }) {
   const removeItem = (id) => {
     setItems((prev) => {
       const next = prev.filter((it) => it.id !== id)
-      return gravityOn ? applyGravity(next, heightsRef.current) : next
+      return compactOn ? compactItems(next, heightsRef.current, compactOpts()) : next
     })
     setSelectedIds((prev) => prev.filter((x) => x !== id))
   }
@@ -292,7 +295,7 @@ export default function Builder({ api, scenario }) {
     const ids = new Set(selectedIds)
     setItems((prev) => {
       const next = prev.filter((it) => !ids.has(it.id))
-      return gravityOn ? applyGravity(next, heightsRef.current) : next
+      return compactOn ? compactItems(next, heightsRef.current, compactOpts()) : next
     })
     setSelectedIds([])
   }
@@ -489,7 +492,7 @@ export default function Builder({ api, scenario }) {
     if (selectedIds.length < 2) return
     setItems((prev) => {
       const aligned = alignItems(prev, selectedIds, mode, { canvasW }, heightsRef.current)
-      return gravityOn ? applyGravity(aligned, heightsRef.current) : aligned
+      return compactOn ? compactItems(aligned, heightsRef.current, compactOpts()) : aligned
     })
   }
 
@@ -707,7 +710,7 @@ export default function Builder({ api, scenario }) {
   /* ── 렌더 ── */
 
   /* 드래그 중에는 다른 아이템들이 실시간으로 밀려나는 미리보기 레이아웃.
-     중력이 켜져 있으면 드래그 중인 아이템만 포인터에 고정하고 나머지는 위로 스택 */
+     컴팩트가 켜져 있으면 드래그 중인 아이템만 포인터에 고정하고 나머지를 스택 */
   let displayItems = items
   if (dragPos) {
     const moved = items.map((it) =>
@@ -715,7 +718,7 @@ export default function Builder({ api, scenario }) {
     )
     const draggedIds = Object.keys(dragPos.positions)
     const resolved = resolveCollision(moved, draggedIds, heightsRef.current)
-    displayItems = gravityOn ? applyGravity(resolved, heightsRef.current, draggedIds) : resolved
+    displayItems = compactOn ? compactItems(resolved, heightsRef.current, compactOpts(draggedIds)) : resolved
   }
 
   const canvasHeight = Math.max(
@@ -861,14 +864,33 @@ export default function Builder({ api, scenario }) {
             ))}
           </Dropdown>
 
-          <button
-            type="button"
-            className={'sb-btn' + (gravityOn ? ' sb-btn--gravity-on' : '')}
-            title={gravityOn ? '중력 켜짐 — 컴포넌트가 위로 스택돼요 (끄면 자유 배치)' : '중력 꺼짐 — 자유 배치 (켜면 위로 스택)'}
-            onClick={toggleGravity}
+          <Dropdown
+            open={openMenu === 'compact'}
+            onClose={() => setOpenMenu(null)}
+            button={
+              <button
+                type="button"
+                className={'sb-btn' + (compactOn ? ' sb-btn--compact-on' : '') + (openMenu === 'compact' ? ' sb-btn--open' : '')}
+                title="컴팩트 방향 — 배치가 바뀔 때 빈 공간 없이 스택되는 방향"
+                onClick={() => toggleMenu('compact')}
+              >
+                🧲 {COMPACT_TYPES.find((t) => t.key === compactType)?.label || '컴팩트'}
+                {chevron}
+              </button>
+            }
           >
-            🧲 중력 {gravityOn ? 'ON' : 'OFF'}
-          </button>
+            {COMPACT_TYPES.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                className={'sb-menu__item' + (t.key === compactType ? ' sb-menu__item--active' : '')}
+                onClick={() => changeCompact(t)}
+              >
+                <strong>{t.label}</strong>
+                <small>{t.desc}{t.key === compactType ? ' · 사용 중' : ''}</small>
+              </button>
+            ))}
+          </Dropdown>
 
           <Dropdown
             open={openMenu === 'layout'}

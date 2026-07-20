@@ -29,7 +29,7 @@ cd scenario-studio && npm run build   # vite build && cp -R ../legacy ../docs/le
 
 - `App.jsx` — 라우팅(home/builder/player/explore-editor + 공유 링크 모드), **계정(프로필별 워크스페이스) 상태** + localStorage 저장. 활성 계정에서 scenarios/explore/profile/threads를 파생하고, 시나리오 CRUD·복제·순서변경·가져오기/내보내기·계정 전환/추가/삭제·쓰레드 기록 API 제공
 - `lib/store.js` — 데이터 모델·localStorage. STAGES(설문→계획), DEVICE_PRESETS(기기 폭), CHIP_COLORS, DEFAULT_EXPLORE/PROFILE, **createAccount/loadAccounts/saveAccounts**(계정, 구 키 마이그레이션 포함), 쓰레드 저장, visibleProfileItems(프로필 노출 계산)
-- `lib/layout.js` — **레이아웃 엔진** (순수 함수): resolveCollision(겹침 해소, 다중 이동+잠금 지원), applyGravity(위로 스택 — 핀·잠금 제외), layoutStack/TwoColumns/CompactUp, alignItems(다중 정렬), PAD/GAP 상수
+- `lib/layout.js` — **레이아웃 엔진** (순수 함수): resolveCollision(겹침 해소, 다중 이동+잠금 지원), compactItems(COMPACT_TYPES: vertical/horizontal/none — 핀·잠금 제외 스택), layoutStack/TwoColumns/CompactUp, alignItems(다중 정렬), PAD/GAP 상수
 - `lib/share.js` — 공유 링크: 시나리오를 `#s=<base64url JSON>` 해시로 인코딩/디코딩 (서버 불필요)
 - `lib/registry.jsx` — **컴포넌트 레지스트리** (팔레트의 모든 컴포넌트). `{ label, stage, icon, defaults, fields[], render(props, ctx), canvasInteractive?, defaultW? }`. ctx.mode='canvas'|'player', ctx.player(실행 API), ctx.profile, ctx.updateProps(캔버스 내 편집), ctx.summaryPreview. kText() 텍스트 렌더러(키워드+부분 서식+인라인 편집 진입)
 - `lib/richtext.jsx` — 인라인 리치텍스트 엔진: `{{옵션|텍스트}}`/`[[키워드]]` 마크업 ↔ contentEditable 변환, 서식 적용/병합, InlineEditor, FONT_OPTIONS/TEXT_COLORS
@@ -62,7 +62,7 @@ cd scenario-studio && npm run build   # vite build && cp -R ../legacy ../docs/le
 
 - **탐색은 공통 페이지** (시나리오 소유 아님). 칩 클릭 = 탐색 완료 → 플레이어는 설문부터 시작
 - **프로필/설문 요약 패널은 일반 컴포넌트** (`profilePanel`, `surveySummary`) — 고정 아님, 드래그 배치. 노출 항목은 컴포넌트 props.hidden (캔버스에서 배지 클릭으로 토글)
-- **겹침 해소 + 중력**: `resolveCollision(items, movedIds[], heights)` — 이동한 아이템은 고정, 겹치는 다른 아이템이 아래로 밀림. 드래그 중 실시간 적용. 시나리오별 `gravity`(기본 true)가 켜져 있으면 모든 배치 커밋 후 `applyGravity`로 위로 스택(빌더의 `settle()` 경유, 드래그 중엔 드래그 아이템만 핀 고정)
+- **겹침 해소 + 컴팩트**: `resolveCollision(items, movedIds[], heights)` — 이동한 아이템은 고정, 겹치는 다른 아이템이 아래로 밀림. 드래그 중 실시간 적용. 시나리오별 `compact`('vertical' 기본 | 'horizontal' | 'none')에 따라 모든 배치 커밋 후 `compactItems`로 스택(빌더의 `settle()` 경유, 드래그 중엔 드래그 아이템만 핀 고정). 구버전 `gravity: false`는 'none'으로 해석
 - **아이템 모델**: `{ id, type, x, y, w, h(null=자동), props }`, 높이는 ResizeObserver로 heightsRef에 측정
 - **원본 룩 유지**: `public/`에 원본 CSS(gmarket-advanced*.css) 복사본 + Tailwind CDN. 원본 클래스 그대로 재사용
 - **프로필별 워크스페이스(계정)**: `ddak-accounts-v1`에 `{accounts[], activeId}` — 계정 = 프로필+탐색 페이지+시나리오+쓰레드 묶음. 프로필 전환은 홈 드로어. 구 단일 키(`ddak-scenarios-v1`, `ddak-explore-page-v1`, `ddak-profile-v1`, `ddak-threads-v1`)는 최초 1회 첫 계정으로 마이그레이션 (발행은 브라우저 로컬 한정)

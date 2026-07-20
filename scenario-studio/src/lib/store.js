@@ -257,7 +257,7 @@ export function createScenario(partial = {}) {
     query: '',
     device: 'desktop',
     color: '#5f7465',
-    gravity: true, // 캔버스 중력: 컴포넌트가 위로 스택 (빌더 상단 바에서 토글)
+    compact: 'vertical', // 컴팩트 방향: 'vertical'(위로 스택) | 'horizontal'(왼쪽) | 'none' — 빌더 상단 바
     versions: [], // 발행 시점 스냅샷 (최근 10개)
     status: 'draft',
     createdAt: new Date().toISOString(),
