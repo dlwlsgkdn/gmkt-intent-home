@@ -27,22 +27,36 @@ cd scenario-studio && npm run build   # vite build && cp -R ../legacy ../docs/le
 
 ## 아키텍처 (scenario-studio/src)
 
-- `App.jsx` — 라우팅(home/builder/player/explore-editor + 공유 링크 모드), 시나리오/탐색/프로필 상태 + localStorage 저장, 시나리오 CRUD·복제·순서변경·가져오기/내보내기 API
-- `lib/store.js` — 데이터 모델·localStorage. STAGES(설문→계획), DEVICE_PRESETS(기기 폭), CHIP_COLORS, DEFAULT_EXPLORE(공통 탐색 페이지), DEFAULT_PROFILE(고정 설문 정보)
+- `App.jsx` — 라우팅(home/builder/player/explore-editor + 공유 링크 모드), **계정(프로필별 워크스페이스) 상태** + localStorage 저장. 활성 계정에서 scenarios/explore/profile/threads를 파생하고, 시나리오 CRUD·복제·순서변경·가져오기/내보내기·계정 전환/추가/삭제·쓰레드 기록 API 제공
+- `lib/store.js` — 데이터 모델·localStorage. STAGES(설문→계획), DEVICE_PRESETS(기기 폭), CHIP_COLORS, DEFAULT_EXPLORE/PROFILE, **createAccount/loadAccounts/saveAccounts**(계정, 구 키 마이그레이션 포함), 쓰레드 저장, visibleProfileItems(프로필 노출 계산)
 - `lib/layout.js` — **레이아웃 엔진** (순수 함수): resolveCollision(겹침 해소, 다중 이동+잠금 지원), layoutStack/TwoColumns/CompactUp, alignItems(다중 정렬), PAD/GAP 상수
 - `lib/share.js` — 공유 링크: 시나리오를 `#s=<base64url JSON>` 해시로 인코딩/디코딩 (서버 불필요)
-- `lib/registry.jsx` — **컴포넌트 레지스트리** (팔레트의 모든 컴포넌트). `{ label, stage, icon, defaults, fields[], render(props, ctx), canvasInteractive? }`. ctx.mode='canvas'|'player', ctx.player(실행 API), ctx.profile, ctx.updateProps(캔버스 내 편집), ctx.summaryPreview
+- `lib/registry.jsx` — **컴포넌트 레지스트리** (팔레트의 모든 컴포넌트). `{ label, stage, icon, defaults, fields[], render(props, ctx), canvasInteractive?, defaultW? }`. ctx.mode='canvas'|'player', ctx.player(실행 API), ctx.profile, ctx.updateProps(캔버스 내 편집), ctx.summaryPreview. kText() 텍스트 렌더러(키워드+부분 서식+인라인 편집 진입)
+- `lib/richtext.jsx` — 인라인 리치텍스트 엔진: `{{옵션|텍스트}}`/`[[키워드]]` 마크업 ↔ contentEditable 변환, 서식 적용/병합, InlineEditor, FONT_OPTIONS/TEXT_COLORS
 - `lib/templates.js` — 새 시나리오 템플릿 (빈/뷰티 브리프/선물 추천)
-- `components/Builder.jsx` — 편집기 오케스트레이터 (상태/드래그/히스토리/발행). Undo/Redo(500ms 병합), 스마트 스냅, 다중 선택(⇧클릭·⌘A·그룹 드래그·정렬 도구), 기기 프리셋, 발행 버전 스냅샷·복원, 공유 링크 복사
-- `components/builder/CanvasItem.jsx` — 캔버스 아이템 (드래그/리사이즈/잠금/숨김)
-- `components/builder/Palette.jsx` — 팔레트(검색)/레이어 패널(잠금·숨김·순서)
-- `components/builder/Inspector.jsx` — 속성 편집 / 다중 선택 정렬 도구
-- `components/ui/Dropdown.jsx` — 상단 바 드롭다운 공용 래퍼
-- `components/Player.jsx` — 시나리오 실행(설문→계획 스테퍼). 기기 폭 반영, hidden 아이템 제외, 다시 시작, 응답/프로필 제외 상태를 ctx.player로 공급
-- `components/HomeView.jsx` — 홈. 발행 칩(색상/드래그 순서변경/클릭 실행), 시나리오 드로어(템플릿·복제·JSON 입출력)
-- `components/ExploreFrame.jsx` — 공통 탐색(홈) 렌더러 (홈과 편집기가 공유)
-- `components/ExploreEditor.jsx` — 공통 탐색 페이지 + 사용자 프로필 편집기 (라이브 미리보기)
+- `components/Builder.jsx` — 편집기 오케스트레이터 (상태/드래그/히스토리/발행). Undo/Redo(500ms 병합), 스마트 스냅, 다중 선택(⇧클릭·⌘A·러버밴드·그룹 드래그·정렬 도구), ⌘C/X/V 클립보드(단계 간), 캔버스 줌(⌘+/-/0), 우클릭 컨텍스트 메뉴, 팔레트 드래그 배치, 기기 프리셋, 발행 버전 스냅샷·복원, 공유 링크 복사
+- `components/builder/CanvasItem.jsx` — 캔버스 아이템 (드래그/리사이즈/잠금/숨김, zoom 좌표 보정, 우클릭)
+- `components/builder/Palette.jsx` — 팔레트(검색·클릭 추가·캔버스로 드래그)/레이어 패널(잠금·숨김·순서)
+- `components/builder/Inspector.jsx` — 속성 편집 / 필드 드래그 선택 서식 툴바 / 다중 선택 정렬 도구
+- `components/builder/CanvasTextToolbar.jsx` — 캔버스 인라인 편집 중 선택 위에 뜨는 서식 툴바
+- `components/ui/Dropdown.jsx` — 드롭다운 공용 래퍼 (버튼은 호출부, 메뉴/백드롭 담당)
+- `components/Frame.jsx` — 공통 프레임 조각: BgBlobs, FloatingBar(하단, 햄버거=쓰레드 패널, 버튼 위치→패널 방향), ViewerDeviceControl(기기 폭), ProfileControl(프로필 전환/추가/삭제), StudioFab
+- `components/ThreadPanel.jsx` — 쇼핑 쓰레드 히스토리 패널 (원본 history-sidebar 룩, 좌/우/중앙 등장, 아코디언 카드, 이어보기/삭제)
+- `components/Player.jsx` — 시나리오 실행(설문→계획 스테퍼). 기기 폭 반영, hidden 아이템 제외, 다시 시작, 응답/프로필 제외 상태를 ctx.player로 공급, **쓰레드 자동 기록**(체험 1회 = 쓰레드 1개)
+- `components/HomeView.jsx` — 홈. 발행 칩(색상/드래그 순서변경/클릭 실행), 좌상단 기기+프로필 컨트롤, 시나리오 드로어(템플릿·복제·JSON 입출력), 쓰레드 패널
+- `components/ExploreFrame.jsx` — 공통 탐색(홈) 렌더러 (홈과 편집기가 공유). 검색창 한 줄 말줄임(input)/여러 줄(textarea+field-sizing) 모드
+- `components/ExploreEditor.jsx` — 탐색 페이지 + 사용자 프로필 + 키워드 사전 편집기 (라이브 미리보기)
 - `studio.css` — 스튜디오 전용 스타일 (`sb-` 접두사) + 원본 CSS 클래스의 절대배치 무력화 오버라이드
+
+## 기능 현황 (2026-07 기준 — 상세는 FEATURES.md)
+
+1. **프로필별 워크스페이스**: 계정 = 프로필+탐색 페이지+시나리오+쓰레드. 홈 좌상단 프로필 컨트롤로 전환/추가/삭제
+2. **홈**: 발행 칩(클릭 실행·드래그 순서·색상), 검색 매칭, 검색창 말줄임/멀티라인 옵션
+3. **쓰레드 히스토리**: 햄버거 → 원본 룩 패널(버튼 위치 방향에서 등장), 체험 자동 기록, 이어보기
+4. **빌더**: 자유 배치+겹침 회피+스냅, 다중 선택(⇧/⌘A/러버밴드), 우클릭 메뉴, ⌘C/X/V(단계 간), 줌, 팔레트 드래그 배치, 인라인 WYSIWYG 편집+서식 툴바(볼드/폰트/크기/색/키워드 밑줄), Undo/Redo, 기기 프리셋, 자동 정렬, 발행/버전 복원, 공유 링크
+5. **컴포넌트 15종** (+탐색 레거시 5종): 설문 3, 계획 8, 공통 4(텍스트/안내/가로 스크롤 패널/이미지)
+6. **플레이어**: 설문→계획 스테퍼, 프로필 배지 제외, 설문 요약, 담기/완료, 쓰레드 기록
+7. **공유**: URL 해시 링크(즉시 체험, 가져오기), JSON 백업/이관
 
 ## 핵심 설계 결정
 
