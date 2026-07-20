@@ -1240,6 +1240,52 @@
 .sb-child--selected { outline: 1.5px solid var(--sb-accent) !important; outline-offset: 2px; }
 .sb-child--hidden { opacity: 0.45; }
 
+/* ── 캔버스 편집/미리보기 모드 (Figma clip-무시 + Webflow 미리보기 토글 패턴) ──
+   편집 모드: 컨테이너 경계를 반투명 점선으로 표시, 클리핑 해제로 자식을 온전히 표시 */
+.sb-container-edit {
+  outline: 1.5px dashed rgba(95, 116, 101, 0.45);
+  outline-offset: 4px;
+  border-radius: 12px;
+}
+/* 가로 스크롤: 편집 모드에선 줄바꿈으로 전체 카드 표시 (실사용은 한 줄 스크롤) */
+.sb-hscroll__track--edit {
+  flex-wrap: wrap;
+  overflow: visible;
+}
+/* 세로 스크롤: 편집 모드에선 높이 제한 해제, 실제 표시 높이는 점선 마커로 */
+.sb-vscroll__list--edit {
+  position: relative;
+  overflow: visible;
+}
+.sb-edit-extent {
+  position: absolute;
+  left: -4px;
+  right: -4px;
+  border-top: 1.5px dashed rgba(180, 90, 107, 0.55);
+  color: #b45a6b;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 4px 0;
+  pointer-events: none;
+  z-index: 3;
+}
+/* 캐러셀: 편집 모드에선 슬라이드를 세로로 펼쳐 모두 표시 */
+.sb-carousel__track--edit {
+  flex-direction: column;
+  overflow: visible;
+  scroll-snap-type: none;
+}
+.sb-carousel__track--edit .sb-carousel__slot { flex: 0 0 auto; width: 100%; }
+.sb-edit-note {
+  margin: 0 0 8px;
+  font-size: 10.5px;
+  color: rgba(95, 116, 101, 0.85);
+}
+
+/* 미리보기 모드: 편집 크롬(태그·리사이즈 핸들) 숨김 — 사용자 실사용 모습 */
+.sb-canvas--preview .sb-canvas-item__tag,
+.sb-canvas--preview .sb-resize-handle { display: none; }
+
 /* 빈 컨테이너 드롭존 (캔버스 전용) */
 .sb-container-empty {
   display: flex;

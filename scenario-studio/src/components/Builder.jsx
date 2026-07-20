@@ -33,6 +33,7 @@ export default function Builder({ api, scenario }) {
   const [inlineEdit, setInlineEdit] = useState(null) // 캔버스 인라인 텍스트 편집 {itemId, key}
   const [, setHistVer] = useState(0) // undo/redo 버튼 활성화 갱신용
   const [zoom, setZoom] = useState(1) // 캔버스 줌 (Figma식 ⌘+/-/0)
+  const [canvasView, setCanvasView] = useState('edit') // 'edit'(클리핑 해제+경계 표시) | 'preview'(실사용 모습)
   const [marquee, setMarquee] = useState(null) // 빈 캔버스 드래그 → 러버밴드 선택 박스
   const [ctxMenu, setCtxMenu] = useState(null) // 우클릭 컨텍스트 메뉴 {sx, sy, cx, cy, itemId}
   const dragPosRef = useRef(null)
@@ -991,6 +992,7 @@ export default function Builder({ api, scenario }) {
   /* 캔버스 렌더 컨텍스트: 프로필 데이터, 배지 클릭 토글, 계획 요약 미리보기 */
   const canvasCtx = {
     mode: 'canvas',
+    canvasView, // 'edit' = 컨테이너 클리핑 해제, 'preview' = 실사용 모습
     allItems: items, // 컨테이너가 자식을 찾아 렌더할 때 사용
     selectedIds, // 자식 셸의 선택 표시
     childPointerDown, // 자식 클릭 선택 / 드래그 꺼내기
@@ -1128,7 +1130,17 @@ export default function Builder({ api, scenario }) {
             </button>
           </div>
           <span className="sb-tb-sep" aria-hidden="true" />
-          <div className="sb-tb-group" role="group" aria-label="캔버스 줌">
+          <div className="sb-tb-group" role="group" aria-label="보기">
+            <button
+              type="button"
+              className={'sb-btn' + (canvasView === 'preview' ? ' sb-btn--compact-on' : '')}
+              title={canvasView === 'preview'
+                ? '미리보기 모드 — 실제 사용자가 보는 모습 (클릭해 편집 모드로)'
+                : '편집 모드 — 레이아웃 클리핑을 풀고 모든 자식을 온전히 표시 (클릭해 미리보기로)'}
+              onClick={() => setCanvasView((v) => (v === 'edit' ? 'preview' : 'edit'))}
+            >
+              {canvasView === 'preview' ? '👁 미리보기' : '✏️ 편집 모드'}
+            </button>
             <div className="sb-zoom-ctl">
               <button type="button" title="축소 (⌘-)" aria-label="축소" onClick={() => zoomBy(-1)}>−</button>
               <button type="button" className="sb-zoom-ctl__val" title="100%로 (⌘0)" onClick={() => setZoom(1)}>
@@ -1265,7 +1277,7 @@ export default function Builder({ api, scenario }) {
             <div className="sb-canvas-scale" style={{ width: canvasW * zoom, height: canvasHeight * zoom }}>
               <div
                 ref={canvasRef}
-                className="sb-canvas"
+                className={'sb-canvas' + (canvasView === 'preview' ? ' sb-canvas--preview' : ' sb-canvas--edit')}
                 style={{ width: canvasW, height: canvasHeight, transform: `scale(${zoom})`, transformOrigin: '0 0' }}
                 onPointerDown={onCanvasPointerDown}
                 onContextMenu={(e) => { if (e.target === e.currentTarget) openCtxMenu(e, null) }}

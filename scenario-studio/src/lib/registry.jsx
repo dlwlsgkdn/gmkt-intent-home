@@ -50,9 +50,13 @@ function ChildShell({ item, ctx, children }) {
   )
 }
 
-/* 캔버스 모드의 빈 컨테이너 드롭존 (실행 화면에서는 렌더 안 함) */
+/* 캔버스 편집 모드 여부 — 컨테이너 클리핑을 풀고 경계를 점선으로 표시 (Figma의 clip 무시,
+   Webflow/Framer의 편집 캔버스 ↔ 미리보기 토글 패턴) */
+const isEditView = (ctx) => ctx.mode === 'canvas' && ctx.canvasView !== 'preview'
+
+/* 캔버스 편집 모드의 빈 컨테이너 드롭존 (미리보기·실행 화면에서는 렌더 안 함) */
 const EmptyDropZone = ({ ctx }) =>
-  ctx.mode === 'canvas' ? (
+  isEditView(ctx) ? (
     <div className="sb-container-empty">컴포넌트를 여기로 끌어다 놓으세요</div>
   ) : null
 
@@ -852,10 +856,11 @@ export const LIBRARY = {
       const cards = parseCards(p.items)
       const cardW = Math.max(96, Number(p.cardW) || 168)
       const kids = ctx.children || []
+      const edit = isEditView(ctx)
       return (
-        <div className="sb-hscroll">
+        <div className={'sb-hscroll' + (edit ? ' sb-container-edit' : '')}>
           {p.title ? <p className="sb-hscroll__title">{kText(p.title, ctx, 'title')}</p> : null}
-          <div className={'sb-hscroll__track' + scrollCls(p.scrollbar)}>
+          <div className={'sb-hscroll__track' + scrollCls(p.scrollbar) + (edit ? ' sb-hscroll__track--edit' : '')}>
             {kids.length > 0 ? (
               kids.map((c) => (
                 <div key={c.key} className="sb-hscroll__slot" style={{ width: cardW }}>{c.node}</div>
@@ -909,7 +914,7 @@ export const LIBRARY = {
       const cols = Math.max(1, Math.min(4, Number(p.cols) || 2))
       const kids = ctx.children || []
       return (
-        <div className="sb-gridpanel">
+        <div className={'sb-gridpanel' + (isEditView(ctx) ? ' sb-container-edit' : '')}>
           {p.title ? <p className="sb-hscroll__title">{kText(p.title, ctx, 'title')}</p> : null}
           <div className="sb-gridpanel__grid" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
             {kids.length > 0 && kids.map((c) => <div key={c.key} className="sb-gridpanel__slot">{c.node}</div>)}
@@ -956,10 +961,12 @@ export const LIBRARY = {
       const cards = parseCards(p.items)
       const kids = ctx.children || []
       const slideCount = kids.length > 0 ? kids.length : cards.length
+      const edit = isEditView(ctx)
       return (
-        <div className="sb-carousel">
+        <div className={'sb-carousel' + (edit ? ' sb-container-edit' : '')}>
           {p.title ? <p className="sb-hscroll__title">{kText(p.title, ctx, 'title')}</p> : null}
-          <div className={'sb-carousel__track' + scrollCls(p.scrollbar)}>
+          {edit && slideCount > 1 && <p className="sb-edit-note">편집 모드 — 슬라이드를 모두 펼쳐 표시 중 (실사용은 한 장씩 스냅)</p>}
+          <div className={'sb-carousel__track' + scrollCls(p.scrollbar) + (edit ? ' sb-carousel__track--edit' : '')}>
             {kids.length > 0 && kids.map((c) => <div key={c.key} className="sb-carousel__slot">{c.node}</div>)}
             {kids.length === 0 && cards.length === 0 && <EmptyDropZone ctx={ctx} />}
             {kids.length === 0 && cards.map((c, i) => (
@@ -1064,10 +1071,19 @@ export const LIBRARY = {
       const cards = parseCards(p.items)
       const panelH = Math.max(120, Number(p.panelH) || 280)
       const kids = ctx.children || []
+      const edit = isEditView(ctx)
       return (
-        <div className="sb-vscroll">
+        <div className={'sb-vscroll' + (edit ? ' sb-container-edit' : '')}>
           {p.title ? <p className="sb-hscroll__title">{kText(p.title, ctx, 'title')}</p> : null}
-          <div className={'sb-vscroll__list' + scrollCls(p.scrollbar)} style={{ height: panelH }}>
+          <div
+            className={'sb-vscroll__list' + scrollCls(p.scrollbar) + (edit ? ' sb-vscroll__list--edit' : '')}
+            style={edit ? { minHeight: 80 } : { height: panelH }}
+          >
+            {edit && (
+              <span className="sb-edit-extent" style={{ top: panelH }} aria-hidden="true">
+                실제 표시 높이 {panelH}px
+              </span>
+            )}
             {kids.length > 0 && kids.map((c) => <div key={c.key} className="sb-vscroll__slot">{c.node}</div>)}
             {kids.length === 0 && cards.length === 0 && <EmptyDropZone ctx={ctx} />}
             {kids.length === 0 && cards.map((c, i) => (
@@ -1139,7 +1155,7 @@ export function renderItem(item, ctx) {
     renderCtx.children = kids.map((k) => ({
       key: k.id,
       node:
-        ctx.mode === 'canvas' && ctx.childPointerDown ? (
+        isEditView(ctx) && ctx.childPointerDown ? (
           <ChildShell item={k} ctx={ctx}>{renderItem(k, ctx)}</ChildShell>
         ) : (
           renderItem(k, ctx)
