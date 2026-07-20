@@ -469,12 +469,6 @@
   flex-direction: column;
   background: #eef1f4;
 }
-/* 상단 바 + 단계 탭을 하나로 묶어 고정 (상단 바 높이가 줄바꿈으로 변해도 안전) */
-.sb-builder-head {
-  position: sticky;
-  top: 0;
-  z-index: 60;
-}
 .sb-topbar {
   display: flex;
   flex-direction: column;
@@ -484,12 +478,16 @@
   background: rgba(255, 255, 255, 0.94);
   border-bottom: 1px solid var(--sb-line);
   backdrop-filter: blur(8px);
+  position: sticky;
+  top: 0;
+  z-index: 60;
 }
 .sb-topbar__row { display: flex; align-items: center; gap: 14px; min-width: 0; }
-/* 2행: 편집 도구 — 그룹 사이 구분선 */
+/* 2행: 단계 탭 + 편집 도구 — 그룹 사이 구분선, 스페이서로 좌우 분리 */
 .sb-topbar__row--tools { gap: 10px; flex-wrap: wrap; row-gap: 6px; }
 .sb-tb-group { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .sb-tb-sep { width: 1px; height: 20px; background: var(--sb-line); flex-shrink: 0; }
+.sb-tb-spacer { flex: 1; min-width: 8px; }
 .sb-topbar__meta { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .sb-title-input {
   border: none;
@@ -526,30 +524,30 @@
 }
 .sb-topbar__actions { margin-left: auto; display: flex; gap: 8px; }
 
+/* 단계 탭 — 상단 바 2행 안에 포함 (필 형태) */
 .sb-stage-tabs {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 20px 0;
-  background: #eef1f4;
-  box-shadow: 0 -8px 0 #eef1f4;
+  gap: 6px;
+  min-width: 0;
 }
 .sb-stage-tab {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 18px;
-  border-radius: 16px 16px 0 0;
+  padding: 7px 14px;
+  border-radius: 999px;
   border: 1px solid transparent;
-  border-bottom: none;
   background: transparent;
   color: #64748b;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   transition: all 0.15s ease;
+  white-space: nowrap;
 }
+.sb-stage-tab:hover { background: #f8fafc; }
 .sb-stage-tab--active {
-  background: #fff;
+  background: #eef1f4;
   border-color: var(--sb-line);
   color: var(--sb-ink);
 }
@@ -574,12 +572,10 @@
   border-radius: 999px;
   padding: 2px 7px;
 }
-.sb-stage-desc { margin: 0 0 0 12px; font-size: 12px; color: #94a3b8; }
-
 /* 공통 탐색 페이지로 가는 탭 */
 .sb-stage-tab--common {
   border: 1px dashed rgba(95, 116, 101, 0.45) !important;
-  border-radius: 16px !important;
+  border-radius: 999px !important;
   background: var(--sb-accent-soft);
   color: var(--sb-accent);
 }
@@ -2095,10 +2091,8 @@ button.sb-info-chip:hover { border-color: #94a3b8; background: #f8fafc; }
 }
 
 @media (max-width: 980px) {
-  /* 좁은 화면: 상단 영역 전체 고정을 풀고, 단계 탭만 최상단에 붙는다 */
-  .sb-builder-head { position: static; }
-  .sb-stage-tabs { position: sticky; top: 0; z-index: 55; }
-  .sb-stage-desc { display: none; }
+  /* 좁은 화면: 상단 바가 여러 줄로 커지므로 고정을 푼다 */
+  .sb-topbar { position: static; }
 }
 
 /* 모바일: 단일 컬럼 — 팔레트(접힘 스크롤) → 캔버스, 인스펙터는 하단 시트 */
@@ -2157,6 +2151,5 @@ button.sb-info-chip:hover { border-color: #94a3b8; background: #f8fafc; }
 @media (max-width: 480px) {
   .sb-topbar { padding: 10px 12px; }
   .sb-status { display: none; }
-  .sb-stage-tabs { padding: 10px 12px 0; }
   .sb-scenario-row__actions { flex-wrap: wrap; }
 }

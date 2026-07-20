@@ -39,7 +39,6 @@ export default function Builder({ api, scenario }) {
   const items = scenario.stages[stageKey] || []
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
   const selected = items.find((it) => it.id === selectedId) || null
-  const stageMeta = STAGES.find((s) => s.key === stageKey)
   const chipColor = scenario.color || '#5f7465'
 
   /* 기기 프리셋에 따른 캔버스 폭 */
@@ -766,9 +765,7 @@ export default function Builder({ api, scenario }) {
 
   return (
     <div className="sb-builder">
-      {/* 상단 영역(상단 바 + 단계 탭)을 한 덩어리로 고정 — 상단 바 높이가 가변이어도 겹치지 않게 */}
-      <div className="sb-builder-head">
-      {/* 상단 바 — 1행: 문서 정보 + 발행, 2행: 편집 도구 그룹 */}
+      {/* 상단 바 — 1행: 문서 정보 + 발행, 2행: 단계 탭 + 편집 도구 그룹 */}
       <div className="sb-topbar">
         <div className="sb-topbar__row">
         <button type="button" className="sb-icon-btn" onClick={api.goHome} aria-label="홈으로">
@@ -861,8 +858,35 @@ export default function Builder({ api, scenario }) {
         </div>
         </div>
 
-        {/* 2행: 편집 도구 — 연관 도구끼리 그룹, 구분선으로 분리 */}
+        {/* 2행: 단계 탭(왼쪽) + 편집 도구 그룹(오른쪽, 구분선 분리) */}
         <div className="sb-topbar__row sb-topbar__row--tools">
+          <div className="sb-stage-tabs">
+            <button
+              type="button"
+              className="sb-stage-tab sb-stage-tab--common"
+              title="모든 시나리오가 공유하는 공통 탐색(홈) 페이지 편집"
+              onClick={api.openExploreEditor}
+            >
+              <span className="sb-stage-tab__num">🧭</span>
+              탐색
+              <span className="sb-stage-tab__count">공통</span>
+            </button>
+            <span className="sb-stage-tabs__divider" aria-hidden="true" />
+            {STAGES.map((s, i) => (
+              <button
+                key={s.key}
+                type="button"
+                className={'sb-stage-tab' + (stageKey === s.key ? ' sb-stage-tab--active' : '')}
+                title={s.desc}
+                onClick={() => setStageKey(s.key)}
+              >
+                <span className="sb-stage-tab__num">{i + 1}</span>
+                {s.label}
+                <span className="sb-stage-tab__count">{(scenario.stages[s.key] || []).length}</span>
+              </button>
+            ))}
+          </div>
+          <span className="sb-tb-spacer" aria-hidden="true" />
           <div className="sb-tb-group" role="group" aria-label="히스토리">
             <button type="button" className="sb-icon-btn" title="실행 취소 (⌘Z)" aria-label="실행 취소" disabled={historyRef.current.past.length === 0} onClick={undo}>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M9 14L4 9l5-5M4 9h10a6 6 0 010 12h-3" /></svg>
@@ -959,35 +983,6 @@ export default function Builder({ api, scenario }) {
             </button>
           </div>
         </div>
-      </div>
-
-      {/* 단계 탭 */}
-      <div className="sb-stage-tabs">
-        <button
-          type="button"
-          className="sb-stage-tab sb-stage-tab--common"
-          title="모든 시나리오가 공유하는 공통 탐색(홈) 페이지 편집"
-          onClick={api.openExploreEditor}
-        >
-          <span className="sb-stage-tab__num">🧭</span>
-          탐색
-          <span className="sb-stage-tab__count">공통</span>
-        </button>
-        <span className="sb-stage-tabs__divider" aria-hidden="true" />
-        {STAGES.map((s, i) => (
-          <button
-            key={s.key}
-            type="button"
-            className={'sb-stage-tab' + (stageKey === s.key ? ' sb-stage-tab--active' : '')}
-            onClick={() => setStageKey(s.key)}
-          >
-            <span className="sb-stage-tab__num">{i + 1}</span>
-            {s.label}
-            <span className="sb-stage-tab__count">{(scenario.stages[s.key] || []).length}</span>
-          </button>
-        ))}
-        <p className="sb-stage-desc">{stageMeta?.desc}</p>
-      </div>
       </div>
 
       <div className="sb-workspace">
