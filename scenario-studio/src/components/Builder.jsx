@@ -24,11 +24,16 @@ export default function Builder({ api, scenario }) {
   const [focusTick, setFocusTick] = useState(0) // 더블클릭 → 인스펙터 포커스 신호
   const [inlineEdit, setInlineEdit] = useState(null) // 캔버스 인라인 텍스트 편집 {itemId, key}
   const [, setHistVer] = useState(0) // undo/redo 버튼 활성화 갱신용
+  const [zoom, setZoom] = useState(1) // 캔버스 줌 (Figma식 ⌘+/-/0)
+  const [marquee, setMarquee] = useState(null) // 빈 캔버스 드래그 → 러버밴드 선택 박스
+  const [ctxMenu, setCtxMenu] = useState(null) // 우클릭 컨텍스트 메뉴 {sx, sy, cx, cy, itemId}
   const dragPosRef = useRef(null)
   const dragStartRef = useRef(null) // 그룹 드래그 시작 시점의 위치들
   const sizeDraftRef = useRef(null)
   const heightsRef = useRef({})
   const historyRef = useRef({ past: [], future: [], lastPush: 0 })
+  const clipboardRef = useRef(null) // ⌘C 복사한 컴포넌트 스냅샷 (단계 간 붙여넣기 가능)
+  const canvasRef = useRef(null)
 
   const items = scenario.stages[stageKey] || []
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
@@ -123,6 +128,126 @@ export default function Builder({ api, scenario }) {
       return [...prev, { ...item, x: PAD, y: bottom + GAP, w }]
     })
     setSelectedIds([item.id])
+  }
+
+  /* 팔레트에서 캔버스로 드래그해 원하는 위치에 바로 배치 */
+  const addItemAt = (type, x, y) => {
+    const def = LIBRARY[type]
+    if (!def) return
+    const item = createItem(type, def.defaults)
+    const w = Math.min(def.defaultW || itemW, itemW)
+    const nx = Math.max(0, Math.min(canvasW - w, Math.round(x - w / 2)))
+    const ny = Math.max(0, Math.round(y - 16))
+    setItems((prev) => resolveCollision([...prev, { ...item, x: nx, y: ny, w }], [item.id], heightsRef.current))
+    setSelectedIds([item.id])
+  }
+
+  /* ── 복사 / 붙여넣기 (⌘C/⌘X/⌘V — 단계를 건너 붙여넣기 가능) ── */
+  const copySelected = () => {
+    const srcs = items.filter((it) => selectedIds.includes(it.id))
+    if (srcs.length === 0) return false
+    const minX = Math.min(...srcs.map((it) => it.x))
+    const minY = Math.min(...srcs.map((it) => it.y))
+    clipboardRef.current = srcs.map((it) => ({
+      type: it.type,
+      w: it.w,
+      h: it.h,
+      hidden: it.hidden,
+      style: it.style ? { ...it.style } : undefined,
+      props: JSON.parse(JSON.stringify(it.props)),
+      relX: it.x - minX,
+      relY: it.y - minY,
+    }))
+    api.showToast(`${srcs.length}개 컴포넌트를 복사했어요. ⌘V로 붙여넣어요.`)
+    return true
+  }
+
+  /* at을 주면 그 지점(캔버스 좌표)에, 없으면 스택 맨 아래에 붙여넣는다 */
+  const pasteClipboard = (at) => {
+    const clip = clipboardRef.current
+    if (!clip || clip.length === 0) return
+    const bottom = items.reduce(
+      (max, it) => Math.max(max, it.y + (heightsRef.current[it.id] || 80)),
+      PAD - GAP
+    )
+    const baseX = at ? at.x : PAD
+    const baseY = at ? at.y : bottom + GAP
+    const copies = clip.map((c) => ({
+      ...createItem(c.type, c.props),
+      x: Math.max(0, Math.min(canvasW - c.w, Math.round(baseX + c.relX))),
+      y: Math.max(0, Math.round(baseY + c.relY)),
+      w: Math.min(c.w, itemW),
+      h: c.h,
+      hidden: c.hidden,
+      style: c.style ? { ...c.style } : undefined,
+      props: JSON.parse(JSON.stringify(c.props)),
+    }))
+    setItems((prev) => resolveCollision([...prev, ...copies], copies.map((c) => c.id), heightsRef.current))
+    setSelectedIds(copies.map((c) => c.id))
+  }
+
+  /* ── 캔버스 줌 ── */
+  const ZOOM_STEPS = [0.5, 0.67, 0.8, 0.9, 1, 1.1, 1.25, 1.5]
+  const zoomBy = (dir) => {
+    setZoom((z) => {
+      const idx = ZOOM_STEPS.findIndex((s) => Math.abs(s - z) < 0.01)
+      const next = ZOOM_STEPS[Math.max(0, Math.min(ZOOM_STEPS.length - 1, (idx < 0 ? 4 : idx) + dir))]
+      return next
+    })
+  }
+
+  /* ── 러버밴드(마퀴) 다중 선택: 빈 캔버스를 드래그 ── */
+  const onCanvasPointerDown = (e) => {
+    if (e.target !== e.currentTarget || e.button !== 0) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const sx = (e.clientX - rect.left) / zoom
+    const sy = (e.clientY - rect.top) / zoom
+    const baseSel = e.shiftKey ? [...selectedIds] : []
+    if (!e.shiftKey) setSelectedIds([])
+    const move = (ev) => {
+      const cx = (ev.clientX - rect.left) / zoom
+      const cy = (ev.clientY - rect.top) / zoom
+      const box = { x: Math.min(sx, cx), y: Math.min(sy, cy), w: Math.abs(cx - sx), h: Math.abs(cy - sy) }
+      if (box.w < 3 && box.h < 3) return
+      setMarquee(box)
+      const hit = items
+        .filter((it) => {
+          const ih = it.h || heightsRef.current[it.id] || 80
+          return it.x < box.x + box.w && it.x + it.w > box.x && it.y < box.y + box.h && it.y + ih > box.y
+        })
+        .map((it) => it.id)
+      setSelectedIds([...new Set([...baseSel, ...hit])])
+    }
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      setMarquee(null)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
+
+  /* ── 우클릭 컨텍스트 메뉴 ── */
+  const openCtxMenu = (e, itemId) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (itemId && !selectedIds.includes(itemId)) setSelectedIds([itemId])
+    const rect = canvasRef.current ? canvasRef.current.getBoundingClientRect() : null
+    setCtxMenu({
+      sx: e.clientX,
+      sy: e.clientY,
+      cx: rect ? (e.clientX - rect.left) / zoom : PAD,
+      cy: rect ? (e.clientY - rect.top) / zoom : PAD,
+      itemId: itemId || null,
+    })
+  }
+
+  /* 선택된 컴포넌트들의 잠금/숨김을 클릭한 아이템 기준으로 일괄 토글 */
+  const toggleSelected = (key) => {
+    const target = items.find((it) => it.id === (ctxMenu && ctxMenu.itemId))
+    const next = target ? !target[key] : true
+    const ids = new Set(selectedIds)
+    setItems((prev) => prev.map((it) => (ids.has(it.id) ? { ...it, [key]: next } : it)))
   }
 
   const updateItem = (id, patch) => {
@@ -372,6 +497,43 @@ export default function Builder({ api, scenario }) {
       if (meta && e.key.toLowerCase() === 'd' && selectedIds.length > 0) {
         e.preventDefault()
         duplicateSelected()
+        return
+      }
+      if (meta && e.key.toLowerCase() === 'c') {
+        if (copySelected()) e.preventDefault()
+        return
+      }
+      if (meta && e.key.toLowerCase() === 'x') {
+        if (copySelected()) {
+          e.preventDefault()
+          removeSelected()
+        }
+        return
+      }
+      if (meta && e.key.toLowerCase() === 'v') {
+        if (clipboardRef.current && clipboardRef.current.length > 0) {
+          e.preventDefault()
+          pasteClipboard()
+        }
+        return
+      }
+      if (meta && (e.key === '=' || e.key === '+')) {
+        e.preventDefault()
+        zoomBy(1)
+        return
+      }
+      if (meta && e.key === '-') {
+        e.preventDefault()
+        zoomBy(-1)
+        return
+      }
+      if (meta && e.key === '0') {
+        e.preventDefault()
+        setZoom(1)
+        return
+      }
+      if (e.key === 'Escape' && ctxMenu) {
+        setCtxMenu(null)
         return
       }
       if (selectedIds.length === 0) return
@@ -636,6 +798,13 @@ export default function Builder({ api, scenario }) {
           <button type="button" className="sb-icon-btn" title="다시 실행 (⇧⌘Z)" aria-label="다시 실행" disabled={historyRef.current.future.length === 0} onClick={redo}>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M15 14l5-5-5-5M20 9H10a6 6 0 000 12h3" /></svg>
           </button>
+          <div className="sb-zoom-ctl" role="group" aria-label="캔버스 줌">
+            <button type="button" title="축소 (⌘-)" aria-label="축소" onClick={() => zoomBy(-1)}>−</button>
+            <button type="button" className="sb-zoom-ctl__val" title="100%로 (⌘0)" onClick={() => setZoom(1)}>
+              {Math.round(zoom * 100)}%
+            </button>
+            <button type="button" title="확대 (⌘+)" aria-label="확대" onClick={() => zoomBy(1)}>+</button>
+          </div>
           <button type="button" className="sb-icon-btn" title="공유 링크 복사 — 링크만 열면 바로 체험" aria-label="공유 링크 복사" onClick={copyShareLink}>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5M10.172 13.828a4 4 0 010-5.656l3-3a4 4 0 015.656 5.656l-1.5 1.5" /></svg>
           </button>
@@ -757,43 +926,68 @@ export default function Builder({ api, scenario }) {
 
         {/* 캔버스 */}
         <main className="sb-canvas-wrap" onPointerDown={(e) => { if (e.target === e.currentTarget) setSelectedIds([]) }}>
-          <div className="sb-canvas-col" style={{ width: canvasW }}>
-            <div
-              className="sb-canvas"
-              style={{ width: canvasW, height: canvasHeight }}
-              onPointerDown={(e) => { if (e.target === e.currentTarget) setSelectedIds([]) }}
-            >
-              {items.length === 0 && (
-                <div className="sb-canvas__empty">
-                  왼쪽 팔레트에서 컴포넌트를 눌러 추가하세요.<br />
-                  <span>추가한 컴포넌트는 마우스로 끌어 배치할 수 있어요.</span>
-                </div>
-              )}
-              {guides.map((g, i) => (
-                <div
-                  key={i}
-                  className={'sb-guide sb-guide--' + g.type}
-                  style={g.type === 'v' ? { left: g.pos } : { top: g.pos }}
-                />
-              ))}
-              {displayItems.map((it) => (
-                <CanvasItem
-                  key={it.id}
-                  item={it}
-                  selected={selectedIds.includes(it.id)}
-                  dragPos={dragPos && dragPos.positions[it.id] ? dragPos.positions[it.id] : null}
-                  sizeDraft={sizeDraft && sizeDraft.id === it.id ? sizeDraft : null}
-                  heightsRef={heightsRef}
-                  renderCtx={canvasCtx}
-                  onSelect={handleSelect}
-                  onDragStart={onGroupDragStart}
-                  onDrag={onDrag}
-                  onDragEnd={onDragEnd}
-                  onResize={onResize}
-                  onResizeEnd={onResizeEnd}
-                  onInspect={(id) => { setSelectedIds([id]); setFocusTick((t) => t + 1) }}
-                />
-              ))}
+          <div className="sb-canvas-col" style={{ width: canvasW * zoom }}>
+            <div className="sb-canvas-scale" style={{ width: canvasW * zoom, height: canvasHeight * zoom }}>
+              <div
+                ref={canvasRef}
+                className="sb-canvas"
+                style={{ width: canvasW, height: canvasHeight, transform: `scale(${zoom})`, transformOrigin: '0 0' }}
+                onPointerDown={onCanvasPointerDown}
+                onContextMenu={(e) => { if (e.target === e.currentTarget) openCtxMenu(e, null) }}
+                onDragOver={(e) => {
+                  if ([...e.dataTransfer.types].includes('text/sb-type')) {
+                    e.preventDefault()
+                    e.dataTransfer.dropEffect = 'copy'
+                  }
+                }}
+                onDrop={(e) => {
+                  const type = e.dataTransfer.getData('text/sb-type')
+                  if (!type) return
+                  e.preventDefault()
+                  const rect = canvasRef.current.getBoundingClientRect()
+                  addItemAt(type, (e.clientX - rect.left) / zoom, (e.clientY - rect.top) / zoom)
+                }}
+              >
+                {items.length === 0 && (
+                  <div className="sb-canvas__empty">
+                    왼쪽 팔레트에서 컴포넌트를 누르거나 끌어다 놓으세요.<br />
+                    <span>추가한 컴포넌트는 마우스로 끌어 배치할 수 있어요.</span>
+                  </div>
+                )}
+                {guides.map((g, i) => (
+                  <div
+                    key={i}
+                    className={'sb-guide sb-guide--' + g.type}
+                    style={g.type === 'v' ? { left: g.pos } : { top: g.pos }}
+                  />
+                ))}
+                {marquee && (
+                  <div
+                    className="sb-marquee"
+                    style={{ left: marquee.x, top: marquee.y, width: marquee.w, height: marquee.h }}
+                  />
+                )}
+                {displayItems.map((it) => (
+                  <CanvasItem
+                    key={it.id}
+                    item={it}
+                    zoom={zoom}
+                    selected={selectedIds.includes(it.id)}
+                    dragPos={dragPos && dragPos.positions[it.id] ? dragPos.positions[it.id] : null}
+                    sizeDraft={sizeDraft && sizeDraft.id === it.id ? sizeDraft : null}
+                    heightsRef={heightsRef}
+                    renderCtx={canvasCtx}
+                    onSelect={handleSelect}
+                    onDragStart={onGroupDragStart}
+                    onDrag={onDrag}
+                    onDragEnd={onDragEnd}
+                    onResize={onResize}
+                    onResizeEnd={onResizeEnd}
+                    onInspect={(id) => { setSelectedIds([id]); setFocusTick((t) => t + 1) }}
+                    onContextMenu={openCtxMenu}
+                  />
+                ))}
+              </div>
             </div>
           </div>
         </main>
@@ -817,6 +1011,60 @@ export default function Builder({ api, scenario }) {
         />
 
         <CanvasTextToolbar active={!!inlineEdit} ensureKeyword={ensureKeyword} />
+
+        {/* 우클릭 컨텍스트 메뉴 (Figma/Canva식) */}
+        {ctxMenu && (
+          <>
+            <div
+              className="sb-menu-backdrop"
+              onClick={() => setCtxMenu(null)}
+              onContextMenu={(e) => { e.preventDefault(); setCtxMenu(null) }}
+            />
+            <div className="sb-menu sb-ctx-menu" style={{ left: ctxMenu.sx, top: ctxMenu.sy }}>
+              {ctxMenu.itemId ? (
+                <>
+                  <button type="button" onClick={() => { setCtxMenu(null); duplicateSelected() }}>
+                    복제 <kbd>⌘D</kbd>
+                  </button>
+                  <button type="button" onClick={() => { setCtxMenu(null); copySelected() }}>
+                    복사 <kbd>⌘C</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!clipboardRef.current || clipboardRef.current.length === 0}
+                    onClick={() => { setCtxMenu(null); pasteClipboard({ x: ctxMenu.cx, y: ctxMenu.cy }) }}
+                  >
+                    붙여넣기 <kbd>⌘V</kbd>
+                  </button>
+                  <span className="sb-ctx-menu__sep" />
+                  <button type="button" onClick={() => { setCtxMenu(null); toggleSelected('locked') }}>
+                    {items.find((it) => it.id === ctxMenu.itemId)?.locked ? '잠금 해제' : '위치 잠금'}
+                  </button>
+                  <button type="button" onClick={() => { setCtxMenu(null); toggleSelected('hidden') }}>
+                    {items.find((it) => it.id === ctxMenu.itemId)?.hidden ? '실행 시 보이기' : '실행 시 숨기기'}
+                  </button>
+                  <span className="sb-ctx-menu__sep" />
+                  <button type="button" className="sb-ctx-menu__danger" onClick={() => { setCtxMenu(null); removeSelected() }}>
+                    삭제 <kbd>Del</kbd>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    disabled={!clipboardRef.current || clipboardRef.current.length === 0}
+                    onClick={() => { setCtxMenu(null); pasteClipboard({ x: ctxMenu.cx, y: ctxMenu.cy }) }}
+                  >
+                    여기에 붙여넣기 <kbd>⌘V</kbd>
+                  </button>
+                  <button type="button" onClick={() => { setCtxMenu(null); setSelectedIds(items.map((it) => it.id)) }}>
+                    전체 선택 <kbd>⌘A</kbd>
+                  </button>
+                </>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

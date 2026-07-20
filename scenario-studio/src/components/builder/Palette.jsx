@@ -53,7 +53,18 @@ export default function Palette({
           />
           {defs.length === 0 && <p className="sb-layer-list__empty">"{query}" 검색 결과가 없어요.</p>}
           {defs.map((def) => (
-            <button key={def.type} type="button" className="sb-palette-card" onClick={() => onAdd(def.type)}>
+            <button
+              key={def.type}
+              type="button"
+              className="sb-palette-card"
+              onClick={() => onAdd(def.type)}
+              draggable
+              title="클릭해 추가하거나, 캔버스로 끌어다 놓으세요"
+              onDragStart={(e) => {
+                e.dataTransfer.setData('text/sb-type', def.type)
+                e.dataTransfer.effectAllowed = 'copy'
+              }}
+            >
               <span className="sb-palette-card__icon">{def.icon}</span>
               <span className="sb-palette-card__text">
                 <strong>{def.label}</strong>
@@ -67,8 +78,12 @@ export default function Palette({
             <dl>
               <div><dt>⌘Z / ⇧⌘Z</dt><dd>실행 취소 / 다시 실행</dd></div>
               <div><dt>⇧+클릭</dt><dd>다중 선택 (함께 이동)</dd></div>
+              <div><dt>빈 곳 드래그</dt><dd>범위로 다중 선택</dd></div>
+              <div><dt>우클릭</dt><dd>복제·잠금·삭제 메뉴</dd></div>
               <div><dt>⌘A</dt><dd>전체 선택</dd></div>
+              <div><dt>⌘C / ⌘X / ⌘V</dt><dd>복사 / 잘라내기 / 붙여넣기 (단계 간 가능)</dd></div>
               <div><dt>⌘D</dt><dd>선택 컴포넌트 복제</dd></div>
+              <div><dt>⌘+ / ⌘- / ⌘0</dt><dd>캔버스 확대 / 축소 / 100%</dd></div>
               <div><dt>Delete</dt><dd>선택 컴포넌트 삭제</dd></div>
               <div><dt>방향키</dt><dd>8px 이동 (⇧: 1px)</dd></div>
               <div><dt>Esc</dt><dd>선택 해제</dd></div>

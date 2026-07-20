@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react'
-import { BgBlobs, FloatingBar, StudioFab, ViewerDeviceControl } from './Frame.jsx'
+import { BgBlobs, FloatingBar, StudioFab, ViewerDeviceControl, ProfileControl } from './Frame.jsx'
 import ExploreFrame from './ExploreFrame.jsx'
 import ThreadPanel from './ThreadPanel.jsx'
 import { TEMPLATES } from '../lib/templates.js'
@@ -101,7 +101,10 @@ export default function HomeView({ api }) {
         onList={(origin) => setThreadOrigin((v) => (v ? null : origin || 'right'))}
       />
       <StudioFab onClick={() => setDrawerOpen(true)} />
-      <ViewerDeviceControl deviceKey={api.viewerDevice} onChange={api.setViewerDevice} />
+      <div className="sb-topleft">
+        <ViewerDeviceControl deviceKey={api.viewerDevice} onChange={api.setViewerDevice} />
+        <ProfileControl api={api} />
+      </div>
 
       <section className="clean-home min-h-screen relative z-10">
         <div
@@ -148,55 +151,6 @@ export default function HomeView({ api }) {
               </div>
               <button type="button" className="sb-icon-btn" onClick={() => setDrawerOpen(false)} aria-label="닫기">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </div>
-
-            {/* 사용자 프로필 전환 — 프로필마다 DDAK(탐색) 페이지·시나리오·쓰레드를 따로 관리 */}
-            <p className="sb-panel-label">사용자 프로필</p>
-            <div className="sb-account-list">
-              {api.accounts.map((a) => {
-                const isActive = a.id === api.activeAccountId
-                return (
-                  <div key={a.id} className={'sb-account-row' + (isActive ? ' sb-account-row--active' : '')}>
-                    <button
-                      type="button"
-                      className="sb-account-row__main"
-                      onClick={() => api.switchAccount(a.id)}
-                      title={isActive ? '사용 중인 프로필' : '이 프로필로 전환'}
-                    >
-                      <span className="sb-account-row__avatar">{(a.profile.name || '?').slice(0, 1)}</span>
-                      <span className="sb-account-row__meta">
-                        <strong>{a.profile.name}</strong>
-                        <small>시나리오 {a.scenarios.length}개 · 쓰레드 {a.threads.length}개</small>
-                      </span>
-                      {isActive && (
-                        <svg className="w-4 h-4 sb-account-row__check" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
-                      )}
-                    </button>
-                    {api.accounts.length > 1 && (
-                      <button
-                        type="button"
-                        className="sb-account-row__remove"
-                        aria-label="프로필 삭제"
-                        onClick={() => {
-                          if (window.confirm(`"${a.profile.name}" 프로필과 그 시나리오·탐색 페이지를 삭제할까요?`)) api.removeAccount(a.id)
-                        }}
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M6 18L18 6M6 6l12 12" /></svg>
-                      </button>
-                    )}
-                  </div>
-                )
-              })}
-              <button
-                type="button"
-                className="sb-account-add"
-                onClick={() => {
-                  const nm = window.prompt('새 프로필 이름을 입력하세요', '')
-                  if (nm != null) api.addAccount(nm)
-                }}
-              >
-                + 새 프로필 (탐색 페이지·시나리오 새로 시작)
               </button>
             </div>
 

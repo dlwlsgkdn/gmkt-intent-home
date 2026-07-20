@@ -4,6 +4,7 @@ import { LIBRARY, renderItem } from '../../lib/registry.jsx'
 /* 캔버스 위의 컴포넌트 한 개 — 드래그/리사이즈/선택/잠금/숨김 */
 export default function CanvasItem({
   item,
+  zoom = 1,
   selected,
   dragPos,
   sizeDraft,
@@ -16,6 +17,7 @@ export default function CanvasItem({
   onResize,
   onResizeEnd,
   onInspect,
+  onContextMenu,
 }) {
   const ref = useRef(null)
   const dragging = dragPos != null
@@ -49,8 +51,8 @@ export default function CanvasItem({
     const origY = item.y
     let moved = false
     const move = (ev) => {
-      const dx = ev.clientX - startX
-      const dy = ev.clientY - startY
+      const dx = (ev.clientX - startX) / zoom
+      const dy = (ev.clientY - startY) / zoom
       if (!moved && Math.abs(dx) + Math.abs(dy) > 3) {
         moved = true
         onDragStart(item.id)
@@ -76,7 +78,7 @@ export default function CanvasItem({
     const origW = item.w
     const origH = item.h || (ref.current ? ref.current.offsetHeight : 120)
     const move = (ev) => {
-      onResize(item.id, origW + (ev.clientX - startX), origH + (ev.clientY - startY))
+      onResize(item.id, origW + (ev.clientX - startX) / zoom, origH + (ev.clientY - startY) / zoom)
     }
     const up = () => {
       window.removeEventListener('pointermove', move)
@@ -107,6 +109,7 @@ export default function CanvasItem({
       style={{ left: x, top: y, width: w, height: h || 'auto' }}
       onPointerDown={onPointerDown}
       onDoubleClick={() => onInspect(item.id)}
+      onContextMenu={onContextMenu ? (e) => onContextMenu(e, item.id) : undefined}
     >
       <span className="sb-canvas-item__tag">
         {locked ? '🔒 ' : ''}{item.hidden ? '🚫 ' : ''}{def?.icon} {def?.label}

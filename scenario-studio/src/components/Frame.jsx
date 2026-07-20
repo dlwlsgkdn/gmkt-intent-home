@@ -91,6 +91,73 @@ export function ViewerDeviceControl({ deviceKey, onChange }) {
   )
 }
 
+/* 좌상단 사용자 프로필 전환 컨트롤 — 기기(화면 폭) 컨트롤 옆에 나란히 (홈 전용).
+   프로필마다 탐색(DDAK) 페이지·시나리오·쓰레드가 따로 관리된다. */
+export function ProfileControl({ api }) {
+  const [open, setOpen] = useState(false)
+  const name = (api.profile && api.profile.name) || '사용자'
+  return (
+    <div className="sb-viewer-ctl sb-profile-ctl">
+      <button type="button" className="sb-viewer-ctl__btn" onClick={() => setOpen((v) => !v)} title="사용자 프로필 전환">
+        <span className="sb-profile-ctl__avatar">{name.slice(0, 1)}</span>
+        {name}
+        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" /></svg>
+      </button>
+      {open && (
+        <>
+          <div className="sb-menu-backdrop" onClick={() => setOpen(false)} />
+          <div className="sb-menu sb-viewer-ctl__menu sb-profile-ctl__menu">
+            {api.accounts.map((a) => {
+              const isActive = a.id === api.activeAccountId
+              return (
+                <div key={a.id} className="sb-profile-ctl__row">
+                  <button
+                    type="button"
+                    className={'sb-menu__item' + (isActive ? ' sb-menu__item--active' : '')}
+                    onClick={() => { setOpen(false); api.switchAccount(a.id) }}
+                  >
+                    <strong>{a.profile.name}{isActive ? ' · 사용 중' : ''}</strong>
+                    <small>시나리오 {a.scenarios.length}개 · 쓰레드 {a.threads.length}개</small>
+                  </button>
+                  {api.accounts.length > 1 && (
+                    <button
+                      type="button"
+                      className="sb-profile-ctl__remove"
+                      aria-label={`${a.profile.name} 프로필 삭제`}
+                      onClick={() => {
+                        if (window.confirm(`"${a.profile.name}" 프로필과 그 시나리오·탐색 페이지를 삭제할까요?`)) {
+                          setOpen(false)
+                          api.removeAccount(a.id)
+                        }
+                      }}
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+            <button
+              type="button"
+              className="sb-menu__item sb-profile-ctl__add"
+              onClick={() => {
+                const nm = window.prompt('새 프로필 이름을 입력하세요', '')
+                if (nm != null) {
+                  setOpen(false)
+                  api.addAccount(nm)
+                }
+              }}
+            >
+              <strong>+ 새 프로필</strong>
+              <small>탐색 페이지·시나리오를 새로 시작해요</small>
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 /* 우상단 시나리오 스튜디오 진입 플로팅 버튼 */
 export function StudioFab({ label = '시나리오 스튜디오', onClick }) {
   return (

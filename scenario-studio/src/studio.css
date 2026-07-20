@@ -269,75 +269,6 @@
   margin-bottom: 18px;
 }
 .sb-drawer__head h3 { margin: 4px 0 0; font-size: 20px; font-weight: 600; color: var(--sb-ink); }
-/* 사용자 프로필(계정) 전환 목록 */
-.sb-account-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
-.sb-account-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid var(--sb-line);
-  border-radius: 14px;
-  background: #fff;
-  padding: 4px 8px 4px 4px;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
-}
-.sb-account-row--active { border-color: var(--sb-accent); background: var(--sb-accent-soft); }
-.sb-account-row__main {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 6px;
-  min-width: 0;
-  text-align: left;
-}
-.sb-account-row__avatar {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: #eef2f6;
-  color: var(--sb-ink);
-  font-size: 13px;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-.sb-account-row--active .sb-account-row__avatar { background: var(--sb-accent); color: #fff; }
-.sb-account-row__meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.sb-account-row__meta strong {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--sb-ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.sb-account-row__meta small { font-size: 11px; color: #94a3b8; }
-.sb-account-row__check { color: var(--sb-accent); flex-shrink: 0; }
-.sb-account-row__remove {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #cbd5e1;
-  flex-shrink: 0;
-  transition: all 0.15s ease;
-}
-.sb-account-row__remove:hover { color: #b45a6b; background: #fdf5f7; }
-.sb-account-add {
-  padding: 9px;
-  border: 1px dashed var(--sb-line);
-  border-radius: 14px;
-  font-size: 12px;
-  color: #94a3b8;
-  transition: all 0.15s ease;
-}
-.sb-account-add:hover { color: var(--sb-ink); border-color: #94a3b8; background: #f8fafc; }
-
 /* 탐색 페이지 편집 진입 버튼 */
 .sb-explore-btn {
   display: flex;
@@ -829,6 +760,71 @@
   flex-direction: column;
   gap: 14px;
 }
+/* 줌 스케일 래퍼 — transform은 레이아웃 크기에 영향이 없어 스크롤 영역을 직접 잡아준다 */
+.sb-canvas-scale { position: relative; flex-shrink: 0; }
+
+/* 러버밴드(마퀴) 다중 선택 박스 */
+.sb-marquee {
+  position: absolute;
+  z-index: 40;
+  border: 1px solid var(--sb-accent);
+  background: rgba(95, 116, 101, 0.08);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+/* 우클릭 컨텍스트 메뉴 */
+.sb-ctx-menu {
+  position: fixed;
+  z-index: 400;
+  min-width: 180px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.sb-ctx-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: var(--sb-ink);
+  text-align: left;
+  transition: background-color 0.12s ease;
+}
+.sb-ctx-menu button:hover:not(:disabled) { background: #f1f5f9; }
+.sb-ctx-menu button:disabled { color: #cbd5e1; }
+.sb-ctx-menu button kbd {
+  font-family: inherit;
+  font-size: 10.5px;
+  color: #94a3b8;
+}
+.sb-ctx-menu__danger { color: #b45a6b !important; }
+.sb-ctx-menu__danger:hover:not(:disabled) { background: #fdf5f7 !important; }
+.sb-ctx-menu__sep { height: 1px; background: var(--sb-line); margin: 4px 6px; }
+
+/* 상단 바 줌 컨트롤 */
+.sb-zoom-ctl {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--sb-line);
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+}
+.sb-zoom-ctl button {
+  padding: 7px 9px;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1;
+  transition: background-color 0.12s ease;
+}
+.sb-zoom-ctl button:hover { background: #f1f5f9; color: var(--sb-ink); }
+.sb-zoom-ctl__val { font-size: 11px !important; font-weight: 700; min-width: 44px; text-align: center; }
 
 /* 캔버스 위 고정 패널 미리보기 */
 .sb-pinned-panel { position: relative; padding-top: 10px; }
@@ -1467,6 +1463,50 @@
   right: auto;
 }
 
+/* 좌상단 컨트롤 묶음(기기 폭 + 프로필) — 홈에서 나란히 배치 */
+.sb-topleft {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  z-index: 210;
+  display: flex;
+  gap: 8px;
+}
+.sb-topleft .sb-viewer-ctl { position: relative; top: auto; left: auto; }
+
+/* 사용자 프로필 전환 드롭다운 */
+.sb-profile-ctl__avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--sb-accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.sb-profile-ctl__menu { min-width: 230px; }
+.sb-profile-ctl__row { display: flex; align-items: center; gap: 2px; }
+.sb-profile-ctl__row .sb-menu__item { flex: 1; min-width: 0; }
+.sb-profile-ctl__remove {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #cbd5e1;
+  flex-shrink: 0;
+  margin-right: 4px;
+  transition: all 0.15s ease;
+}
+.sb-profile-ctl__remove:hover { color: #b45a6b; background: #fdf5f7; }
+.sb-profile-ctl__add { border-top: 1px solid var(--sb-line); }
+.sb-profile-ctl__add strong { color: var(--sb-accent); }
+
 /* 스토리 카드 제목: 원본 vw clamp → 고정 */
 .sb-phone .beauty-story__body h2,
 .sb-canvas-item__content .beauty-story__body h2,
@@ -2046,6 +2086,7 @@ button.sb-info-chip:hover { border-color: #94a3b8; background: #f8fafc; }
   .sb-studio-fab { top: 14px; right: 12px; padding: 10px 12px; }
   .sb-studio-fab span { display: none; }
   .sb-viewer-ctl { top: 14px; left: 12px; }
+  .sb-topleft { top: 14px; left: 12px; gap: 6px; }
   .sb-viewer-ctl__btn { padding: 8px 10px; font-size: 11px; }
   .sb-player-stepper {
     top: 62px;
