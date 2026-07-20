@@ -30,10 +30,11 @@ export default function ThreadPanel({ api, open, origin = 'right', onClose }) {
   }, [open])
   if (!open) return null
 
+  /* 쓰레드 이동: 새 쓰레드를 만들지 않고 기존 쓰레드를 이어서, 마지막 단계의 맨 위에서 연다 */
   const resume = (t) => {
     if (api.scenarios.some((s) => s.id === t.scenarioId)) {
       onClose()
-      api.playScenario(t.scenarioId)
+      api.playScenario(t.scenarioId, { threadId: t.id, stage: t.stage })
     } else {
       api.showToast('이 쓰레드의 시나리오를 찾을 수 없어요. (삭제되었거나 공유 체험이에요)')
     }

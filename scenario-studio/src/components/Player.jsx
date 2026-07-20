@@ -4,17 +4,43 @@ import { renderItem } from '../lib/registry.jsx'
 import { BgBlobs, FloatingBar, StudioFab, ViewerDeviceControl } from './Frame.jsx'
 import ThreadPanel from './ThreadPanel.jsx'
 
-export default function Player({ api, scenario }) {
-  const [stageIdx, setStageIdx] = useState(0)
+/* resume = { threadId, stage } — 쓰레드 히스토리의 "쓰레드 이동": 기존 쓰레드를 이어간다 */
+export default function Player({ api, scenario, resume }) {
+  // 이어보기면 그 쓰레드의 마지막 단계·담은 상품·완료 상태를 복원한다
+  const resumeThread = resume ? (api.threads || []).find((t) => t.id === resume.threadId) : null
+  const [stageIdx, setStageIdx] = useState(() => {
+    if (!resume) return 0
+    const i = STAGES.findIndex((s) => s.key === resume.stage)
+    return i >= 0 ? i : 0
+  })
   const [query, setQuery] = useState(scenario.query || '')
   const [answers, setAnswers] = useState({})
-  const [cart, setCart] = useState([])
+  const [cart, setCart] = useState(() => (resumeThread ? [...(resumeThread.cart || [])] : []))
   const [excludedProfile, setExcludedProfile] = useState([]) // 이번 회차에서 뺀 프로필 항목
   const [keyword, setKeyword] = useState(null) // 점선 밑줄 키워드 클릭 → 설명 모달
-  const [completed, setCompleted] = useState(false)
+  const [completed, setCompleted] = useState(() => (resumeThread ? resumeThread.status === 'completed' : false))
   const [threadOrigin, setThreadOrigin] = useState(null) // 쓰레드 히스토리 패널 (null=닫힘)
 
   const stage = STAGES[stageIdx]
+
+  /* 단계별 스크롤 기억 (세션 메모리, 저장 안 함):
+     처음 여는 단계는 맨 위에서, 다시 돌아온 단계는 떠날 때 위치에서 열린다 */
+  const scrollMemRef = useRef({})
+  const goStage = (idx) => {
+    if (idx === stageIdx) return
+    scrollMemRef.current[stage.key] = window.scrollY
+    setStageIdx(idx)
+  }
+  useEffect(() => {
+    const saved = scrollMemRef.current[STAGES[stageIdx].key]
+    const y = saved != null ? saved : 0
+    window.scrollTo(0, y)
+    if (y > 0) {
+      // 이미지 로딩 등으로 페이지가 잠깐 짧을 때 클램프되는 것 보정
+      const t = setTimeout(() => window.scrollTo(0, y), 150)
+      return () => clearTimeout(t)
+    }
+  }, [stageIdx])
   /* 숨김 처리된 컴포넌트는 실행에서 제외 */
   const items = useMemo(
     () => sortByPosition(scenario.stages[stage.key] || []).filter((it) => !it.hidden),
@@ -23,18 +49,21 @@ export default function Player({ api, scenario }) {
 
   /* 처음부터 다시 체험 */
   const restart = () => {
+    scrollMemRef.current = {}
     setStageIdx(0)
     setAnswers({})
     setExcludedProfile([])
     setCart([])
     setCompleted(false)
     setQuery(scenario.query || '')
+    window.scrollTo(0, 0)
     api.showToast('처음부터 다시 시작해요.')
   }
 
-  /* 이번 체험 회차 = 쓰레드 1개 — 단계 이동/담기/완료 때마다 히스토리에 기록 */
-  const threadIdRef = useRef(uid())
-  const startedAtRef = useRef(new Date().toISOString())
+  /* 쓰레드 기록 — 설문 진입(마운트) 시 생성되고, 단계 이동/담기/완료 때마다 갱신.
+     이어보기(resume)면 새로 만들지 않고 같은 id로 이어서 기록한다 */
+  const threadIdRef = useRef(resume ? resume.threadId : uid())
+  const startedAtRef = useRef((resumeThread && resumeThread.startedAt) || new Date().toISOString())
   useEffect(() => {
     api.recordThread({
       id: threadIdRef.current,
@@ -53,8 +82,8 @@ export default function Player({ api, scenario }) {
   /* 실행 화면은 전역 뷰어 기기 폭의 모바일 프레임으로 고정 (좌상단 컨트롤로 조절) */
   const viewer = DEVICE_PRESETS.find((d) => d.key === api.viewerDevice) || DEVICE_PRESETS.find((d) => d.key === 'iphone-15') || DEVICE_PRESETS[0]
 
-  const next = () => setStageIdx((i) => Math.min(STAGES.length - 1, i + 1))
-  const prev = () => setStageIdx((i) => Math.max(0, i - 1))
+  const next = () => goStage(Math.min(STAGES.length - 1, stageIdx + 1))
+  const prev = () => goStage(Math.max(0, stageIdx - 1))
 
   /* 프로필(고정 설문 정보): 설문 단계의 프로필 요약 패널 컴포넌트가 숨긴 항목 제외 */
   const profileItems = visibleProfileItems(api.profile, scenario)
@@ -134,7 +163,7 @@ export default function Player({ api, scenario }) {
                 (i === stageIdx ? ' sb-player-stepper__step--active' : '') +
                 (i < stageIdx ? ' sb-player-stepper__step--done' : '')
               }
-              onClick={() => setStageIdx(i)}
+              onClick={() => goStage(i)}
             >
               <span className="sb-player-stepper__dot">{i + 1}</span>
               <span className="sb-player-stepper__label">{s.label}</span>

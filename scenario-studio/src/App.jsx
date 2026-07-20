@@ -189,7 +189,8 @@ export default function App() {
     importScenarios,
     goHome: () => setRoute({ name: 'home' }),
     openBuilder: (id) => setRoute({ name: 'builder', id }),
-    playScenario: (id) => setRoute({ name: 'player', id }),
+    /* resume = { threadId, stage } — 쓰레드 이동: 기존 쓰레드를 이어서 해당 단계부터 */
+    playScenario: (id, resume) => setRoute({ name: 'player', id, resume }),
     openExploreEditor: () => setRoute((prev) => ({ name: 'explore-editor', back: prev })),
     closeExploreEditor: () => setRoute((prev) => prev.back || { name: 'home' }),
     explore,
@@ -238,7 +239,10 @@ export default function App() {
       {route.name === 'home' && <HomeView api={api} />}
       {route.name === 'explore-editor' && <ExploreEditor api={api} />}
       {route.name === 'builder' && current && <Builder api={api} scenario={current} />}
-      {route.name === 'player' && current && <Player api={api} scenario={current} />}
+      {route.name === 'player' && current && (
+        /* key: 같은 시나리오를 다른 쓰레드로 이어볼 때 상태(단계/담기)가 새로 초기화되도록 리마운트 */
+        <Player key={current.id + ':' + (route.resume ? route.resume.threadId : 'new')} api={api} scenario={current} resume={route.resume} />
+      )}
       {route.name !== 'home' && route.name !== 'explore-editor' && !current && <HomeView api={api} />}
 
       {toast && <div className="sb-toast">{toast}</div>}
