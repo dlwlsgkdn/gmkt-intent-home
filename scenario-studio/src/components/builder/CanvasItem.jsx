@@ -58,7 +58,7 @@ export default function CanvasItem({
         moved = true
         onDragStart(item.id)
       }
-      if (moved) onDrag(item.id, origX + dx, origY + dy)
+      if (moved) onDrag(item.id, origX + dx, origY + dy, ev.clientX, ev.clientY)
     }
     const up = () => {
       window.removeEventListener('pointermove', move)

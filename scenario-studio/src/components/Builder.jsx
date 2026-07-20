@@ -57,6 +57,36 @@ export default function Builder({ api, scenario }) {
     })
   const nextSlot = (list, parentId) =>
     list.filter((it) => it.parentId === parentId).reduce((m, it) => Math.max(m, it.slot || 0), 0) + 1
+
+  /* 포인터(캔버스 좌표)가 가리키는 컨테이너 안 삽입 위치(0-base) — 자식 슬롯 DOM과 비교 */
+  const slotIndexAt = (containerId, containerType, cx, cy) => {
+    if (!canvasRef.current) return Infinity
+    const rect = canvasRef.current.getBoundingClientRect()
+    const px = rect.left + cx * zoom
+    const py = rect.top + cy * zoom
+    const els = [...canvasRef.current.querySelectorAll(`[data-child-of="${containerId}"]`)]
+    const horizontal = LIBRARY[containerType]?.flow === 'x'
+    let idx = 0
+    els.forEach((el) => {
+      const r = el.getBoundingClientRect()
+      const center = horizontal ? r.left + r.width / 2 : r.top + r.height / 2
+      if ((horizontal ? px : py) > center) idx++
+    })
+    return idx
+  }
+
+  /* childId를 containerId의 index 위치에 끼워 넣고 형제 슬롯을 1..n으로 재부여 */
+  const placeChild = (list, childId, containerId, index) => {
+    const sibs = list
+      .filter((it) => it.parentId === containerId && it.id !== childId)
+      .sort((a, b) => (a.slot || 0) - (b.slot || 0))
+    const order = sibs.map((s) => s.id)
+    order.splice(Math.max(0, Math.min(order.length, index)), 0, childId)
+    return list.map((it) => {
+      const k = order.indexOf(it.id)
+      return k >= 0 ? { ...it, parentId: containerId, slot: k + 1 } : it
+    })
+  }
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
   const selected = items.find((it) => it.id === selectedId) || null
   const chipColor = scenario.color || '#5f7465'
@@ -208,17 +238,71 @@ export default function Builder({ api, scenario }) {
     setSelectedIds([item.id])
   }
 
-  /* 컨테이너(레이아웃) 안에 자식으로 추가 — 팔레트 드래그를 컨테이너 위에 놓았을 때 */
-  const addChild = (type, parentId) => {
+  /* 컨테이너(레이아웃) 안에 자식으로 추가 — 팔레트 드래그를 컨테이너 위에 놓았을 때.
+     at = {cx, cy, type}이 있으면 포인터 위치 기준 슬롯에 삽입 */
+  const addChild = (type, parentId, at) => {
     const def = LIBRARY[type]
     if (!def || def.container) {
       api.showToast('레이아웃 안에 레이아웃은 넣을 수 없어요.')
       return
     }
+    const idx = at ? slotIndexAt(parentId, at.containerType, at.cx, at.cy) : Infinity
     const item = { ...createItem(type, def.defaults), x: 0, y: 0 }
-    setItems((prev) => [...prev, { ...item, parentId, slot: nextSlot(prev, parentId) }])
+    setItems((prev) => placeChild([...prev, item], item.id, parentId, idx))
     setSelectedIds([item.id])
     api.showToast(`${def.label}을(를) 레이아웃 안에 배치했어요.`)
+  }
+
+  /* 캔버스에서 컨테이너 자식 직접 조작: 클릭 = 선택, 드래그 = 꺼내서 일반 드래그로 전환
+     (컨테이너 위에 다시 놓으면 그 위치 슬롯으로 — 재정렬/이동/꺼내기 모두 가능) */
+  const childPointerDown = (e, childId) => {
+    if (e.button !== 0) return
+    if (e.target.closest && e.target.closest('.sb-inline-editor')) return
+    e.stopPropagation()
+    const child = items.find((it) => it.id === childId)
+    if (!child) return
+    const w = Math.min(child.w || 320, itemW)
+    const startX = e.clientX
+    const startY = e.clientY
+    const shift = e.shiftKey
+    let dragging = false
+    const move = (ev) => {
+      if (!dragging && Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY) > 6) {
+        dragging = true
+        const rect = canvasRef.current.getBoundingClientRect()
+        const cx = (ev.clientX - rect.left) / zoom
+        const cy = (ev.clientY - rect.top) / zoom
+        // 컨테이너에서 꺼내 포인터를 따라가는 일반 드래그로 전환
+        setItems((prev) =>
+          prev.map((it) =>
+            it.id === childId
+              ? {
+                  ...it,
+                  parentId: undefined,
+                  slot: undefined,
+                  w,
+                  x: Math.max(0, Math.round(cx - w / 2)),
+                  y: Math.max(0, Math.round(cy - 20)),
+                }
+              : it
+          )
+        )
+        setSelectedIds([childId])
+        dragStartRef.current = null
+      }
+      if (dragging) {
+        const rect = canvasRef.current.getBoundingClientRect()
+        onDrag(childId, (ev.clientX - rect.left) / zoom - w / 2, (ev.clientY - rect.top) / zoom - 20, ev.clientX, ev.clientY)
+      }
+    }
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      if (dragging) onDragEnd(childId)
+      else handleSelect(childId, shift)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
   }
 
   /* 컨테이너에서 꺼내 캔버스 맨 아래로 */
@@ -449,7 +533,15 @@ export default function Builder({ api, scenario }) {
     dragStartRef.current = { primary: id, positions }
   }
 
-  const onDrag = (id, x, y) => {
+  const onDrag = (id, x, y, clientX, clientY) => {
+    // 포인터의 캔버스 좌표 — 컨테이너 드롭 판정에 사용 (아이템 중심보다 정확)
+    const pointer =
+      clientX != null && canvasRef.current
+        ? (() => {
+            const rect = canvasRef.current.getBoundingClientRect()
+            return { x: (clientX - rect.left) / zoom, y: (clientY - rect.top) / zoom }
+          })()
+        : null
     const start = dragStartRef.current
     const groupIds = start ? Object.keys(start.positions) : [id]
 
@@ -518,9 +610,10 @@ export default function Builder({ api, scenario }) {
 
     setGuides(activeGuides)
     // 컨테이너 위에 있으면 "안에 배치" 드롭 대상 하이라이트 (레이아웃끼리 중첩은 불가)
-    const hover = !LIBRARY[it?.type]?.container ? containerAt(nx + w / 2, ny + hh / 2, id) : null
+    const probe = pointer || { x: nx + w / 2, y: ny + hh / 2 }
+    const hover = !LIBRARY[it?.type]?.container ? containerAt(probe.x, probe.y, id) : null
     setDropTargetId(hover ? hover.id : null)
-    const pos = { id, positions: { [id]: { x: nx, y: ny } } }
+    const pos = { id, positions: { [id]: { x: nx, y: ny } }, pointer: probe }
     dragPosRef.current = pos
     setDragPos(pos)
   }
@@ -542,18 +635,17 @@ export default function Builder({ api, scenario }) {
             const dragged = prev.find((it) => it.id === dId)
             if (dragged && !LIBRARY[dragged.type]?.container) {
               const p2 = pos.positions[dId]
-              const cx = p2.x + dragged.w / 2
-              const cy = p2.y + (dragged.h || heightsRef.current[dId] || 80) / 2
+              // 드롭 판정: 포인터 위치 우선, 없으면 아이템 중심
+              const cx = pos.pointer ? pos.pointer.x : p2.x + dragged.w / 2
+              const cy = pos.pointer ? pos.pointer.y : p2.y + (dragged.h || heightsRef.current[dId] || 80) / 2
               const target = prev.find((it) => {
                 if (it.id === dId || it.parentId || !LIBRARY[it.type]?.container) return false
                 const hh = it.h || heightsRef.current[it.id] || 80
                 return cx >= it.x && cx <= it.x + it.w && cy >= it.y && cy <= it.y + hh
               })
               if (target) {
-                const slot = nextSlot(prev, target.id)
-                const nested = prev.map((it) =>
-                  it.id === dId ? { ...it, parentId: target.id, slot } : it
-                )
+                const idx = slotIndexAt(target.id, target.type, cx, cy)
+                const nested = placeChild(prev, dId, target.id, idx)
                 api.showToast(`${LIBRARY[dragged.type]?.label}을(를) ${LIBRARY[target.type]?.label} 안에 배치했어요.`)
                 return settle(nested, [])
               }
@@ -900,6 +992,12 @@ export default function Builder({ api, scenario }) {
   const canvasCtx = {
     mode: 'canvas',
     allItems: items, // 컨테이너가 자식을 찾아 렌더할 때 사용
+    selectedIds, // 자식 셸의 선택 표시
+    childPointerDown, // 자식 클릭 선택 / 드래그 꺼내기
+    inspectChild: (id) => {
+      setSelectedIds([id])
+      setFocusTick((t) => t + 1)
+    },
     profile: api.profile,
     updateProps: (id, key, value) => updateProps(id, key, value),
     /* 컴포넌트 안 더블클릭 인라인 편집 */
@@ -1188,9 +1286,9 @@ export default function Builder({ api, scenario }) {
                   const rect = canvasRef.current.getBoundingClientRect()
                   const cx = (e.clientX - rect.left) / zoom
                   const cy = (e.clientY - rect.top) / zoom
-                  // 컨테이너 위에 놓으면 그 안의 자식으로 배치
+                  // 컨테이너 위에 놓으면 그 위치의 슬롯에 자식으로 배치
                   const target = !LIBRARY[type]?.container && containerAt(cx, cy)
-                  if (target) addChild(type, target.id)
+                  if (target) addChild(type, target.id, { containerType: target.type, cx, cy })
                   else addItemAt(type, cx, cy)
                 }}
               >

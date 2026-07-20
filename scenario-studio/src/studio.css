@@ -1226,6 +1226,35 @@
   z-index: 5;
 }
 
+/* 컨테이너 자식 셸 — 캔버스에서 직접 선택/드래그/편집 */
+.sb-child {
+  position: relative;
+  pointer-events: auto;
+  cursor: grab;
+  border-radius: 10px;
+  outline: 1px dashed transparent;
+  outline-offset: 2px;
+  transition: outline-color 0.12s ease;
+}
+.sb-child:hover { outline-color: #cbd5e1; }
+.sb-child--selected { outline: 1.5px solid var(--sb-accent) !important; outline-offset: 2px; }
+.sb-child--hidden { opacity: 0.45; }
+
+/* 빈 컨테이너 드롭존 (캔버스 전용) */
+.sb-container-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 72px;
+  padding: 12px;
+  border: 1.5px dashed var(--sb-line);
+  border-radius: 14px;
+  color: #94a3b8;
+  font-size: 12px;
+  text-align: center;
+}
+
 /* 팔레트 카테고리 라벨 / 레이아웃 카드 강조 / 레이어 자식 들여쓰기 */
 .sb-palette-cat { margin-top: 12px; }
 .sb-palette-card--layout { border-style: dashed; }

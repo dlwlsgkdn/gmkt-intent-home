@@ -27,6 +27,35 @@ function parseCards(text) {
 /* 스크롤 컨테이너의 스크롤바 표시 유틸 클래스 */
 const scrollCls = (show) => (show ? ' sb-scroll-bar' : ' sb-scroll-hide')
 
+/* 캔버스에서 컨테이너 자식을 감싸는 셸 — 클릭 선택/더블클릭 편집/드래그로 꺼내기·재배치 */
+function ChildShell({ item, ctx, children }) {
+  const selected = ctx.selectedIds && ctx.selectedIds.includes(item.id)
+  return (
+    <div
+      className={
+        'sb-child' +
+        (selected ? ' sb-child--selected' : '') +
+        (item.hidden ? ' sb-child--hidden' : '')
+      }
+      data-child-id={item.id}
+      data-child-of={item.parentId}
+      onPointerDown={(e) => ctx.childPointerDown && ctx.childPointerDown(e, item.id)}
+      onDoubleClick={(e) => {
+        e.stopPropagation()
+        if (ctx.inspectChild) ctx.inspectChild(item.id)
+      }}
+    >
+      {children}
+    </div>
+  )
+}
+
+/* 캔버스 모드의 빈 컨테이너 드롭존 (실행 화면에서는 렌더 안 함) */
+const EmptyDropZone = ({ ctx }) =>
+  ctx.mode === 'canvas' ? (
+    <div className="sb-container-empty">컴포넌트를 여기로 끌어다 놓으세요</div>
+  ) : null
+
 /* 텍스트 안의 [[키워드]]를 점선 밑줄로 렌더 — 플레이어에서 클릭하면 설명 모달.
    사전은 탐색 페이지 편집기의 '키워드 사전'에서 관리한다. */
 function RichSpan({ optsStr, content, ctx, i }) {
@@ -804,14 +833,14 @@ export const LIBRARY = {
     stage: 'common',
     category: 'layout',
     container: true,
+    flow: 'x',
     icon: '↔️',
-    hint: '가로 스크롤 레이아웃 — 다른 컴포넌트를 끌어다 안에 배치. 비어 있으면 카드 목록 표시',
+    hint: '가로 스크롤 레이아웃 — 다른 컴포넌트를 끌어다 안에 배치 (텍스트 카드 목록도 가능)',
     defaults: {
       title: '함께 보면 좋아요',
       cardW: '168',
       scrollbar: false,
-      items:
-        '수분 프라이머|피부결 정돈 1단계|./makeup-clone-assets/8e01e19fb7cf7c96.avif, 톤업 쿠션|얇게 두 번 레이어|./makeup-clone-assets/d9b261330f3ffccf.avif, 세팅 픽서|마무리 고정|./makeup-clone-assets/42072b0ad4be9333.avif, 립 밤|무너짐 없는 마무리|',
+      items: '',
     },
     fields: [
       { key: 'title', label: '패널 제목 (비우면 숨김)', kind: 'text' },
@@ -833,9 +862,7 @@ export const LIBRARY = {
               ))
             ) : (
               <>
-                {cards.length === 0 && (
-                  <span className="sb-pinned-panel__empty">컴포넌트를 끌어다 놓거나 카드 목록("제목|설명|이미지URL")을 입력하세요.</span>
-                )}
+                {cards.length === 0 && <EmptyDropZone ctx={ctx} />}
                 {cards.map((c, i) => (
                   <div
                     key={i}
@@ -864,13 +891,13 @@ export const LIBRARY = {
     stage: 'common',
     category: 'layout',
     container: true,
+    flow: 'y',
     icon: '🔲',
-    hint: 'N열 그리드 레이아웃 — 다른 컴포넌트를 끌어다 안에 배치. 비어 있으면 카드 목록 표시',
+    hint: 'N열 그리드 레이아웃 — 다른 컴포넌트를 끌어다 안에 배치 (텍스트 카드 목록도 가능)',
     defaults: {
       title: '카테고리 둘러보기',
       cols: '2',
-      items:
-        '수분 프라이머|피부결 정돈 1단계|./makeup-clone-assets/8e01e19fb7cf7c96.avif, 톤업 쿠션|얇게 두 번 레이어|./makeup-clone-assets/d9b261330f3ffccf.avif, 세팅 픽서|마무리 고정|./makeup-clone-assets/42072b0ad4be9333.avif, 립 밤|무너짐 없는 마무리|',
+      items: '',
     },
     fields: [
       { key: 'title', label: '패널 제목 (비우면 숨김)', kind: 'text' },
@@ -886,9 +913,7 @@ export const LIBRARY = {
           {p.title ? <p className="sb-hscroll__title">{kText(p.title, ctx, 'title')}</p> : null}
           <div className="sb-gridpanel__grid" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
             {kids.length > 0 && kids.map((c) => <div key={c.key} className="sb-gridpanel__slot">{c.node}</div>)}
-            {kids.length === 0 && cards.length === 0 && (
-              <span className="sb-pinned-panel__empty">컴포넌트를 끌어다 놓거나 카드 목록("제목|설명|이미지URL")을 입력하세요.</span>
-            )}
+            {kids.length === 0 && cards.length === 0 && <EmptyDropZone ctx={ctx} />}
             {kids.length === 0 && cards.map((c, i) => (
               <div
                 key={i}
@@ -914,13 +939,13 @@ export const LIBRARY = {
     stage: 'common',
     category: 'layout',
     container: true,
+    flow: 'x',
     icon: '🎠',
-    hint: '한 장씩 스냅되는 캐러셀 레이아웃 — 다른 컴포넌트를 끌어다 슬라이드로. 비어 있으면 카드 목록',
+    hint: '한 장씩 스냅되는 캐러셀 레이아웃 — 다른 컴포넌트를 끌어다 슬라이드로 (텍스트 카드도 가능)',
     defaults: {
       title: '',
       scrollbar: false,
-      items:
-        '속광은 남기고 유분만 덜어내는 베이스|최근 쓰레드 반복 키워드: 무너짐·들뜸|./makeup-clone-assets/d9b261330f3ffccf.avif, 맑은 로즈 한 끗|퍼스널 컬러 맞춤 포인트|./makeup-clone-assets/8e01e19fb7cf7c96.avif, 1박 2일 파우치 최소 구성|여행 전 체크|./makeup-clone-assets/42072b0ad4be9333.avif',
+      items: '',
     },
     fields: [
       { key: 'title', label: '패널 제목 (비우면 숨김)', kind: 'text' },
@@ -936,9 +961,7 @@ export const LIBRARY = {
           {p.title ? <p className="sb-hscroll__title">{kText(p.title, ctx, 'title')}</p> : null}
           <div className={'sb-carousel__track' + scrollCls(p.scrollbar)}>
             {kids.length > 0 && kids.map((c) => <div key={c.key} className="sb-carousel__slot">{c.node}</div>)}
-            {kids.length === 0 && cards.length === 0 && (
-              <span className="sb-pinned-panel__empty">컴포넌트를 끌어다 놓거나 카드 목록("제목|설명|이미지URL")을 입력하세요.</span>
-            )}
+            {kids.length === 0 && cards.length === 0 && <EmptyDropZone ctx={ctx} />}
             {kids.length === 0 && cards.map((c, i) => (
               <div
                 key={i}
@@ -1022,14 +1045,14 @@ export const LIBRARY = {
     stage: 'common',
     category: 'layout',
     container: true,
+    flow: 'y',
     icon: '↕️',
-    hint: '고정 높이 세로 스크롤 레이아웃 — 다른 컴포넌트를 끌어다 안에 배치. 비어 있으면 카드 목록',
+    hint: '고정 높이 세로 스크롤 레이아웃 — 다른 컴포넌트를 끌어다 안에 배치 (텍스트 카드도 가능)',
     defaults: {
       title: '더 볼만한 항목',
       panelH: '280',
       scrollbar: true,
-      items:
-        '수분 프라이머|피부결 정돈 1단계|./makeup-clone-assets/8e01e19fb7cf7c96.avif, 톤업 쿠션|얇게 두 번 레이어|./makeup-clone-assets/d9b261330f3ffccf.avif, 세팅 픽서|마무리 고정|./makeup-clone-assets/42072b0ad4be9333.avif, 립 밤|무너짐 없는 마무리|, 쿨링 미스트|오후 수분 보충|',
+      items: '',
     },
     fields: [
       { key: 'title', label: '패널 제목 (비우면 숨김)', kind: 'text' },
@@ -1046,9 +1069,7 @@ export const LIBRARY = {
           {p.title ? <p className="sb-hscroll__title">{kText(p.title, ctx, 'title')}</p> : null}
           <div className={'sb-vscroll__list' + scrollCls(p.scrollbar)} style={{ height: panelH }}>
             {kids.length > 0 && kids.map((c) => <div key={c.key} className="sb-vscroll__slot">{c.node}</div>)}
-            {kids.length === 0 && cards.length === 0 && (
-              <span className="sb-pinned-panel__empty">컴포넌트를 끌어다 놓거나 카드 목록("제목|설명|이미지URL")을 입력하세요.</span>
-            )}
+            {kids.length === 0 && cards.length === 0 && <EmptyDropZone ctx={ctx} />}
             {kids.length === 0 && cards.map((c, i) => (
               <div
                 key={i}
@@ -1115,7 +1136,15 @@ export function renderItem(item, ctx) {
     const kids = childrenOf(ctx.allItems, item.id).filter(
       (k) => !(ctx.mode === 'player' && k.hidden)
     )
-    renderCtx.children = kids.map((k) => ({ key: k.id, node: renderItem(k, ctx) }))
+    renderCtx.children = kids.map((k) => ({
+      key: k.id,
+      node:
+        ctx.mode === 'canvas' && ctx.childPointerDown ? (
+          <ChildShell item={k} ctx={ctx}>{renderItem(k, ctx)}</ChildShell>
+        ) : (
+          renderItem(k, ctx)
+        ),
+    }))
   }
   const el = def.render(item.props, renderCtx)
 
