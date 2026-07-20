@@ -89,6 +89,32 @@ export function layoutCompactUp(items, heights) {
   return items.map((it) => placed.find((p) => p.id === it.id) || it)
 }
 
+/* 중력: x/너비는 유지한 채, 핀(드래그 중)·잠금 아이템만 제자리에 두고
+   나머지를 위로 끌어올려 스택시킨다 (겹침도 함께 해소) */
+export function applyGravity(items, heights, pinnedIds = []) {
+  const h = (it) => it.h || heights[it.id] || 80
+  const pinned = new Set(pinnedIds)
+  const fixed = items.filter((it) => pinned.has(it.id) || it.locked)
+  const movable = sortByPosition(items.filter((it) => !pinned.has(it.id) && !it.locked))
+  const placed = [...fixed]
+  for (const it of movable) {
+    let y = PAD
+    for (let guard = 0; guard < 200; guard++) {
+      const hit = placed.find(
+        (p) =>
+          it.x < p.x + p.w &&
+          it.x + it.w > p.x &&
+          y < p.y + h(p) &&
+          y + h(it) > p.y
+      )
+      if (!hit) break
+      y = hit.y + h(hit) + GAP
+    }
+    placed.push({ ...it, y })
+  }
+  return items.map((it) => placed.find((p) => p.id === it.id) || it)
+}
+
 export const LAYOUT_MODES = [
   { key: 'stack', label: '1단 세로 정렬', desc: '전체 너비로 위에서부터 차곡차곡', fn: layoutStack },
   { key: 'twocol', label: '2단 그리드 정렬', desc: '반폭 2열 마소너리 배치', fn: layoutTwoColumns },

@@ -3,7 +3,7 @@ import { STAGES, DEVICE_PRESETS, CHIP_COLORS, createItem, visibleProfileItems } 
 import { LIBRARY } from '../lib/registry.jsx'
 import {
   PAD, GAP, MIN_ITEM_W,
-  resolveCollision, layoutCompactUp, alignItems, LAYOUT_MODES,
+  resolveCollision, layoutCompactUp, alignItems, applyGravity, LAYOUT_MODES,
 } from '../lib/layout.js'
 import { buildShareUrl } from '../lib/share.js'
 import Dropdown from './ui/Dropdown.jsx'
@@ -46,6 +46,24 @@ export default function Builder({ api, scenario }) {
   const device = DEVICE_PRESETS.find((d) => d.key === (scenario.device || 'desktop')) || DEVICE_PRESETS[0]
   const canvasW = device.w
   const itemW = canvasW - PAD * 2
+
+  /* 캔버스 중력 (기본 켜짐): 배치가 바뀔 때마다 컴포넌트를 위로 스택.
+     settle = 겹침 해소 후 중력 적용 — 모든 커밋 경로가 이걸 통과한다 */
+  const gravityOn = scenario.gravity !== false
+  const settle = (list, movedIds) => {
+    const resolved = resolveCollision(list, movedIds, heightsRef.current)
+    return gravityOn ? applyGravity(resolved, heightsRef.current) : resolved
+  }
+  const toggleGravity = () => {
+    const next = !gravityOn
+    api.updateScenario(scenario.id, (s) => ({ ...s, gravity: next }))
+    if (next) {
+      setItems((prev) => applyGravity(prev, heightsRef.current))
+      api.showToast('중력 켜짐 — 컴포넌트가 위로 차곡차곡 쌓여요.')
+    } else {
+      api.showToast('중력 꺼짐 — 빈 공간을 두고 자유롭게 배치할 수 있어요.')
+    }
+  }
 
   const toggleMenu = (key) => setOpenMenu((cur) => (cur === key ? null : key))
 
@@ -126,7 +144,8 @@ export default function Builder({ api, scenario }) {
         (max, it) => Math.max(max, it.y + (heightsRef.current[it.id] || 80)),
         PAD - GAP
       )
-      return [...prev, { ...item, x: PAD, y: bottom + GAP, w }]
+      const next = [...prev, { ...item, x: PAD, y: bottom + GAP, w }]
+      return gravityOn ? applyGravity(next, heightsRef.current) : next
     })
     setSelectedIds([item.id])
   }
@@ -139,7 +158,7 @@ export default function Builder({ api, scenario }) {
     const w = Math.min(def.defaultW || itemW, itemW)
     const nx = Math.max(0, Math.min(canvasW - w, Math.round(x - w / 2)))
     const ny = Math.max(0, Math.round(y - 16))
-    setItems((prev) => resolveCollision([...prev, { ...item, x: nx, y: ny, w }], [item.id], heightsRef.current))
+    setItems((prev) => settle([...prev, { ...item, x: nx, y: ny, w }], [item.id]))
     setSelectedIds([item.id])
   }
 
@@ -183,7 +202,7 @@ export default function Builder({ api, scenario }) {
       style: c.style ? { ...c.style } : undefined,
       props: JSON.parse(JSON.stringify(c.props)),
     }))
-    setItems((prev) => resolveCollision([...prev, ...copies], copies.map((c) => c.id), heightsRef.current))
+    setItems((prev) => settle([...prev, ...copies], copies.map((c) => c.id)))
     setSelectedIds(copies.map((c) => c.id))
   }
 
@@ -262,13 +281,19 @@ export default function Builder({ api, scenario }) {
   }
 
   const removeItem = (id) => {
-    setItems((prev) => prev.filter((it) => it.id !== id))
+    setItems((prev) => {
+      const next = prev.filter((it) => it.id !== id)
+      return gravityOn ? applyGravity(next, heightsRef.current) : next
+    })
     setSelectedIds((prev) => prev.filter((x) => x !== id))
   }
 
   const removeSelected = () => {
     const ids = new Set(selectedIds)
-    setItems((prev) => prev.filter((it) => !ids.has(it.id)))
+    setItems((prev) => {
+      const next = prev.filter((it) => !ids.has(it.id))
+      return gravityOn ? applyGravity(next, heightsRef.current) : next
+    })
     setSelectedIds([])
   }
 
@@ -288,7 +313,7 @@ export default function Builder({ api, scenario }) {
     const src = items.find((it) => it.id === id)
     if (!src) return
     const copy = cloneOf(src)
-    setItems((prev) => resolveCollision([...prev, copy], [copy.id], heightsRef.current))
+    setItems((prev) => settle([...prev, copy], [copy.id]))
     setSelectedIds([copy.id])
   }
 
@@ -297,7 +322,7 @@ export default function Builder({ api, scenario }) {
     const srcs = items.filter((it) => selectedIds.includes(it.id))
     if (srcs.length === 0) return
     const copies = srcs.map(cloneOf)
-    setItems((prev) => resolveCollision([...prev, ...copies], copies.map((c) => c.id), heightsRef.current))
+    setItems((prev) => settle([...prev, ...copies], copies.map((c) => c.id)))
     setSelectedIds(copies.map((c) => c.id))
   }
 
@@ -395,7 +420,7 @@ export default function Builder({ api, scenario }) {
       if (pos && pos.id === id) {
         setItems((prev) => {
           const movedList = prev.map((it) => (pos.positions[it.id] ? { ...it, ...pos.positions[it.id] } : it))
-          return resolveCollision(movedList, Object.keys(pos.positions), heightsRef.current)
+          return settle(movedList, Object.keys(pos.positions))
         })
       }
       setDragPos(null)
@@ -424,7 +449,7 @@ export default function Builder({ api, scenario }) {
               ? { ...it, w: draft.w, h: draft.h, x: Math.min(it.x, canvasW - draft.w) }
               : it
           )
-          return resolveCollision(resized, id, heightsRef.current)
+          return settle(resized, id)
         })
       }
       setSizeDraft(null)
@@ -436,7 +461,7 @@ export default function Builder({ api, scenario }) {
     if (patch.h != null) heightsRef.current[id] = patch.h
     setItems((prev) => {
       const updated = prev.map((it) => (it.id === id ? { ...it, ...patch } : it))
-      return resolveCollision(updated, id, heightsRef.current)
+      return settle(updated, id)
     })
   }
 
@@ -454,14 +479,18 @@ export default function Builder({ api, scenario }) {
             }
           : it
       )
-      return resolveCollision(moved, [...ids], heightsRef.current)
+      // 중력이 켜져 있으면 세로 미세 이동은 다시 스택되므로 가로 이동/재배열 용도
+      return settle(moved, [...ids])
     })
   }
 
   /* 다중 선택 정렬 도구 */
   const alignSelected = (mode) => {
     if (selectedIds.length < 2) return
-    setItems((prev) => alignItems(prev, selectedIds, mode, { canvasW }, heightsRef.current))
+    setItems((prev) => {
+      const aligned = alignItems(prev, selectedIds, mode, { canvasW }, heightsRef.current)
+      return gravityOn ? applyGravity(aligned, heightsRef.current) : aligned
+    })
   }
 
   /* 레이어 패널에서 순서 바꾸기: 이웃과 자리를 교환하고 컴팩트 정리 */
@@ -677,13 +706,16 @@ export default function Builder({ api, scenario }) {
 
   /* ── 렌더 ── */
 
-  /* 드래그 중에는 다른 아이템들이 실시간으로 밀려나는 미리보기 레이아웃 */
+  /* 드래그 중에는 다른 아이템들이 실시간으로 밀려나는 미리보기 레이아웃.
+     중력이 켜져 있으면 드래그 중인 아이템만 포인터에 고정하고 나머지는 위로 스택 */
   let displayItems = items
   if (dragPos) {
     const moved = items.map((it) =>
       dragPos.positions[it.id] ? { ...it, ...dragPos.positions[it.id] } : it
     )
-    displayItems = resolveCollision(moved, Object.keys(dragPos.positions), heightsRef.current)
+    const draggedIds = Object.keys(dragPos.positions)
+    const resolved = resolveCollision(moved, draggedIds, heightsRef.current)
+    displayItems = gravityOn ? applyGravity(resolved, heightsRef.current, draggedIds) : resolved
   }
 
   const canvasHeight = Math.max(
@@ -828,6 +860,15 @@ export default function Builder({ api, scenario }) {
               </button>
             ))}
           </Dropdown>
+
+          <button
+            type="button"
+            className={'sb-btn' + (gravityOn ? ' sb-btn--gravity-on' : '')}
+            title={gravityOn ? '중력 켜짐 — 컴포넌트가 위로 스택돼요 (끄면 자유 배치)' : '중력 꺼짐 — 자유 배치 (켜면 위로 스택)'}
+            onClick={toggleGravity}
+          >
+            🧲 중력 {gravityOn ? 'ON' : 'OFF'}
+          </button>
 
           <Dropdown
             open={openMenu === 'layout'}

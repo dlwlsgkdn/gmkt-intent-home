@@ -807,6 +807,14 @@
 .sb-ctx-menu__danger:hover:not(:disabled) { background: #fdf5f7 !important; }
 .sb-ctx-menu__sep { height: 1px; background: var(--sb-line); margin: 4px 6px; }
 
+/* 중력 토글 — 켜짐 상태 강조 */
+.sb-btn--gravity-on {
+  border-color: var(--sb-accent) !important;
+  background: var(--sb-accent-soft) !important;
+  color: var(--sb-accent) !important;
+  font-weight: 700;
+}
+
 /* 상단 바 줌 컨트롤 */
 .sb-zoom-ctl {
   display: inline-flex;
