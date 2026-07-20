@@ -4,9 +4,16 @@ import React, { useEffect, useRef } from 'react'
    마크업: {{옵션|텍스트}} (옵션: b, s18, c#hex, fserif|fmono, kw) + [[키워드]]
    캔버스 인라인 편집(contentEditable)과 인스펙터 툴바가 공유한다 */
 
+/* 폰트 목록 — 웹폰트는 index.html의 Google Fonts 링크로 로드된다.
+   key는 마크업(f<key>)에 저장되므로 바꾸면 기존 데이터가 '기본'으로 돌아간다 */
 export const FONT_OPTIONS = [
   { key: null, label: '기본', stack: null },
-  { key: 'serif', label: '명조', stack: "'Nanum Myeongjo', 'Noto Serif KR', 'AppleMyungjo', serif" },
+  { key: 'serif', label: '나눔명조', stack: "'Nanum Myeongjo', 'Noto Serif KR', 'AppleMyungjo', serif" },
+  { key: 'batang', label: '고운바탕', stack: "'Gowun Batang', 'Noto Serif KR', serif" },
+  { key: 'song', label: '송명 (레트로)', stack: "'Song Myung', 'Noto Serif KR', serif" },
+  { key: 'round', label: '주아 (둥근)', stack: "'Jua', sans-serif" },
+  { key: 'pen', label: '나눔손글씨', stack: "'Nanum Pen Script', cursive" },
+  { key: 'black', label: '헤드라인', stack: "'Black Han Sans', sans-serif" },
   { key: 'mono', label: '모노', stack: 'ui-monospace, SFMono-Regular, Menlo, monospace' },
 ]
 
@@ -29,7 +36,7 @@ export function parseRichOpts(optsStr) {
     else if (o === 'kw') spec.kw = true
     else if (/^s\d+$/.test(o)) spec.size = Number(o.slice(1))
     else if (/^c#[0-9a-fA-F]{3,8}$/.test(o)) spec.color = o.slice(1)
-    else if (/^f(serif|mono)$/.test(o)) spec.font = o.slice(1)
+    else if (/^f[a-z]+$/.test(o)) spec.font = o.slice(1) // 실제 폰트 여부는 표시 시 FONT_OPTIONS로 검증
   })
   return spec
 }
@@ -198,6 +205,32 @@ export function SizeMenu({ onPick }) {
         <span className="sb-seltb__sizes">
           {[12, 14, 16, 18, 20, 24, 28].map((n) => (
             <button key={n} type="button" onClick={() => { setOpen(false); onPick(n) }}>{n}</button>
+          ))}
+        </span>
+      )}
+    </span>
+  )
+}
+
+/* 폰트 선택 서브메뉴 — 각 항목을 해당 폰트로 미리보기 */
+export function FontMenu({ onPick }) {
+  const [open, setOpen] = React.useState(false)
+  return (
+    <span className="sb-seltb__sizemenu">
+      <button type="button" title="폰트" onClick={() => setOpen((v) => !v)}>
+        폰트<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ width: 9, height: 9, marginLeft: 1 }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
+      </button>
+      {open && (
+        <span className="sb-seltb__fonts">
+          {FONT_OPTIONS.filter((f) => f.key).map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              style={{ fontFamily: f.stack }}
+              onClick={() => { setOpen(false); onPick(f.key) }}
+            >
+              {f.label}
+            </button>
           ))}
         </span>
       )}

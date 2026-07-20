@@ -1,6 +1,6 @@
 import React from 'react'
 import { LIBRARY } from '../../lib/registry.jsx'
-import { FONT_OPTIONS, TEXT_COLORS, SizeMenu, applyOptToRaw } from '../../lib/richtext.jsx'
+import { TEXT_COLORS, SizeMenu, FontMenu, applyOptToRaw } from '../../lib/richtext.jsx'
 import { MIN_ITEM_W } from '../../lib/layout.js'
 
 /* 오른쪽 패널: 선택 컴포넌트 속성 편집 / 다중 선택 도구 */
@@ -106,11 +106,7 @@ export default function Inspector({
         {!sel.list && (
           <>
             <button type="button" title="볼드" onClick={() => applyMark('b')}><b>B</b></button>
-            {FONT_OPTIONS.filter((fo) => fo.key).map((fo) => (
-              <button key={fo.key} type="button" title={fo.label} style={{ fontFamily: fo.stack }} onClick={() => applyMark('f' + fo.key)}>
-                {fo.label}
-              </button>
-            ))}
+            <FontMenu onPick={(key) => applyMark('f' + key)} />
             <SizeMenu onPick={(n) => applyMark('s' + n)} />
             <span className="sb-seltb__sep" />
             {TEXT_COLORS.filter((c) => c.color).map((c) => (

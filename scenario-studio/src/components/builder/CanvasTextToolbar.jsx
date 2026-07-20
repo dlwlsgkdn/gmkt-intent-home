@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import {
-  FONT_OPTIONS, TEXT_COLORS, SizeMenu,
+  TEXT_COLORS, SizeMenu, FontMenu,
   domToMarkup, markupToHtml, boundaryToRaw, rawToBoundary, applyOptToRaw,
 } from '../../lib/richtext.jsx'
 
@@ -78,11 +78,7 @@ export default function CanvasTextToolbar({ active, ensureKeyword }) {
   return (
     <div className="sb-seltb sb-seltb--canvas" style={style} onMouseDown={(e) => e.preventDefault()}>
       <button type="button" title="볼드" onClick={() => apply('b')}><b>B</b></button>
-      {FONT_OPTIONS.filter((f) => f.key).map((f) => (
-        <button key={f.key} type="button" title={f.label} style={{ fontFamily: f.stack }} onClick={() => apply('f' + f.key)}>
-          {f.label}
-        </button>
-      ))}
+      <FontMenu onPick={(key) => apply('f' + key)} />
       <SizeMenu onPick={(n) => apply('s' + n)} />
       <span className="sb-seltb__sep" />
       {TEXT_COLORS.filter((c) => c.color).map((c) => (
