@@ -56,7 +56,6 @@ export default function ContainerContents({
             <small>{flow} · 내부 컴포넌트 {children.length}개</small>
           </span>
         </button>
-        <span className="sb-container-contents__mode">편집 전용 전체 보기</span>
       </div>
 
       {children.length >= 6 && (

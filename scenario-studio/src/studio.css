@@ -1430,16 +1430,6 @@
 .sb-container-contents__parent > span:last-child { display: flex; flex-direction: column; min-width: 0; }
 .sb-container-contents__parent strong { color: var(--sb-ink); font-size: 12px; }
 .sb-container-contents__parent small { color: #64748b; font-size: 10px; }
-.sb-container-contents__mode {
-  flex: 0 0 auto;
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: #fff;
-  border: 1px solid rgba(95, 116, 101, 0.22);
-  color: var(--sb-accent);
-  font-size: 9.5px;
-  font-weight: 700;
-}
 .sb-container-contents__search {
   width: calc(100% - 20px);
   margin: 9px 10px 0;
