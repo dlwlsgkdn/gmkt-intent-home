@@ -20,10 +20,11 @@ const SNAP = 6
 const DRAG_SOFT_RATIO = 0.45
 const DRAG_PREVIEW_MS = 250
 /* 컨테이너 겹침 회피 ↔ 삽입 공존 임계점:
-   포인터가 컨테이너 주변 NEST_GUARD_MARGIN 안에 있으면 삽입 접근으로 보고 밀림에서 보호(핀 고정).
+   포인터가 컨테이너(+NEST_GUARD_MARGIN) 위에 있으면 삽입 의도로 보고 밀림에서 보호(핀 고정).
    포인터가 그 밖이면서 CONTAINER_SOFT_RATIO 이상 깊게 겹친 상태가
-   CONTAINER_PUSH_DELAY_MS 이상 지속된 컨테이너만 밀린다 — 일반 컴포넌트보다 훨씬 둔감 */
-const NEST_GUARD_MARGIN = 48
+   CONTAINER_PUSH_DELAY_MS 이상 지속된 컨테이너만 밀린다 — 일반 컴포넌트보다 훨씬 둔감.
+   (접근 중 도망감 방지는 지속시간 게이트가 담당하므로 마진은 경계 떨림 방지용으로만 최소한) */
+const NEST_GUARD_MARGIN = 8
 const CONTAINER_SOFT_RATIO = 0.75
 const CONTAINER_PUSH_DELAY_MS = 450
 
