@@ -10,6 +10,7 @@ import Dropdown from './ui/Dropdown.jsx'
 import CanvasItem from './builder/CanvasItem.jsx'
 import Palette from './builder/Palette.jsx'
 import Inspector from './builder/Inspector.jsx'
+import ContainerContents from './builder/ContainerContents.jsx'
 import CanvasTextToolbar from './builder/CanvasTextToolbar.jsx'
 import ContextMenu from './builder/ContextMenu.jsx'
 
@@ -34,6 +35,7 @@ export default function Builder({ api, scenario }) {
   const [, setHistVer] = useState(0) // undo/redo 버튼 활성화 갱신용
   const [zoom, setZoom] = useState(1) // 캔버스 줌 (Figma식 ⌘+/-/0)
   const [canvasView, setCanvasView] = useState('edit') // 'edit'(클리핑 해제+경계 표시) | 'preview'(실사용 모습)
+  const previewMode = canvasView === 'preview'
   const [marquee, setMarquee] = useState(null) // 빈 캔버스 드래그 → 러버밴드 선택 박스
   const [ctxMenu, setCtxMenu] = useState(null) // 우클릭 컨텍스트 메뉴 {sx, sy, cx, cy, itemId}
   const dragPosRef = useRef(null)
@@ -47,9 +49,15 @@ export default function Builder({ api, scenario }) {
   const items = isExplore ? (api.explore.items || []) : (scenario.stages[stageKey] || [])
   /* 컨테이너(레이아웃) 안의 자식은 캔버스 절대배치 대상이 아니다 — 캔버스/레이아웃 연산은 최상위만 */
   const topItems = items.filter((it) => !it.parentId)
-  const heightOf = (it) => it.h || heightsRef.current[it.id] || 80
   const [dropTargetId, setDropTargetId] = useState(null) // 드래그 중 컨테이너 드롭 대상 하이라이트
   const [draggingChildId, setDraggingChildId] = useState(null) // 컨테이너 안 재정렬 중인 자식 (시각 피드백)
+  const [childDragGhost, setChildDragGhost] = useState(null) // { x, y, label, icon } — 내부 재정렬 포인터 피드백
+  const [, setMeasureVer] = useState(0) // 편집 중 클리핑 해제 높이를 캔버스 스크롤 범위에 반영
+  const heightOf = (it) => {
+    const measured = heightsRef.current[it.id]
+    if (!previewMode && LIBRARY[it.type]?.container) return Math.max(it.h || 0, measured || 0, 80)
+    return it.h || measured || 80
+  }
   /* (x, y) 캔버스 좌표를 덮는 컨테이너 아이템 */
   const containerAt = (x, y, excludeId) =>
     topItems.find((it) => {
@@ -61,13 +69,32 @@ export default function Builder({ api, scenario }) {
     list.filter((it) => it.parentId === parentId).reduce((m, it) => Math.max(m, it.slot || 0), 0) + 1
 
   /* 포인터(캔버스 좌표)가 가리키는 컨테이너 안 삽입 위치(0-base) — 자식 슬롯 DOM과 비교 */
-  const slotIndexAt = (containerId, containerType, cx, cy) => {
+  const slotIndexAt = (containerId, containerType, cx, cy, excludeId) => {
     if (!canvasRef.current) return Infinity
     const rect = canvasRef.current.getBoundingClientRect()
     const px = rect.left + cx * zoom
     const py = rect.top + cy * zoom
     const els = [...canvasRef.current.querySelectorAll(`[data-child-of="${containerId}"]`)]
-    const horizontal = LIBRARY[containerType]?.flow === 'x'
+      .filter((el) => el.dataset.childId !== excludeId)
+    const flow = LIBRARY[containerType]?.flow
+    if (flow === 'grid') {
+      const rows = []
+      els.forEach((el, index) => {
+        const r = el.getBoundingClientRect()
+        let row = rows.find((candidate) => Math.abs(candidate.top - r.top) <= 8)
+        if (!row) {
+          row = { top: r.top, bottom: r.bottom, cells: [] }
+          rows.push(row)
+        }
+        row.bottom = Math.max(row.bottom, r.bottom)
+        row.cells.push({ index, rect: r })
+      })
+      if (rows.length === 0) return 0
+      const row = rows.find((candidate) => py <= candidate.bottom) || rows[rows.length - 1]
+      const before = row.cells.find((cell) => px <= cell.rect.left + cell.rect.width / 2)
+      return before ? before.index : row.cells[row.cells.length - 1].index + 1
+    }
+    const horizontal = flow === 'x'
     let idx = 0
     els.forEach((el) => {
       const r = el.getBoundingClientRect()
@@ -79,16 +106,19 @@ export default function Builder({ api, scenario }) {
 
   /* 컨테이너 안 삽입 위치 가이드 라인 (Notion/Framer식 인서트 캐럿) — 캔버스 좌표 */
   const [insertHint, setInsertHint] = useState(null) // { dir:'v'|'h', x, y, len }
-  const insertHintAt = (container, cx, cy) => {
+  const insertHintAt = (container, cx, cy, excludeId) => {
     if (!canvasRef.current || !container) return null
     const els = [...canvasRef.current.querySelectorAll(`[data-child-of="${container.id}"]`)]
+      .filter((el) => el.dataset.childId !== excludeId)
     if (els.length === 0) return null
     const rect = canvasRef.current.getBoundingClientRect()
-    const horizontal = LIBRARY[container.type]?.flow === 'x'
-    const idx = slotIndexAt(container.id, container.type, cx, cy)
+    const flow = LIBRARY[container.type]?.flow
+    const horizontal = flow === 'x'
+    const grid = flow === 'grid'
+    const idx = slotIndexAt(container.id, container.type, cx, cy, excludeId)
     const t = els[Math.min(idx, els.length - 1)].getBoundingClientRect()
     const after = idx >= els.length
-    if (horizontal) {
+    if (horizontal || grid) {
       const sx = after ? t.right + 6 : t.left - 6
       return { dir: 'v', x: (sx - rect.left) / zoom, y: (t.top - rect.top) / zoom, len: t.height / zoom }
     }
@@ -110,6 +140,18 @@ export default function Builder({ api, scenario }) {
   }
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
   const selected = items.find((it) => it.id === selectedId) || null
+  const managedContainer = selected
+    ? LIBRARY[selected.type]?.container
+      ? selected
+      : selected.parentId
+        ? items.find((it) => it.id === selected.parentId) || null
+        : null
+    : null
+  const managedChildren = managedContainer
+    ? items
+        .filter((it) => it.parentId === managedContainer.id)
+        .sort((a, b) => (a.slot || 0) - (b.slot || 0))
+    : []
   const chipColor = scenario.color || '#5f7465'
 
   /* 기기 프리셋에 따른 캔버스 폭 */
@@ -138,6 +180,7 @@ export default function Builder({ api, scenario }) {
   const compactTop = (list) =>
     withTopOnly(list, (top) => (compactOn ? compactItems(top, heightsRef.current, compactOpts()) : top))
   const changeCompact = (type) => {
+    if (previewMode) return
     setOpenMenu(null)
     if (type.key === compactType) return
     api.updateScenario(scenario.id, (s) => ({ ...s, compact: type.key }))
@@ -151,10 +194,21 @@ export default function Builder({ api, scenario }) {
 
   /* 선택: ⇧+클릭 = 토글 추가, 일반 클릭 = 단일 선택(그룹 멤버 클릭 시 그룹 유지) */
   const handleSelect = (id, shift) => {
+    if (previewMode) return
     setSelectedIds((prev) => {
       if (shift) return prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
       return prev.includes(id) && prev.length > 1 ? prev : [id]
     })
+  }
+
+  const selectManagedItem = (id) => {
+    if (previewMode) return
+    setSelectedIds([id])
+    setTimeout(() => {
+      canvasRef.current
+        ?.querySelector(`[data-child-id="${id}"]`)
+        ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    }, 0)
   }
 
   /* ── 히스토리 (Undo/Redo) — 시나리오 단계 + 공통 탐색 아이템을 함께 스냅샷 ── */
@@ -183,6 +237,7 @@ export default function Builder({ api, scenario }) {
   }
 
   const undo = () => {
+    if (previewMode) return
     const h = historyRef.current
     const snap = h.past.pop()
     if (!snap) return
@@ -193,6 +248,7 @@ export default function Builder({ api, scenario }) {
   }
 
   const redo = () => {
+    if (previewMode) return
     const h = historyRef.current
     const snap = h.future.pop()
     if (!snap) return
@@ -205,6 +261,7 @@ export default function Builder({ api, scenario }) {
   /* ── 아이템 변경 — 탐색은 계정 공유 페이지에, 설문/계획은 시나리오에 저장 ──
      탐색은 함수 업데이터 필수: setTimeout 커밋(드래그/보정)이 낡은 클로저로 덮어쓰지 않게 */
   const setItems = (updater) => {
+    if (previewMode) return
     pushHistory()
     if (isExplore) {
       api.updateExplore((prev) => ({ ...prev, items: updater(prev.items || []) }))
@@ -221,7 +278,26 @@ export default function Builder({ api, scenario }) {
     setDragPos(null)
     setSizeDraft(null)
     setInlineEdit(null)
+    setDraggingChildId(null)
+    setChildDragGhost(null)
+    setInsertHint(null)
   }, [stageKey])
+
+  /* 미리보기 진입 시 남아 있던 모든 편집 상태를 닫는다. */
+  useEffect(() => {
+    if (!previewMode) return
+    setSelectedIds([])
+    setDragPos(null)
+    setSizeDraft(null)
+    setInlineEdit(null)
+    setMarquee(null)
+    setCtxMenu(null)
+    setOpenMenu(null)
+    setDropTargetId(null)
+    setInsertHint(null)
+    setDraggingChildId(null)
+    setChildDragGhost(null)
+  }, [previewMode])
 
   /* 탐색 아이템은 계정 공유라 시나리오 기기 폭과 무관하게 저장됨 —
      현재 캔버스보다 넓은 아이템은 진입/기기 변경 시 폭에 맞게 보정 */
@@ -247,13 +323,25 @@ export default function Builder({ api, scenario }) {
 
   const addItem = (type) => {
     const def = LIBRARY[type]
+    const anchor = selectedIds.length === 1 ? items.find((it) => it.id === selectedIds[0]) : null
+    // Webflow/Elementor식 클릭 추가: 컨테이너를 선택하면 그 안에, 자식을 선택하면 바로 뒤에 추가한다.
+    if (!def.container && anchor) {
+      if (LIBRARY[anchor.type]?.container) {
+        addChild(type, anchor.id, { index: Infinity })
+        return
+      }
+      if (anchor.parentId) {
+        addChild(type, anchor.parentId, { index: anchor.slot || Infinity })
+        return
+      }
+    }
     const item = createItem(type, def.defaults)
     // 컴포넌트별 기본 폭 (예: 상품/영상/게시글 카드는 세로형으로 시작)
     const w = Math.min(def.defaultW || itemW, itemW)
     setItems((prev) => {
       const bottom = prev
         .filter((it) => !it.parentId)
-        .reduce((max, it) => Math.max(max, it.y + (heightsRef.current[it.id] || 80)), PAD - GAP)
+        .reduce((max, it) => Math.max(max, it.y + heightOf(it)), PAD - GAP)
       return compactTop([...prev, { ...item, x: PAD, y: bottom + GAP, w }])
     })
     setSelectedIds([item.id])
@@ -267,7 +355,11 @@ export default function Builder({ api, scenario }) {
       api.showToast('레이아웃 안에 레이아웃은 넣을 수 없어요.')
       return
     }
-    const idx = at ? slotIndexAt(parentId, at.containerType, at.cx, at.cy) : Infinity
+    const idx = typeof at?.index === 'number'
+      ? at.index
+      : at?.cx != null
+        ? slotIndexAt(parentId, at.containerType, at.cx, at.cy)
+        : Infinity
     // 컨테이너 안 기본 너비: 컴포넌트 고유 기본값(카드류) 또는 320px — 이후 인스펙터에서 자유 조절
     const item = { ...createItem(type, def.defaults), x: 0, y: 0, w: Math.min(def.defaultW || 320, itemW) }
     setItems((prev) => placeChild([...prev, item], item.id, parentId, idx))
@@ -280,17 +372,22 @@ export default function Builder({ api, scenario }) {
      포인터가 컨테이너 경계를 벗어나면 자동으로 꺼내져 일반 드래그로 전환
      (다시 컨테이너 위에 놓으면 그 위치 슬롯으로 복귀) */
   const childPointerDown = (e, childId) => {
+    if (previewMode) return
     if (e.button !== 0) return
     if (e.target.closest && e.target.closest('.sb-inline-editor')) return
     e.stopPropagation()
     const child = items.find((it) => it.id === childId)
     if (!child) return
     const parent = items.find((it) => it.id === child.parentId)
-    const w = Math.min(child.w || 320, itemW)
     const startX = e.clientX
     const startY = e.clientY
     const shift = e.shiftKey
-    const MARGIN = 24
+    if (!parent || child.locked) {
+      handleSelect(childId, shift)
+      return
+    }
+    const w = Math.min(child.w || 320, itemW)
+    const MARGIN = 18
     let phase = 'idle' // 'idle' → 'reorder'(컨테이너 안) → 'out'(꺼내진 일반 드래그)
     let lastSlot = -1
 
@@ -298,22 +395,18 @@ export default function Builder({ api, scenario }) {
       const rect = canvasRef.current.getBoundingClientRect()
       return { cx: (ev.clientX - rect.left) / zoom, cy: (ev.clientY - rect.top) / zoom }
     }
-    /* "안"의 기준은 컨테이너 박스가 아니라 카드(슬롯) 밴드 —
-       편집 모드에선 컨테이너가 클리핑 해제로 실제보다 크게 펼쳐지므로,
-       슬롯 영역에서 일정 거리 이상 벗어나면 즉시 꺼내진다 (화면 좌표로 판정) */
+    /* 부모 전체 박스를 경계로 사용한다. 제목·패딩·카드 사이 여백을 가로질러도
+       의도치 않게 밖으로 빠지지 않고, 박스를 명확히 벗어났을 때만 꺼낸다. */
     const insideParent = (clientX, clientY) => {
-      if (!parent || !canvasRef.current) return false
-      const slots = [...canvasRef.current.querySelectorAll(`[data-child-of="${parent.id}"]`)]
-      if (slots.length === 0) return false
-      return slots.some((el) => {
-        const r = el.getBoundingClientRect()
-        return (
-          clientX >= r.left - MARGIN &&
-          clientX <= r.right + MARGIN &&
-          clientY >= r.top - MARGIN &&
-          clientY <= r.bottom + MARGIN
-        )
-      })
+      const el = canvasRef.current?.querySelector(`[data-canvas-item-id="${parent.id}"]`)
+      if (!el) return false
+      const r = el.getBoundingClientRect()
+      return (
+        clientX >= r.left - MARGIN &&
+        clientX <= r.right + MARGIN &&
+        clientY >= r.top - MARGIN &&
+        clientY <= r.bottom + MARGIN
+      )
     }
     const popOut = (cx, cy) => {
       phase = 'out'
@@ -333,6 +426,7 @@ export default function Builder({ api, scenario }) {
       )
       setSelectedIds([childId])
       dragStartRef.current = null
+      setChildDragGhost(null)
     }
 
     const move = (ev) => {
@@ -344,19 +438,23 @@ export default function Builder({ api, scenario }) {
       const { cx, cy } = toCanvas(ev)
       if (phase === 'reorder') {
         if (insideParent(ev.clientX, ev.clientY)) {
-          // 컨테이너 안: 포인터 위치의 슬롯으로 실시간 재정렬
+          // 컨테이너 안: 구조는 고정하고 삽입 위치만 미리보기 — 놓을 때 한 번만 커밋한다.
           setDropTargetId(parent ? parent.id : null)
           setDraggingChildId(childId)
-          const idx = slotIndexAt(parent.id, parent.type, cx, cy)
-          if (idx !== lastSlot) {
-            lastSlot = idx
-            setItems((prev) => placeChild(prev, childId, parent.id, idx))
-          }
+          setChildDragGhost({
+            x: ev.clientX + 14,
+            y: ev.clientY + 14,
+            label: LIBRARY[child.type]?.label || '컴포넌트',
+            icon: LIBRARY[child.type]?.icon || '◈',
+          })
+          lastSlot = slotIndexAt(parent.id, parent.type, cx, cy, childId)
+          setInsertHint(insertHintAt(parent, cx, cy, childId))
           return
         }
         // 슬롯 밴드를 벗어남 → 자동으로 꺼내서 일반 드래그로 전환 (가이드/겹침/컴팩트 활성)
         setDropTargetId(null)
         setDraggingChildId(null)
+        setInsertHint(null)
         popOut(cx, cy)
       }
       if (phase === 'out') {
@@ -366,13 +464,20 @@ export default function Builder({ api, scenario }) {
     const up = () => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', up)
       setDraggingChildId(null)
+      setChildDragGhost(null)
+      setInsertHint(null)
       if (phase === 'out') onDragEnd(childId)
-      else if (phase === 'reorder') setDropTargetId(null)
+      else if (phase === 'reorder') {
+        setDropTargetId(null)
+        if (lastSlot >= 0) setItems((prev) => placeChild(prev, childId, parent.id, lastSlot))
+      }
       else handleSelect(childId, shift)
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
   }
 
   /* 자식 리사이즈 핸들 — 바깥 컴포넌트와 동일하게 우하단 드래그로 너비/높이 조절 */
@@ -407,7 +512,7 @@ export default function Builder({ api, scenario }) {
     setItems((prev) => {
       const bottom = prev
         .filter((it) => !it.parentId)
-        .reduce((max, it) => Math.max(max, it.y + (heightsRef.current[it.id] || 80)), PAD - GAP)
+        .reduce((max, it) => Math.max(max, it.y + heightOf(it)), PAD - GAP)
       const updated = prev.map((it) =>
         it.id === id
           ? { ...it, parentId: undefined, slot: undefined, x: PAD, y: bottom + GAP, w: Math.min(it.w || itemW, itemW) }
@@ -461,7 +566,7 @@ export default function Builder({ api, scenario }) {
     const clip = clipboardRef.current
     if (!clip || clip.length === 0) return
     const bottom = topItems.reduce(
-      (max, it) => Math.max(max, it.y + (heightsRef.current[it.id] || 80)),
+      (max, it) => Math.max(max, it.y + heightOf(it)),
       PAD - GAP
     )
     const baseX = at ? at.x : PAD
@@ -498,6 +603,7 @@ export default function Builder({ api, scenario }) {
 
   /* ── 러버밴드(마퀴) 다중 선택: 빈 캔버스를 드래그 ── */
   const onCanvasPointerDown = (e) => {
+    if (previewMode) return
     if (e.target !== e.currentTarget || e.button !== 0) return
     const rect = e.currentTarget.getBoundingClientRect()
     const sx = (e.clientX - rect.left) / zoom
@@ -512,7 +618,7 @@ export default function Builder({ api, scenario }) {
       setMarquee(box)
       const hit = topItems
         .filter((it) => {
-          const ih = it.h || heightsRef.current[it.id] || 80
+          const ih = heightOf(it)
           return it.x < box.x + box.w && it.x + it.w > box.x && it.y < box.y + box.h && it.y + ih > box.y
         })
         .map((it) => it.id)
@@ -529,6 +635,7 @@ export default function Builder({ api, scenario }) {
 
   /* ── 우클릭 컨텍스트 메뉴 ── */
   const openCtxMenu = (e, itemId) => {
+    if (previewMode) return
     e.preventDefault()
     e.stopPropagation()
     if (itemId && !selectedIds.includes(itemId)) setSelectedIds([itemId])
@@ -586,7 +693,7 @@ export default function Builder({ api, scenario }) {
   })
 
   const cloneOf = (src) =>
-    cloneItem(src, { x: src.x, y: src.y + (src.h || heightsRef.current[src.id] || 80) + GAP })
+    cloneItem(src, { x: src.x, y: src.y + heightOf(src) + GAP })
 
   /* 사본 그룹: 컨테이너면 자식까지, 자식이면 같은 컨테이너 안 다음 슬롯으로 */
   const cloneGroup = (src, list) => {
@@ -660,13 +767,14 @@ export default function Builder({ api, scenario }) {
       setDragPos(pos)
       setGuides([])
       setDropTargetId(null)
+      setInsertHint(null)
       return
     }
 
     // 단일 드래그: 스마트 스냅 (캔버스 가장자리/중앙, 다른 아이템 모서리·간격)
     const it = items.find((i) => i.id === id)
     const w = it ? it.w : itemW
-    const hh = (it && it.h) || heightsRef.current[id] || 80
+    const hh = it ? heightOf(it) : 80
     let nx = Math.max(0, Math.min(canvasW - w, x))
     let ny = Math.max(0, y)
     const activeGuides = []
@@ -692,7 +800,7 @@ export default function Builder({ api, scenario }) {
     const hCands = [[PAD, PAD]]
     topItems.forEach((o) => {
       if (o.id === id) return
-      const oh = o.h || heightsRef.current[o.id] || 80
+      const oh = heightOf(o)
       hCands.push([o.y, o.y])
       hCands.push([o.y + oh + GAP, o.y + oh + GAP])
       hCands.push([o.y - hh - GAP, o.y - GAP / 2])
@@ -736,17 +844,18 @@ export default function Builder({ api, scenario }) {
               const p2 = pos.positions[dId]
               // 드롭 판정: 포인터 위치 우선, 없으면 아이템 중심
               const cx = pos.pointer ? pos.pointer.x : p2.x + dragged.w / 2
-              const cy = pos.pointer ? pos.pointer.y : p2.y + (dragged.h || heightsRef.current[dId] || 80) / 2
+              const cy = pos.pointer ? pos.pointer.y : p2.y + heightOf(dragged) / 2
               const target = prev.find((it) => {
                 if (it.id === dId || it.parentId || !LIBRARY[it.type]?.container) return false
-                const hh = it.h || heightsRef.current[it.id] || 80
+                const hh = heightOf(it)
                 return cx >= it.x && cx <= it.x + it.w && cy >= it.y && cy <= it.y + hh
               })
               if (target) {
                 const idx = slotIndexAt(target.id, target.type, cx, cy)
                 const nested = placeChild(prev, dId, target.id, idx)
                 api.showToast(`${LIBRARY[dragged.type]?.label}을(를) ${LIBRARY[target.type]?.label} 안에 배치했어요.`)
-                return settle(nested, [])
+                // 드롭 직후 컴팩트가 대상 컨테이너를 다시 움직이지 않도록 자리를 고정한다.
+                return settle(nested, [target.id])
               }
             }
           }
@@ -861,10 +970,62 @@ export default function Builder({ api, scenario }) {
     })
   }
 
+  /* 레이어 트리 드래그 — 캔버스에서 잡기 어려운 중첩 구조를 정밀하게 변경한다. */
+  const dropLayer = (id, targetId, placement) => {
+    const source = items.find((it) => it.id === id)
+    const target = items.find((it) => it.id === targetId)
+    if (!source || !target || source.id === target.id || source.locked) return
+
+    if (placement === 'inside') {
+      if (!LIBRARY[target.type]?.container || LIBRARY[source.type]?.container) {
+        api.showToast('레이아웃 안에는 일반 컴포넌트만 넣을 수 있어요.')
+        return
+      }
+      setItems((prev) => placeChild(prev, id, targetId, Infinity))
+      setSelectedIds([id])
+      api.showToast(`${LIBRARY[source.type]?.label}을(를) ${LIBRARY[target.type]?.label} 안에 배치했어요.`)
+      return
+    }
+
+    if (target.parentId) {
+      if (LIBRARY[source.type]?.container) {
+        api.showToast('레이아웃 안에 레이아웃은 넣을 수 없어요.')
+        return
+      }
+      setItems((prev) => {
+        const siblings = prev
+          .filter((it) => it.parentId === target.parentId && it.id !== id)
+          .sort((a, b) => (a.slot || 0) - (b.slot || 0))
+        const targetIndex = siblings.findIndex((it) => it.id === targetId)
+        const index = Math.max(0, targetIndex + (placement === 'after' ? 1 : 0))
+        return placeChild(prev, id, target.parentId, index)
+      })
+      setSelectedIds([id])
+      return
+    }
+
+    // 최상위끼리는 현재 캔버스 자리 집합을 유지한 채 레이어 순서를 바꾼다.
+    if (!source.parentId) {
+      setItems((prev) => {
+        const sorted = [...prev.filter((it) => !it.parentId)].sort((a, b) => (a.y - b.y) || (a.x - b.x))
+        const slots = sorted.map((it) => ({ x: it.x, y: it.y }))
+        const order = sorted.filter((it) => it.id !== id).map((it) => it.id)
+        const targetIndex = order.indexOf(targetId)
+        order.splice(Math.max(0, targetIndex + (placement === 'after' ? 1 : 0)), 0, id)
+        return prev.map((it) => {
+          const index = order.indexOf(it.id)
+          return index >= 0 ? { ...it, ...slots[index] } : it
+        })
+      })
+      setSelectedIds([id])
+    }
+  }
+
   /* ── 키보드 단축키 ── */
   useEffect(() => {
     const onKey = (e) => {
       if (e.target.closest && e.target.closest('input, textarea, select, [contenteditable]')) return
+      if (previewMode) return
       const meta = e.metaKey || e.ctrlKey
       if (meta && e.key.toLowerCase() === 'z') {
         e.preventDefault()
@@ -946,16 +1107,18 @@ export default function Builder({ api, scenario }) {
 
   /* 더블클릭 시 인스펙터 첫 입력란에 포커스 */
   useEffect(() => {
+    if (previewMode) return
     if (!focusTick) return
     const el = document.querySelector('.sb-inspector input[type="text"], .sb-inspector textarea')
     if (el) {
       el.focus()
       if (el.select) el.select()
     }
-  }, [focusTick])
+  }, [focusTick, previewMode])
 
   /* ── 상단 바 액션 ── */
   const changeDevice = (preset) => {
+    if (previewMode) return
     setOpenMenu(null)
     if (preset.key === (scenario.device || 'desktop')) return
     pushHistory()
@@ -980,6 +1143,7 @@ export default function Builder({ api, scenario }) {
   }
 
   const runAutoLayout = (mode) => {
+    if (previewMode) return
     setOpenMenu(null)
     setItems((prev) => withTopOnly(prev, (top) => mode.fn(top, heightsRef.current, { itemW, canvasW })))
     // 너비가 바뀌는 정렬은 높이가 다시 측정된 뒤 한 번 더 컴팩트하게 보정한다
@@ -1023,6 +1187,7 @@ export default function Builder({ api, scenario }) {
 
   /* 발행 버전 복원: 현재 상태는 undo 히스토리로 보존 */
   const restoreVersion = (snap) => {
+    if (previewMode) return
     setOpenMenu(null)
     const when = new Date(snap.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
     if (!window.confirm(`${when} 발행 시점으로 되돌릴까요?\n(현재 상태는 ⌘Z로 복구할 수 있어요)`)) return
@@ -1067,8 +1232,18 @@ export default function Builder({ api, scenario }) {
     )
     const draggedIds = Object.keys(dragPos.positions)
     displayItems = withTopOnly(moved, (top) => {
-      const resolved = resolveCollision(top, draggedIds, heightsRef.current)
-      return compactOn ? compactItems(resolved, heightsRef.current, compactOpts(draggedIds)) : resolved
+      const dragged = draggedIds.length === 1 ? items.find((it) => it.id === draggedIds[0]) : null
+      const canNest = dragged && !LIBRARY[dragged.type]?.container
+      // 일반 컴포넌트를 컨테이너에 넣는 동안에는 모든 컨테이너를 고정 드롭존으로 취급한다.
+      // 그래야 충돌 해소/컴팩트가 포인터 앞의 컨테이너를 밀어내지 않는다.
+      const pinnedIds = canNest
+        ? [
+            ...draggedIds,
+            ...top.filter((it) => LIBRARY[it.type]?.container).map((it) => it.id),
+          ]
+        : draggedIds
+      const resolved = resolveCollision(top, pinnedIds, heightsRef.current)
+      return compactOn ? compactItems(resolved, heightsRef.current, compactOpts(pinnedIds)) : resolved
     })
   }
 
@@ -1076,7 +1251,7 @@ export default function Builder({ api, scenario }) {
     560,
     ...displayItems.map((it) => {
       const y = (dragPos && dragPos.positions[it.id]?.y) ?? it.y
-      return y + (it.h || heightsRef.current[it.id] || 80) + 120
+      return y + heightOf(it) + 120
     })
   )
 
@@ -1087,7 +1262,7 @@ export default function Builder({ api, scenario }) {
     api.showToast(`"${word}" 키워드를 사전에 추가했어요. 탐색 편집기에서 설명을 채워주세요.`)
   }
 
-  /* 캔버스 렌더 컨텍스트: 프로필 데이터, 배지 클릭 토글, 계획 요약 미리보기 */
+  /* 캔버스 렌더 컨텍스트: 미리보기에서는 편집 콜백을 제외해 모든 컴포넌트를 읽기 전용으로 만든다. */
   const canvasCtx = {
     mode: 'canvas',
     canvasView, // 'edit' = 컨테이너 클리핑 해제, 'preview' = 실사용 모습
@@ -1097,21 +1272,24 @@ export default function Builder({ api, scenario }) {
     childPointerDown, // 자식 클릭 선택 / 드래그 꺼내기
     childResizeDown, // 자식 리사이즈 핸들
     inspectChild: (id) => {
+      if (previewMode) return
       setSelectedIds([id])
       setFocusTick((t) => t + 1)
     },
     profile: api.profile,
-    updateProps: (id, key, value) => updateProps(id, key, value),
-    /* 컴포넌트 안 더블클릭 인라인 편집 */
-    editing: inlineEdit,
-    beginEdit: (id, key) => {
-      setSelectedIds([id])
-      setInlineEdit({ itemId: id, key })
-    },
-    commitEdit: (id, key, raw) => {
-      updateProps(id, key, raw)
-      setInlineEdit(null)
-    },
+    ...(previewMode ? {} : {
+      updateProps: (id, key, value) => updateProps(id, key, value),
+      /* 컴포넌트 안 더블클릭 인라인 편집 */
+      editing: inlineEdit,
+      beginEdit: (id, key) => {
+        setSelectedIds([id])
+        setInlineEdit({ itemId: id, key })
+      },
+      commitEdit: (id, key, raw) => {
+        updateProps(id, key, raw)
+        setInlineEdit(null)
+      },
+    }),
     summaryPreview: {
       profile: visibleProfileItems(api.profile, scenario),
       questions: (scenario.stages.survey || [])
@@ -1125,7 +1303,7 @@ export default function Builder({ api, scenario }) {
   )
 
   return (
-    <div className="sb-builder">
+    <div className={'sb-builder' + (previewMode ? ' sb-builder--preview' : '')}>
       {/* 상단 바 — 1행: 문서 정보 + 발행, 2행: 단계 탭 + 편집 도구 그룹 */}
       <div className="sb-topbar">
         <div className="sb-topbar__row">
@@ -1193,7 +1371,7 @@ export default function Builder({ api, scenario }) {
               open={openMenu === 'version'}
               onClose={() => setOpenMenu(null)}
               button={
-                <button type="button" className={'sb-btn' + (openMenu === 'version' ? ' sb-btn--open' : '')} onClick={() => toggleMenu('version')} title="발행 시점 버전 복원">
+                <button type="button" disabled={previewMode} className={'sb-btn' + (openMenu === 'version' ? ' sb-btn--open' : '')} onClick={() => toggleMenu('version')} title="발행 시점 버전 복원">
                   버전 {(scenario.versions || []).length}
                 </button>
               }
@@ -1222,10 +1400,10 @@ export default function Builder({ api, scenario }) {
         {/* 2행: 편집 도구 그룹 (구분선 분리) */}
         <div className="sb-topbar__row sb-topbar__row--tools">
           <div className="sb-tb-group" role="group" aria-label="히스토리">
-            <button type="button" className="sb-icon-btn" title="실행 취소 (⌘Z)" aria-label="실행 취소" disabled={historyRef.current.past.length === 0} onClick={undo}>
+            <button type="button" className="sb-icon-btn" title="실행 취소 (⌘Z)" aria-label="실행 취소" disabled={previewMode || historyRef.current.past.length === 0} onClick={undo}>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M9 14L4 9l5-5M4 9h10a6 6 0 010 12h-3" /></svg>
             </button>
-            <button type="button" className="sb-icon-btn" title="다시 실행 (⇧⌘Z)" aria-label="다시 실행" disabled={historyRef.current.future.length === 0} onClick={redo}>
+            <button type="button" className="sb-icon-btn" title="다시 실행 (⇧⌘Z)" aria-label="다시 실행" disabled={previewMode || historyRef.current.future.length === 0} onClick={redo}>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M15 14l5-5-5-5M20 9H10a6 6 0 000 12h3" /></svg>
             </button>
           </div>
@@ -1255,7 +1433,7 @@ export default function Builder({ api, scenario }) {
             open={openMenu === 'device'}
             onClose={() => setOpenMenu(null)}
             button={
-              <button type="button" className={'sb-btn' + (openMenu === 'device' ? ' sb-btn--open' : '')} onClick={() => toggleMenu('device')} title="캔버스 기기 폭 선택">
+              <button type="button" disabled={previewMode} className={'sb-btn' + (openMenu === 'device' ? ' sb-btn--open' : '')} onClick={() => toggleMenu('device')} title="캔버스 기기 폭 선택">
                 {device.icon} {device.label}
                 {chevron}
               </button>
@@ -1280,6 +1458,7 @@ export default function Builder({ api, scenario }) {
             button={
               <button
                 type="button"
+                disabled={previewMode}
                 className={'sb-btn' + (compactOn ? ' sb-btn--compact-on' : '') + (openMenu === 'compact' ? ' sb-btn--open' : '')}
                 title="컴팩트 방향 — 배치가 바뀔 때 빈 공간 없이 스택되는 방향"
                 onClick={() => toggleMenu('compact')}
@@ -1306,7 +1485,7 @@ export default function Builder({ api, scenario }) {
             open={openMenu === 'layout'}
             onClose={() => setOpenMenu(null)}
             button={
-              <button type="button" className={'sb-btn' + (openMenu === 'layout' ? ' sb-btn--open' : '')} onClick={() => toggleMenu('layout')}>
+              <button type="button" disabled={previewMode} className={'sb-btn' + (openMenu === 'layout' ? ' sb-btn--open' : '')} onClick={() => toggleMenu('layout')}>
                 자동 정렬
                 {chevron}
               </button>
@@ -1359,6 +1538,7 @@ export default function Builder({ api, scenario }) {
 
       <div className="sb-workspace">
         <Palette
+          disabled={previewMode}
           stageKey={stageKey}
           items={items}
           selectedIds={selectedIds}
@@ -1369,19 +1549,35 @@ export default function Builder({ api, scenario }) {
           onToggleLock={(id) => updateItem(id, { locked: !items.find((it) => it.id === id)?.locked })}
           onToggleHide={(id) => updateItem(id, { hidden: !items.find((it) => it.id === id)?.hidden })}
           onUnnest={unnestItem}
+          onDropLayer={dropLayer}
         />
 
         {/* 캔버스 */}
-        <main className="sb-canvas-wrap" onPointerDown={(e) => { if (e.target === e.currentTarget) setSelectedIds([]) }}>
+        <main className="sb-canvas-wrap" onPointerDown={(e) => { if (!previewMode && e.target === e.currentTarget) setSelectedIds([]) }}>
           <div className="sb-canvas-col" style={{ width: canvasW * zoom }}>
+            {!previewMode && managedContainer && (
+              <ContainerContents
+                container={managedContainer}
+                children={managedChildren}
+                selectedId={selectedId}
+                onSelect={selectManagedItem}
+                onSelectContainer={() => setSelectedIds([managedContainer.id])}
+                onMove={moveLayer}
+                onUpdate={updateItem}
+                onDuplicate={duplicateItem}
+                onRemove={removeItem}
+                onUnnest={unnestItem}
+              />
+            )}
             <div className="sb-canvas-scale" style={{ width: canvasW * zoom, height: canvasHeight * zoom }}>
               <div
                 ref={canvasRef}
                 className={'sb-canvas' + (canvasView === 'preview' ? ' sb-canvas--preview' : ' sb-canvas--edit')}
                 style={{ width: canvasW, height: canvasHeight, transform: `scale(${zoom})`, transformOrigin: '0 0' }}
-                onPointerDown={onCanvasPointerDown}
-                onContextMenu={(e) => { if (e.target === e.currentTarget) openCtxMenu(e, null) }}
+                onPointerDown={previewMode ? undefined : onCanvasPointerDown}
+                onContextMenu={previewMode ? undefined : (e) => { if (e.target === e.currentTarget) openCtxMenu(e, null) }}
                 onDragOver={(e) => {
+                  if (previewMode) return
                   if ([...e.dataTransfer.types].includes('text/sb-type')) {
                     e.preventDefault()
                     e.dataTransfer.dropEffect = 'copy'
@@ -1393,7 +1589,14 @@ export default function Builder({ api, scenario }) {
                     setInsertHint(hover ? insertHintAt(hover, cx, cy) : null)
                   }
                 }}
+                onDragLeave={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget)) {
+                    setDropTargetId(null)
+                    setInsertHint(null)
+                  }
+                }}
                 onDrop={(e) => {
+                  if (previewMode) return
                   const type = e.dataTransfer.getData('text/sb-type')
                   if (!type) return
                   e.preventDefault()
@@ -1441,12 +1644,14 @@ export default function Builder({ api, scenario }) {
                   <CanvasItem
                     key={it.id}
                     item={it}
+                    editable={!previewMode}
                     zoom={zoom}
                     dropTarget={dropTargetId === it.id}
                     selected={selectedIds.includes(it.id)}
                     dragPos={dragPos && dragPos.positions[it.id] ? dragPos.positions[it.id] : null}
                     sizeDraft={sizeDraft && sizeDraft.id === it.id ? sizeDraft : null}
                     heightsRef={heightsRef}
+                    onMeasure={() => setMeasureVer((v) => v + 1)}
                     renderCtx={canvasCtx}
                     onSelect={handleSelect}
                     onDragStart={onGroupDragStart}
@@ -1464,6 +1669,7 @@ export default function Builder({ api, scenario }) {
         </main>
 
         <Inspector
+          disabled={previewMode}
           stageKey={stageKey}
           selected={selected}
           selectedIds={selectedIds}
@@ -1482,22 +1688,34 @@ export default function Builder({ api, scenario }) {
           unnestItem={unnestItem}
         />
 
-        <CanvasTextToolbar active={!!inlineEdit} ensureKeyword={ensureKeyword} />
+        <CanvasTextToolbar active={!previewMode && !!inlineEdit} ensureKeyword={ensureKeyword} />
 
-        {/* 우클릭 컨텍스트 메뉴 (Figma/Canva식) */}
-        <ContextMenu
-          menu={ctxMenu}
-          items={items}
-          hasClipboard={!!(clipboardRef.current && clipboardRef.current.length > 0)}
-          onClose={() => setCtxMenu(null)}
-          onDuplicate={duplicateSelected}
-          onCopy={copySelected}
-          onPaste={pasteClipboard}
-          onToggle={toggleSelected}
-          onRemove={removeSelected}
-          onSelectAll={() => setSelectedIds(items.map((it) => it.id))}
-        />
+        {!previewMode && (
+          /* 우클릭 컨텍스트 메뉴 (Figma/Canva식) */
+          <ContextMenu
+            menu={ctxMenu}
+            items={items}
+            hasClipboard={!!(clipboardRef.current && clipboardRef.current.length > 0)}
+            onClose={() => setCtxMenu(null)}
+            onDuplicate={duplicateSelected}
+            onCopy={copySelected}
+            onPaste={pasteClipboard}
+            onToggle={toggleSelected}
+            onRemove={removeSelected}
+            onSelectAll={() => setSelectedIds(items.map((it) => it.id))}
+          />
+        )}
       </div>
+      {childDragGhost && (
+        <div
+          className="sb-child-drag-ghost"
+          style={{ left: childDragGhost.x, top: childDragGhost.y }}
+          aria-hidden="true"
+        >
+          <span>{childDragGhost.icon}</span>
+          {childDragGhost.label}
+        </div>
+      )}
     </div>
   )
 }

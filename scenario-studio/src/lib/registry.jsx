@@ -36,8 +36,9 @@ function parseCards(text) {
 const scrollCls = (show) => (show ? ' sb-scroll-bar' : ' sb-scroll-hide')
 
 /* 캔버스에서 컨테이너 자식을 감싸는 셸 — 클릭 선택/더블클릭 편집/드래그 재배치/리사이즈 핸들 */
-function ChildShell({ item, ctx, children }) {
+function ChildShell({ item, index, ctx, children }) {
   const selected = ctx.selectedIds && ctx.selectedIds.includes(item.id)
+  const def = LIBRARY[item.type]
   return (
     <div
       className={
@@ -54,6 +55,10 @@ function ChildShell({ item, ctx, children }) {
         if (ctx.inspectChild) ctx.inspectChild(item.id)
       }}
     >
+      <span className="sb-child__identity" aria-hidden="true">
+        <b>{index + 1}</b>
+        {def?.icon} {def?.label}
+      </span>
       {children}
       {ctx.childResizeDown && (
         <span
@@ -66,30 +71,38 @@ function ChildShell({ item, ctx, children }) {
   )
 }
 
-/* 가로 스크롤 트랙 — 데스크탑 마우스 드래그 스크롤 + 옵션 좌우 화살표 (스냅 유지) */
-function ScrollTrack({ className, children, interactive, arrows, slideGap = 12 }) {
+/* 가로/세로 스크롤 트랙 — 데스크탑 마우스 드래그 + 옵션 좌우 화살표 (스냅 유지) */
+function ScrollTrack({ className, children, interactive, arrows, slideGap = 12, axis = 'x', style }) {
   const ref = React.useRef(null)
   const draggedRef = React.useRef(false)
 
   const onPointerDown = (e) => {
     const el = ref.current
     if (!el || e.button !== 0) return
-    const startX = e.clientX
-    const startLeft = el.scrollLeft
+    const horizontal = axis === 'x'
+    const startPoint = horizontal ? e.clientX : e.clientY
+    const startScroll = horizontal ? el.scrollLeft : el.scrollTop
     const prevSnap = el.style.scrollSnapType
     let moved = false
     const move = (ev) => {
-      const dx = ev.clientX - startX
-      if (!moved && Math.abs(dx) > 5) {
+      const point = horizontal ? ev.clientX : ev.clientY
+      const delta = point - startPoint
+      if (!moved && Math.abs(delta) > 5) {
         moved = true
         draggedRef.current = true
         el.style.scrollSnapType = 'none' // 드래그 중엔 스냅 해제
+        el.classList.add('sb-drag-scroll--active')
       }
-      if (moved) el.scrollLeft = startLeft - dx
+      if (moved) {
+        ev.preventDefault()
+        if (horizontal) el.scrollLeft = startScroll - delta
+        else el.scrollTop = startScroll - delta
+      }
     }
     const up = () => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
+      el.classList.remove('sb-drag-scroll--active')
       if (moved) {
         el.style.scrollSnapType = prevSnap // 복원 → 가장 가까운 슬라이드로 스냅
         setTimeout(() => { draggedRef.current = false }, 120)
@@ -108,7 +121,8 @@ function ScrollTrack({ className, children, interactive, arrows, slideGap = 12 }
     <div className="sb-track-wrap">
       <div
         ref={ref}
-        className={className}
+        className={className + (interactive ? ' sb-drag-scroll' : '')}
+        style={style}
         onPointerDown={interactive ? onPointerDown : undefined}
         onDragStart={(e) => e.preventDefault()} // 이미지/링크의 네이티브 드래그 차단
         onClickCapture={(e) => {
@@ -138,6 +152,7 @@ function ScrollTrack({ className, children, interactive, arrows, slideGap = 12 }
 /* 캔버스 편집 모드 여부 — 컨테이너 클리핑을 풀고 경계를 점선으로 표시 (Figma의 clip 무시,
    Webflow/Framer의 편집 캔버스 ↔ 미리보기 토글 패턴) */
 const isEditView = (ctx) => ctx.mode === 'canvas' && ctx.canvasView !== 'preview'
+const isInteractionView = (ctx) => ctx.mode === 'player' || (ctx.mode === 'canvas' && ctx.canvasView === 'preview')
 
 /* 캔버스 편집 모드의 빈 컨테이너 드롭존 (미리보기·실행 화면에서는 렌더 안 함) */
 const EmptyDropZone = ({ ctx }) =>
@@ -179,7 +194,7 @@ export function kText(text, ctx, fieldKey) {
     return part
   })
 
-  // 캔버스 인라인 편집
+  // 캔버스 인라인 편집 (미리보기에서는 beginEdit을 공급하지 않아 읽기 전용)
   if (fieldKey && ctx && ctx.mode === 'canvas' && ctx.beginEdit) {
     const editingThis = ctx.editing && ctx.editing.itemId === ctx.itemId && ctx.editing.key === fieldKey
     if (editingThis) {
@@ -424,20 +439,49 @@ export const LIBRARY = {
     label: '설문 질문',
     stage: 'survey',
     icon: '❓',
-    hint: '선택지 카드형 질문. 옵션은 "메인|서브, 메인|서브" 형태',
+    hint: '선택지 배치 수·도형·가로 스크롤을 조절하는 질문',
     defaults: {
       question: '지금 피부에서 가장 신경 쓰이는 건?',
       options: '유분 무너짐|오후 T존, 들뜸·건조|각질 부각, 톤 안 맞음|경계 표시, 커버력 부족|잡티',
       multi: false,
+      maxPerRow: '4',
+      optionShape: 'card',
+      horizontalScroll: true,
     },
     fields: [
       { key: 'question', label: '질문 문구', kind: 'textarea' },
       { key: 'options', label: '선택지 (메인|서브, 쉼표 구분)', kind: 'textarea', list: true },
       { key: 'multi', label: '복수 선택 허용', kind: 'toggle' },
+      {
+        key: 'maxPerRow',
+        label: '한 줄에 보이는 최대 선택지',
+        kind: 'select',
+        defaultValue: '4',
+        options: ['1', '2', '3', '4', '5', '6'].map((value) => ({ value, label: `${value}개` })),
+      },
+      {
+        key: 'optionShape',
+        label: '선택지 도형',
+        kind: 'select',
+        defaultValue: 'card',
+        options: [
+          { value: 'card', label: '카드형' },
+          { value: 'pill', label: '알약형' },
+          { value: 'square', label: '정사각형' },
+          { value: 'circle', label: '원형' },
+        ],
+      },
+      { key: 'horizontalScroll', label: '가로 스크롤 사용', kind: 'toggle', defaultValue: true },
     ],
     render: (p, ctx) => {
       const opts = splitOptions(p.options)
       const isPlayer = ctx.mode === 'player'
+      const maxPerRow = Math.max(1, Math.min(6, Number(p.maxPerRow) || 4))
+      const shape = ['card', 'pill', 'square', 'circle'].includes(p.optionShape) ? p.optionShape : 'card'
+      const horizontalScroll = p.horizontalScroll !== false
+      const optionLayoutStyle = horizontalScroll
+        ? { gridAutoColumns: `calc(${100 / maxPerRow}% - ${(8 * (maxPerRow - 1)) / maxPerRow}px)` }
+        : { gridTemplateColumns: `repeat(${maxPerRow}, minmax(0, 1fr))` }
       const answer = isPlayer ? ctx.player.answers[ctx.itemId] : undefined
       const selectedSet = new Set(
         p.multi ? (Array.isArray(answer) ? answer : []) : answer != null ? [answer] : []
@@ -447,7 +491,14 @@ export const LIBRARY = {
         <div className="clean-question-list">
           <div>
             <label className="text-sm font-medium text-slate-400 mb-3 block">{kText(p.question, ctx, 'question')}</label>
-            <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 pt-2 -mt-2">
+            <ScrollTrack
+              interactive={horizontalScroll && isInteractionView(ctx)}
+              className={
+                'sb-survey-options' +
+                (horizontalScroll ? ' sb-survey-options--scroll sb-scroll-hide' : ' sb-survey-options--grid')
+              }
+              style={optionLayoutStyle}
+            >
               {opts.map((opt, i) => {
                 const selected = selectedSet.has(opt.main)
                 return (
@@ -455,7 +506,7 @@ export const LIBRARY = {
                     key={i}
                     type="button"
                     className={
-                      'flex-shrink-0 info-card border-2 border-slate-100 rounded-2xl transition-all bg-slate-50 hover:border-gmarket-blue p-3 text-center flex flex-col items-center justify-center gap-1 min-w-[5rem]' +
+                      `sb-survey-option sb-survey-option--${shape} info-card border-2 border-slate-100 transition-all bg-slate-50 hover:border-gmarket-blue text-center flex flex-col items-center justify-center gap-1` +
                       (selected ? ' active-card ring-4 ring-blue-100' : '')
                     }
                     onClick={() => {
@@ -474,7 +525,7 @@ export const LIBRARY = {
                   </button>
                 )
               })}
-            </div>
+            </ScrollTrack>
           </div>
         </div>
       )
@@ -946,7 +997,7 @@ export const LIBRARY = {
         <div className={'sb-hscroll' + (edit ? ' sb-container-edit' : '')}>
           {p.title ? <p className="sb-hscroll__title">{kText(p.title, ctx, 'title')}</p> : null}
           <ScrollTrack
-            interactive={ctx.mode === 'player'}
+            interactive={isInteractionView(ctx)}
             className={'sb-hscroll__track' + scrollCls(p.scrollbar) + (edit ? ' sb-hscroll__track--edit' : '')}
           >
             {kids.length > 0 ? (
@@ -991,7 +1042,7 @@ export const LIBRARY = {
     stage: 'common',
     category: 'layout',
     container: true,
-    flow: 'y',
+    flow: 'grid',
     icon: '🔲',
     hint: 'N열 그리드 레이아웃 — 다른 컴포넌트를 끌어다 안에 배치 (텍스트 카드 목록도 가능)',
     defaults: {
@@ -1073,7 +1124,7 @@ export const LIBRARY = {
           {p.title ? <p className="sb-hscroll__title">{kText(p.title, ctx, 'title')}</p> : null}
           {edit && slideCount > 1 && <p className="sb-edit-note">편집 모드 — 슬라이드를 모두 펼쳐 표시 중 (실사용은 한 장씩 스냅)</p>}
           <ScrollTrack
-            interactive={ctx.mode === 'player'}
+            interactive={isInteractionView(ctx)}
             arrows={!edit && !!p.arrows && slideCount > 1}
             className={'sb-carousel__track' + scrollCls(p.scrollbar) + (edit ? ' sb-carousel__track--edit' : '')}
           >
@@ -1185,7 +1236,9 @@ export const LIBRARY = {
       return (
         <div className={'sb-vscroll' + (edit ? ' sb-container-edit' : '')}>
           {p.title ? <p className="sb-hscroll__title">{kText(p.title, ctx, 'title')}</p> : null}
-          <div
+          <ScrollTrack
+            axis="y"
+            interactive={isInteractionView(ctx)}
             className={'sb-vscroll__list' + scrollCls(p.scrollbar) + (edit ? ' sb-vscroll__list--edit' : '')}
             style={edit ? { minHeight: 80 } : { height: panelH }}
           >
@@ -1221,7 +1274,7 @@ export const LIBRARY = {
                 </div>
               </div>
             ))}
-          </div>
+          </ScrollTrack>
         </div>
       )
     },
@@ -1271,12 +1324,12 @@ export function renderItem(item, ctx) {
     const kids = childrenOf(ctx.allItems, item.id).filter(
       (k) => !(ctx.mode === 'player' && k.hidden)
     )
-    renderCtx.children = kids.map((k) => ({
+    renderCtx.children = kids.map((k, index) => ({
       key: k.id,
       item: k, // 슬롯이 자식의 고유 크기(w/h)를 존중할 수 있도록 전달
       node:
         isEditView(ctx) && ctx.childPointerDown ? (
-          <ChildShell item={k} ctx={ctx}>{renderItem(k, ctx)}</ChildShell>
+          <ChildShell item={k} index={index} ctx={ctx}>{renderItem(k, ctx)}</ChildShell>
         ) : (
           renderItem(k, ctx)
         ),

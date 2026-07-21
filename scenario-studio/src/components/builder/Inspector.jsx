@@ -5,6 +5,7 @@ import { MIN_ITEM_W } from '../../lib/layout.js'
 
 /* 오른쪽 패널: 선택 컴포넌트 속성 편집 / 다중 선택 도구 */
 export default function Inspector({
+  disabled = false,
   stageKey,
   selected,
   selectedIds,
@@ -24,11 +25,12 @@ export default function Inspector({
 }) {
   /* 드래그 선택 → 플로팅 서식 툴바 상태 (훅은 조기 return보다 앞에) */
   const [sel, setSel] = React.useState(null) // { key, start, end, list }
+  const disabledAttrs = disabled ? { inert: '', 'aria-disabled': true } : {}
 
   /* 다중 선택: 정렬 도구 + 일괄 작업 */
   if (selectedIds.length > 1) {
     return (
-      <aside className="sb-inspector">
+      <aside className={'sb-inspector' + (disabled ? ' sb-builder-panel--disabled' : '')} {...disabledAttrs}>
         <div className="sb-inspector__empty">
           <p className="sb-panel-label">다중 선택</p>
           <strong className="sb-multi-count">{selectedIds.length}개</strong> 컴포넌트가 선택됐어요.<br />
@@ -54,7 +56,7 @@ export default function Inspector({
   /* 선택 없음 */
   if (!selected) {
     return (
-      <aside className="sb-inspector sb-inspector--idle">
+      <aside className={'sb-inspector sb-inspector--idle' + (disabled ? ' sb-builder-panel--disabled' : '')} {...disabledAttrs}>
         <div className="sb-inspector__empty">
           <p className="sb-panel-label">편집</p>
           캔버스에서 컴포넌트를 선택하면<br />플레이스홀더를 편집할 수 있어요.<br />
@@ -130,8 +132,10 @@ export default function Inspector({
       </div>
     ) : null
 
+  const fieldValue = (f) => selected.props[f.key] ?? f.defaultValue ?? ''
+
   return (
-    <aside className="sb-inspector">
+    <aside className={'sb-inspector' + (disabled ? ' sb-builder-panel--disabled' : '')} {...disabledAttrs}>
       <p className="sb-panel-label">
         {def?.icon} {def?.label}
         {selected.locked ? ' · 🔒 잠김' : ''}
@@ -145,24 +149,34 @@ export default function Inspector({
             <textarea
               rows={3}
               data-fkey={f.key}
-              value={selected.props[f.key] ?? ''}
+              value={fieldValue(f)}
               onChange={(e) => updateProps(selected.id, f.key, e.target.value)}
               onSelect={(e) => onFieldSelect(f.key, e.target, f.list)}
             />
+          ) : f.kind === 'select' ? (
+            <select
+              data-fkey={f.key}
+              value={fieldValue(f)}
+              onChange={(e) => updateProps(selected.id, f.key, e.target.value)}
+            >
+              {(f.options || []).map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
           ) : f.kind === 'toggle' ? (
             <button
               type="button"
-              className={'sb-toggle' + (selected.props[f.key] ? ' sb-toggle--on' : '')}
-              onClick={() => updateProps(selected.id, f.key, !selected.props[f.key])}
+              className={'sb-toggle' + (fieldValue(f) ? ' sb-toggle--on' : '')}
+              onClick={() => updateProps(selected.id, f.key, !fieldValue(f))}
             >
               <span className="sb-toggle__knob" />
-              {selected.props[f.key] ? '켜짐' : '꺼짐'}
+              {fieldValue(f) ? '켜짐' : '꺼짐'}
             </button>
           ) : (
             <input
               type="text"
               data-fkey={f.key}
-              value={selected.props[f.key] ?? ''}
+              value={fieldValue(f)}
               onChange={(e) => updateProps(selected.id, f.key, e.target.value)}
               onSelect={(e) => onFieldSelect(f.key, e.target, f.list)}
             />
@@ -173,10 +187,16 @@ export default function Inspector({
         ✍️ 문구를 드래그로 선택하면 서식 툴바가 떠요 — 볼드/폰트/크기/색, 그리고 점선 밑줄(설명 모달 연결).
       </p>
 
+      {def?.container && (
+        <p className="sb-profile-config__hint">
+          🗂️ 캔버스 위의 “편집 전용 전체 보기”에서 내부 컴포넌트를 검색·선택·정렬하고 숨김·잠금·복제·삭제할 수 있어요.
+        </p>
+      )}
+
       {selected.parentId && (
         <>
           <p className="sb-profile-config__hint">
-            📦 레이아웃 컴포넌트 안에 배치되어 있어요 — 크기는 아래 슬라이더로 그대로 유지되고, 순서는 드래그나 레이어 패널로 바꿔요.
+            📦 레이아웃 컴포넌트 안에 배치되어 있어요 — 이 컴포넌트를 선택해도 캔버스 위 전체 목록은 계속 유지돼요.
           </p>
           <div className="sb-inspector__actions">
             <button type="button" className="sb-btn" onClick={() => unnestItem(selected.id)}>

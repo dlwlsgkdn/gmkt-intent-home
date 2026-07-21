@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import { LIBRARY, libraryForStage } from '../../lib/registry.jsx'
 import { sortByPosition } from '../../lib/store.js'
 
@@ -9,6 +9,7 @@ const CATEGORIES = [
 ]
 
 export default function Palette({
+  disabled = false,
   stageKey,
   items,
   selectedIds,
@@ -19,9 +20,15 @@ export default function Palette({
   onToggleLock,
   onToggleHide,
   onUnnest,
+  onDropLayer,
 }) {
   const [tab, setTab] = useState('components')
   const [query, setQuery] = useState('')
+  const [layerDragId, setLayerDragId] = useState(null)
+  const [layerDrop, setLayerDrop] = useState(null) // { targetId, placement:'before'|'inside'|'after' }
+  const layerDragRef = useRef(null)
+  const layerDropRef = useRef(null)
+  const disabledAttrs = disabled ? { inert: '', 'aria-disabled': true } : {}
 
   const defs = libraryForStage(stageKey).filter((def) => {
     const q = query.trim().toLowerCase()
@@ -38,8 +45,63 @@ export default function Palette({
       .map((k) => ({ it: k, depth: 1 })),
   ])
 
+  const layerPlacementAt = (target, clientY, rect) => {
+    const source = items.find((it) => it.id === (layerDragRef.current || layerDragId))
+    if (!source || source.id === target.id) return null
+    const ratio = (clientY - rect.top) / Math.max(1, rect.height)
+    if (LIBRARY[target.type]?.container && !LIBRARY[source.type]?.container && ratio >= 0.25 && ratio <= 0.75) {
+      return 'inside'
+    }
+    if (target.parentId && !LIBRARY[source.type]?.container) return ratio < 0.5 ? 'before' : 'after'
+    if (!source.parentId && !target.parentId) return ratio < 0.5 ? 'before' : 'after'
+    return null
+  }
+
+  const startLayerDrag = (e, id) => {
+    const source = items.find((it) => it.id === id)
+    if (disabled || !source || source.locked || e.button !== 0) return
+    e.preventDefault()
+    e.stopPropagation()
+    const startX = e.clientX
+    const startY = e.clientY
+    let moved = false
+    layerDragRef.current = id
+    setLayerDragId(id)
+
+    const updateDrop = (next) => {
+      layerDropRef.current = next
+      setLayerDrop(next)
+    }
+    const move = (ev) => {
+      if (!moved && Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY) <= 4) return
+      moved = true
+      const row = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.sb-layer[data-layer-id]')
+      const target = row ? items.find((it) => it.id === row.dataset.layerId) : null
+      if (!target) {
+        updateDrop(null)
+        return
+      }
+      const placement = layerPlacementAt(target, ev.clientY, row.getBoundingClientRect())
+      updateDrop(placement ? { targetId: target.id, placement } : null)
+    }
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', up)
+      const drop = layerDropRef.current
+      layerDragRef.current = null
+      layerDropRef.current = null
+      setLayerDragId(null)
+      setLayerDrop(null)
+      if (moved && drop) onDropLayer(id, drop.targetId, drop.placement)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
+  }
+
   return (
-    <aside className="sb-palette">
+    <aside className={'sb-palette' + (disabled ? ' sb-builder-panel--disabled' : '')} {...disabledAttrs}>
       <div className="sb-palette-tabs">
         <button
           type="button"
@@ -79,8 +141,8 @@ export default function Palette({
                     type="button"
                     className={'sb-palette-card' + (def.container ? ' sb-palette-card--layout' : '')}
                     onClick={() => onAdd(def.type)}
-                    draggable
-                    title={def.container ? '클릭해 추가 — 다른 컴포넌트를 이 위로 끌어오면 안에 배치돼요' : '클릭해 추가하거나, 캔버스(또는 레이아웃 컴포넌트 위)로 끌어다 놓으세요'}
+                    draggable={!disabled}
+                    title={def.container ? '클릭해 추가 — 다른 컴포넌트를 이 위로 끌어오면 안에 배치돼요' : '레이아웃을 선택한 뒤 클릭하면 그 안에 추가돼요. 원하는 위치로 직접 끌어도 됩니다.'}
                     onDragStart={(e) => {
                       e.dataTransfer.setData('text/sb-type', def.type)
                       e.dataTransfer.effectAllowed = 'copy'
@@ -103,6 +165,8 @@ export default function Palette({
               <div><dt>⌘Z / ⇧⌘Z</dt><dd>실행 취소 / 다시 실행</dd></div>
               <div><dt>⇧+클릭</dt><dd>다중 선택 (함께 이동)</dd></div>
               <div><dt>빈 곳 드래그</dt><dd>범위로 다중 선택</dd></div>
+              <div><dt>레이아웃 선택+추가</dt><dd>선택한 레이아웃 안에 바로 삽입</dd></div>
+              <div><dt>레이어 ⠿ 드래그</dt><dd>부모·내부 순서 정밀 변경</dd></div>
               <div><dt>우클릭</dt><dd>복제·잠금·삭제 메뉴</dd></div>
               <div><dt>⌘A</dt><dd>전체 선택</dd></div>
               <div><dt>⌘C / ⌘X / ⌘V</dt><dd>복사 / 잘라내기 / 붙여넣기 (단계 간 가능)</dd></div>
@@ -117,6 +181,9 @@ export default function Palette({
         </>
       ) : (
         <div className="sb-layer-list">
+          {items.length > 0 && (
+            <p className="sb-layer-list__hint">⠿를 끌어 레이아웃 안에 넣거나 정확한 순서로 옮기세요.</p>
+          )}
           {items.length === 0 && <p className="sb-layer-list__empty">이 단계에 컴포넌트가 없어요.</p>}
           {layerRows.map(({ it, depth }, i, arr) => {
             const isChild = depth > 0
@@ -126,14 +193,21 @@ export default function Palette({
             return (
               <div
                 key={it.id}
+                data-layer-id={it.id}
                 className={
                   'sb-layer' +
                   (isChild ? ' sb-layer--child' : '') +
                   (selectedIds.includes(it.id) ? ' sb-layer--active' : '') +
-                  (it.hidden ? ' sb-layer--hidden' : '')
+                  (it.hidden ? ' sb-layer--hidden' : '') +
+                  (layerDrop?.targetId === it.id ? ` sb-layer--drop-${layerDrop.placement}` : '')
                 }
                 onClick={(e) => onSelect(it.id, e.shiftKey)}
               >
+                <span
+                  className={'sb-layer__drag' + (layerDragId === it.id ? ' sb-layer__drag--active' : '')}
+                  title={it.locked ? '잠금을 풀면 이동할 수 있어요' : '드래그해 순서·부모 변경'}
+                  onPointerDown={(e) => startLayerDrag(e, it.id)}
+                >⠿</span>
                 {isChild && <span className="sb-layer__branch" aria-hidden="true">↳</span>}
                 <span className="sb-layer__icon">{LIBRARY[it.type]?.icon}</span>
                 <span className="sb-layer__name">
