@@ -64,6 +64,7 @@ export default function Builder({ api, scenario }) {
   const pushReadyRef = useRef(new Set()) // 지속시간을 채워 밀림이 허용된 아이템
   const pushWakeRef = useRef(null) // 지속시간 경과 시점에 재렌더를 깨우는 타이머
   const dragBlockedRef = useRef(new Set()) // 밀 자리가 없어 제자리에 남은 아이템 (드롭 시 원위치 복귀)
+  const previewLayoutRef = useRef(null) // 마지막 미리보기 레이아웃 { id: {x, y} } — 드롭 커밋이 그대로 반영
   const dragStartRef = useRef(null) // 그룹 드래그 시작 시점의 위치들
   const sizeDraftRef = useRef(null)
   const heightsRef = useRef({})
@@ -946,6 +947,9 @@ export default function Builder({ api, scenario }) {
     const pushedIds = new Set(pushReadyRef.current)
     // 밀 자리가 없어 제자리에 남은 아이템이 있으면 이 드롭은 무효 — 드래그를 원위치로
     const blockedDrop = dragBlockedRef.current.size > 0
+    // 마지막 미리보기 레이아웃 — 드롭 커밋이 미리보기와 동일한 배치가 되도록 기준으로 사용
+    const previewPos = previewLayoutRef.current
+    previewLayoutRef.current = null
     dragBlockedRef.current = new Set()
     dragPosRef.current = null
     dragStartRef.current = null
@@ -1001,7 +1005,13 @@ export default function Builder({ api, scenario }) {
               }
             }
           }
-          const movedList = prev.map((it) => (pos.positions[it.id] ? { ...it, ...pos.positions[it.id] } : it))
+          // 드래그 아이템은 최종 드롭 위치, 나머지 최상위 아이템은 미리보기에서 밀린 위치를
+          // 기준으로 커밋 — 드롭 결과가 미리보기 화면과 동일해진다
+          const movedList = prev.map((it) => {
+            if (pos.positions[it.id]) return { ...it, ...pos.positions[it.id] }
+            if (!it.parentId && previewPos && previewPos[it.id]) return { ...it, ...previewPos[it.id] }
+            return it
+          })
           return settle(movedList, draggedIds)
         })
       }
@@ -1383,10 +1393,27 @@ export default function Builder({ api, scenario }) {
         top, draggedIds, pushReadyRef.current, heightsRef.current
       )
       dragBlockedRef.current = blockedIds
-      if (!compactOn) return resolvedTop
-      // 밀린 아이템만 컴팩트에 참여 — 빈자리가 있으면 위로 채워 들어간다
-      const pinnedIds = top.filter((it) => !displacedIds.has(it.id)).map((it) => it.id)
-      return compactItems(resolvedTop, heightsRef.current, compactOpts(pinnedIds))
+      if (!compactOn) {
+        previewLayoutRef.current = Object.fromEntries(
+          resolvedTop.filter((it) => !draggedIds.includes(it.id)).map((it) => [it.id, { x: it.x, y: it.y }])
+        )
+        return resolvedTop
+      }
+      // 게이트가 열려 실제 밀림이 시작된 뒤에는 나머지 아이템도 함께 재배치(연쇄 스택 이동) —
+      // 멀리 있는 아이템이 중간 아이템을 건너뛰어 빈자리로 순간이동하지 않고 한 칸씩 밀린다.
+      // 아무도 밀리지 않았다면 전부 제자리 고정(정적 캔버스 유지)
+      const pinnedIds =
+        displacedIds.size > 0
+          ? top
+              .filter((it) => draggedIds.includes(it.id) || blockedIds.has(it.id))
+              .map((it) => it.id)
+          : top.map((it) => it.id)
+      const finalTop = compactItems(resolvedTop, heightsRef.current, compactOpts(pinnedIds))
+      // 드롭 시 미리보기 그대로 커밋되도록 마지막 레이아웃을 기억 (드래그 아이템 제외)
+      previewLayoutRef.current = Object.fromEntries(
+        finalTop.filter((it) => !draggedIds.includes(it.id)).map((it) => [it.id, { x: it.x, y: it.y }])
+      )
+      return finalTop
     })
   }
 
