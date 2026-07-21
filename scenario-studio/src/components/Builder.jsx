@@ -24,6 +24,9 @@ const SNAP = 6
 const DRAG_SOFT_RATIO = 0.45
 const DRAG_PUSH_DELAY_MS = 250
 const DRAG_PREVIEW_MS = 250
+/* 히스테리시스: 한 번 밀린 아이템은 겹침이 이 비율 아래로 떨어질 때까지 밀림을 유지한다.
+   (밀어낸 뒤 빈자리로 조금만 움직여도 되돌아오는 떨림 방지 — 진입 45%, 유지 15%) */
+const PUSH_EXIT_RATIO = 0.15
 /* 컨테이너 삽입 ↔ 회피 구역 분리 (트리뷰의 drop-into/drop-between 패턴):
    컨테이너 세로 중앙부 = 삽입 존(포인터가 있으면 "안에 배치" + 밀림 보호),
    상/하 가장자리 NEST_EDGE_ZONE 밴드 = 밀어내기 존(깊은 겹침 지속 시 컨테이너가 비켜남) */
@@ -892,7 +895,9 @@ export default function Builder({ api, scenario }) {
     setGuides(activeGuides)
     // 컨테이너 위에 있으면 "안에 배치" 드롭 대상 하이라이트 + 삽입 위치 가이드 라인
     const probe = pointer || { x: nx + w / 2, y: ny + hh / 2 }
-    const hover = !LIBRARY[it?.type]?.container ? containerAt(probe.x, probe.y, id) : null
+    const hoverRaw = !LIBRARY[it?.type]?.container ? containerAt(probe.x, probe.y, id) : null
+    // 밀려나 있는 컨테이너는 삽입 대상에서 제외 — 비워진 원래 자리는 순수한 빈자리로 취급
+    const hover = hoverRaw && !pushReadyRef.current.has(hoverRaw.id) ? hoverRaw : null
     setDropTargetId(hover ? hover.id : null)
     setInsertHint(hover ? insertHintAt(hover, probe.x, probe.y) : null)
 
@@ -914,9 +919,15 @@ export default function Builder({ api, scenario }) {
         probe.y >= o.y + band && probe.y <= o.y + oh - band
       const ox = Math.min(nx + w, o.x + o.w) - Math.max(nx, o.x)
       const oy = Math.min(ny + hh, o.y + oh) - Math.max(ny, o.y)
+      const area = ox > 0 && oy > 0 ? ox * oy : 0
+      const minArea = Math.min(w * hh, o.w * oh)
       const ratio = isCont ? CONTAINER_SOFT_RATIO : DRAG_SOFT_RATIO
-      const deep = ox > 0 && oy > 0 && ox * oy >= ratio * Math.min(w * hh, o.w * oh)
-      if (deep && !guarded) {
+      // 히스테리시스: 이미 밀린 아이템은 (원래 자리를 차지하고 있는 동안) 삽입 존 보호를
+      // 무시하고 낮은 유지 임계로 밀림을 지속 — 빈자리로 파고들어도 되돌아오지 않는다
+      const holds = pushReadyRef.current.has(o.id)
+        ? area >= PUSH_EXIT_RATIO * minArea
+        : area >= ratio * minArea && !guarded
+      if (holds) {
         if (!gate[o.id]) gate[o.id] = now + (isCont ? CONTAINER_PUSH_DELAY_MS : DRAG_PUSH_DELAY_MS)
       } else {
         delete gate[o.id]
@@ -930,6 +941,8 @@ export default function Builder({ api, scenario }) {
 
   const onDragEnd = (id) => {
     const pos = dragPosRef.current
+    // 드롭 시점에 밀려나 있던 컨테이너 — 커밋에서도 삽입 대상에서 제외 (빈자리 배치 유지)
+    const pushedIds = new Set(pushReadyRef.current)
     dragPosRef.current = null
     dragStartRef.current = null
     if (dragLayoutTimerRef.current) {
@@ -964,6 +977,7 @@ export default function Builder({ api, scenario }) {
               // 삽입 판정은 드래그 중 하이라이트와 동일하게 삽입 존(중앙부)만 (containerAt과 동일 기준)
               const target = prev.find((it) => {
                 if (it.id === dId || it.parentId || !LIBRARY[it.type]?.container) return false
+                if (pushedIds.has(it.id)) return false // 밀려나 있던 컨테이너의 빈자리는 배치로
                 const hh = heightOf(it)
                 const band = Math.min(NEST_EDGE_ZONE, hh / 4)
                 return cx >= it.x && cx <= it.x + it.w && cy >= it.y + band && cy <= it.y + hh - band
