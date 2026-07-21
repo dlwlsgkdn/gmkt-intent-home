@@ -7,17 +7,19 @@ export const GAP = 14
 export const MIN_ITEM_W = 160
 
 /* 공용: box가 placed 중 하나와 겹치면 그 아이템을 반환.
-   soft = { ids, ratio }를 주면 ids에 속한 박스(드래그 중인 아이템)와는
+   soft = { ids, ratio, ratioOf? }를 주면 ids에 속한 박스(드래그 중인 아이템)와는
    겹침 면적이 작은 쪽 면적의 ratio 이상일 때만 충돌로 판정한다 —
-   드래그 미리보기에서 스치기만 해도 밀려나는 과민 반응을 둔화시키는 용도 */
+   드래그 미리보기에서 스치기만 해도 밀려나는 과민 반응을 둔화시키는 용도.
+   ratioOf(box)로 밀리는 대상별 임계값을 다르게 줄 수 있다 (예: 컨테이너는 더 둔감) */
 const hitOf = (placed, box, h, soft) =>
   placed.find((p) => {
     const ox = Math.min(box.x + box.w, p.x + p.w) - Math.max(box.x, p.x)
     const oy = Math.min(box.y + h(box), p.y + h(p)) - Math.max(box.y, p.y)
     if (ox <= 0 || oy <= 0) return false
     if (soft && soft.ids.has(p.id)) {
+      const ratio = soft.ratioOf ? soft.ratioOf(box) : (soft.ratio || 0.35)
       const minArea = Math.min(box.w * h(box), p.w * h(p))
-      return ox * oy >= (soft.ratio || 0.35) * minArea
+      return ox * oy >= ratio * minArea
     }
     return true
   })
