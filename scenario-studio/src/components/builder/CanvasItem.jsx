@@ -36,8 +36,8 @@ export default function CanvasItem({
   useEffect(() => {
     const el = ref.current
     if (!el) return
+    const content = el.querySelector(':scope > .sb-canvas-item__content')
     const report = () => {
-      const content = el.querySelector(':scope > .sb-canvas-item__content')
       const next = revealContainerContents
         ? Math.max(el.offsetHeight, (content?.scrollHeight || 0) + 20)
         : el.offsetHeight
