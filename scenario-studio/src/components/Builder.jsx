@@ -22,13 +22,14 @@ const SNAP = 6
    재배치 커밋은 드롭 시점에 정확하게 수행.
    밀려나는 미리보기 재배치는 250ms 간격으로만 갱신 (드래그 아이템 자체는 즉각 반응) */
 const DRAG_SOFT_RATIO = 0.45
-const DRAG_PUSH_DELAY_MS = 400
+const DRAG_PUSH_DELAY_MS = 250
 const DRAG_PREVIEW_MS = 250
-/* 컨테이너 삽입 공존: 삽입 가능한 드래그에서 포인터가 컨테이너(+마진) 위면
-   삽입 의도로 보고 밀림에서 보호. 마진은 경계 떨림 방지용 최소한 */
-const NEST_GUARD_MARGIN = 8
-const CONTAINER_SOFT_RATIO = 0.75
-const CONTAINER_PUSH_DELAY_MS = 700
+/* 컨테이너 삽입 ↔ 회피 구역 분리 (트리뷰의 drop-into/drop-between 패턴):
+   컨테이너 세로 중앙부 = 삽입 존(포인터가 있으면 "안에 배치" + 밀림 보호),
+   상/하 가장자리 NEST_EDGE_ZONE 밴드 = 밀어내기 존(깊은 겹침 지속 시 컨테이너가 비켜남) */
+const NEST_EDGE_ZONE = 18
+const CONTAINER_SOFT_RATIO = 0.45
+const CONTAINER_PUSH_DELAY_MS = 400
 
 /* 빌더에서 편집 가능한 단계: 공통 탐색(계정 소유, 자동 반영) + 시나리오 소유 설문/계획 */
 const BUILD_STAGES = [
@@ -78,12 +79,15 @@ export default function Builder({ api, scenario }) {
     if (!previewMode && LIBRARY[it.type]?.container) return Math.max(it.h || 0, measured || 0, 80)
     return it.h || measured || 80
   }
-  /* (x, y) 캔버스 좌표를 덮는 컨테이너 아이템 */
+  /* (x, y) 캔버스 좌표가 컨테이너의 '삽입 존'(세로 가장자리 밴드를 뺀 중앙부)에 있으면 반환.
+     상/하 NEST_EDGE_ZONE 밴드는 겹침 회피(밀어내기) 존으로 남겨둔다 */
   const containerAt = (x, y, excludeId) =>
     topItems.find((it) => {
       if (it.id === excludeId) return false
       if (!LIBRARY[it.type]?.container) return false
-      return x >= it.x && x <= it.x + it.w && y >= it.y && y <= it.y + heightOf(it)
+      const hh = heightOf(it)
+      const band = Math.min(NEST_EDGE_ZONE, hh / 4)
+      return x >= it.x && x <= it.x + it.w && y >= it.y + band && y <= it.y + hh - band
     })
   const nextSlot = (list, parentId) =>
     list.filter((it) => it.parentId === parentId).reduce((m, it) => Math.max(m, it.slot || 0), 0) + 1
@@ -901,11 +905,13 @@ export default function Builder({ api, scenario }) {
       if (o.id === id) return
       const isCont = !!LIBRARY[o.type]?.container
       const oh = heightOf(o)
-      // 삽입 가능한 드래그에서 포인터가 컨테이너(+마진) 위면 삽입 의도 — 밀림에서 보호
+      // 삽입 가능한 드래그에서 포인터가 컨테이너 삽입 존(중앙부)이면 삽입 의도 — 밀림에서 보호.
+      // 상/하 가장자리 밴드는 밀어내기 존이라 보호하지 않는다 (containerAt과 동일 구역 기준)
+      const band = Math.min(NEST_EDGE_ZONE, oh / 4)
       const guarded =
         isCont && nestable &&
-        probe.x >= o.x - NEST_GUARD_MARGIN && probe.x <= o.x + o.w + NEST_GUARD_MARGIN &&
-        probe.y >= o.y - NEST_GUARD_MARGIN && probe.y <= o.y + oh + NEST_GUARD_MARGIN
+        probe.x >= o.x && probe.x <= o.x + o.w &&
+        probe.y >= o.y + band && probe.y <= o.y + oh - band
       const ox = Math.min(nx + w, o.x + o.w) - Math.max(nx, o.x)
       const oy = Math.min(ny + hh, o.y + oh) - Math.max(ny, o.y)
       const ratio = isCont ? CONTAINER_SOFT_RATIO : DRAG_SOFT_RATIO
@@ -955,10 +961,12 @@ export default function Builder({ api, scenario }) {
               // 드롭 판정: 포인터 위치 우선, 없으면 아이템 중심
               const cx = pos.pointer ? pos.pointer.x : p2.x + dragged.w / 2
               const cy = pos.pointer ? pos.pointer.y : p2.y + heightOf(dragged) / 2
+              // 삽입 판정은 드래그 중 하이라이트와 동일하게 삽입 존(중앙부)만 (containerAt과 동일 기준)
               const target = prev.find((it) => {
                 if (it.id === dId || it.parentId || !LIBRARY[it.type]?.container) return false
                 const hh = heightOf(it)
-                return cx >= it.x && cx <= it.x + it.w && cy >= it.y && cy <= it.y + hh
+                const band = Math.min(NEST_EDGE_ZONE, hh / 4)
+                return cx >= it.x && cx <= it.x + it.w && cy >= it.y + band && cy <= it.y + hh - band
               })
               if (target) {
                 const idx = slotIndexAt(target.id, target.type, cx, cy)
