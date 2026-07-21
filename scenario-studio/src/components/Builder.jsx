@@ -20,10 +20,10 @@ const SNAP = 6
 const DRAG_SOFT_RATIO = 0.35
 const DRAG_PREVIEW_MS = 150
 /* 컨테이너 겹침 회피 ↔ 삽입 공존 임계점:
-   포인터가 가장자리에서 NEST_INSET 이상 안쪽이면 "안에 배치" 모드(그 컨테이너만 핀 고정),
-   아니면 컨테이너도 일반 아이템처럼 밀리되 CONTAINER_SOFT_RATIO 이상 겹칠 때만
-   (일반 35%보다 높아 접근 중에 드롭존이 먼저 도망가지 않는다) */
-const NEST_INSET = 12
+   포인터가 컨테이너 주변 NEST_GUARD_MARGIN 안에 있으면 삽입 접근으로 보고 밀림에서 보호(핀 고정).
+   포인터가 그 밖일 때만 컨테이너도 밀리되 CONTAINER_SOFT_RATIO 이상 깊게 겹칠 때만
+   (일반 35%보다 높아 스치는 정도로는 반응하지 않는다) */
+const NEST_GUARD_MARGIN = 48
 const CONTAINER_SOFT_RATIO = 0.6
 
 /* 빌더에서 편집 가능한 단계: 공통 탐색(계정 소유, 자동 반영) + 시나리오 소유 설문/계획 */
@@ -71,16 +71,12 @@ export default function Builder({ api, scenario }) {
     if (!previewMode && LIBRARY[it.type]?.container) return Math.max(it.h || 0, measured || 0, 80)
     return it.h || measured || 80
   }
-  /* (x, y) 캔버스 좌표를 덮는 컨테이너 아이템.
-     inset을 주면 가장자리에서 그만큼 안쪽까지 들어와야 매칭 — 삽입 의도 판정용
-     (작은 컨테이너는 inset이 과해지지 않게 크기의 1/4로 제한) */
-  const containerAt = (x, y, excludeId, inset = 0) =>
+  /* (x, y) 캔버스 좌표를 덮는 컨테이너 아이템 */
+  const containerAt = (x, y, excludeId) =>
     topItems.find((it) => {
       if (it.id === excludeId) return false
       if (!LIBRARY[it.type]?.container) return false
-      const hh = heightOf(it)
-      const ix = Math.min(inset, it.w / 4, hh / 4)
-      return x >= it.x + ix && x <= it.x + it.w - ix && y >= it.y + ix && y <= it.y + hh - ix
+      return x >= it.x && x <= it.x + it.w && y >= it.y && y <= it.y + heightOf(it)
     })
   const nextSlot = (list, parentId) =>
     list.filter((it) => it.parentId === parentId).reduce((m, it) => Math.max(m, it.slot || 0), 0) + 1
@@ -862,7 +858,7 @@ export default function Builder({ api, scenario }) {
     setGuides(activeGuides)
     // 컨테이너 위에 있으면 "안에 배치" 드롭 대상 하이라이트 + 삽입 위치 가이드 라인
     const probe = pointer || { x: nx + w / 2, y: ny + hh / 2 }
-    const hover = !LIBRARY[it?.type]?.container ? containerAt(probe.x, probe.y, id, NEST_INSET) : null
+    const hover = !LIBRARY[it?.type]?.container ? containerAt(probe.x, probe.y, id) : null
     setDropTargetId(hover ? hover.id : null)
     setInsertHint(hover ? insertHintAt(hover, probe.x, probe.y) : null)
     const pos = { id, positions: { [id]: { x: nx, y: ny } }, pointer: probe }
@@ -896,12 +892,10 @@ export default function Builder({ api, scenario }) {
               // 드롭 판정: 포인터 위치 우선, 없으면 아이템 중심
               const cx = pos.pointer ? pos.pointer.x : p2.x + dragged.w / 2
               const cy = pos.pointer ? pos.pointer.y : p2.y + heightOf(dragged) / 2
-              // 삽입 판정은 드래그 중 하이라이트와 동일하게 가장자리 인셋 안쪽만 (containerAt과 동일 기준)
               const target = prev.find((it) => {
                 if (it.id === dId || it.parentId || !LIBRARY[it.type]?.container) return false
                 const hh = heightOf(it)
-                const ix = Math.min(NEST_INSET, it.w / 4, hh / 4)
-                return cx >= it.x + ix && cx <= it.x + it.w - ix && cy >= it.y + ix && cy <= it.y + hh - ix
+                return cx >= it.x && cx <= it.x + it.w && cy >= it.y && cy <= it.y + hh
               })
               if (target) {
                 const idx = slotIndexAt(target.id, target.type, cx, cy)
@@ -1295,10 +1289,28 @@ export default function Builder({ api, scenario }) {
     displayItems = withTopOnly(moved, (top) => {
       const dragged = draggedIds.length === 1 ? items.find((it) => it.id === draggedIds[0]) : null
       const canNest = dragged && !LIBRARY[dragged.type]?.container
-      // 포인터가 가리키는 "안에 배치" 대상 컨테이너만 고정 드롭존으로 취급한다.
-      // 나머지 컨테이너는 일반 아이템처럼 겹침 회피에 참여 (CONTAINER_SOFT_RATIO 임계)
+      // 포인터가 주변 NEST_GUARD_MARGIN 안에 있는 컨테이너는 삽입 접근 중으로 보고
+      // 밀림에서 보호한다 — 포인터가 도착하기 전에 드롭존이 도망가지 않도록.
+      // 포인터가 멀리 있는 컨테이너만 겹침 회피에 참여 (CONTAINER_SOFT_RATIO 임계)
+      const pointer = dragPos.pointer
       const pinnedIds =
-        canNest && dropTargetId ? [...draggedIds, dropTargetId] : draggedIds
+        canNest && pointer
+          ? [
+              ...draggedIds,
+              ...top
+                .filter((it) => {
+                  if (!LIBRARY[it.type]?.container) return false
+                  const hh = heightOf(it)
+                  return (
+                    pointer.x >= it.x - NEST_GUARD_MARGIN &&
+                    pointer.x <= it.x + it.w + NEST_GUARD_MARGIN &&
+                    pointer.y >= it.y - NEST_GUARD_MARGIN &&
+                    pointer.y <= it.y + hh + NEST_GUARD_MARGIN
+                  )
+                })
+                .map((it) => it.id),
+            ]
+          : draggedIds
       const resolved = resolveCollision(top, pinnedIds, heightsRef.current, soft)
       return compactOn
         ? compactItems(resolved, heightsRef.current, { ...compactOpts(pinnedIds), soft })
