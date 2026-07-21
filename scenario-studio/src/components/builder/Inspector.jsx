@@ -7,6 +7,7 @@ import { MIN_ITEM_W } from '../../lib/layout.js'
 export default function Inspector({
   disabled = false,
   stageKey,
+  containerPanel = null,
   selected,
   selectedIds,
   itemW,
@@ -187,16 +188,12 @@ export default function Inspector({
         ✍️ 문구를 드래그로 선택하면 서식 툴바가 떠요 — 볼드/폰트/크기/색, 그리고 점선 밑줄(설명 모달 연결).
       </p>
 
-      {def?.container && (
-        <p className="sb-profile-config__hint">
-          🗂️ 캔버스 위의 “편집 전용 전체 보기”에서 내부 컴포넌트를 검색·선택·정렬하고 숨김·잠금·복제·삭제할 수 있어요.
-        </p>
-      )}
+      {containerPanel}
 
       {selected.parentId && (
         <>
           <p className="sb-profile-config__hint">
-            📦 레이아웃 컴포넌트 안에 배치되어 있어요 — 이 컴포넌트를 선택해도 캔버스 위 전체 목록은 계속 유지돼요.
+            📦 레이아웃 컴포넌트 안에 배치되어 있어요 — 위 목록에서 내부 컴포넌트를 검색·선택·정렬할 수 있어요.
           </p>
           <div className="sb-inspector__actions">
             <button type="button" className="sb-btn" onClick={() => unnestItem(selected.id)}>

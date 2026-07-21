@@ -1403,14 +1403,11 @@
 
 /* 선택한 컨테이너의 전체 자식 목록 — 캔버스 크기/클리핑과 독립된 편집 전용 Navigator */
 .sb-container-contents {
-  position: sticky;
-  top: 0;
-  z-index: 70;
   width: 100%;
+  margin-bottom: 14px;
   border: 1px solid rgba(95, 116, 101, 0.28);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 18px 38px -28px rgba(15, 23, 42, 0.45);
+  border-radius: 14px;
+  background: #fff;
   overflow: hidden;
 }
 .sb-container-contents__head {
@@ -1471,9 +1468,10 @@
 }
 .sb-container-entry {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 5px;
-  min-width: 620px;
+  gap: 0 5px;
+  min-width: 0;
   border: 1px solid var(--sb-line);
   border-radius: 11px;
   background: #fff;
@@ -1491,8 +1489,8 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
-  flex: 1;
-  padding: 7px 8px;
+  flex: 1 1 100%;
+  padding: 7px 8px 4px;
   text-align: left;
 }
 .sb-container-entry__index {
@@ -1502,7 +1500,13 @@
 }
 .sb-container-entry__icon { flex: 0 0 auto; font-size: 14px; }
 .sb-container-entry__text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
-.sb-container-entry__text strong { color: var(--sb-ink); font-size: 11px; }
+.sb-container-entry__text strong {
+  color: var(--sb-ink);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .sb-container-entry__text small {
   color: #94a3b8;
   font-size: 9.5px;
@@ -1511,7 +1515,7 @@
   text-overflow: ellipsis;
 }
 .sb-container-entry__size { flex: 0 0 auto; color: #94a3b8; font: 600 9px/1 ui-monospace, monospace; }
-.sb-container-entry__actions { display: flex; gap: 2px; padding-right: 6px; }
+.sb-container-entry__actions { display: flex; gap: 2px; margin-left: auto; padding: 0 6px 5px 8px; }
 .sb-container-entry__actions button {
   width: 24px;
   height: 24px;

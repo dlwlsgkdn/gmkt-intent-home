@@ -1567,20 +1567,6 @@ export default function Builder({ api, scenario }) {
         {/* 캔버스 */}
         <main className="sb-canvas-wrap" onPointerDown={(e) => { if (!previewMode && e.target === e.currentTarget) setSelectedIds([]) }}>
           <div className="sb-canvas-col" style={{ width: canvasW * zoom }}>
-            {!previewMode && managedContainer && (
-              <ContainerContents
-                container={managedContainer}
-                children={managedChildren}
-                selectedId={selectedId}
-                onSelect={selectManagedItem}
-                onSelectContainer={() => setSelectedIds([managedContainer.id])}
-                onMove={moveLayer}
-                onUpdate={updateItem}
-                onDuplicate={duplicateItem}
-                onRemove={removeItem}
-                onUnnest={unnestItem}
-              />
-            )}
             <div className="sb-canvas-scale" style={{ width: canvasW * zoom, height: canvasHeight * zoom }}>
               <div
                 ref={canvasRef}
@@ -1683,6 +1669,22 @@ export default function Builder({ api, scenario }) {
         <Inspector
           disabled={previewMode}
           stageKey={stageKey}
+          containerPanel={
+            !previewMode && managedContainer ? (
+              <ContainerContents
+                container={managedContainer}
+                children={managedChildren}
+                selectedId={selectedId}
+                onSelect={selectManagedItem}
+                onSelectContainer={() => setSelectedIds([managedContainer.id])}
+                onMove={moveLayer}
+                onUpdate={updateItem}
+                onDuplicate={duplicateItem}
+                onRemove={removeItem}
+                onUnnest={unnestItem}
+              />
+            ) : null
+          }
           selected={selected}
           selectedIds={selectedIds}
           itemW={itemW}
