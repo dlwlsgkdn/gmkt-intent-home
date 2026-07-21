@@ -1005,6 +1005,26 @@ export default function Builder({ api, scenario }) {
               }
             }
           }
+          // 회피가 발동하지 않은 겹침 상태로는 배치 불가 — 커밋하지 않고 원위치 복귀.
+          // (회피로 밀린 아이템은 미리보기 위치previewPos 기준이라 겹침이 아님)
+          const overlapped = prev.some((it) => {
+            if (it.parentId || pos.positions[it.id]) return false
+            const pp = (previewPos && previewPos[it.id]) || it
+            const hh = heightOf(it)
+            return draggedIds.some((dId) => {
+              const d = prev.find((x) => x.id === dId)
+              if (!d) return false
+              const dp = pos.positions[dId]
+              return (
+                dp.x < pp.x + it.w && dp.x + d.w > pp.x &&
+                dp.y < pp.y + hh && dp.y + heightOf(d) > pp.y
+              )
+            })
+          })
+          if (overlapped) {
+            api.showToast('겹친 채로는 배치할 수 없어 원래 위치로 되돌렸어요.')
+            return prev
+          }
           // 드래그 아이템은 최종 드롭 위치, 나머지 최상위 아이템은 미리보기에서 밀린 위치를
           // 기준으로 커밋 — 드롭 결과가 미리보기 화면과 동일해진다
           const movedList = prev.map((it) => {
