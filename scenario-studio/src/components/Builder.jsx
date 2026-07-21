@@ -3,7 +3,7 @@ import { STAGES, DEVICE_PRESETS, CHIP_COLORS, createItem, visibleProfileItems } 
 import { LIBRARY } from '../lib/registry.jsx'
 import {
   PAD, GAP, MIN_ITEM_W,
-  resolveCollision, layoutCompactUp, alignItems, compactItems, COMPACT_TYPES, LAYOUT_MODES,
+  resolveCollision, previewResolve, layoutCompactUp, alignItems, compactItems, COMPACT_TYPES, LAYOUT_MODES,
 } from '../lib/layout.js'
 import { buildShareUrl } from '../lib/share.js'
 import Dropdown from './ui/Dropdown.jsx'
@@ -63,6 +63,7 @@ export default function Builder({ api, scenario }) {
   const pushGateRef = useRef({}) // { 아이템id: 밀림이 허용되는 시각(deadline) }
   const pushReadyRef = useRef(new Set()) // 지속시간을 채워 밀림이 허용된 아이템
   const pushWakeRef = useRef(null) // 지속시간 경과 시점에 재렌더를 깨우는 타이머
+  const dragBlockedRef = useRef(new Set()) // 밀 자리가 없어 제자리에 남은 아이템 (드롭 시 원위치 복귀)
   const dragStartRef = useRef(null) // 그룹 드래그 시작 시점의 위치들
   const sizeDraftRef = useRef(null)
   const heightsRef = useRef({})
@@ -943,6 +944,9 @@ export default function Builder({ api, scenario }) {
     const pos = dragPosRef.current
     // 드롭 시점에 밀려나 있던 컨테이너 — 커밋에서도 삽입 대상에서 제외 (빈자리 배치 유지)
     const pushedIds = new Set(pushReadyRef.current)
+    // 밀 자리가 없어 제자리에 남은 아이템이 있으면 이 드롭은 무효 — 드래그를 원위치로
+    const blockedDrop = dragBlockedRef.current.size > 0
+    dragBlockedRef.current = new Set()
     dragPosRef.current = null
     dragStartRef.current = null
     if (dragLayoutTimerRef.current) {
@@ -962,6 +966,12 @@ export default function Builder({ api, scenario }) {
     setInsertHint(null)
     // 진행 중인 React 렌더와 커밋이 겹치지 않도록 다음 틱으로 미룬다
     setTimeout(() => {
+      if (pos && pos.id === id && blockedDrop) {
+        // 커밋하지 않고 미리보기만 해제 → 드래그 아이템이 원래 자리로 돌아간다
+        api.showToast('밀어낼 자리가 없어 원래 위치로 되돌렸어요.')
+        setDragPos(null)
+        return
+      }
       if (pos && pos.id === id) {
         setItems((prev) => {
           const draggedIds = Object.keys(pos.positions)
@@ -1366,18 +1376,17 @@ export default function Builder({ api, scenario }) {
       layoutPos.positions[it.id] ? { ...it, ...layoutPos.positions[it.id] } : it
     )
     const draggedIds = Object.keys(dragPos.positions)
-    const soft = {
-      ids: new Set(draggedIds),
-      // 컨테이너는 삽입 여지를 위해 더 둔감하게(75%), 일반 아이템은 45%
-      ratioOf: (box) => (LIBRARY[box.type]?.container ? CONTAINER_SOFT_RATIO : DRAG_SOFT_RATIO),
-    }
     displayItems = withTopOnly(moved, (top) => {
-      const pushable = pushReadyRef.current
-      const pinnedIds = top.filter((it) => !pushable.has(it.id)).map((it) => it.id)
-      const resolved = resolveCollision(top, pinnedIds, heightsRef.current, soft)
-      return compactOn
-        ? compactItems(resolved, heightsRef.current, { ...compactOpts(pinnedIds), soft })
-        : resolved
+      // 게이트 통과 아이템만 드래그 박스에서 밀리고, 밀린 아이템이 덮친 아이템은 연쇄로 밀림.
+      // 잠긴 아이템에 막혀 자리가 없는 아이템은 제자리 유지 → 드롭 시 드래그를 원위치 복귀
+      const { items: resolvedTop, displacedIds, blockedIds } = previewResolve(
+        top, draggedIds, pushReadyRef.current, heightsRef.current
+      )
+      dragBlockedRef.current = blockedIds
+      if (!compactOn) return resolvedTop
+      // 밀린 아이템만 컴팩트에 참여 — 빈자리가 있으면 위로 채워 들어간다
+      const pinnedIds = top.filter((it) => !displacedIds.has(it.id)).map((it) => it.id)
+      return compactItems(resolvedTop, heightsRef.current, compactOpts(pinnedIds))
     })
   }
 

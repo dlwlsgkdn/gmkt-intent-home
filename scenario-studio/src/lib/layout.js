@@ -49,6 +49,58 @@ export function resolveCollision(items, movedIds, heights, soft) {
   return items.map((it) => placed.find((p) => p.id === it.id) || it)
 }
 
+/* 드래그 미리보기 전용 겹침 해소 — 지속시간 게이트를 통과한 아이템(readyIds)만
+   드래그 박스에서 밀려나고, 밀린 아이템이 덮친 아이템은 연쇄로 함께 밀려 자리를 만든다.
+   잠긴 아이템은 밀 수 없으므로, 잠긴 아이템을 넘어가야만 자리가 나는 아이템은
+   밀지 않고 제자리에 둔 채 blockedIds로 보고한다 (드롭 시 원위치 복귀 판단용) */
+export function previewResolve(items, draggedIds, readyIds, heights) {
+  const h = (it) => it.h || heights[it.id] || 80
+  const draggedSet = new Set(draggedIds)
+  const ready = readyIds instanceof Set ? readyIds : new Set(readyIds)
+  const dragged = items.filter((it) => draggedSet.has(it.id))
+  if (dragged.length === 0) return { items, displacedIds: new Set(), blockedIds: new Set() }
+  const lockedFixed = items.filter((it) => !draggedSet.has(it.id) && it.locked)
+  const movable = items
+    .filter((it) => !draggedSet.has(it.id) && !it.locked)
+    .sort((a, b) => (a.y - b.y) || (a.x - b.x))
+  const isOver = (a, b) =>
+    a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + h(b) && a.y + h(a) > b.y
+  const placed = [...dragged, ...lockedFixed]
+  const displacedIds = new Set()
+  const blockedIds = new Set()
+  const result = {}
+  for (const it of movable) {
+    const cur = { ...it }
+    let moved = false
+    let stuck = false
+    for (let guard = 0; guard < 100; guard++) {
+      const hit = placed.find((p) => {
+        if (!isOver(cur, p)) return false
+        // 드래그 박스가 직접 밀 수 있는 건 게이트 통과 아이템뿐 (연쇄로 이미 밀린 것 포함)
+        if (draggedSet.has(p.id)) return ready.has(cur.id) || moved
+        return true
+      })
+      if (!hit) break
+      if (hit.locked && !draggedSet.has(hit.id)) {
+        stuck = true
+        break
+      }
+      cur.y = hit.y + h(hit) + GAP
+      moved = true
+    }
+    if (stuck) {
+      blockedIds.add(it.id)
+      result[it.id] = it // 밀 자리가 없으면 제자리 유지
+      placed.push({ ...it })
+    } else {
+      if (cur.y !== it.y) displacedIds.add(it.id)
+      result[it.id] = cur
+      placed.push(cur)
+    }
+  }
+  return { items: items.map((it) => result[it.id] || it), displacedIds, blockedIds }
+}
+
 /* 1단 세로 스택: y→x 순으로 전체 너비로 쌓기 */
 export function layoutStack(items, heights, ctx) {
   const sorted = sortByPosition(items)
