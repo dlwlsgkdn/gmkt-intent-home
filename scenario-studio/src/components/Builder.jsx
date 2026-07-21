@@ -15,18 +15,20 @@ import CanvasTextToolbar from './builder/CanvasTextToolbar.jsx'
 import ContextMenu from './builder/ContextMenu.jsx'
 
 const SNAP = 6
-/* 드래그 겹침 회피 둔화: 겹침 면적이 작은 쪽의 45% 이상일 때만 밀어내고,
+/* 드래그 겹침 회피 둔화 — 지속시간 게이트:
+   겹치자마자 밀지 않는다. 겹침 면적이 임계(일반 45%, 컨테이너 75%) 이상인 상태가
+   지속시간(일반 400ms, 컨테이너 700ms)을 채운 아이템만 밀림을 허용하고,
+   그 전에 겹침이 풀리면 타이머는 리셋된다. 드래그 중 나머지 아이템은 전부 제자리 고정,
+   재배치 커밋은 드롭 시점에 정확하게 수행.
    밀려나는 미리보기 재배치는 250ms 간격으로만 갱신 (드래그 아이템 자체는 즉각 반응) */
 const DRAG_SOFT_RATIO = 0.45
+const DRAG_PUSH_DELAY_MS = 400
 const DRAG_PREVIEW_MS = 250
-/* 컨테이너 겹침 회피 ↔ 삽입 공존 임계점:
-   포인터가 컨테이너(+NEST_GUARD_MARGIN) 위에 있으면 삽입 의도로 보고 밀림에서 보호(핀 고정).
-   포인터가 그 밖이면서 CONTAINER_SOFT_RATIO 이상 깊게 겹친 상태가
-   CONTAINER_PUSH_DELAY_MS 이상 지속된 컨테이너만 밀린다 — 일반 컴포넌트보다 훨씬 둔감.
-   (접근 중 도망감 방지는 지속시간 게이트가 담당하므로 마진은 경계 떨림 방지용으로만 최소한) */
+/* 컨테이너 삽입 공존: 삽입 가능한 드래그에서 포인터가 컨테이너(+마진) 위면
+   삽입 의도로 보고 밀림에서 보호. 마진은 경계 떨림 방지용 최소한 */
 const NEST_GUARD_MARGIN = 8
 const CONTAINER_SOFT_RATIO = 0.75
-const CONTAINER_PUSH_DELAY_MS = 450
+const CONTAINER_PUSH_DELAY_MS = 700
 
 /* 빌더에서 편집 가능한 단계: 공통 탐색(계정 소유, 자동 반영) + 시나리오 소유 설문/계획 */
 const BUILD_STAGES = [
@@ -54,9 +56,9 @@ export default function Builder({ api, scenario }) {
   const dragPosRef = useRef(null)
   const dragLayoutPosRef = useRef(null) // 스로틀된 미리보기 재배치 기준 위치
   const dragLayoutTimerRef = useRef(null)
-  const containerPushSinceRef = useRef({}) // { 컨테이너id: 깊은 겹침이 시작된 시각 }
-  const containerPushableRef = useRef(new Set()) // 지속시간을 채워 밀림이 허용된 컨테이너
-  const containerPushWakeRef = useRef(null) // 지속시간 경과 시점에 재렌더를 깨우는 타이머
+  const pushGateRef = useRef({}) // { 아이템id: 밀림이 허용되는 시각(deadline) }
+  const pushReadyRef = useRef(new Set()) // 지속시간을 채워 밀림이 허용된 아이템
+  const pushWakeRef = useRef(null) // 지속시간 경과 시점에 재렌더를 깨우는 타이머
   const dragStartRef = useRef(null) // 그룹 드래그 시작 시점의 위치들
   const sizeDraftRef = useRef(null)
   const heightsRef = useRef({})
@@ -767,24 +769,23 @@ export default function Builder({ api, scenario }) {
     dragStartRef.current = { primary: id, positions }
   }
 
-  /* 컨테이너 밀림 게이트: 깊은 겹침이 CONTAINER_PUSH_DELAY_MS 이상 지속된
-     컨테이너만 밀림을 허용한다. 아직 대기 중인 게 있으면 경과 시점에 재렌더를 깨운다 */
-  const refreshContainerPushable = () => {
+  /* 밀림 게이트: 깊은 겹침이 지속시간(deadline)을 채운 아이템만 밀림을 허용한다.
+     아직 대기 중인 게 있으면 경과 시점에 재렌더를 깨운다 */
+  const refreshPushGate = () => {
     const now = Date.now()
-    const since = containerPushSinceRef.current
+    const gate = pushGateRef.current
     const ready = new Set()
     let nextWake = Infinity
-    Object.entries(since).forEach(([cid, t]) => {
-      const elapsed = now - t
-      if (elapsed >= CONTAINER_PUSH_DELAY_MS) ready.add(cid)
-      else nextWake = Math.min(nextWake, CONTAINER_PUSH_DELAY_MS - elapsed)
+    Object.entries(gate).forEach(([itemId, at]) => {
+      if (now >= at) ready.add(itemId)
+      else nextWake = Math.min(nextWake, at - now)
     })
-    containerPushableRef.current = ready
-    if (nextWake < Infinity && !containerPushWakeRef.current) {
-      containerPushWakeRef.current = setTimeout(() => {
-        containerPushWakeRef.current = null
+    pushReadyRef.current = ready
+    if (nextWake < Infinity && !pushWakeRef.current) {
+      pushWakeRef.current = setTimeout(() => {
+        pushWakeRef.current = null
         if (!dragPosRef.current) return // 이미 드롭됨
-        refreshContainerPushable()
+        refreshPushGate()
         dragLayoutPosRef.current = dragPosRef.current
         setDragLayoutPos({ ...dragPosRef.current }) // 새 객체로 재렌더 유도
       }, nextWake + 16)
@@ -891,30 +892,31 @@ export default function Builder({ api, scenario }) {
     setDropTargetId(hover ? hover.id : null)
     setInsertHint(hover ? insertHintAt(hover, probe.x, probe.y) : null)
 
-    // 컨테이너 밀림 지속시간 추적: 포인터가 보호 구역 밖 + 깊은 겹침인 컨테이너만
-    // since에 기록하고, 조건이 깨지면 즉시 리셋 (스치듯 지나가면 밀리지 않는다)
-    const since = containerPushSinceRef.current
-    if (!LIBRARY[it?.type]?.container) {
-      const now = Date.now()
-      topItems.forEach((o) => {
-        if (o.id === id || !LIBRARY[o.type]?.container) return
-        const oh = heightOf(o)
-        const inGuard =
-          probe.x >= o.x - NEST_GUARD_MARGIN && probe.x <= o.x + o.w + NEST_GUARD_MARGIN &&
-          probe.y >= o.y - NEST_GUARD_MARGIN && probe.y <= o.y + oh + NEST_GUARD_MARGIN
-        const ox = Math.min(nx + w, o.x + o.w) - Math.max(nx, o.x)
-        const oy = Math.min(ny + hh, o.y + oh) - Math.max(ny, o.y)
-        const deep = ox > 0 && oy > 0 && ox * oy >= CONTAINER_SOFT_RATIO * Math.min(w * hh, o.w * oh)
-        if (deep && !inGuard) {
-          if (!since[o.id]) since[o.id] = now
-        } else {
-          delete since[o.id]
-        }
-      })
-    } else {
-      Object.keys(since).forEach((k) => delete since[k])
-    }
-    refreshContainerPushable()
+    // 밀림 지속시간 추적: 임계 이상 깊게 겹친 아이템만 gate에 deadline을 기록하고,
+    // 조건이 깨지면 즉시 리셋 (스치듯 지나가면 아무것도 밀리지 않는다)
+    const gate = pushGateRef.current
+    const now = Date.now()
+    const nestable = !LIBRARY[it?.type]?.container
+    topItems.forEach((o) => {
+      if (o.id === id) return
+      const isCont = !!LIBRARY[o.type]?.container
+      const oh = heightOf(o)
+      // 삽입 가능한 드래그에서 포인터가 컨테이너(+마진) 위면 삽입 의도 — 밀림에서 보호
+      const guarded =
+        isCont && nestable &&
+        probe.x >= o.x - NEST_GUARD_MARGIN && probe.x <= o.x + o.w + NEST_GUARD_MARGIN &&
+        probe.y >= o.y - NEST_GUARD_MARGIN && probe.y <= o.y + oh + NEST_GUARD_MARGIN
+      const ox = Math.min(nx + w, o.x + o.w) - Math.max(nx, o.x)
+      const oy = Math.min(ny + hh, o.y + oh) - Math.max(ny, o.y)
+      const ratio = isCont ? CONTAINER_SOFT_RATIO : DRAG_SOFT_RATIO
+      const deep = ox > 0 && oy > 0 && ox * oy >= ratio * Math.min(w * hh, o.w * oh)
+      if (deep && !guarded) {
+        if (!gate[o.id]) gate[o.id] = now + (isCont ? CONTAINER_PUSH_DELAY_MS : DRAG_PUSH_DELAY_MS)
+      } else {
+        delete gate[o.id]
+      }
+    })
+    refreshPushGate()
 
     const pos = { id, positions: { [id]: { x: nx, y: ny } }, pointer: probe }
     publishDragPos(pos)
@@ -928,12 +930,12 @@ export default function Builder({ api, scenario }) {
       clearTimeout(dragLayoutTimerRef.current)
       dragLayoutTimerRef.current = null
     }
-    if (containerPushWakeRef.current) {
-      clearTimeout(containerPushWakeRef.current)
-      containerPushWakeRef.current = null
+    if (pushWakeRef.current) {
+      clearTimeout(pushWakeRef.current)
+      pushWakeRef.current = null
     }
-    containerPushSinceRef.current = {}
-    containerPushableRef.current = new Set()
+    pushGateRef.current = {}
+    pushReadyRef.current = new Set()
     dragLayoutPosRef.current = null
     setDragLayoutPos(null)
     setGuides([])
@@ -1331,8 +1333,8 @@ export default function Builder({ api, scenario }) {
 
   /* ── 렌더 ── */
 
-  /* 드래그 중에는 다른 아이템들이 밀려나는 미리보기 레이아웃.
-     컴팩트가 켜져 있으면 드래그 중인 아이템만 포인터에 고정하고 나머지를 스택.
+  /* 드래그 중 미리보기 레이아웃 — 지속시간 게이트를 통과한 아이템만 밀림에 참여하고
+     나머지는 전부 제자리 고정(핀). 겹치자마자 반응하지 않고, 오래 겹친 것만 비켜난다.
      둔화: 재배치 기준 위치는 스로틀된 dragLayoutPos를 쓰고(드래그 아이템 렌더는
      CanvasItem의 dragPos prop이 즉시 반영), 겹침 판정은 soft 임계값을 적용 */
   let displayItems = items
@@ -1344,23 +1346,12 @@ export default function Builder({ api, scenario }) {
     const draggedIds = Object.keys(dragPos.positions)
     const soft = {
       ids: new Set(draggedIds),
-      // 컨테이너는 삽입 여지를 위해 더 둔감하게(60%), 일반 아이템은 35%
+      // 컨테이너는 삽입 여지를 위해 더 둔감하게(75%), 일반 아이템은 45%
       ratioOf: (box) => (LIBRARY[box.type]?.container ? CONTAINER_SOFT_RATIO : DRAG_SOFT_RATIO),
     }
     displayItems = withTopOnly(moved, (top) => {
-      const dragged = draggedIds.length === 1 ? items.find((it) => it.id === draggedIds[0]) : null
-      const canNest = dragged && !LIBRARY[dragged.type]?.container
-      // 컨테이너는 밀림 게이트를 통과한 것(보호 구역 밖 + 깊은 겹침이
-      // CONTAINER_PUSH_DELAY_MS 이상 지속)만 겹침 회피에 참여시키고 나머지는 핀 고정
-      const pushable = containerPushableRef.current
-      const pinnedIds = canNest
-        ? [
-            ...draggedIds,
-            ...top
-              .filter((it) => LIBRARY[it.type]?.container && !pushable.has(it.id))
-              .map((it) => it.id),
-          ]
-        : draggedIds
+      const pushable = pushReadyRef.current
+      const pinnedIds = top.filter((it) => !pushable.has(it.id)).map((it) => it.id)
       const resolved = resolveCollision(top, pinnedIds, heightsRef.current, soft)
       return compactOn
         ? compactItems(resolved, heightsRef.current, { ...compactOpts(pinnedIds), soft })
