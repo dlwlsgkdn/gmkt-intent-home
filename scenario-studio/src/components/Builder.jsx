@@ -360,8 +360,20 @@ export default function Builder({ api, scenario }) {
       : at?.cx != null
         ? slotIndexAt(parentId, at.containerType, at.cx, at.cy)
         : Infinity
-    // 컨테이너 안 기본 너비: 컴포넌트 고유 기본값(카드류) 또는 320px — 이후 인스펙터에서 자유 조절
-    const item = { ...createItem(type, def.defaults), x: 0, y: 0, w: Math.min(def.defaultW || 320, itemW) }
+    // 컨테이너 안 기본 너비: 컴포넌트 고유 기본값(카드류)을 컨테이너 내부 폭에 맞춰 시작.
+    // 최초 배치 시 한 번만 계산해 저장하므로 이후 컨테이너 리사이즈에는 영향받지 않는다.
+    const contentEl = canvasRef.current?.querySelector(
+      `[data-canvas-item-id="${parentId}"] > .sb-canvas-item__content`
+    )
+    let fitW = itemW
+    if (contentEl) {
+      const cs = getComputedStyle(contentEl)
+      fitW = Math.round(
+        contentEl.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 10
+      )
+    }
+    const w = Math.max(MIN_ITEM_W, Math.min(def.defaultW || 320, fitW))
+    const item = { ...createItem(type, def.defaults), x: 0, y: 0, w }
     setItems((prev) => placeChild([...prev, item], item.id, parentId, idx))
     setSelectedIds([item.id])
     api.showToast(`${def.label}을(를) 레이아웃 안에 배치했어요.`)

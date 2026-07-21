@@ -1068,7 +1068,7 @@ export const LIBRARY = {
                 <div
                   key={c.key}
                   className="sb-gridpanel__slot"
-                  style={{ width: c.item.w || undefined, maxWidth: '100%', height: c.item.h || undefined }}
+                  style={{ width: c.item.w || undefined, height: c.item.h || undefined }}
                 >
                   {c.node}
                 </div>
@@ -1128,7 +1128,20 @@ export const LIBRARY = {
             arrows={!edit && !!p.arrows && slideCount > 1}
             className={'sb-carousel__track' + scrollCls(p.scrollbar) + (edit ? ' sb-carousel__track--edit' : '')}
           >
-            {kids.length > 0 && kids.map((c) => <div key={c.key} className="sb-carousel__slot">{c.node}</div>)}
+            {kids.length > 0 && kids.map((c) => (
+              /* 자식이 고유 크기를 가지면 슬라이드도 그 크기를 따른다 (없으면 한 장 = 컨테이너 폭).
+                 편집 모드 트랙은 세로 방향이라 flex-basis 대신 width로 지정 */
+              <div
+                key={c.key}
+                className="sb-carousel__slot"
+                style={{
+                  ...(c.item.w ? (edit ? { width: c.item.w } : { flex: `0 0 ${c.item.w}px` }) : null),
+                  ...(c.item.h ? { height: c.item.h } : null),
+                }}
+              >
+                {c.node}
+              </div>
+            ))}
             {kids.length === 0 && cards.length === 0 && <EmptyDropZone ctx={ctx} />}
             {kids.length === 0 && cards.map((c, i) => (
               <div
@@ -1252,7 +1265,7 @@ export const LIBRARY = {
                 <div
                   key={c.key}
                   className="sb-vscroll__slot"
-                  style={{ width: c.item.w || undefined, maxWidth: '100%', height: c.item.h || undefined }}
+                  style={{ width: c.item.w || undefined, height: c.item.h || undefined }}
                 >
                   {c.node}
                 </div>
