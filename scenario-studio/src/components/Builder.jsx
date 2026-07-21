@@ -15,6 +15,10 @@ import CanvasTextToolbar from './builder/CanvasTextToolbar.jsx'
 import ContextMenu from './builder/ContextMenu.jsx'
 
 const SNAP = 6
+/* 드래그 겹침 회피 둔화: 겹침 면적이 작은 쪽의 35% 이상일 때만 밀어내고,
+   밀려나는 미리보기 재배치는 150ms 간격으로만 갱신 (드래그 아이템 자체는 즉각 반응) */
+const DRAG_SOFT_RATIO = 0.35
+const DRAG_PREVIEW_MS = 150
 
 /* 빌더에서 편집 가능한 단계: 공통 탐색(계정 소유, 자동 반영) + 시나리오 소유 설문/계획 */
 const BUILD_STAGES = [
@@ -27,6 +31,7 @@ export default function Builder({ api, scenario }) {
   const isExplore = stageKey === 'explore'
   const [selectedIds, setSelectedIds] = useState([]) // 다중 선택 (⇧+클릭)
   const [dragPos, setDragPos] = useState(null) // { id, positions: {id:{x,y}} }
+  const [dragLayoutPos, setDragLayoutPos] = useState(null) // 겹침 회피 미리보기용 지연 위치
   const [sizeDraft, setSizeDraft] = useState(null) // {id, w, h}
   const [openMenu, setOpenMenu] = useState(null) // 'device' | 'layout' | 'color' | 'version'
   const [guides, setGuides] = useState([]) // 드래그 중 스냅 가이드라인
@@ -39,6 +44,8 @@ export default function Builder({ api, scenario }) {
   const [marquee, setMarquee] = useState(null) // 빈 캔버스 드래그 → 러버밴드 선택 박스
   const [ctxMenu, setCtxMenu] = useState(null) // 우클릭 컨텍스트 메뉴 {sx, sy, cx, cy, itemId}
   const dragPosRef = useRef(null)
+  const dragLayoutPosRef = useRef(null) // 스로틀된 미리보기 재배치 기준 위치
+  const dragLayoutTimerRef = useRef(null)
   const dragStartRef = useRef(null) // 그룹 드래그 시작 시점의 위치들
   const sizeDraftRef = useRef(null)
   const heightsRef = useRef({})
@@ -749,6 +756,24 @@ export default function Builder({ api, scenario }) {
     dragStartRef.current = { primary: id, positions }
   }
 
+  /* 드래그 위치 발행: 드래그 아이템은 즉시, 겹침 회피 미리보기 기준 위치는
+     DRAG_PREVIEW_MS 간격으로만 갱신해 주변 아이템이 차분하게 반응하도록 */
+  const publishDragPos = (pos) => {
+    dragPosRef.current = pos
+    setDragPos(pos)
+    if (!dragLayoutPosRef.current) {
+      dragLayoutPosRef.current = pos
+      setDragLayoutPos(pos)
+    } else if (!dragLayoutTimerRef.current) {
+      dragLayoutTimerRef.current = setTimeout(() => {
+        dragLayoutTimerRef.current = null
+        if (!dragPosRef.current) return // 이미 드롭됨
+        dragLayoutPosRef.current = dragPosRef.current
+        setDragLayoutPos(dragPosRef.current)
+      }, DRAG_PREVIEW_MS)
+    }
+  }
+
   const onDrag = (id, x, y, clientX, clientY) => {
     // 포인터의 캔버스 좌표 — 컨테이너 드롭 판정에 사용 (아이템 중심보다 정확)
     const pointer =
@@ -775,8 +800,7 @@ export default function Builder({ api, scenario }) {
         }
       })
       const pos = { id, positions }
-      dragPosRef.current = pos
-      setDragPos(pos)
+      publishDragPos(pos)
       setGuides([])
       setDropTargetId(null)
       setInsertHint(null)
@@ -832,14 +856,19 @@ export default function Builder({ api, scenario }) {
     setDropTargetId(hover ? hover.id : null)
     setInsertHint(hover ? insertHintAt(hover, probe.x, probe.y) : null)
     const pos = { id, positions: { [id]: { x: nx, y: ny } }, pointer: probe }
-    dragPosRef.current = pos
-    setDragPos(pos)
+    publishDragPos(pos)
   }
 
   const onDragEnd = (id) => {
     const pos = dragPosRef.current
     dragPosRef.current = null
     dragStartRef.current = null
+    if (dragLayoutTimerRef.current) {
+      clearTimeout(dragLayoutTimerRef.current)
+      dragLayoutTimerRef.current = null
+    }
+    dragLayoutPosRef.current = null
+    setDragLayoutPos(null)
     setGuides([])
     setDropTargetId(null)
     setInsertHint(null)
@@ -1235,14 +1264,18 @@ export default function Builder({ api, scenario }) {
 
   /* ── 렌더 ── */
 
-  /* 드래그 중에는 다른 아이템들이 실시간으로 밀려나는 미리보기 레이아웃.
-     컴팩트가 켜져 있으면 드래그 중인 아이템만 포인터에 고정하고 나머지를 스택 */
+  /* 드래그 중에는 다른 아이템들이 밀려나는 미리보기 레이아웃.
+     컴팩트가 켜져 있으면 드래그 중인 아이템만 포인터에 고정하고 나머지를 스택.
+     둔화: 재배치 기준 위치는 스로틀된 dragLayoutPos를 쓰고(드래그 아이템 렌더는
+     CanvasItem의 dragPos prop이 즉시 반영), 겹침 판정은 soft 임계값을 적용 */
   let displayItems = items
   if (dragPos) {
+    const layoutPos = dragLayoutPos || dragPos
     const moved = items.map((it) =>
-      dragPos.positions[it.id] ? { ...it, ...dragPos.positions[it.id] } : it
+      layoutPos.positions[it.id] ? { ...it, ...layoutPos.positions[it.id] } : it
     )
     const draggedIds = Object.keys(dragPos.positions)
+    const soft = { ids: new Set(draggedIds), ratio: DRAG_SOFT_RATIO }
     displayItems = withTopOnly(moved, (top) => {
       const dragged = draggedIds.length === 1 ? items.find((it) => it.id === draggedIds[0]) : null
       const canNest = dragged && !LIBRARY[dragged.type]?.container
@@ -1254,8 +1287,10 @@ export default function Builder({ api, scenario }) {
             ...top.filter((it) => LIBRARY[it.type]?.container).map((it) => it.id),
           ]
         : draggedIds
-      const resolved = resolveCollision(top, pinnedIds, heightsRef.current)
-      return compactOn ? compactItems(resolved, heightsRef.current, compactOpts(pinnedIds)) : resolved
+      const resolved = resolveCollision(top, pinnedIds, heightsRef.current, soft)
+      return compactOn
+        ? compactItems(resolved, heightsRef.current, { ...compactOpts(pinnedIds), soft })
+        : resolved
     })
   }
 

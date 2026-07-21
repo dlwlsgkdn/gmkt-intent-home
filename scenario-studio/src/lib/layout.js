@@ -6,19 +6,26 @@ export const PAD = 24
 export const GAP = 14
 export const MIN_ITEM_W = 160
 
-/* 공용: box가 placed 중 하나와 겹치면 그 아이템을 반환 */
-const hitOf = (placed, box, h) =>
-  placed.find(
-    (p) =>
-      box.x < p.x + p.w &&
-      box.x + box.w > p.x &&
-      box.y < p.y + h(p) &&
-      box.y + h(box) > p.y
-  )
+/* 공용: box가 placed 중 하나와 겹치면 그 아이템을 반환.
+   soft = { ids, ratio }를 주면 ids에 속한 박스(드래그 중인 아이템)와는
+   겹침 면적이 작은 쪽 면적의 ratio 이상일 때만 충돌로 판정한다 —
+   드래그 미리보기에서 스치기만 해도 밀려나는 과민 반응을 둔화시키는 용도 */
+const hitOf = (placed, box, h, soft) =>
+  placed.find((p) => {
+    const ox = Math.min(box.x + box.w, p.x + p.w) - Math.max(box.x, p.x)
+    const oy = Math.min(box.y + h(box), p.y + h(p)) - Math.max(box.y, p.y)
+    if (ox <= 0 || oy <= 0) return false
+    if (soft && soft.ids.has(p.id)) {
+      const minArea = Math.min(box.w * h(box), p.w * h(p))
+      return ox * oy >= (soft.ratio || 0.35) * minArea
+    }
+    return true
+  })
 
 /* 겹침 해소: 이동한 아이템(들)과 잠긴 아이템은 제자리를 지키고,
-   겹치는 나머지 아이템들이 아래로 밀린다 */
-export function resolveCollision(items, movedIds, heights) {
+   겹치는 나머지 아이템들이 아래로 밀린다.
+   soft(hitOf 참고)는 드래그 미리보기 전용 — 커밋 경로에서는 넘기지 말 것 */
+export function resolveCollision(items, movedIds, heights, soft) {
   const h = (it) => it.h || heights[it.id] || 80
   const movedSet = new Set(Array.isArray(movedIds) ? movedIds : [movedIds])
   const moved = items.filter((it) => movedSet.has(it.id))
@@ -31,7 +38,7 @@ export function resolveCollision(items, movedIds, heights) {
   for (const it of others) {
     const cur = { ...it }
     for (let guard = 0; guard < 100; guard++) {
-      const hit = hitOf(placed, cur, h)
+      const hit = hitOf(placed, cur, h, soft)
       if (!hit) break
       cur.y = hit.y + h(hit) + GAP
     }
@@ -84,10 +91,10 @@ export const COMPACT_TYPES = [
   { key: 'none', label: '컴팩트 끄기', desc: '빈 공간을 두고 자유롭게 배치해요' },
 ]
 
-export function compactItems(items, heights, { direction = 'vertical', pinnedIds = [], canvasW = Infinity } = {}) {
+export function compactItems(items, heights, { direction = 'vertical', pinnedIds = [], canvasW = Infinity, soft = null } = {}) {
   if (direction === 'none') return items
   const h = (it) => it.h || heights[it.id] || 80
-  const overlaps = (placed, box) => hitOf(placed, box, h)
+  const overlaps = (placed, box) => hitOf(placed, box, h, soft)
   const pinned = new Set(pinnedIds)
   const fixed = items.filter((it) => pinned.has(it.id) || it.locked)
   const movableSrc = items.filter((it) => !pinned.has(it.id) && !it.locked)
