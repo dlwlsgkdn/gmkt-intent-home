@@ -352,6 +352,31 @@
 .sb-template-card strong { font-size: 12px; font-weight: 700; color: var(--sb-accent); }
 .sb-template-card small { font-size: 10px; line-height: 1.45; color: #7d8a80; word-break: keep-all; }
 
+.sb-panel-label--count {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sb-panel-label--count b {
+  color: var(--sb-accent);
+  font-size: 11px;
+}
+.sb-scenario-filter {
+  width: 100%;
+  margin: -5px 0 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--sb-line);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--sb-ink);
+  font-size: 12px;
+  outline: none;
+}
+.sb-scenario-filter:focus {
+  border-color: rgba(95, 116, 101, 0.72);
+  box-shadow: 0 0 0 3px var(--sb-accent-soft);
+}
+
 /* 내보내기/가져오기 */
 .sb-drawer__tools {
   display: flex;
@@ -617,6 +642,233 @@
   height: 22px;
   background: var(--sb-line);
   margin: 0 4px;
+}
+
+/* 계획 단계 4행: 독립 캔버스를 가진 계획 케이스 탭 */
+.sb-topbar__row--cases {
+  gap: 8px;
+  padding-top: 7px;
+  border-top: 1px dashed var(--sb-line);
+  min-width: 0;
+}
+.sb-plan-cases__label {
+  flex-shrink: 0;
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.sb-plan-case-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 80px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.sb-plan-case-tabs::-webkit-scrollbar { display: none; }
+.sb-plan-case-tab {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  padding: 7px 10px;
+  border: 1px solid var(--sb-line);
+  border-radius: 11px;
+  background: #fff;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: all 0.14s ease;
+}
+.sb-plan-case-tab:hover { border-color: #94a3b8; }
+.sb-plan-case-tab--active {
+  border-color: var(--sb-accent);
+  background: var(--sb-accent-soft);
+  color: var(--sb-accent);
+  box-shadow: 0 0 0 2px rgba(95, 116, 101, 0.08);
+}
+.sb-plan-case-tab > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: #e2e8f0;
+  color: #64748b;
+  font-size: 9px;
+}
+.sb-plan-case-tab--active > span { background: var(--sb-accent); color: #fff; }
+.sb-plan-case-tab > b {
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #94a3b8;
+  font-size: 9px;
+}
+.sb-plan-case-tab--active > b { background: rgba(95, 116, 101, 0.15); color: var(--sb-accent); }
+.sb-plan-case-add { margin-top: 0; }
+.sb-plan-cases__note {
+  margin-left: auto;
+  color: #94a3b8;
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+/* 계획 케이스 조건 편집 드롭다운 */
+.sb-plan-case-menu {
+  width: min(570px, calc(100vw - 32px));
+  max-height: min(720px, calc(100vh - 190px));
+  padding: 0;
+  overflow-y: auto;
+}
+.sb-plan-case-editor { padding: 18px; }
+.sb-plan-case-editor__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.sb-plan-case-editor__head .sb-panel-label { margin-bottom: 4px; }
+.sb-plan-case-editor__head small { color: #94a3b8; font-size: 11px; line-height: 1.5; }
+.sb-plan-case-badge {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 700;
+}
+.sb-plan-case-badge--fallback { background: var(--sb-accent-soft); color: var(--sb-accent); }
+.sb-plan-case-fallback {
+  padding: 14px;
+  border: 1px dashed rgba(95, 116, 101, 0.45);
+  border-radius: 14px;
+  background: var(--sb-accent-soft);
+}
+.sb-plan-case-fallback strong { color: var(--sb-accent); font-size: 12px; }
+.sb-plan-case-fallback p { margin: 5px 0 0; color: #6f7f73; font-size: 11px; line-height: 1.55; }
+.sb-plan-rules { display: flex; flex-direction: column; gap: 10px; }
+.sb-plan-rule {
+  padding: 12px;
+  border: 1px solid var(--sb-line);
+  border-radius: 14px;
+  background: #f8fafc;
+}
+.sb-plan-rule__top {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 26px;
+  align-items: center;
+  gap: 7px;
+}
+.sb-plan-rule__top > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--sb-ink);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+}
+.sb-plan-rule select {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--sb-line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--sb-ink);
+  font-size: 12px;
+  outline: none;
+}
+.sb-plan-rule select:focus { border-color: var(--sb-accent); }
+.sb-plan-rule__operator { margin-top: 8px; }
+.sb-plan-rule__remove {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  color: #94a3b8;
+  font-size: 17px;
+}
+.sb-plan-rule__remove:hover { background: #fef2f2; color: #dc2626; }
+.sb-plan-rule__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+}
+.sb-plan-rule-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 9px;
+  border: 1px solid var(--sb-line);
+  border-radius: 999px;
+  background: #fff;
+  color: #64748b;
+  font-size: 11px;
+}
+.sb-plan-rule-option > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font-size: 8px;
+}
+.sb-plan-rule-option--active { border-color: var(--sb-accent); background: var(--sb-accent-soft); color: var(--sb-accent); }
+.sb-plan-rule-option--active > span { border-color: var(--sb-accent); background: var(--sb-accent); color: #fff; }
+.sb-plan-rule-option--stale { border-color: rgba(217, 119, 6, 0.35); color: #b45309; background: #fffbeb; }
+.sb-plan-rule__options em { color: #94a3b8; font-size: 11px; font-style: normal; }
+.sb-plan-case-warning {
+  margin: 10px 0 0;
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: #fff7ed;
+  color: #b45309;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.sb-plan-case-editor__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--sb-line);
+}
+.sb-plan-case-editor__actions button {
+  padding: 7px 9px;
+  border: 1px solid var(--sb-line);
+  border-radius: 9px;
+  background: #fff;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+}
+.sb-plan-case-editor__actions button:hover:not(:disabled) { border-color: #94a3b8; color: var(--sb-ink); }
+.sb-plan-case-editor__actions button:disabled { opacity: 0.35; }
+.sb-plan-case-editor__actions .sb-danger { color: #dc2626; }
+
+/* 계획 케이스 행만큼 고정 패널 시작점을 아래로 내린다. */
+.sb-builder--plan .sb-palette,
+.sb-builder--plan .sb-inspector {
+  top: 176px;
+  max-height: calc(100vh - 188px);
 }
 
 .sb-workspace {
@@ -1238,6 +1490,52 @@
 
 .sb-product-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
+/* 첨부 시나리오의 이모지 상품 비주얼·원가·추천 근거 */
+.sb-product-card2__mock {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.sb-product-card2__mock > span {
+  position: absolute;
+  left: 14px;
+  bottom: 12px;
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(15, 23, 42, 0.58);
+}
+.sb-product-card2__mock > b { font-size: 44px; line-height: 1; }
+.sb-product-card2__was {
+  margin-left: 7px;
+  color: #94a3b8;
+  font-size: 10px;
+  text-decoration: line-through;
+}
+.sb-product-card2__summary {
+  min-height: 48px;
+  margin: -2px 0 12px;
+  padding: 0;
+  list-style: none;
+}
+.sb-product-card2__summary li {
+  position: relative;
+  margin-top: 4px;
+  padding-left: 9px;
+  color: #64748b;
+  font-size: 10px;
+  line-height: 1.45;
+}
+.sb-product-card2__summary li::before {
+  position: absolute;
+  left: 0;
+  content: '·';
+  font-weight: 800;
+}
+
 /* ── 가로 스크롤 패널 ── */
 .sb-hscroll { min-width: 0; }
 .sb-hscroll__title {
@@ -1268,7 +1566,12 @@
 .sb-gridpanel__card { width: auto; }
 
 /* ── 컨테이너(레이아웃) 자식 슬롯 ── */
-.sb-hscroll__slot { flex: 0 0 auto; min-width: 0; }
+.sb-hscroll__slot {
+  flex: 0 0 auto;
+  min-width: 0;
+  /* 패널 전체가 아닌 슬롯의 실제 너비로 내부 카드의 반응형 레이아웃을 결정 */
+  container-type: inline-size;
+}
 .sb-vscroll__slot { flex-shrink: 0; min-width: 0; }
 .sb-gridpanel__slot { min-width: 0; }
 .sb-carousel__slot { flex: 0 0 100%; scroll-snap-align: center; min-width: 0; }
@@ -2699,6 +3002,8 @@ button.sb-info-chip:hover { border-color: #94a3b8; background: #f8fafc; }
     border-radius: 20px;
     box-shadow: 0 24px 48px -24px rgba(15, 23, 42, 0.35);
   }
+  .sb-builder--plan .sb-inspector { top: auto; max-height: 55vh; }
+  .sb-plan-cases__note { display: none; }
 }
 
 @media (max-width: 980px) {
@@ -2725,6 +3030,12 @@ button.sb-info-chip:hover { border-color: #94a3b8; background: #f8fafc; }
     max-height: 48vh;
     border-radius: 20px 20px 14px 14px;
   }
+  .sb-builder--plan .sb-palette { max-height: 34vh; }
+  .sb-builder--plan .sb-inspector { top: auto; max-height: 48vh; }
+  .sb-topbar__row--cases { flex-wrap: wrap; }
+  .sb-plan-case-tabs { flex-basis: calc(100% - 92px); order: 1; }
+  .sb-plan-case-add { order: 2; }
+  .sb-topbar__row--cases .sb-menu-wrap { order: 3; }
   .sb-title-input { max-width: 130px; font-size: 15px; }
   .sb-chip-input { width: 90px; }
   .sb-btn { padding: 8px 11px; font-size: 12px; }

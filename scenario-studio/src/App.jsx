@@ -1,14 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { createScenario, uid, loadKeywords, saveKeywords, loadViewerDevice, saveViewerDevice, loadAccounts, saveAccounts, createAccount, createDataBackup, parseDataBackup } from './lib/store.js'
+import { createScenario, normalizeScenario, uid, loadKeywords, saveKeywords, loadViewerDevice, saveViewerDevice, loadAccounts, saveAccounts, createAccount, createDataBackup, parseDataBackup } from './lib/store.js'
 import { readShareFromHash, clearShareHash } from './lib/share.js'
 import HomeView from './components/HomeView.jsx'
 import Builder from './components/Builder.jsx'
 import Player from './components/Player.jsx'
 import ExploreEditor from './components/ExploreEditor.jsx'
+import { installDateMakeupPack } from './lib/dateMakeupPack.js'
 
 export default function App() {
   /* 프로필별 워크스페이스(계정): 프로필 + 탐색 페이지 + 시나리오 + 쓰레드 묶음 */
-  const [init] = useState(loadAccounts)
+  const [init] = useState(() => installDateMakeupPack(loadAccounts()))
   const [accounts, setAccounts] = useState(init.accounts)
   const [activeAccountId, setActiveAccountId] = useState(init.activeId)
   const [keywords, setKeywords] = useState(loadKeywords)
@@ -29,7 +30,10 @@ export default function App() {
   const setProfile = (v) => patchActive('profile', v)
   const setThreads = (v) => patchActive('threads', v)
   // 공유 링크(#s=...)로 들어온 경우: 저장하지 않고 바로 체험
-  const [shared, setShared] = useState(readShareFromHash)
+  const [shared, setShared] = useState(() => {
+    const value = readShareFromHash()
+    return value ? normalizeScenario(value) : null
+  })
   // route: {name:'home'} | {name:'builder', id} | {name:'player', id} | {name:'explore-editor'}
   const [route, setRoute] = useState({ name: 'home' })
   const [toast, setToast] = useState(null)
@@ -88,33 +92,52 @@ export default function App() {
     })
   }
 
-  /* 시나리오 복제 — 아이템 id까지 새로 발급해 완전한 사본을 만든다 */
+  /* 시나리오 복제 — 설문/모든 계획 케이스의 아이템 id를 함께 재발급하고,
+     계획 조건이 참조하는 설문 질문 id도 새 사본에 맞게 연결한다. */
   const copyScenario = (id) => {
     const src = scenarios.find((s) => s.id === id)
     if (!src) return
-    const stages = {}
-    Object.keys(src.stages).forEach((k) => {
-      // id 재발급 시 컨테이너 자식의 parentId도 새 id로 매핑
-      const list = src.stages[k] || []
-      const idMap = {}
-      list.forEach((it) => { idMap[it.id] = uid() })
-      stages[k] = list.map((it) => ({
+    const idMap = {}
+    const allItemLists = [
+      src.stages.survey || [],
+      ...(src.planCases || []).map((planCase) => planCase.items || []),
+    ]
+    allItemLists.flat().forEach((item) => { idMap[item.id] = uid() })
+    const cloneItems = (list) => list.map((it) => ({
         ...it,
         id: idMap[it.id],
         parentId: it.parentId ? idMap[it.parentId] : undefined,
-        props: { ...it.props },
+        props: JSON.parse(JSON.stringify(it.props || {})),
+        style: it.style ? { ...it.style } : undefined,
       }))
-    })
-    const copy = {
+    const stages = {
+      ...src.stages,
+      survey: cloneItems(src.stages.survey || []),
+      plan: [],
+    }
+    const planCases = (src.planCases || []).map((planCase) => ({
+      ...planCase,
+      id: uid(),
+      conditions: (planCase.conditions || []).map((condition) => ({
+        ...condition,
+        id: uid(),
+        questionId: idMap[condition.questionId] || condition.questionId,
+        values: [...(condition.values || [])],
+      })),
+      items: cloneItems(planCase.items || []),
+    }))
+    const copy = normalizeScenario({
       ...src,
       id: uid(),
       title: `${src.title} 복사본`,
       chip: src.chip ? `${src.chip}_복사` : '복사본',
       status: 'draft',
       stages,
+      planCases,
+      versions: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-    }
+    })
     setScenarios((prev) => [...prev, copy])
     setToast(`"${copy.title}" 을(를) 만들었어요. (작성 중 상태)`)
   }
@@ -126,8 +149,7 @@ export default function App() {
     }
     const cleaned = arr
       .filter((s) => s && typeof s === 'object' && s.stages)
-      .map((s) => ({
-        ...createScenario(),
+      .map((s) => normalizeScenario({
         ...s,
         id: uid(),
         updatedAt: new Date().toISOString(),
@@ -255,7 +277,7 @@ export default function App() {
       clearShareHash()
     }
     const adoptShared = () => {
-      const s = { ...createScenario(), ...shared, id: uid(), status: 'draft' }
+      const s = normalizeScenario({ ...shared, id: uid(), status: 'draft', versions: [] })
       setScenarios((prev) => [...prev, s])
       exitShared()
       setRoute({ name: 'builder', id: s.id })

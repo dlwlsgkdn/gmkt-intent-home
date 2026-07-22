@@ -447,6 +447,8 @@ export const LIBRARY = {
       maxPerRow: '4',
       optionShape: 'card',
       horizontalScroll: true,
+      defaultAnswer: '',
+      locked: false,
     },
     fields: [
       { key: 'question', label: '질문 문구', kind: 'textarea' },
@@ -472,6 +474,8 @@ export const LIBRARY = {
         ],
       },
       { key: 'horizontalScroll', label: '가로 스크롤 사용', kind: 'toggle', defaultValue: true },
+      { key: 'defaultAnswer', label: '미리 선택할 답변', kind: 'text' },
+      { key: 'locked', label: '미리 선택한 답변 고정', kind: 'toggle' },
     ],
     render: (p, ctx) => {
       const opts = splitOptions(p.options)
@@ -509,8 +513,9 @@ export const LIBRARY = {
                       `sb-survey-option sb-survey-option--${shape} info-card border-2 border-slate-100 transition-all bg-slate-50 hover:border-gmarket-blue text-center flex flex-col items-center justify-center gap-1` +
                       (selected ? ' active-card ring-4 ring-blue-100' : '')
                     }
+                    aria-disabled={!!p.locked}
                     onClick={() => {
-                      if (!isPlayer) return
+                      if (!isPlayer || p.locked) return
                       if (p.multi) {
                         const next = new Set(selectedSet)
                         next.has(opt.main) ? next.delete(opt.main) : next.add(opt.main)
@@ -712,17 +717,27 @@ export const LIBRARY = {
     hint: '원본 상품 카드 스타일 — 기본 세로형, 넓히면 가로형',
     defaultW: 224,
     defaults: {
+      brand: '',
       name: '수분광 톤업 프라이머 30ml',
       price: '18,900',
+      was: '',
       score: '94',
+      summary: '',
+      emoji: '',
+      gradient: '',
       external: false,
       mall: '',
       imageUrl: './makeup-clone-assets/8e01e19fb7cf7c96.avif',
     },
     fields: [
+      { key: 'brand', label: '브랜드', kind: 'text' },
       { key: 'name', label: '상품명', kind: 'text' },
       { key: 'price', label: '가격 (원 제외)', kind: 'text' },
+      { key: 'was', label: '정가 (원 제외)', kind: 'text' },
       { key: 'score', label: '매칭률 (%)', kind: 'text' },
+      { key: 'summary', label: '추천 이유 (줄바꿈 구분)', kind: 'textarea' },
+      { key: 'emoji', label: '상품 이모지', kind: 'text' },
+      { key: 'gradient', label: '상품 배경 CSS', kind: 'text' },
       { key: 'external', label: '외부몰 상품', kind: 'toggle' },
       { key: 'mall', label: '외부몰 이름 (예: 올리브영)', kind: 'text' },
       { key: 'imageUrl', label: '이미지 URL', kind: 'text' },
@@ -737,7 +752,14 @@ export const LIBRARY = {
               <span className="text-[10px] font-bold text-slate-400 mr-1.5 uppercase tracking-tighter">Match</span>
               <span className="text-xs font-bold text-gmarket-blue">{score}%</span>
             </span>
-            <Img src={p.imageUrl} alt={p.name} />
+            {p.emoji ? (
+              <div className="sb-product-card2__mock" style={{ background: p.gradient || undefined }} aria-label={p.name}>
+                {p.brand ? <span>{kText(p.brand, ctx, 'brand')}</span> : null}
+                <b aria-hidden="true">{p.emoji}</b>
+              </div>
+            ) : (
+              <Img src={p.imageUrl} alt={p.name} />
+            )}
           </div>
           <div className="sb-media-card__body sb-product-card2__body">
             <div className="sb-media-card__tags">
@@ -758,7 +780,15 @@ export const LIBRARY = {
             <div className="flex items-baseline mb-3 text-left">
               <span className="text-lg font-bold text-gmarket-blue">{kText(p.price, ctx, 'price')}</span>
               <span className="text-xs font-medium text-slate-400 ml-0.5">원</span>
+              {p.was ? <span className="sb-product-card2__was">{kText(p.was, ctx, 'was')}원</span> : null}
             </div>
+            {p.summary ? (
+              <ul className="sb-product-card2__summary">
+                {String(p.summary).split('\n').map((line) => line.trim()).filter(Boolean).map((line, index) => (
+                  <li key={index}>{kText(line, ctx)}</li>
+                ))}
+              </ul>
+            ) : null}
             <div className="flex gap-2">
               <button
                 type="button"

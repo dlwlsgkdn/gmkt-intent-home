@@ -11,10 +11,17 @@ export default function HomeView({ api }) {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [threadOrigin, setThreadOrigin] = useState(null) // null=닫힘 | 'left'|'center'|'right'
   const [draggingChipId, setDraggingChipId] = useState(null)
+  const [scenarioFilter, setScenarioFilter] = useState('')
   const importInputRef = useRef(null)
   const backupImportInputRef = useRef(null)
   const chipDragRef = useRef(null) // { id, startX, startY, moved }
   const published = api.scenarios.filter((s) => s.status === 'published')
+  const filteredScenarios = api.scenarios.filter((scenario) => {
+    const needle = scenarioFilter.trim().toLowerCase().replace(/[\s_·/]+/g, '')
+    if (!needle) return true
+    return [scenario.title, scenario.chip, ...Object.values(scenario.sourceAnswers || {})]
+      .some((value) => String(value || '').toLowerCase().replace(/[\s_·/]+/g, '').includes(needle))
+  })
 
   /* 칩 드래그로 순서 변경 — 6px 이상 움직이면 드래그, 아니면 클릭(실행) */
   const onChipPointerDown = (e, id) => {
@@ -252,7 +259,19 @@ export default function HomeView({ api }) {
               ))}
             </div>
 
-            <p className="sb-panel-label">현재 프로필의 시나리오</p>
+            <p className="sb-panel-label sb-panel-label--count">
+              <span>현재 프로필의 시나리오</span>
+              <b>{api.scenarios.length}개</b>
+            </p>
+            {api.scenarios.length > 0 && (
+              <input
+                type="search"
+                className="sb-scenario-filter"
+                placeholder="제목·칩·답변으로 검색"
+                value={scenarioFilter}
+                onChange={(event) => setScenarioFilter(event.target.value)}
+              />
+            )}
             <div className="sb-drawer__tools">
               <button type="button" onClick={exportScenarios}>
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16" /></svg>
@@ -286,7 +305,13 @@ export default function HomeView({ api }) {
                   <span>새 시나리오를 만들어 설문→계획 흐름을 구성해보세요.</span>
                 </div>
               )}
-              {api.scenarios.map((s) => (
+              {api.scenarios.length > 0 && filteredScenarios.length === 0 && (
+                <div className="sb-drawer__empty">
+                  검색 결과가 없어요.<br />
+                  <span>예: 모공부각, 뽀송, 야외</span>
+                </div>
+              )}
+              {filteredScenarios.map((s) => (
                 <div key={s.id} className="sb-scenario-row">
                   <div className="sb-scenario-row__info">
                     <span className={'sb-status ' + (s.status === 'published' ? 'sb-status--live' : '')}>

@@ -16,7 +16,9 @@ function timeAgo(iso) {
 /* 원본(gmarket-advanced-clean-home)의 "마지막 페이즈" 라벨을 스튜디오 단계에 맞게 매핑 */
 function phaseLabel(t) {
   if (t.status === 'completed') return '체험 완료'
-  return t.stage === 'plan' ? '계획 확인 중' : '설문 작성 중'
+  return t.stage === 'plan'
+    ? `계획 확인 중${t.planCaseName ? ` · ${t.planCaseName}` : ''}`
+    : '설문 작성 중'
 }
 
 /* 쇼핑 쓰레드 히스토리 패널 — 원본 clean-home의 history-sidebar 룩 재사용.

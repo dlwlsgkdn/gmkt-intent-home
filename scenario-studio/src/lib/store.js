@@ -35,8 +35,127 @@ export function hexToRgba(hex, alpha) {
    탐색(홈)은 모든 시나리오가 공유하는 공통 페이지로, 칩 클릭이 곧 탐색 완료다. */
 export const STAGES = [
   { key: 'survey', label: '설문', desc: '사용자에게 물어볼 질문 구성' },
-  { key: 'plan', label: '계획', desc: '설문 후 보여줄 맞춤 계획' },
+  { key: 'plan', label: '계획', desc: '설문 조건에 따라 선택되는 여러 맞춤 계획 케이스' },
 ]
+
+/* ── 계획 케이스 ──
+   계획은 하나의 stages.plan 배열이 아니라, 조건과 독립 캔버스를 가진 여러 케이스다.
+   일반 케이스는 위에서부터 조건을 평가해 첫 번째 일치 케이스를 사용하고,
+   아무 일반 케이스도 맞지 않으면 isFallback 케이스를 사용한다. */
+export const PLAN_CONDITION_OPERATORS = [
+  { key: 'includesAny', label: '다음 중 하나를 선택', needsValues: true },
+  { key: 'includesAll', label: '다음을 모두 선택', needsValues: true },
+  { key: 'excludesAny', label: '다음을 하나도 선택하지 않음', needsValues: true },
+  { key: 'answered', label: '응답함', needsValues: false },
+  { key: 'unanswered', label: '응답하지 않음', needsValues: false },
+]
+
+export function createPlanCondition(partial = {}) {
+  return {
+    id: uid(),
+    questionId: '',
+    operator: 'includesAny',
+    values: [],
+    ...partial,
+  }
+}
+
+export function createPlanCase(partial = {}) {
+  return {
+    id: uid(),
+    name: '새 계획 케이스',
+    conditionMode: 'all', // 'all'(AND) | 'any'(OR)
+    conditions: [],
+    isFallback: false,
+    items: [],
+    ...partial,
+  }
+}
+
+function normalizePlanCondition(raw) {
+  const operator = PLAN_CONDITION_OPERATORS.some((op) => op.key === raw?.operator)
+    ? raw.operator
+    : 'includesAny'
+  return createPlanCondition({
+    ...(raw || {}),
+    id: String(raw?.id || uid()),
+    questionId: String(raw?.questionId || ''),
+    operator,
+    values: Array.isArray(raw?.values)
+      ? raw.values.map(String)
+      : raw?.value != null
+        ? [String(raw.value)]
+        : [],
+  })
+}
+
+function normalizePlanCase(raw, index) {
+  return createPlanCase({
+    ...(raw || {}),
+    id: String(raw?.id || uid()),
+    name: String(raw?.name || `계획 케이스 ${index + 1}`),
+    conditionMode: raw?.conditionMode === 'any' ? 'any' : 'all',
+    conditions: Array.isArray(raw?.conditions)
+      ? raw.conditions.map(normalizePlanCondition)
+      : [],
+    isFallback: !!raw?.isFallback,
+    items: Array.isArray(raw?.items) ? raw.items : [],
+  })
+}
+
+/* 구 데이터(stages.plan[])를 기본 케이스 하나로 무손실 변환한다. */
+export function planCasesForScenario(scenario) {
+  const source = Array.isArray(scenario?.planCases) && scenario.planCases.length > 0
+    ? scenario.planCases
+    : [createPlanCase({
+        name: '기본 계획',
+        isFallback: true,
+        items: Array.isArray(scenario?.stages?.plan) ? scenario.stages.plan : [],
+      })]
+  const cases = source.map(normalizePlanCase)
+  const fallbackIndex = cases.findIndex((planCase) => planCase.isFallback)
+  const keepFallback = fallbackIndex >= 0 ? fallbackIndex : cases.length - 1
+  const marked = cases.map((planCase, index) => ({
+    ...planCase,
+    isFallback: index === keepFallback,
+  }))
+  const fallback = marked.find((planCase) => planCase.isFallback)
+  return [...marked.filter((planCase) => !planCase.isFallback), fallback]
+}
+
+const answerValues = (answer) => {
+  if (Array.isArray(answer)) return answer.map(String).filter(Boolean)
+  if (answer == null || answer === '') return []
+  return [String(answer)]
+}
+
+export function planConditionMatches(condition, answers) {
+  if (!condition?.questionId) return false
+  const selected = answerValues(answers?.[condition.questionId])
+  const values = Array.isArray(condition.values) ? condition.values.map(String).filter(Boolean) : []
+  if (condition.operator === 'answered') return selected.length > 0
+  if (condition.operator === 'unanswered') return selected.length === 0
+  if (values.length === 0) return false
+  if (condition.operator === 'includesAll') return values.every((value) => selected.includes(value))
+  if (condition.operator === 'excludesAny') return values.every((value) => !selected.includes(value))
+  return values.some((value) => selected.includes(value))
+}
+
+export function planCaseMatches(planCase, answers) {
+  if (!planCase || planCase.isFallback || !Array.isArray(planCase.conditions) || planCase.conditions.length === 0) {
+    return false
+  }
+  const results = planCase.conditions.map((condition) => planConditionMatches(condition, answers))
+  return planCase.conditionMode === 'any' ? results.some(Boolean) : results.every(Boolean)
+}
+
+/* 조건이 겹치면 배열 순서가 우선순위다. 미일치 시 기본 케이스, 그것도 없으면 첫 케이스. */
+export function resolvePlanCase(scenario, answers) {
+  const cases = planCasesForScenario(scenario)
+  return cases.find((planCase) => planCaseMatches(planCase, answers))
+    || cases.find((planCase) => planCase.isFallback)
+    || cases[0]
+}
 
 /* ── 공통 탐색(홈) 페이지 설정 ── */
 export const DEFAULT_EXPLORE = {
@@ -202,13 +321,15 @@ export function createAccount(partial = {}) {
   }
 }
 
-/* 계정 보정: 탐색 페이지에 아이템이 없으면 기존 설정으로부터 생성 */
+/* 계정 보정: 탐색 페이지에 아이템이 없으면 기존 설정으로부터 생성하고,
+   모든 시나리오를 현재 계획 케이스 모델로 마이그레이션한다. */
 function normalizeAccount(a) {
   const acc = { ...createAccount(), ...a }
   if (!acc.explore || typeof acc.explore !== 'object') acc.explore = JSON.parse(JSON.stringify(DEFAULT_EXPLORE))
   if (!Array.isArray(acc.explore.items) || acc.explore.items.length === 0) {
     acc.explore = { ...acc.explore, items: exploreItemsFrom(acc.explore) }
   }
+  acc.scenarios = Array.isArray(acc.scenarios) ? acc.scenarios.map(normalizeScenario) : []
   return acc
 }
 
@@ -338,9 +459,11 @@ function loadLegacyExplore() {
   }
 }
 
-export function createScenario(partial = {}) {
-  return {
-    id: uid(),
+export function normalizeScenario(input = {}) {
+  const raw = input && typeof input === 'object' && !Array.isArray(input) ? input : {}
+  const now = new Date().toISOString()
+  const stages = raw.stages && typeof raw.stages === 'object' ? raw.stages : {}
+  const scenario = {
     title: '새 시나리오',
     chip: '새_시나리오',
     query: '',
@@ -349,11 +472,23 @@ export function createScenario(partial = {}) {
     compact: 'vertical', // 컴팩트 방향: 'vertical'(위로 스택) | 'horizontal'(왼쪽) | 'none' — 빌더 상단 바
     versions: [], // 발행 시점 스냅샷 (최근 10개)
     status: 'draft',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    stages: { survey: [], plan: [] },
-    ...partial,
+    createdAt: now,
+    updatedAt: now,
+    ...raw,
+    id: String(raw.id || uid()),
+    versions: Array.isArray(raw.versions) ? raw.versions : [],
+    stages: {
+      ...stages,
+      survey: Array.isArray(stages.survey) ? stages.survey : [],
+      // 구버전 호환 입력만 받으며, 실제 계획 아이템은 planCases[].items에 저장한다.
+      plan: [],
+    },
   }
+  return { ...scenario, planCases: planCasesForScenario({ ...scenario, stages }) }
+}
+
+export function createScenario(partial = {}) {
+  return normalizeScenario(partial)
 }
 
 export function createItem(type, defaults, index = 0) {

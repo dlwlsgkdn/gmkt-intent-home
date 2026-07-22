@@ -1,8 +1,21 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { STAGES, DEVICE_PRESETS, sortByPosition, uid, visibleProfileItems } from '../lib/store.js'
+import { STAGES, DEVICE_PRESETS, resolvePlanCase, sortByPosition, uid, visibleProfileItems } from '../lib/store.js'
 import { renderItem } from '../lib/registry.jsx'
 import { BgBlobs, FloatingBar, StudioFab, ViewerDeviceControl } from './Frame.jsx'
 import ThreadPanel from './ThreadPanel.jsx'
+
+function defaultAnswersFor(scenario) {
+  return Object.fromEntries(
+    (scenario.stages.survey || [])
+      .filter((item) => item.type === 'surveyQuestion' && item.props.defaultAnswer)
+      .map((item) => [
+        item.id,
+        item.props.multi
+          ? String(item.props.defaultAnswer).split(',').map((answer) => answer.trim()).filter(Boolean)
+          : item.props.defaultAnswer,
+      ])
+  )
+}
 
 /* resume = { threadId, stage } — 쓰레드 히스토리의 "쓰레드 이동": 기존 쓰레드를 이어간다 */
 export default function Player({ api, scenario, resume }) {
@@ -14,9 +27,13 @@ export default function Player({ api, scenario, resume }) {
     return i >= 0 ? i : 0
   })
   const [query, setQuery] = useState(scenario.query || '')
-  const [answers, setAnswers] = useState({})
+  const [answers, setAnswers] = useState(() =>
+    resumeThread?.answers ? { ...resumeThread.answers } : defaultAnswersFor(scenario)
+  )
   const [cart, setCart] = useState(() => (resumeThread ? [...(resumeThread.cart || [])] : []))
-  const [excludedProfile, setExcludedProfile] = useState([]) // 이번 회차에서 뺀 프로필 항목
+  const [excludedProfile, setExcludedProfile] = useState(() =>
+    resumeThread ? [...(resumeThread.excludedProfile || [])] : []
+  ) // 이번 회차에서 뺀 프로필 항목
   const [keyword, setKeyword] = useState(null) // 점선 밑줄 키워드 클릭 → 설명 모달
   const [completed, setCompleted] = useState(() => (resumeThread ? resumeThread.status === 'completed' : false))
   const [threadOrigin, setThreadOrigin] = useState(null) // 쓰레드 히스토리 패널 (null=닫힘)
@@ -41,18 +58,27 @@ export default function Player({ api, scenario, resume }) {
       return () => clearTimeout(t)
     }
   }, [stageIdx])
+  /* 설문 답 조합으로 위에서부터 첫 번째 일치 계획 케이스를 선택한다.
+     일치 항목이 없으면 isFallback 기본 계획 케이스가 선택된다. */
+  const matchedPlanCase = useMemo(
+    () => resolvePlanCase(scenario, answers),
+    [scenario, answers]
+  )
+
   /* 숨김·컨테이너 자식 제외한 최상위만 스택 렌더 (자식은 컨테이너가 렌더) */
-  const stageItems = scenario.stages[stage.key] || []
+  const stageItems = stage.key === 'plan'
+    ? (matchedPlanCase?.items || [])
+    : (scenario.stages[stage.key] || [])
   const items = useMemo(
     () => sortByPosition(stageItems).filter((it) => !it.hidden && !it.parentId),
-    [scenario, stage.key] // eslint-disable-line react-hooks/exhaustive-deps
+    [stageItems]
   )
 
   /* 처음부터 다시 체험 */
   const restart = () => {
     scrollMemRef.current = {}
     setStageIdx(0)
-    setAnswers({})
+    setAnswers(defaultAnswersFor(scenario))
     setExcludedProfile([])
     setCart([])
     setCompleted(false)
@@ -74,12 +100,16 @@ export default function Player({ api, scenario, resume }) {
       color: scenario.color,
       stage: stage.key,
       stageLabel: stage.label,
+      planCaseId: matchedPlanCase?.id,
+      planCaseName: matchedPlanCase?.name,
+      answers,
+      excludedProfile,
       cart,
       status: completed ? 'completed' : 'ongoing',
       startedAt: startedAtRef.current,
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stageIdx, cart, completed])
+  }, [stageIdx, answers, excludedProfile, cart, completed, matchedPlanCase?.id])
   /* 실행 화면은 전역 뷰어 기기 폭의 모바일 프레임으로 고정 (좌상단 컨트롤로 조절) */
   const viewer = DEVICE_PRESETS.find((d) => d.key === api.viewerDevice) || DEVICE_PRESETS.find((d) => d.key === 'iphone-15') || DEVICE_PRESETS[0]
 
@@ -167,7 +197,9 @@ export default function Player({ api, scenario, resume }) {
               onClick={() => goStage(i)}
             >
               <span className="sb-player-stepper__dot">{i + 1}</span>
-              <span className="sb-player-stepper__label">{s.label}</span>
+              <span className="sb-player-stepper__label">
+                {s.key === 'plan' && matchedPlanCase ? matchedPlanCase.name : s.label}
+              </span>
             </button>
           </React.Fragment>
         ))}
@@ -177,7 +209,10 @@ export default function Player({ api, scenario, resume }) {
         <div className="sb-phone sb-phone--player" style={{ width: viewer.w }}>
         <div className="sb-player__head">
           <div className="sb-player__head-row">
-            <p className="sb-eyebrow">#{scenario.chip} 칩으로 진입 · 탐색 완료</p>
+            <p className="sb-eyebrow">
+              #{scenario.chip} 칩으로 진입 · 탐색 완료
+              {stage.key === 'plan' && matchedPlanCase ? ` · ${matchedPlanCase.name}` : ''}
+            </p>
             <button type="button" className="sb-player-restart" onClick={restart} title="응답을 초기화하고 처음부터">
               ↺ 처음부터
             </button>
@@ -229,7 +264,7 @@ export default function Player({ api, scenario, resume }) {
           )}
           {stageIdx < STAGES.length - 1 ? (
             <button type="button" className="clean-plan-submit" onClick={next}>
-              맞춤 브리프 확인하기
+              맞춤 계획 확인하기
             </button>
           ) : (
             <button type="button" className="clean-plan-submit" onClick={playerApi.complete}>

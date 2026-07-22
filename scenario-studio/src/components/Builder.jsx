@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { STAGES, DEVICE_PRESETS, CHIP_COLORS, createItem, visibleProfileItems } from '../lib/store.js'
+import { STAGES, DEVICE_PRESETS, CHIP_COLORS, createItem, createPlanCase, planCasesForScenario, uid, visibleProfileItems } from '../lib/store.js'
 import { LIBRARY } from '../lib/registry.jsx'
 import {
   PAD, GAP, MIN_ITEM_W,
@@ -13,6 +13,7 @@ import Inspector from './builder/Inspector.jsx'
 import ContainerContents from './builder/ContainerContents.jsx'
 import CanvasTextToolbar from './builder/CanvasTextToolbar.jsx'
 import ContextMenu from './builder/ContextMenu.jsx'
+import PlanCaseEditor from './builder/PlanCaseEditor.jsx'
 
 const SNAP = 6
 /* 드래그 겹침 회피 둔화 — 지속시간 게이트:
@@ -43,6 +44,9 @@ const BUILD_STAGES = [
 export default function Builder({ api, scenario }) {
   const [stageKey, setStageKey] = useState(STAGES[0].key)
   const isExplore = stageKey === 'explore'
+  const planCases = scenario.planCases || planCasesForScenario(scenario)
+  const [planCaseId, setPlanCaseId] = useState(() => planCases[0]?.id || null)
+  const activePlanCase = planCases.find((planCase) => planCase.id === planCaseId) || planCases[0]
   const [selectedIds, setSelectedIds] = useState([]) // 다중 선택 (⇧+클릭)
   const [dragPos, setDragPos] = useState(null) // { id, positions: {id:{x,y}} }
   const [dragLayoutPos, setDragLayoutPos] = useState(null) // 겹침 회피 미리보기용 지연 위치
@@ -72,7 +76,11 @@ export default function Builder({ api, scenario }) {
   const clipboardRef = useRef(null) // ⌘C 복사한 컴포넌트 스냅샷 (단계 간 붙여넣기 가능)
   const canvasRef = useRef(null)
 
-  const items = isExplore ? (api.explore.items || []) : (scenario.stages[stageKey] || [])
+  const items = isExplore
+    ? (api.explore.items || [])
+    : stageKey === 'plan'
+      ? (activePlanCase?.items || [])
+      : (scenario.stages[stageKey] || [])
   /* 컨테이너(레이아웃) 안의 자식은 캔버스 절대배치 대상이 아니다 — 캔버스/레이아웃 연산은 최상위만 */
   const topItems = items.filter((it) => !it.parentId)
   const [dropTargetId, setDropTargetId] = useState(null) // 드래그 중 컨테이너 드롭 대상 하이라이트
@@ -242,15 +250,28 @@ export default function Builder({ api, scenario }) {
 
   /* ── 히스토리 (Undo/Redo) — 시나리오 단계 + 공통 탐색 아이템을 함께 스냅샷 ── */
   const takeSnapshot = () =>
-    JSON.stringify({ stages: scenario.stages, device: scenario.device, exploreItems: api.explore.items || [] })
+    JSON.stringify({
+      stages: scenario.stages,
+      planCases,
+      device: scenario.device,
+      exploreItems: api.explore.items || [],
+    })
   const applySnapshot = (snap) => {
     const data = JSON.parse(snap)
+    const restoredCases = planCasesForScenario({
+      stages: data.stages || data,
+      planCases: data.planCases,
+    })
     setSelectedIds([])
     api.updateScenario(scenario.id, (s) => ({
       ...s,
       stages: data.stages || data,
+      planCases: restoredCases,
       device: data.device || s.device,
     }))
+    if (!restoredCases.some((planCase) => planCase.id === planCaseId)) {
+      setPlanCaseId(restoredCases[0]?.id || null)
+    }
     if (data.exploreItems) api.updateExplore({ ...api.explore, items: data.exploreItems })
   }
 
@@ -294,12 +315,129 @@ export default function Builder({ api, scenario }) {
     pushHistory()
     if (isExplore) {
       api.updateExplore((prev) => ({ ...prev, items: updater(prev.items || []) }))
+    } else if (stageKey === 'plan') {
+      api.updateScenario(scenario.id, (s) => ({
+        ...s,
+        planCases: (s.planCases || planCasesForScenario(s)).map((planCase) =>
+          planCase.id === planCaseId
+            ? { ...planCase, items: updater(planCase.items || []) }
+            : planCase
+        ),
+      }))
     } else {
       api.updateScenario(scenario.id, (s) => ({
         ...s,
         stages: { ...s.stages, [stageKey]: updater(s.stages[stageKey] || []) },
       }))
     }
+  }
+
+  /* Undo/삭제/가져오기로 현재 케이스가 사라진 경우 유효한 케이스로 이동한다. */
+  useEffect(() => {
+    if (planCases.some((planCase) => planCase.id === planCaseId)) return
+    setPlanCaseId(planCases[0]?.id || null)
+  }, [planCaseId, planCases])
+
+  const updatePlanCases = (updater) => {
+    if (previewMode) return
+    pushHistory()
+    api.updateScenario(scenario.id, (s) => ({
+      ...s,
+      planCases: updater(s.planCases || planCasesForScenario(s)),
+    }))
+  }
+
+  const updateActivePlanCase = (patch) => {
+    updatePlanCases((current) => current.map((planCase) =>
+      planCase.id === planCaseId ? { ...planCase, ...patch } : planCase
+    ))
+  }
+
+  const addPlanCase = () => {
+    const next = createPlanCase({ name: `계획 케이스 ${planCases.length + 1}` })
+    updatePlanCases((current) => {
+      const fallbackIndex = current.findIndex((planCase) => planCase.isFallback)
+      const nextCases = [...current]
+      nextCases.splice(fallbackIndex >= 0 ? fallbackIndex : current.length, 0, next)
+      return nextCases
+    })
+    setPlanCaseId(next.id)
+    setOpenMenu('case')
+  }
+
+  const duplicatePlanCase = () => {
+    if (!activePlanCase) return
+    const idMap = {}
+    activePlanCase.items.forEach((item) => { idMap[item.id] = uid() })
+    const itemsCopy = activePlanCase.items.map((item) => ({
+      ...item,
+      id: idMap[item.id],
+      parentId: item.parentId ? idMap[item.parentId] : undefined,
+      props: JSON.parse(JSON.stringify(item.props || {})),
+      style: item.style ? { ...item.style } : undefined,
+    }))
+    const copy = createPlanCase({
+      ...activePlanCase,
+      id: uid(),
+      name: `${activePlanCase.name} 복사본`,
+      isFallback: false,
+      conditions: (activePlanCase.conditions || []).map((condition) => ({
+        ...condition,
+        id: uid(),
+        values: [...(condition.values || [])],
+      })),
+      items: itemsCopy,
+    })
+    updatePlanCases((current) => {
+      const index = current.findIndex((planCase) => planCase.id === activePlanCase.id)
+      const fallbackIndex = current.findIndex((planCase) => planCase.isFallback)
+      const next = [...current]
+      const insertAt = activePlanCase.isFallback
+        ? (fallbackIndex >= 0 ? fallbackIndex : next.length)
+        : Math.min(index + 1, fallbackIndex >= 0 ? fallbackIndex : next.length)
+      next.splice(insertAt, 0, copy)
+      return next
+    })
+    setPlanCaseId(copy.id)
+    api.showToast(`"${copy.name}" 케이스를 만들었어요.`)
+  }
+
+  const removePlanCase = () => {
+    if (!activePlanCase || planCases.length <= 1) return
+    if (!window.confirm(`"${activePlanCase.name}" 계획 케이스를 삭제할까요?`)) return
+    const index = planCases.findIndex((planCase) => planCase.id === activePlanCase.id)
+    const remaining = planCases.filter((planCase) => planCase.id !== activePlanCase.id)
+    if (activePlanCase.isFallback && remaining.length > 0) {
+      remaining[remaining.length - 1] = { ...remaining[remaining.length - 1], isFallback: true }
+    }
+    updatePlanCases(() => remaining)
+    setPlanCaseId(remaining[Math.min(index, remaining.length - 1)]?.id || null)
+    setOpenMenu(null)
+  }
+
+  const setFallbackPlanCase = () => {
+    updatePlanCases((current) => {
+      const target = current.find((planCase) => planCase.id === planCaseId)
+      if (!target) return current
+      const regular = current
+        .filter((planCase) => planCase.id !== planCaseId)
+        .map((planCase) => ({ ...planCase, isFallback: false }))
+      return [...regular, { ...target, isFallback: true }]
+    })
+  }
+
+  const movePlanCase = (delta) => {
+    if (activePlanCase?.isFallback) return
+    const from = planCases.findIndex((planCase) => planCase.id === planCaseId)
+    const lastRegularIndex = Math.max(0, planCases.findIndex((planCase) => planCase.isFallback) - 1)
+    const to = Math.max(0, Math.min(lastRegularIndex, from + delta))
+    if (from < 0 || from === to) return
+    updatePlanCases((current) => {
+      const next = [...current]
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      return next
+    })
   }
 
   useEffect(() => {
@@ -310,7 +448,7 @@ export default function Builder({ api, scenario }) {
     setDraggingChildId(null)
     setChildDragGhost(null)
     setInsertHint(null)
-  }, [stageKey])
+  }, [stageKey, planCaseId])
 
   /* 미리보기 진입 시 남아 있던 모든 편집 상태를 닫는다. */
   useEffect(() => {
@@ -1297,15 +1435,20 @@ export default function Builder({ api, scenario }) {
     const ratio = (preset.w - PAD * 2) / (canvasW - PAD * 2)
     const newItemW = preset.w - PAD * 2
     api.updateScenario(scenario.id, (s) => {
+      const resizeItems = (list) => (list || []).map((it) => {
+        const w = Math.max(MIN_ITEM_W, Math.min(newItemW, Math.round(it.w * ratio)))
+        const x = Math.max(0, Math.min(preset.w - PAD - w, Math.round(PAD + (it.x - PAD) * ratio)))
+        return { ...it, w, x }
+      })
       const stages = {}
       Object.keys(s.stages).forEach((k) => {
-        stages[k] = (s.stages[k] || []).map((it) => {
-          const w = Math.max(MIN_ITEM_W, Math.min(newItemW, Math.round(it.w * ratio)))
-          const x = Math.max(0, Math.min(preset.w - PAD - w, Math.round(PAD + (it.x - PAD) * ratio)))
-          return { ...it, w, x }
-        })
+        stages[k] = resizeItems(s.stages[k])
       })
-      return { ...s, device: preset.key, stages }
+      const resizedPlanCases = (s.planCases || planCasesForScenario(s)).map((planCase) => ({
+        ...planCase,
+        items: resizeItems(planCase.items),
+      }))
+      return { ...s, device: preset.key, stages, planCases: resizedPlanCases }
     })
     // 폭 변경으로 높이가 다시 측정된 뒤 겹침/간격을 보정한다
     setTimeout(() => {
@@ -1328,10 +1471,26 @@ export default function Builder({ api, scenario }) {
   }
 
   const publish = () => {
-    const emptyStages = STAGES.filter((s) => (scenario.stages[s.key] || []).length === 0)
-    if (emptyStages.length > 0) {
+    const warnings = []
+    if ((scenario.stages.survey || []).length === 0) warnings.push('설문 단계가 비어 있어요.')
+    const emptyCases = planCases.filter((planCase) => (planCase.items || []).length === 0)
+    if (emptyCases.length > 0) warnings.push(`빈 계획 케이스: ${emptyCases.map((planCase) => planCase.name).join(', ')}`)
+    const incompleteCases = planCases.filter((planCase) =>
+      !planCase.isFallback && (
+        !planCase.conditions.length
+        || planCase.conditions.some((condition) => {
+          const operator = condition.operator
+          const needsValues = !['answered', 'unanswered'].includes(operator)
+          return !condition.questionId || (needsValues && (!condition.values || condition.values.length === 0))
+        })
+      )
+    )
+    if (incompleteCases.length > 0) {
+      warnings.push(`조건 미완성 케이스: ${incompleteCases.map((planCase) => planCase.name).join(', ')}`)
+    }
+    if (warnings.length > 0) {
       const ok = window.confirm(
-        `${emptyStages.map((s) => s.label).join(', ')} 단계가 비어 있어요. 그래도 발행할까요?`
+        `${warnings.join('\n')}\n\n그래도 발행할까요?`
       )
       if (!ok) return
     }
@@ -1346,6 +1505,7 @@ export default function Builder({ api, scenario }) {
       chip: finalChip,
       device: scenario.device,
       stages: JSON.parse(JSON.stringify(scenario.stages)),
+      planCases: JSON.parse(JSON.stringify(planCases)),
     }
     api.updateScenario(scenario.id, (s) => ({
       ...s,
@@ -1371,6 +1531,10 @@ export default function Builder({ api, scenario }) {
       chip: snap.chip,
       device: snap.device,
       stages: JSON.parse(JSON.stringify(snap.stages)),
+      planCases: JSON.parse(JSON.stringify(planCasesForScenario({
+        stages: snap.stages,
+        planCases: snap.planCases,
+      }))),
     }))
     api.showToast('발행 시점 버전으로 복원했어요.')
   }
@@ -1488,12 +1652,19 @@ export default function Builder({ api, scenario }) {
     },
   }
 
+  const surveyQuestions = (scenario.stages.survey || []).filter((item) => item.type === 'surveyQuestion')
+  const activePlanCaseIndex = planCases.findIndex((planCase) => planCase.id === activePlanCase?.id)
+
   const chevron = (
     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" /></svg>
   )
 
   return (
-    <div className={'sb-builder' + (previewMode ? ' sb-builder--preview' : '')}>
+    <div className={
+      'sb-builder'
+      + (previewMode ? ' sb-builder--preview' : '')
+      + (stageKey === 'plan' ? ' sb-builder--plan' : '')
+    }>
       {/* 상단 바 — 1행: 문서 정보 + 발행, 2행: 단계 탭 + 편집 도구 그룹 */}
       <div className="sb-topbar">
         <div className="sb-topbar__row">
@@ -1566,15 +1737,19 @@ export default function Builder({ api, scenario }) {
                 </button>
               }
             >
-              {[...(scenario.versions || [])].reverse().map((v, i, arr) => (
-                <button key={v.at} type="button" className="sb-menu__item" onClick={() => restoreVersion(v)}>
-                  <strong>발행 v{arr.length - i}</strong>
-                  <small>
-                    {new Date(v.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                    {' · '}설문 {(v.stages.survey || []).length} · 계획 {(v.stages.plan || []).length}
-                  </small>
-                </button>
-              ))}
+              {[...(scenario.versions || [])].reverse().map((v, i, arr) => {
+                const versionCases = v.planCases || planCasesForScenario({ stages: v.stages })
+                const planItemCount = versionCases.reduce((sum, planCase) => sum + (planCase.items || []).length, 0)
+                return (
+                  <button key={v.at} type="button" className="sb-menu__item" onClick={() => restoreVersion(v)}>
+                    <strong>발행 v{arr.length - i}</strong>
+                    <small>
+                      {new Date(v.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      {' · '}설문 {(v.stages.survey || []).length} · 계획 {versionCases.length}케이스/{planItemCount}개
+                    </small>
+                  </button>
+                )
+              })}
             </Dropdown>
           )}
 
@@ -1716,7 +1891,11 @@ export default function Builder({ api, scenario }) {
                   <span className="sb-stage-tab__num">{s.common ? '🧭' : i}</span>
                   {s.label}
                   <span className="sb-stage-tab__count">
-                    {s.common ? (api.explore.items || []).length : (scenario.stages[s.key] || []).length}
+                    {s.common
+                      ? (api.explore.items || []).length
+                      : s.key === 'plan'
+                        ? planCases.length
+                        : (scenario.stages[s.key] || []).length}
                   </span>
                 </button>
               </React.Fragment>
@@ -1724,6 +1903,64 @@ export default function Builder({ api, scenario }) {
             {isExplore && <span className="sb-stage-tabs__note">공통 페이지 · 모든 시나리오 홈에 즉시 반영</span>}
           </div>
         </div>
+
+        {stageKey === 'plan' && activePlanCase && (
+          <div className="sb-topbar__row sb-topbar__row--cases">
+            <span className="sb-plan-cases__label">계획 케이스</span>
+            <div className="sb-plan-case-tabs" role="tablist" aria-label="계획 케이스">
+              {planCases.map((planCase, index) => (
+                <button
+                  key={planCase.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={planCase.id === activePlanCase.id}
+                  className={'sb-plan-case-tab' + (planCase.id === activePlanCase.id ? ' sb-plan-case-tab--active' : '')}
+                  title={`${index + 1}순위 · ${planCase.isFallback ? '기본 케이스' : `${planCase.conditionMode === 'all' ? 'AND' : 'OR'} 조건 ${planCase.conditions.length}개`}`}
+                  onClick={() => setPlanCaseId(planCase.id)}
+                >
+                  <span>{index + 1}</span>
+                  {planCase.name || `계획 케이스 ${index + 1}`}
+                  <b>{planCase.isFallback ? '기본' : planCase.conditions.length}</b>
+                </button>
+              ))}
+            </div>
+            <button type="button" className="sb-btn sb-btn--small sb-plan-case-add" disabled={previewMode} onClick={addPlanCase}>
+              + 새 케이스
+            </button>
+            <Dropdown
+              open={openMenu === 'case'}
+              onClose={() => setOpenMenu(null)}
+              menuClass="sb-plan-case-menu"
+              button={
+                <button
+                  type="button"
+                  className={'sb-btn sb-btn--small' + (openMenu === 'case' ? ' sb-btn--open' : '')}
+                  disabled={previewMode}
+                  onClick={() => toggleMenu('case')}
+                >
+                  조건 · 우선순위 설정
+                </button>
+              }
+            >
+              <PlanCaseEditor
+                planCase={activePlanCase}
+                caseIndex={activePlanCaseIndex}
+                caseCount={planCases.length}
+                questions={surveyQuestions}
+                onChange={updateActivePlanCase}
+                onSetFallback={setFallbackPlanCase}
+                onDuplicate={duplicatePlanCase}
+                onDelete={removePlanCase}
+                onMove={movePlanCase}
+              />
+            </Dropdown>
+            <span className="sb-plan-cases__note">
+              {activePlanCase.isFallback
+                ? '조건 미일치 시 실행되는 기본 페이지'
+                : `${activePlanCase.conditionMode === 'all' ? '모든 조건' : '조건 중 하나'} 만족 시 실행 · 앞 케이스 우선`}
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="sb-workspace">
