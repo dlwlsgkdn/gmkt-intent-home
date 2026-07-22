@@ -185,6 +185,8 @@ export function exploreItemsFrom(config) {
    계정 = 프로필 + 탐색(DDAK) 페이지 + 시나리오 + 쓰레드 묶음.
    프로필을 전환하면 네 가지가 함께 바뀐다. */
 const ACCOUNTS_KEY = 'ddak-accounts-v1'
+export const BACKUP_FORMAT = 'ddak-scenario-studio-backup'
+export const BACKUP_VERSION = 1
 
 export function createAccount(partial = {}) {
   const explore = JSON.parse(JSON.stringify(DEFAULT_EXPLORE))
@@ -241,6 +243,64 @@ export function saveAccounts(accounts, activeId) {
     localStorage.setItem(ACCOUNTS_KEY, JSON.stringify({ accounts, activeId }))
   } catch (e) {
     /* ignore */
+  }
+}
+
+/* ── 전체 로컬 데이터 JSON 백업 ──
+   현재 사용하는 localStorage 상태(accounts/keywords/viewerDevice)를 한 파일로 묶는다. */
+export function createDataBackup({ accounts, activeAccountId, keywords, viewerDevice }) {
+  return {
+    format: BACKUP_FORMAT,
+    version: BACKUP_VERSION,
+    exportedAt: new Date().toISOString(),
+    data: { accounts, activeAccountId, keywords, viewerDevice },
+  }
+}
+
+const isObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v)
+
+/* 외부 JSON을 앱 상태에 넣기 전 최소 구조를 검증하고 기존 데이터 모델로 보정한다. */
+export function parseDataBackup(payload) {
+  if (!isObject(payload) || payload.format !== BACKUP_FORMAT) {
+    throw new Error('DDAK 전체 백업 파일이 아니에요.')
+  }
+  if (payload.version !== BACKUP_VERSION) {
+    throw new Error(`지원하지 않는 백업 버전이에요. (버전 ${payload.version || '없음'})`)
+  }
+
+  const data = payload.data
+  if (!isObject(data) || !Array.isArray(data.accounts) || data.accounts.length === 0) {
+    throw new Error('백업에 프로필 계정 정보가 없어요.')
+  }
+  if (!Array.isArray(data.keywords)) {
+    throw new Error('백업의 키워드 사전 형식이 올바르지 않아요.')
+  }
+  if (!DEVICE_PRESETS.some((d) => d.key === data.viewerDevice)) {
+    throw new Error('백업의 기기 설정이 올바르지 않아요.')
+  }
+
+  const accounts = data.accounts.map((raw, index) => {
+    if (!isObject(raw) || !isObject(raw.profile) || !Array.isArray(raw.profile.items)) {
+      throw new Error(`${index + 1}번째 프로필 정보가 올바르지 않아요.`)
+    }
+    if (!isObject(raw.explore) || !Array.isArray(raw.scenarios) || !Array.isArray(raw.threads)) {
+      throw new Error(`${index + 1}번째 워크스페이스 정보가 올바르지 않아요.`)
+    }
+    if (raw.scenarios.some((s) => !isObject(s) || !isObject(s.stages))) {
+      throw new Error(`${index + 1}번째 프로필의 시나리오 형식이 올바르지 않아요.`)
+    }
+    return normalizeAccount({ ...raw, id: String(raw.id || uid()) })
+  })
+
+  const activeId = accounts.some((a) => a.id === data.activeAccountId)
+    ? data.activeAccountId
+    : accounts[0].id
+
+  return {
+    accounts,
+    activeId,
+    keywords: data.keywords,
+    viewerDevice: data.viewerDevice,
   }
 }
 

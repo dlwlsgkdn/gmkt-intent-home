@@ -12,6 +12,7 @@ export default function HomeView({ api }) {
   const [threadOrigin, setThreadOrigin] = useState(null) // null=닫힘 | 'left'|'center'|'right'
   const [draggingChipId, setDraggingChipId] = useState(null)
   const importInputRef = useRef(null)
+  const backupImportInputRef = useRef(null)
   const chipDragRef = useRef(null) // { id, startX, startY, moved }
   const published = api.scenarios.filter((s) => s.status === 'published')
 
@@ -71,6 +72,40 @@ export default function HomeView({ api }) {
         api.showToast('가져오기 실패: JSON 형식을 확인해주세요.')
       }
     }
+    reader.readAsText(file)
+    e.target.value = ''
+  }
+
+  const downloadJson = (data, filename) => {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const exportDataBackup = () => {
+    const date = new Date().toISOString().slice(0, 10)
+    downloadJson(api.exportDataBackup(), `ddak-studio-backup-${date}.json`)
+    api.showToast(`전체 데이터를 백업했어요. (프로필 ${api.accounts.length}개)`)
+  }
+
+  const handleBackupImportFile = (e) => {
+    const file = e.target.files && e.target.files[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      try {
+        const payload = JSON.parse(reader.result)
+        if (!window.confirm('현재 브라우저의 모든 프로필·탐색·시나리오·쓰레드와 공통 설정을 백업 파일로 교체할까요?')) return
+        if (api.importDataBackup(payload)) setDrawerOpen(false)
+      } catch (err) {
+        api.showToast('전체 복원 실패: JSON 형식을 확인해주세요.')
+      }
+    }
+    reader.onerror = () => api.showToast('전체 복원 실패: 파일을 읽을 수 없어요.')
     reader.readAsText(file)
     e.target.value = ''
   }
@@ -217,6 +252,7 @@ export default function HomeView({ api }) {
               ))}
             </div>
 
+            <p className="sb-panel-label">현재 프로필의 시나리오</p>
             <div className="sb-drawer__tools">
               <button type="button" onClick={exportScenarios}>
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16" /></svg>
@@ -227,6 +263,20 @@ export default function HomeView({ api }) {
                 가져오기
               </button>
               <input ref={importInputRef} type="file" accept=".json,application/json" className="hidden" onChange={handleImportFile} />
+            </div>
+
+            <p className="sb-panel-label">전체 데이터 백업</p>
+            <p className="sb-drawer__backup-hint">모든 프로필·탐색 화면·시나리오·쓰레드·키워드·기기 설정을 포함합니다.</p>
+            <div className="sb-drawer__tools sb-drawer__tools--backup">
+              <button type="button" onClick={exportDataBackup}>
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16" /></svg>
+                전체 백업
+              </button>
+              <button type="button" onClick={() => backupImportInputRef.current && backupImportInputRef.current.click()}>
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M12 16V4m0 0L8 8m4-4l4 4M4 20h16" /></svg>
+                전체 복원
+              </button>
+              <input ref={backupImportInputRef} type="file" accept=".json,application/json" className="hidden" onChange={handleBackupImportFile} />
             </div>
 
             <div className="sb-drawer__list">

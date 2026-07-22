@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { createScenario, uid, loadKeywords, saveKeywords, loadViewerDevice, saveViewerDevice, loadAccounts, saveAccounts, createAccount } from './lib/store.js'
+import { createScenario, uid, loadKeywords, saveKeywords, loadViewerDevice, saveViewerDevice, loadAccounts, saveAccounts, createAccount, createDataBackup, parseDataBackup } from './lib/store.js'
 import { readShareFromHash, clearShareHash } from './lib/share.js'
 import HomeView from './components/HomeView.jsx'
 import Builder from './components/Builder.jsx'
@@ -140,6 +140,30 @@ export default function App() {
     setToast(`시나리오 ${cleaned.length}개를 가져왔어요.`)
   }
 
+  /* 모든 프로필 워크스페이스와 공통 설정을 단일 JSON으로 백업/복원 */
+  const exportDataBackup = () => createDataBackup({
+    accounts,
+    activeAccountId,
+    keywords,
+    viewerDevice,
+  })
+
+  const importDataBackup = (payload) => {
+    try {
+      const restored = parseDataBackup(payload)
+      setAccounts(restored.accounts)
+      setActiveAccountId(restored.activeId)
+      setKeywords(restored.keywords)
+      setViewerDevice(restored.viewerDevice)
+      setRoute({ name: 'home' })
+      setToast(`전체 데이터를 복원했어요. (프로필 ${restored.accounts.length}개)`)
+      return true
+    } catch (err) {
+      setToast(`전체 복원 실패: ${err.message || '백업 파일을 확인해주세요.'}`)
+      return false
+    }
+  }
+
   const current = useMemo(
     () => scenarios.find((s) => s.id === route.id) || null,
     [scenarios, route.id]
@@ -196,6 +220,8 @@ export default function App() {
     copyScenario,
     reorderScenario,
     importScenarios,
+    exportDataBackup,
+    importDataBackup,
     goHome: () => setRoute({ name: 'home' }),
     openBuilder: (id) => setRoute({ name: 'builder', id }),
     /* resume = { threadId, stage } — 쓰레드 이동: 기존 쓰레드를 이어서 해당 단계부터 */

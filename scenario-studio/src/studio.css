@@ -374,6 +374,17 @@
   transition: all 0.15s ease;
 }
 .sb-drawer__tools button:hover { border-color: #94a3b8; background: #f8fafc; }
+.sb-drawer__backup-hint {
+  margin: -6px 0 9px;
+  color: #7d8a80;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.sb-drawer__tools--backup button {
+  border-color: rgba(95, 116, 101, 0.32);
+  background: var(--sb-accent-soft);
+  color: var(--sb-accent);
+}
 .sb-drawer__list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
 .sb-drawer__empty {
   padding: 28px 18px;
