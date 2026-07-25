@@ -4742,3 +4742,7 @@ button.sb-info-chip:hover { border-color: #94a3b8; background: #f8fafc; }
 .sb-btn--tiny { padding: 5px 9px; font-size: 9.5px; }
 
 .sb-gen-casecount { max-width: 260px; margin-bottom: 10px; }
+
+.sb-gen-total { margin: 4px 0 0; color: var(--sb-ink); font-size: 12px; font-weight: 600; }
+.sb-gen-total b { color: var(--sb-qa-blue); font-weight: 850; }
+.sb-gen-total--warn b { color: #b45309; }

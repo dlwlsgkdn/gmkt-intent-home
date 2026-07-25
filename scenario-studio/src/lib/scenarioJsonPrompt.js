@@ -35,6 +35,11 @@ export function componentReference() {
     .join('\n\n')
 }
 
+/* 조합 폭발을 사용자가 미리 가늠할 수 있게 — 질문 수^선택지 수 */
+export function combinationCount(questionCount, optionCount) {
+  return Math.pow(Number(optionCount) || 0, Number(questionCount) || 0)
+}
+
 const SHAPE_DOC = `시나리오 하나는 아래 형태의 객체입니다. 최종 출력은 이 객체 하나를 담은 **배열**입니다.
 
 {
@@ -54,6 +59,7 @@ const SHAPE_DOC = `시나리오 하나는 아래 형태의 객체입니다. 최�
         { "questionId": "<설문 질문 아이템의 id>", "operator": "includesAny", "values": ["선택지 텍스트"] }
       ],
       "isFallback": false,                 // 마지막 케이스 하나는 반드시 true (조건 미일치 시 실행)
+      "evaluation": { "selected": true, "slot": "A" },   // 평가 대상 3개에만. slot은 "A"/"B"/"C"
       "items": [ ...아이템... ]
     }
   ]
@@ -86,7 +92,12 @@ const LAYOUT_RULES = `배치 규칙:
 조건 규칙:
 - conditions[].questionId는 stages.survey에 넣은 surveyQuestion 아이템의 id와 정확히 일치해야 합니다.
 - values는 그 질문 props.options에 실제로 있는 선택지 문자열이어야 합니다(options는 쉼표로 구분된 하나의 문자열).
-- 케이스 배열의 마지막 하나는 isFallback: true로 두고 conditions는 빈 배열로 둡니다.`
+- 케이스 배열의 마지막 하나는 isFallback: true로 두고 conditions는 빈 배열로 둡니다.
+
+평가 케이스 지정:
+- 만든 케이스 중 이 시나리오를 가장 잘 대표하는 3개를 골라 "evaluation": { "selected": true, "slot": "A" } 를 넣습니다(나머지 두 개는 "B", "C").
+- 고르는 기준: 서로 답변 조합이 최대한 겹치지 않고, 사용자가 실제로 자주 고를 법하며, 계획 내용과 추천 상품의 차이가 뚜렷한 케이스.
+- 기본(폴백) 케이스에는 evaluation을 넣지 않습니다. 나머지 케이스에도 넣지 않습니다.`
 
 export function buildScenarioDbPrompt({
   query,
@@ -94,19 +105,24 @@ export function buildScenarioDbPrompt({
   notes = '',
   catalogText = '',
   questionCount = 3,
+  optionCount = 3,
   stepCount = 3,
-  caseCount = 3,
 } = {}) {
   const catalog = String(catalogText || '').trim()
+  const total = combinationCount(questionCount, optionCount)
   return [
-    'DDAK 시나리오 스튜디오에 그대로 가져올(import) 시나리오 데이터를 JSON으로 만들어 주세요.',
+    'DDAK 시나리오 스튜디오에 그대로 가져올(import) 시나리오 데이터를 JSON 파일로 만들어 주세요.',
     '',
     '## 만들 시나리오',
     `- 검색 의도: ${query}`,
     persona ? `- 대상 페르소나: ${persona}` : null,
     notes ? `- 추가 조건: ${notes}` : null,
-    `- 설문 질문 ${questionCount}개(질문마다 선택지 3~5개), 계획 단계 ${stepCount}개`,
-    `- 계획 케이스 ${caseCount}개 + 기본(폴백) 케이스 1개. 케이스마다 설문 답변 조합이 달라야 하고, 그 조합에 맞게 문구와 추천 상품도 달라야 합니다.`,
+    `- 설문 질문 ${questionCount}개. **질문마다 선택지를 정확히 ${optionCount}개**씩 만듭니다.`,
+    `- 계획 단계 ${stepCount}개`,
+    `- **설문 선택지의 모든 조합에 대해 계획 케이스를 하나씩 빠짐없이** 만듭니다.`,
+    `  ${questionCount}개 질문 × 선택지 ${optionCount}개 = **총 ${total.toLocaleString()}개 케이스** + 기본(폴백) 케이스 1개 = ${(total + 1).toLocaleString()}개.`,
+    '  조합을 하나라도 빠뜨리거나 중복해서는 안 됩니다. 첫 번째 질문의 선택지를 바깥 루프로 두고 순서대로 전개하세요.',
+    '  케이스마다 그 조합에 맞게 제목·설명·체크포인트·추천 상품이 실제로 달라야 합니다. 문장을 그대로 복사하지 마세요.',
     '',
     catalog
       ? `## 사용할 상품 (이 목록에서만 고르고, 가격·브랜드를 바꾸지 마세요)\n형식: 브랜드 | 상품명 | 가격 | 정가 | 특징\n${catalog}`
@@ -124,10 +140,14 @@ export function buildScenarioDbPrompt({
     '작성 규칙:',
     '- 모든 사용자 노출 문구는 한국어 존댓말로 씁니다.',
     '- props는 위 목록에 있는 키만 사용하고, 값은 모두 문자열/불리언 등 목록의 기본값과 같은 타입으로 씁니다.',
-    '- 설명·머리말·맺음말 없이 ```json 코드블록 **하나만** 출력합니다. 그 안에는 시나리오 객체 하나를 담은 배열만 넣습니다.',
     '',
-    '다시 강조합니다: 시나리오 객체 하나가 담긴 배열을 ```json 코드블록 하나로만 출력하세요.',
-    '(이 결과는 스튜디오의 "결과 JSON 붙여넣기" 칸에 붙여넣어 가져옵니다.)',
+    '## 출력 방법',
+    `- 결과를 **\`ddak-scenario.json\` 파일 하나로 만들어** 주세요. 내용은 시나리오 객체 하나를 담은 배열입니다.`,
+    '- 케이스가 많아 내용이 기므로 대화창에 JSON을 길게 붙여넣지 말고, 반드시 다운로드할 수 있는 파일로 만들어 주세요.',
+    '- 답변 본문에는 만든 케이스 수와 평가용으로 고른 A/B/C 케이스만 짧게 적어 주세요.',
+    '',
+    `다시 강조합니다: 조합 ${total.toLocaleString()}개를 하나도 빠뜨리지 말고, 결과는 \`ddak-scenario.json\` 파일로 만들어 주세요.`,
+    '(이 파일을 스튜디오의 "결과 가져오기"에서 그대로 업로드합니다.)',
   ].filter((line) => line !== null).join('\n') // null만 제거 — ''는 단락 구분용 빈 줄
 }
 
@@ -186,6 +206,17 @@ export function parseScenarioDbJson(raw) {
       item.id,
       String(item.props?.options || '').split(',').map((option) => option.trim()).filter(Boolean),
     ]))
+    /* 평가 A/B/C 지정 — 슬롯이 어긋나면 평가 탭에서 케이스가 비어 보인다 */
+    const slots = planCases
+      .filter((planCase) => planCase?.evaluation?.selected)
+      .map((planCase) => planCase.evaluation.slot)
+    const validSlots = slots.filter((slot) => ['A', 'B', 'C'].includes(slot))
+    if (slots.length === 0) {
+      warnings.push(`${label}: 평가용 A/B/C 케이스가 지정되지 않았습니다. 평가 탭에서 직접 선정해야 합니다.`)
+    } else if (validSlots.length !== 3 || new Set(validSlots).size !== 3) {
+      warnings.push(`${label}: 평가 슬롯이 A·B·C 각각 하나씩이어야 하는데 [${slots.join(', ')}]로 지정됐습니다.`)
+    }
+
     planCases.forEach((planCase, caseIndex) => {
       ;(Array.isArray(planCase?.conditions) ? planCase.conditions : []).forEach((condition) => {
         const options = optionsById[condition?.questionId]

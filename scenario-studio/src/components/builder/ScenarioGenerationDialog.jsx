@@ -25,7 +25,7 @@ import {
   parseProductSearchResult,
 } from '../../lib/productSearch.js'
 import { copyToClipboard, wrapForChatApp } from '../../lib/chatPrompt.js'
-import { buildScenarioDbPrompt, parseScenarioDbJson } from '../../lib/scenarioJsonPrompt.js'
+import { buildScenarioDbPrompt, combinationCount, parseScenarioDbJson } from '../../lib/scenarioJsonPrompt.js'
 
 const personaFromProfile = (profile) => {
   const name = profile?.name ? `${profile.name}.` : ''
@@ -55,9 +55,11 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onImport, 
   const [searching, setSearching] = useState(false)
   const [searchNote, setSearchNote] = useState('')
   /* DB JSON 프롬프트 경로 상태 */
-  const [caseCount, setCaseCount] = useState(3)
+  const [optionCount, setOptionCount] = useState(3)
   const [importText, setImportText] = useState('')
   const [importResult, setImportResult] = useState(null)
+  const [importFileName, setImportFileName] = useState('')
+  const importFileRef = React.useRef(null)
 
   const { entries: catalog, errors: catalogErrors } = useMemo(
     () => parseCatalogText(catalogText, []),
@@ -165,9 +167,10 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onImport, 
 
   /* DB JSON을 통째로 만들어 달라는 프롬프트 — 레지스트리 기반이라 컴포넌트가 늘면 함께 갱신된다 */
   const dbPrompt = useMemo(
-    () => buildScenarioDbPrompt({ query, persona, notes, catalogText, questionCount, stepCount, caseCount }),
-    [query, persona, notes, catalogText, questionCount, stepCount, caseCount]
+    () => buildScenarioDbPrompt({ query, persona, notes, catalogText, questionCount, optionCount, stepCount }),
+    [query, persona, notes, catalogText, questionCount, optionCount, stepCount]
   )
+  const totalCases = combinationCount(questionCount, optionCount)
 
   const copyDbPrompt = async () => {
     onToast(await copyToClipboard(dbPrompt)
@@ -175,10 +178,30 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onImport, 
       : '복사하지 못했어요. 프롬프트 칸에서 직접 복사해주세요.')
   }
 
-  const verifyImport = () => {
-    const parsed = parseScenarioDbJson(importText)
+  const verifyImport = (text = importText) => {
+    const parsed = parseScenarioDbJson(text)
     setImportResult(parsed)
     if (parsed.errors.length > 0) onToast(`가져오기 검증에서 ${parsed.errors.length}개 문제를 찾았어요.`)
+    return parsed
+  }
+
+  /* AI가 만들어준 .json 파일을 그대로 올리는 경로 — 케이스가 많으면 붙여넣기보다 편하다 */
+  const handleImportFile = (event) => {
+    const file = event.target.files && event.target.files[0]
+    event.target.value = ''
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const text = String(reader.result || '')
+      setImportFileName(file.name)
+      setImportText(text)
+      const parsed = verifyImport(text)
+      if (parsed.errors.length === 0) {
+        onToast(`${file.name}에서 시나리오 ${parsed.scenarios.length}개를 읽었어요.`)
+      }
+    }
+    reader.onerror = () => onToast('파일을 읽지 못했어요.')
+    reader.readAsText(file)
   }
 
   const runImport = () => {
@@ -430,17 +453,31 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onImport, 
               </div>
               <p className="sb-llm-help">
                 시나리오 <b>DB JSON 전체</b>(설문 화면 + 계획 케이스들)를 만들어 달라는 프롬프트입니다.
-                사용 가능한 컴포넌트 목록과 배치·조건 규칙이 함께 들어갑니다.
-                Claude 앱에 붙여넣고 받은 JSON을 아래에 넣으세요.
+                사용 가능한 컴포넌트 목록과 배치·조건 규칙이 함께 들어가고,
+                <b> 설문 선택지의 모든 조합</b>에 대한 계획 케이스와 평가용 A/B/C 케이스 지정까지 요청합니다.
+                Claude 앱에 붙여넣고 받은 <b>.json 파일</b>을 아래에서 올리세요.
               </p>
-              <label className="sb-gen-field sb-gen-casecount">
-                <span>만들 계획 케이스 수</span>
-                <select value={caseCount} onChange={(event) => setCaseCount(Number(event.target.value))}>
-                  {[2, 3, 4, 5, 6, 8].map((count) => (
-                    <option key={count} value={count}>{count}개 + 기본 케이스</option>
-                  ))}
-                </select>
-              </label>
+              <div className="sb-gen-grid">
+                <label className="sb-gen-field">
+                  <span>질문마다 만들 선택지 수</span>
+                  <select value={optionCount} onChange={(event) => setOptionCount(Number(event.target.value))}>
+                    {[2, 3, 4, 5].map((count) => (
+                      <option key={count} value={count}>{count}개</option>
+                    ))}
+                  </select>
+                </label>
+                <div className="sb-gen-field">
+                  <span>만들어질 계획 케이스</span>
+                  <p className={'sb-gen-total' + (totalCases > 60 ? ' sb-gen-total--warn' : '')}>
+                    질문 {questionCount}개 × 선택지 {optionCount}개 = <b>{totalCases.toLocaleString()}개</b> + 기본 1개
+                  </p>
+                  <small>
+                    {totalCases > 60
+                      ? '조합이 많아 한 번에 다 만들지 못할 수 있어요. 질문 수나 선택지 수를 줄이는 편이 안전합니다.'
+                      : '설문에서 고를 수 있는 모든 조합에 케이스가 하나씩 생깁니다.'}
+                  </small>
+                </div>
+              </div>
               <details className="sb-llm-details">
                 <summary>프롬프트 펼쳐보기 ({dbPrompt.length.toLocaleString()}자)</summary>
                 <textarea readOnly rows={12} value={dbPrompt} aria-label="AI 프롬프트" />
@@ -451,27 +488,50 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onImport, 
               <div className="sb-llm-section__head">
                 <div>
                   <span>STEP B</span>
-                  <strong>결과 JSON 붙여넣기</strong>
+                  <strong>결과 가져오기</strong>
                 </div>
-                <button
-                  type="button"
-                  className="sb-btn"
-                  disabled={!importText.trim()}
-                  onClick={verifyImport}
-                >
-                  검증
-                </button>
+                <div className="sb-gen-headbtns">
+                  <button
+                    type="button"
+                    className="sb-btn sb-btn--primary"
+                    onClick={() => importFileRef.current && importFileRef.current.click()}
+                  >
+                    JSON 파일 올리기
+                  </button>
+                  <button
+                    type="button"
+                    className="sb-btn sb-btn--ghost sb-btn--tiny"
+                    disabled={!importText.trim()}
+                    onClick={() => verifyImport()}
+                  >
+                    검증
+                  </button>
+                </div>
               </div>
-              <textarea
-                className="sb-llm-response"
-                rows={8}
-                value={importText}
-                placeholder={'AI가 만든 [{ "title": …, "stages": …, "planCases": … }] JSON을 붙여넣으세요.'}
-                onChange={(event) => {
-                  setImportText(event.target.value)
-                  setImportResult(null)
-                }}
+              <input
+                ref={importFileRef}
+                type="file"
+                accept=".json,application/json"
+                className="hidden"
+                onChange={handleImportFile}
               />
+              {importFileName && (
+                <p className="sb-llm-help">📄 <b>{importFileName}</b>을 읽었어요. 아래 내용을 확인하고 가져오세요.</p>
+              )}
+              <details className="sb-llm-details">
+                <summary>파일 대신 직접 붙여넣기</summary>
+                <textarea
+                  rows={8}
+                  value={importText}
+                  placeholder={'AI가 만든 [{ "title": …, "stages": …, "planCases": … }] JSON을 붙여넣으세요.'}
+                  aria-label="결과 JSON"
+                  onChange={(event) => {
+                    setImportText(event.target.value)
+                    setImportResult(null)
+                    setImportFileName('')
+                  }}
+                />
+              </details>
               {importResult && (
                 <div className="sb-llm-validation">
                   {importResult.errors.length > 0 && (
