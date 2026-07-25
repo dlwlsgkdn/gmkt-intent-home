@@ -135,6 +135,14 @@ export default function App() {
     setRoute({ name: 'builder', id: s.id })
   }
 
+  /* LLM이 만든 시나리오 초안(설문 + 골든 계획 케이스)을 그대로 등록하고 빌더로 이동 */
+  const newScenarioFrom = (partial) => {
+    const s = createScenario(partial)
+    setScenarios((prev) => [...prev, s])
+    setRoute({ name: 'builder', id: s.id })
+    return s
+  }
+
   /* 홈 칩 드래그 순서 변경: dragId를 targetId 위치로 이동 */
   const reorderScenario = (dragId, targetId) => {
     if (dragId === targetId) return
@@ -306,6 +314,7 @@ export default function App() {
     updateScenario,
     removeScenario,
     newScenario,
+    newScenarioFrom,
     copyScenario,
     reorderScenario,
     importScenarios,

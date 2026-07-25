@@ -6,12 +6,14 @@ import { TEMPLATES } from '../lib/templates.js'
 import { hexToRgba, DEVICE_PRESETS, sortByPosition } from '../lib/store.js'
 import { renderItem } from '../lib/registry.jsx'
 import { isLikelyAnthropicKey, loadLlmApiKey, saveLlmApiKey } from '../lib/llmClient.js'
+import ScenarioGenerationDialog from './builder/ScenarioGenerationDialog.jsx'
 
 export default function HomeView({ api }) {
   const [query, setQuery] = useState('')
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [llmApiKey, setLlmApiKey] = useState(loadLlmApiKey)
   const [llmKeyVisible, setLlmKeyVisible] = useState(false)
+  const [scenarioGenOpen, setScenarioGenOpen] = useState(false)
 
   const updateLlmApiKey = (value) => {
     setLlmApiKey(value)
@@ -257,6 +259,15 @@ export default function HomeView({ api }) {
             </button>
 
             <p className="sb-panel-label">새로 만들기</p>
+            <button
+              type="button"
+              className="sb-template-card sb-template-card--ai"
+              onClick={() => setScenarioGenOpen(true)}
+            >
+              <span className="sb-template-card__icon">✦</span>
+              <strong>AI로 시나리오 만들기</strong>
+              <small>검색어·페르소나·추천 상품만 주면 설문 화면과 계획 화면을 한 번에 구성</small>
+            </button>
             <div className="sb-template-grid">
               {TEMPLATES.map((t) => (
                 <button key={t.key} type="button" className="sb-template-card" onClick={() => api.newScenario(t)}>
@@ -392,6 +403,15 @@ export default function HomeView({ api }) {
             </div>
           </aside>
         </>
+      )}
+
+      {scenarioGenOpen && (
+        <ScenarioGenerationDialog
+          profile={api.profile}
+          onCreate={(partial) => api.newScenarioFrom(partial)}
+          onClose={() => setScenarioGenOpen(false)}
+          onToast={api.showToast}
+        />
       )}
     </>
   )
