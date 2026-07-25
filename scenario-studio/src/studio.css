@@ -4516,3 +4516,71 @@ button.sb-info-chip:hover { border-color: #94a3b8; background: #f8fafc; }
   .sb-status { display: none; }
   .sb-scenario-row__actions { flex-wrap: wrap; }
 }
+
+/* ── 계획 케이스 자동 생성 다이얼로그 (sb-llm-dialog 셸 재사용) ── */
+.sb-gen-dialog { max-width: 860px; }
+.sb-plan-case-generate { color: #7c3aed; border-color: rgba(124, 58, 237, 0.35); }
+.sb-plan-case-generate:hover { background: rgba(124, 58, 237, 0.08); }
+.sb-gen-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.sb-gen-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.sb-gen-field > span { color: var(--sb-ink); font-size: 10.5px; font-weight: 750; }
+.sb-gen-field > span em { color: #94a3b8; font-style: normal; font-weight: 600; }
+.sb-gen-field select,
+.sb-gen-field textarea {
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 11px;
+  color: var(--sb-ink);
+  background: #fff;
+}
+.sb-gen-field textarea { resize: vertical; line-height: 1.5; }
+.sb-gen-field small { color: #64748b; font-size: 9px; }
+.sb-gen-catalog { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre; overflow-x: auto; }
+.sb-gen-axes { display: flex; flex-direction: column; gap: 5px; }
+.sb-gen-axes label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 9px;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.sb-gen-axes label b { color: var(--sb-ink); font-weight: 700; }
+.sb-gen-axes label em { margin-left: auto; color: #64748b; font-style: normal; font-size: 9.5px; }
+.sb-gen-skip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 8px;
+  color: #475569;
+  font-size: 10.5px;
+  cursor: pointer;
+}
+.sb-gen-problems { margin-bottom: 12px; }
+.sb-gen-progress__bar {
+  height: 8px;
+  margin: 10px 0;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+.sb-gen-progress__bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #7c3aed, #2563eb);
+  transition: width 0.4s ease;
+}
+.sb-gen-results { max-height: 320px; overflow-y: auto; }
+@media (max-width: 640px) {
+  .sb-gen-grid { grid-template-columns: 1fr; }
+}

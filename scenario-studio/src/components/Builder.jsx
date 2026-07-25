@@ -15,6 +15,7 @@ import CanvasTextToolbar from './builder/CanvasTextToolbar.jsx'
 import ContextMenu from './builder/ContextMenu.jsx'
 import PlanCaseEditor from './builder/PlanCaseEditor.jsx'
 import EvaluationPanel from './builder/EvaluationPanel.jsx'
+import CaseGenerationDialog from './builder/CaseGenerationDialog.jsx'
 import {
   EVALUATION_CASE_SLOTS,
   evaluationCasesFor,
@@ -406,6 +407,21 @@ export default function Builder({ api, scenario }) {
     updatePlanCases((current) => current.map((planCase) =>
       planCase.id === planCaseId ? { ...planCase, ...patch } : planCase
     ))
+  }
+
+  const [caseGenOpen, setCaseGenOpen] = useState(false)
+
+  /* 자동 생성 초안 케이스를 폴백 앞에 일괄 삽입 */
+  const applyGeneratedCases = (generatedCases) => {
+    if (!Array.isArray(generatedCases) || generatedCases.length === 0) return
+    updatePlanCases((current) => {
+      const fallbackIndex = current.findIndex((planCase) => planCase.isFallback)
+      const next = [...current]
+      next.splice(fallbackIndex >= 0 ? fallbackIndex : next.length, 0, ...generatedCases)
+      return next
+    })
+    setPlanCaseId(generatedCases[0].id)
+    api.showToast(`케이스 ${generatedCases.length}개를 초안으로 추가했어요. 평가 탭에서 검수해주세요.`)
   }
 
   const addPlanCase = () => {
@@ -2164,6 +2180,15 @@ export default function Builder({ api, scenario }) {
             <button type="button" className="sb-btn sb-btn--small sb-plan-case-add" disabled={previewMode} onClick={addPlanCase}>
               + 새 케이스
             </button>
+            <button
+              type="button"
+              className="sb-btn sb-btn--small sb-plan-case-generate"
+              disabled={previewMode}
+              onClick={() => setCaseGenOpen(true)}
+              title="페르소나·검색어·상품 카탈로그로 조합별 케이스를 LLM이 생성"
+            >
+              ✦ 자동 생성
+            </button>
             <Dropdown
               open={openMenu === 'case'}
               onClose={() => setOpenMenu(null)}
@@ -2222,6 +2247,18 @@ export default function Builder({ api, scenario }) {
           </div>
         )}
       </div>
+
+      {caseGenOpen && (
+        <CaseGenerationDialog
+          scenario={scenario}
+          planCases={planCases}
+          activeCaseId={planCaseId}
+          profile={canvasCtx.profile}
+          onApply={applyGeneratedCases}
+          onClose={() => setCaseGenOpen(false)}
+          onToast={api.showToast}
+        />
+      )}
 
       {isEvaluation ? (
         <EvaluationPanel
