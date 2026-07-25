@@ -1,57 +1,66 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { STAGES, DEVICE_PRESETS, CHIP_COLORS, createItem, createPlanCase, planCasesForScenario, uid, visibleProfileItems } from '../lib/store.js'
+import { STAGES, DEVICE_PRESETS, createItem, planCasesForScenario, visibleProfileItems } from '../lib/store.js'
 import { LIBRARY } from '../lib/registry.jsx'
-import {
-  PAD, GAP, MIN_ITEM_W,
-  resolveCollision, previewResolve, layoutCompactUp, alignItems, compactItems, COMPACT_TYPES, LAYOUT_MODES,
-} from '../lib/layout.js'
+import { PAD, GAP, MIN_ITEM_W, layoutCompactUp } from '../lib/layout.js'
 import { buildShareUrl } from '../lib/share.js'
-import Dropdown from './ui/Dropdown.jsx'
-import CanvasItem from './builder/CanvasItem.jsx'
-import Palette from './builder/Palette.jsx'
-import Inspector from './builder/Inspector.jsx'
-import ContainerContents from './builder/ContainerContents.jsx'
-import CanvasTextToolbar from './builder/CanvasTextToolbar.jsx'
-import ContextMenu from './builder/ContextMenu.jsx'
-import PlanCaseEditor from './builder/PlanCaseEditor.jsx'
-import EvaluationPanel from './builder/EvaluationPanel.jsx'
-import CaseGenerationDialog from './builder/CaseGenerationDialog.jsx'
+import {
+  containerAt as containerAtPoint,
+  insertHintAt,
+  itemHeight,
+  slotIndexAt,
+  stackBottom,
+} from '../lib/builder/geometry.js'
+import { createLayoutOps } from '../lib/builder/layoutOps.js'
+import { cloneGroup, fromClipboardEntries, toClipboardEntries } from '../lib/builder/itemClipboard.js'
+import {
+  VERSION_LIMIT,
+  publishSnapshot,
+  publishWarnings,
+  rescaleForDevice,
+  resolveChipLabel,
+  scenarioFromSnapshot,
+} from '../lib/builder/publishing.js'
 import {
   EVALUATION_CASE_SLOTS,
   evaluationCasesFor,
   normalizeCaseEvaluation,
   normalizeComponentEvaluation,
-  recommendSignificantCaseIds,
-  remapCaseEvaluation,
 } from '../lib/evaluation.js'
-import { applyLlmRevisionsToPlanCases } from '../lib/prompt/revision.js'
+import Palette from './builder/Palette.jsx'
+import Inspector from './builder/Inspector.jsx'
+import ContainerContents from './builder/ContainerContents.jsx'
+import CanvasTextToolbar from './builder/CanvasTextToolbar.jsx'
+import ContextMenu from './builder/ContextMenu.jsx'
+import EvaluationPanel from './builder/EvaluationPanel.jsx'
+import CaseGenerationDialog from './builder/CaseGenerationDialog.jsx'
+import BuilderTopBar from './builder/BuilderTopBar.jsx'
+import BuilderCanvas from './builder/BuilderCanvas.jsx'
+import PlanCaseBar from './builder/PlanCaseBar.jsx'
+import { useBuilderHistory } from './builder/hooks/useBuilderHistory.js'
+import { useStageItems } from './builder/hooks/useStageItems.js'
+import { usePlanCases } from './builder/hooks/usePlanCases.js'
+import { useCanvasDrag } from './builder/hooks/useCanvasDrag.js'
+import { useContainerNesting } from './builder/hooks/useContainerNesting.js'
+import { useBuilderShortcuts } from './builder/hooks/useBuilderShortcuts.js'
 
-const SNAP = 6
-/* 드래그 겹침 회피 둔화 — 지속시간 게이트:
-   겹치자마자 밀지 않는다. 겹침 면적이 임계(일반 45%, 컨테이너 75%) 이상인 상태가
-   지속시간(일반 400ms, 컨테이너 700ms)을 채운 아이템만 밀림을 허용하고,
-   그 전에 겹침이 풀리면 타이머는 리셋된다. 드래그 중 나머지 아이템은 전부 제자리 고정,
-   재배치 커밋은 드롭 시점에 정확하게 수행.
-   밀려나는 미리보기 재배치는 250ms 간격으로만 갱신 (드래그 아이템 자체는 즉각 반응) */
-const DRAG_SOFT_RATIO = 0.45
-const DRAG_PUSH_DELAY_MS = 250
-const DRAG_PREVIEW_MS = 250
-/* 히스테리시스: 한 번 밀린 아이템은 겹침이 이 비율 아래로 떨어질 때까지 밀림을 유지한다.
-   (밀어낸 뒤 빈자리로 조금만 움직여도 되돌아오는 떨림 방지 — 진입 45%, 유지 15%) */
-const PUSH_EXIT_RATIO = 0.15
-/* 컨테이너 삽입 ↔ 회피 구역 분리 (트리뷰의 drop-into/drop-between 패턴):
-   컨테이너 세로 중앙부 = 삽입 존(포인터가 있으면 "안에 배치" + 밀림 보호),
-   상/하 가장자리 NEST_EDGE_ZONE 밴드 = 밀어내기 존(깊은 겹침 지속 시 컨테이너가 비켜남) */
-const NEST_EDGE_ZONE = 18
-const CONTAINER_SOFT_RATIO = 0.45
-const CONTAINER_PUSH_DELAY_MS = 400
+/*
+ * 빌더 오케스트레이터.
+ *
+ * 편집 상태(무엇이 선택됐고 어느 단계를 보고 있는가)를 갖고, 각 관심사를 담당하는
+ * 훅과 컴포넌트를 연결한다. 실제 규칙은 아래로 내려가 있다:
+ *   lib/builder/geometry     — 좌표·슬롯 계산
+ *   lib/builder/layoutOps    — 겹침 해소·컴팩트 커밋 관문
+ *   lib/builder/itemClipboard— 사본 만들기
+ *   lib/builder/publishing   — 발행 점검·버전 스냅샷·기기 폭 환산
+ *   hooks/useStageItems      — 아이템을 어디서 읽고 어디에 저장할지
+ *   hooks/useBuilderHistory  — Undo/Redo 스택
+ *   hooks/usePlanCases       — 계획 케이스 CRUD·평가
+ *   hooks/useCanvasDrag      — 드래그·리사이즈·밀림 미리보기
+ *   hooks/useContainerNesting— 컨테이너 자식 넣기/꺼내기/순서
+ *   hooks/useBuilderShortcuts— 키보드
+ */
 
-/* 빌더에서 편집 가능한 단계: 공통 탐색(계정 소유, 자동 반영) + 시나리오 소유 설문/계획 */
-const BUILD_STAGES = [
-  { key: 'explore', label: '탐색', desc: '모든 시나리오가 공유하는 공통 탐색(홈) 페이지 — 저장 즉시 홈에 반영', common: true },
-  ...STAGES,
-  { key: 'evaluation', label: '평가 · 보강', desc: '대표 CASE의 실제 콘텐츠 컴포넌트를 인스턴스별로 0~5점 QA', review: true },
-]
+const ZOOM_STEPS = [0.5, 0.67, 0.8, 0.9, 1, 1.1, 1.25, 1.5]
 
 export default function Builder({ api, scenario }) {
   const [stageKey, setStageKey] = useState(STAGES[0].key)
@@ -60,195 +69,92 @@ export default function Builder({ api, scenario }) {
   const planCases = scenario.planCases || planCasesForScenario(scenario)
   const [planCaseId, setPlanCaseId] = useState(() => planCases[0]?.id || null)
   const activePlanCase = planCases.find((planCase) => planCase.id === planCaseId) || planCases[0]
-  const [selectedIds, setSelectedIds] = useState([]) // 다중 선택 (⇧+클릭)
-  const [dragPos, setDragPos] = useState(null) // { id, positions: {id:{x,y}} }
-  const [dragLayoutPos, setDragLayoutPos] = useState(null) // 겹침 회피 미리보기용 지연 위치
-  const [sizeDraft, setSizeDraft] = useState(null) // {id, w, h}
-  const [openMenu, setOpenMenu] = useState(null) // 'device' | 'layout' | 'color' | 'version'
-  const [guides, setGuides] = useState([]) // 드래그 중 스냅 가이드라인
-  const [focusTick, setFocusTick] = useState(0) // 더블클릭 → 인스펙터 포커스 신호
-  const [inlineEdit, setInlineEdit] = useState(null) // 캔버스 인라인 텍스트 편집 {itemId, key}
-  const [, setHistVer] = useState(0) // undo/redo 버튼 활성화 갱신용
-  const [zoom, setZoom] = useState(1) // 캔버스 줌 (Figma식 ⌘+/-/0)
-  const [canvasView, setCanvasView] = useState('edit') // 'edit'(클리핑 해제+경계 표시) | 'preview'(실사용 모습)
-  const previewMode = !isEvaluation && canvasView === 'preview'
-  const [marquee, setMarquee] = useState(null) // 빈 캔버스 드래그 → 러버밴드 선택 박스
-  const [ctxMenu, setCtxMenu] = useState(null) // 우클릭 컨텍스트 메뉴 {sx, sy, cx, cy, itemId}
-  const [feedbackTarget, setFeedbackTarget] = useState(null) // {caseId,itemId,fieldKey,label}
-  const [focusFieldKey, setFocusFieldKey] = useState(null) // 평가에서 인스펙터의 정확한 필드로 이동
-  const dragPosRef = useRef(null)
-  const dragLayoutPosRef = useRef(null) // 스로틀된 미리보기 재배치 기준 위치
-  const dragLayoutTimerRef = useRef(null)
-  const pushGateRef = useRef({}) // { 아이템id: 밀림이 허용되는 시각(deadline) }
-  const pushReadyRef = useRef(new Set()) // 지속시간을 채워 밀림이 허용된 아이템
-  const pushWakeRef = useRef(null) // 지속시간 경과 시점에 재렌더를 깨우는 타이머
-  const dragBlockedRef = useRef(new Set()) // 밀 자리가 없어 제자리에 남은 아이템 (드롭 시 원위치 복귀)
-  const previewLayoutRef = useRef(null) // 마지막 미리보기 레이아웃 { id: {x, y} } — 드롭 커밋이 그대로 반영
-  const dragStartRef = useRef(null) // 그룹 드래그 시작 시점의 위치들
-  const sizeDraftRef = useRef(null)
-  const heightsRef = useRef({})
-  const measureLayoutTimerRef = useRef(null)
-  const historyRef = useRef({ past: [], future: [], lastPush: 0 })
-  const clipboardRef = useRef(null) // ⌘C 복사한 컴포넌트 스냅샷 (단계 간 붙여넣기 가능)
-  const canvasRef = useRef(null)
-  const planCaseTabsRef = useRef(null)
 
+  const [selectedIds, setSelectedIds] = useState([]) // 다중 선택 (⇧+클릭)
+  const [openMenu, setOpenMenu] = useState(null) // 'device' | 'compact' | 'layout' | 'color' | 'version' | 'case'
+  const [focusTick, setFocusTick] = useState(0) // 더블클릭 → 인스펙터 포커스 신호
+  const [focusFieldKey, setFocusFieldKey] = useState(null) // 평가에서 인스펙터의 정확한 필드로 이동
+  const [inlineEdit, setInlineEdit] = useState(null) // 캔버스 인라인 텍스트 편집 { itemId, key }
+  const [zoom, setZoom] = useState(1)
+  const [canvasView, setCanvasView] = useState('edit') // 'edit'(편집 크롬) | 'preview'(실사용 모습)
+  const previewMode = !isEvaluation && canvasView === 'preview'
+  const [marquee, setMarquee] = useState(null) // 러버밴드 선택 박스
+  const [ctxMenu, setCtxMenu] = useState(null) // 우클릭 메뉴 { sx, sy, cx, cy, itemId }
+  const [dropTargetId, setDropTargetId] = useState(null) // 컨테이너 드롭 대상 하이라이트
+  const [insertHint, setInsertHint] = useState(null) // 컨테이너 삽입 캐럿 { dir, x, y, len }
+  const [draggingChildId, setDraggingChildId] = useState(null)
+  const [childDragGhost, setChildDragGhost] = useState(null) // 자식 재정렬 중 포인터 옆 피드백
+  const [caseGenOpen, setCaseGenOpen] = useState(false)
+  const [feedbackTarget, setFeedbackTarget] = useState(null) // { caseId, itemId, fieldKey, label }
+  const [, setMeasureVer] = useState(0) // 실제 표시 높이 변경을 캔버스 스크롤 범위에 반영
+
+  const canvasRef = useRef(null)
+  const heightsRef = useRef({}) // ResizeObserver가 채우는 실제 표시 높이
+  const clipboardRef = useRef(null) // ⌘C 스냅샷 (단계 간 붙여넣기 가능)
+  const measureLayoutTimerRef = useRef(null)
+
+  /* ── 현재 편집 대상 ── */
   const items = isEvaluation
     ? []
     : isExplore
-    ? (api.explore.items || [])
-    : stageKey === 'plan'
-      ? (activePlanCase?.items || [])
-      : (scenario.stages[stageKey] || [])
-  /* 컨테이너(레이아웃) 안의 자식은 캔버스 절대배치 대상이 아니다 — 캔버스/레이아웃 연산은 최상위만 */
-  const topItems = items.filter((it) => !it.parentId)
-  const [dropTargetId, setDropTargetId] = useState(null) // 드래그 중 컨테이너 드롭 대상 하이라이트
-  const [draggingChildId, setDraggingChildId] = useState(null) // 컨테이너 안 재정렬 중인 자식 (시각 피드백)
-  const [childDragGhost, setChildDragGhost] = useState(null) // { x, y, label, icon } — 내부 재정렬 포인터 피드백
-  const [, setMeasureVer] = useState(0) // 실제 표시 높이 변경을 캔버스 스크롤 범위에 반영
-  const heightOf = (it) => {
-    const measured = heightsRef.current[it.id]
-    if (!previewMode && LIBRARY[it.type]?.container) return Math.max(it.h || 0, measured || 0, 80)
-    return it.h || measured || 80
-  }
-  /* (x, y) 캔버스 좌표가 컨테이너의 '삽입 존'(세로 가장자리 밴드를 뺀 중앙부)에 있으면 반환.
-     상/하 NEST_EDGE_ZONE 밴드는 겹침 회피(밀어내기) 존으로 남겨둔다 */
-  const containerAt = (x, y, excludeId) =>
-    topItems.find((it) => {
-      if (it.id === excludeId) return false
-      if (!LIBRARY[it.type]?.container) return false
-      const hh = heightOf(it)
-      const band = Math.min(NEST_EDGE_ZONE, hh / 4)
-      return x >= it.x && x <= it.x + it.w && y >= it.y + band && y <= it.y + hh - band
-    })
-  const nextSlot = (list, parentId) =>
-    list.filter((it) => it.parentId === parentId).reduce((m, it) => Math.max(m, it.slot || 0), 0) + 1
+      ? (api.explore.items || [])
+      : stageKey === 'plan'
+        ? (activePlanCase?.items || [])
+        : (scenario.stages[stageKey] || [])
+  const topItems = items.filter((item) => !item.parentId)
 
-  /* 포인터(캔버스 좌표)가 가리키는 컨테이너 안 삽입 위치(0-base) — 자식 슬롯 DOM과 비교 */
-  const slotIndexAt = (containerId, containerType, cx, cy, excludeId) => {
-    if (!canvasRef.current) return Infinity
-    const rect = canvasRef.current.getBoundingClientRect()
-    const px = rect.left + cx * zoom
-    const py = rect.top + cy * zoom
-    const els = [...canvasRef.current.querySelectorAll(`[data-child-of="${containerId}"]`)]
-      .filter((el) => el.dataset.childId !== excludeId)
-    const flow = LIBRARY[containerType]?.flow
-    if (flow === 'grid') {
-      const rows = []
-      els.forEach((el, index) => {
-        const r = el.getBoundingClientRect()
-        let row = rows.find((candidate) => Math.abs(candidate.top - r.top) <= 8)
-        if (!row) {
-          row = { top: r.top, bottom: r.bottom, cells: [] }
-          rows.push(row)
-        }
-        row.bottom = Math.max(row.bottom, r.bottom)
-        row.cells.push({ index, rect: r })
-      })
-      if (rows.length === 0) return 0
-      const row = rows.find((candidate) => py <= candidate.bottom) || rows[rows.length - 1]
-      const before = row.cells.find((cell) => px <= cell.rect.left + cell.rect.width / 2)
-      return before ? before.index : row.cells[row.cells.length - 1].index + 1
-    }
-    const horizontal = flow === 'x'
-    let idx = 0
-    els.forEach((el) => {
-      const r = el.getBoundingClientRect()
-      const center = horizontal ? r.left + r.width / 2 : r.top + r.height / 2
-      if ((horizontal ? px : py) > center) idx++
-    })
-    return idx
-  }
-
-  /* 컨테이너 안 삽입 위치 가이드 라인 (Notion/Framer식 인서트 캐럿) — 캔버스 좌표 */
-  const [insertHint, setInsertHint] = useState(null) // { dir:'v'|'h', x, y, len }
-  const insertHintAt = (container, cx, cy, excludeId) => {
-    if (!canvasRef.current || !container) return null
-    const els = [...canvasRef.current.querySelectorAll(`[data-child-of="${container.id}"]`)]
-      .filter((el) => el.dataset.childId !== excludeId)
-    if (els.length === 0) return null
-    const rect = canvasRef.current.getBoundingClientRect()
-    const flow = LIBRARY[container.type]?.flow
-    const horizontal = flow === 'x'
-    const grid = flow === 'grid'
-    const idx = slotIndexAt(container.id, container.type, cx, cy, excludeId)
-    const t = els[Math.min(idx, els.length - 1)].getBoundingClientRect()
-    const after = idx >= els.length
-    if (horizontal || grid) {
-      const sx = after ? t.right + 6 : t.left - 6
-      return { dir: 'v', x: (sx - rect.left) / zoom, y: (t.top - rect.top) / zoom, len: t.height / zoom }
-    }
-    const sy = after ? t.bottom + 6 : t.top - 6
-    return { dir: 'h', x: (t.left - rect.left) / zoom, y: (sy - rect.top) / zoom, len: t.width / zoom }
-  }
-
-  /* childId를 containerId의 index 위치에 끼워 넣고 형제 슬롯을 1..n으로 재부여 */
-  const placeChild = (list, childId, containerId, index) => {
-    const sibs = list
-      .filter((it) => it.parentId === containerId && it.id !== childId)
-      .sort((a, b) => (a.slot || 0) - (b.slot || 0))
-    const order = sibs.map((s) => s.id)
-    order.splice(Math.max(0, Math.min(order.length, index)), 0, childId)
-    return list.map((it) => {
-      const k = order.indexOf(it.id)
-      return k >= 0 ? { ...it, parentId: containerId, slot: k + 1 } : it
-    })
-  }
-  const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
-  const selected = items.find((it) => it.id === selectedId) || null
-  const managedContainer = selected
-    ? LIBRARY[selected.type]?.container
-      ? selected
-      : selected.parentId
-        ? items.find((it) => it.id === selected.parentId) || null
-        : null
-    : null
-  const managedChildren = managedContainer
-    ? items
-        .filter((it) => it.parentId === managedContainer.id)
-        .sort((a, b) => (a.slot || 0) - (b.slot || 0))
-    : []
-  const chipColor = scenario.color || '#5f7465'
-
-  /* 기기 프리셋에 따른 캔버스 폭 */
-  const device = DEVICE_PRESETS.find((d) => d.key === (scenario.device || 'desktop')) || DEVICE_PRESETS[0]
+  const device = DEVICE_PRESETS.find((preset) => preset.key === (scenario.device || 'desktop')) || DEVICE_PRESETS[0]
   const canvasW = device.w
   const itemW = canvasW - PAD * 2
-
-  /* 컴팩트(compactType — 업계 컨벤션): 배치가 바뀔 때마다 빈 공간 없이 스택.
-     'vertical'(기본, 위로) | 'horizontal'(왼쪽으로) | 'none'(자유 배치).
-     settle = 겹침 해소 후 컴팩트 — 모든 커밋 경로가 이걸 통과한다.
-     (구버전 gravity: false 데이터는 'none'으로 해석) */
+  /* 구버전 gravity: false 데이터는 'none'으로 해석 */
   const compactType = scenario.compact || (scenario.gravity === false ? 'none' : 'vertical')
-  const compactOn = compactType !== 'none'
-  const compactOpts = (pinnedIds = []) => ({ direction: compactType, pinnedIds, canvasW })
-  /* 레이아웃 연산(fn)을 최상위 아이템에만 적용하고 자식은 그대로 통과 */
-  const withTopOnly = (list, fn) => {
-    const top = list.filter((it) => !it.parentId)
-    const kids = list.filter((it) => it.parentId)
-    return [...fn(top), ...kids]
-  }
-  const settle = (list, movedIds) =>
-    withTopOnly(list, (top) => {
-      const resolved = resolveCollision(top, movedIds, heightsRef.current)
-      return compactOn ? compactItems(resolved, heightsRef.current, compactOpts()) : resolved
-    })
-  const compactTop = (list) =>
-    withTopOnly(list, (top) => (compactOn ? compactItems(top, heightsRef.current, compactOpts()) : top))
-  const changeCompact = (type) => {
-    if (previewMode) return
-    setOpenMenu(null)
-    if (type.key === compactType) return
-    api.updateScenario(scenario.id, (s) => ({ ...s, compact: type.key }))
-    if (type.key !== 'none') {
-      setItems((prev) => withTopOnly(prev, (top) => compactItems(top, heightsRef.current, { direction: type.key, canvasW })))
-    }
-    api.showToast(`${type.label} — ${type.desc}`)
-  }
+  const layout = createLayoutOps({ heightsRef, compactType, canvasW })
+  const heightOf = (item) => itemHeight(item, heightsRef.current, { previewMode })
 
-  const toggleMenu = (key) => setOpenMenu((cur) => (cur === key ? null : key))
+  /* ── 히스토리 · 저장 ── */
+  const history = useBuilderHistory({
+    enabled: !previewMode,
+    takeSnapshot: () => JSON.stringify({
+      stages: scenario.stages,
+      planCases,
+      device: scenario.device,
+      exploreItems: api.explore.items || [],
+    }),
+    applySnapshot: (snapshot) => {
+      const data = JSON.parse(snapshot)
+      const restoredCases = planCasesForScenario({ stages: data.stages || data, planCases: data.planCases })
+      setSelectedIds([])
+      api.updateScenario(scenario.id, (current) => ({
+        ...current,
+        stages: data.stages || data,
+        planCases: restoredCases,
+        device: data.device || current.device,
+      }))
+      if (!restoredCases.some((planCase) => planCase.id === planCaseId)) {
+        setPlanCaseId(restoredCases[0]?.id || null)
+      }
+      if (data.exploreItems) api.updateExplore({ ...api.explore, items: data.exploreItems })
+    },
+  })
 
-  /* 선택: ⇧+클릭 = 토글 추가, 일반 클릭 = 단일 선택(그룹 멤버 클릭 시 그룹 유지) */
+  const { setItems, setItemsFromMeasure } = useStageItems({
+    api, scenario, stageKey, planCaseId, previewMode, pushHistory: history.pushHistory,
+  })
+
+  const cases = usePlanCases({
+    api, scenario, planCases, planCaseId, activePlanCase, setPlanCaseId, previewMode,
+    pushHistory: history.pushHistory,
+  })
+
+  /* ── 좌표 헬퍼 (geometry에 현재 캔버스 상태를 묶어 둔 얇은 래퍼) ── */
+  const containerAt = (x, y, excludeId) => containerAtPoint(topItems, x, y, { excludeId, heightOf })
+  const slotIndexOf = (containerId, containerType, cx, cy, excludeId) =>
+    slotIndexAt({ canvasEl: canvasRef.current, zoom, containerId, containerType, cx, cy, excludeId })
+  const insertHintOf = (container, cx, cy, excludeId) =>
+    insertHintAt({ canvasEl: canvasRef.current, zoom, container, cx, cy, excludeId })
+
+  /* ── 선택 ── */
+  /* ⇧+클릭 = 토글 추가, 일반 클릭 = 단일 선택(그룹 멤버를 클릭하면 그룹 유지) */
   const handleSelect = (id, shift) => {
     if (previewMode) return
     setSelectedIds((prev) => {
@@ -256,305 +162,306 @@ export default function Builder({ api, scenario }) {
       return prev.includes(id) && prev.length > 1 ? prev : [id]
     })
   }
+  const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
+  const selected = items.find((item) => item.id === selectedId) || null
+  const managedContainer = selected
+    ? LIBRARY[selected.type]?.container
+      ? selected
+      : selected.parentId
+        ? items.find((item) => item.id === selected.parentId) || null
+        : null
+    : null
+  const managedChildren = managedContainer
+    ? items.filter((item) => item.parentId === managedContainer.id).sort((a, b) => (a.slot || 0) - (b.slot || 0))
+    : []
 
-  const selectManagedItem = (id) => {
-    if (previewMode) return
-    setSelectedIds([id])
-    setTimeout(() => {
-      canvasRef.current
-        ?.querySelector(`[data-child-id="${id}"]`)
-        ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
-    }, 0)
+  /* ── 드래그 · 중첩 ── */
+  const drag = useCanvasDrag({
+    items, topItems, itemW, canvasW, zoom, canvasRef, heightsRef, heightOf, layout,
+    slotIndexOf, insertHintOf, setItems, setSelectedIds, selectedIds,
+    setDropTargetId, setInsertHint, showToast: api.showToast,
+  })
+
+  const nesting = useContainerNesting({
+    items, itemW, heightsRef, zoom, canvasRef, heightOf, layout, slotIndexOf, insertHintOf,
+    setItems, setSelectedIds, onSelect: handleSelect, previewMode, showToast: api.showToast,
+    drag, setDropTargetId, setInsertHint, setDraggingChildId, setChildDragGhost,
+  })
+
+  /* ── 아이템 추가 · 편집 · 삭제 ── */
+  const addItem = (type) => {
+    const def = LIBRARY[type]
+    const anchor = selectedIds.length === 1 ? items.find((item) => item.id === selectedIds[0]) : null
+    // Webflow/Elementor식 클릭 추가: 컨테이너를 선택하면 그 안에, 자식을 선택하면 바로 뒤에
+    if (!def.container && anchor) {
+      if (LIBRARY[anchor.type]?.container) return nesting.addChild(type, anchor.id, { index: Infinity })
+      if (anchor.parentId) return nesting.addChild(type, anchor.parentId, { index: anchor.slot || Infinity })
+    }
+    const item = createItem(type, def.defaults)
+    const w = Math.min(def.defaultW || itemW, itemW)
+    setItems((prev) => layout.compact([...prev, { ...item, x: PAD, y: stackBottom(prev, heightOf, PAD - GAP) + GAP, w }]))
+    setSelectedIds([item.id])
+    return undefined
   }
 
-  /* ── 히스토리 (Undo/Redo) — 시나리오 단계 + 공통 탐색 아이템을 함께 스냅샷 ── */
-  const takeSnapshot = () =>
-    JSON.stringify({
-      stages: scenario.stages,
-      planCases,
-      device: scenario.device,
-      exploreItems: api.explore.items || [],
-    })
-  const applySnapshot = (snap) => {
-    const data = JSON.parse(snap)
-    const restoredCases = planCasesForScenario({
-      stages: data.stages || data,
-      planCases: data.planCases,
-    })
+  /* 팔레트에서 캔버스로 드래그해 원하는 위치에 바로 배치 */
+  const addItemAt = (type, x, y) => {
+    const def = LIBRARY[type]
+    if (!def) return
+    const item = createItem(type, def.defaults)
+    const w = Math.min(def.defaultW || itemW, itemW)
+    const nx = Math.max(0, Math.min(canvasW - w, Math.round(x - w / 2)))
+    const ny = Math.max(0, Math.round(y - 16))
+    setItems((prev) => layout.settle([...prev, { ...item, x: nx, y: ny, w }], [item.id]))
+    setSelectedIds([item.id])
+  }
+
+  const updateItem = (id, patch) => setItems((prev) => prev.map((item) => (item.id === id ? { ...item, ...patch } : item)))
+  const updateProps = (id, key, value) =>
+    setItems((prev) => prev.map((item) => (item.id === id ? { ...item, props: { ...item.props, [key]: value } } : item)))
+
+  /* 삭제 — 컨테이너를 지우면 안의 자식도 함께 */
+  const removeItem = (id) => {
+    setItems((prev) => layout.compact(prev.filter((item) => item.id !== id && item.parentId !== id)))
+    setSelectedIds((prev) => prev.filter((x) => x !== id))
+  }
+  const removeSelected = () => {
+    const ids = new Set(selectedIds)
+    setItems((prev) => layout.compact(prev.filter((item) => !ids.has(item.id) && !ids.has(item.parentId))))
     setSelectedIds([])
-    api.updateScenario(scenario.id, (s) => ({
-      ...s,
-      stages: data.stages || data,
-      planCases: restoredCases,
-      device: data.device || s.device,
-    }))
-    if (!restoredCases.some((planCase) => planCase.id === planCaseId)) {
-      setPlanCaseId(restoredCases[0]?.id || null)
+  }
+
+  const duplicateItem = (id) => {
+    const source = items.find((item) => item.id === id)
+    if (!source) return
+    const group = cloneGroup(source, items, { gap: GAP, heightOf })
+    setItems((prev) => layout.settle([...prev, ...group], [group[0].id]))
+    setSelectedIds([group[0].id])
+  }
+
+  const duplicateSelected = () => {
+    const sources = items.filter((item) => selectedIds.includes(item.id))
+    if (sources.length === 0) return
+    const groups = sources.map((source) => cloneGroup(source, items, { gap: GAP, heightOf }))
+    setItems((prev) => layout.settle([...prev, ...groups.flat()], groups.map((group) => group[0].id)))
+    setSelectedIds(groups.map((group) => group[0].id))
+  }
+
+  /* ── 클립보드 (단계를 건너 붙여넣을 수 있다) ── */
+  const copySelected = () => {
+    const entries = toClipboardEntries(items, selectedIds)
+    if (!entries) return false
+    clipboardRef.current = entries
+    api.showToast(`${entries.length}개 컴포넌트를 복사했어요. ⌘V로 붙여넣어요.`)
+    return true
+  }
+
+  /* at을 주면 그 지점(캔버스 좌표)에, 없으면 스택 맨 아래에 붙여넣는다 */
+  const pasteClipboard = (at) => {
+    const clip = clipboardRef.current
+    if (!clip || clip.length === 0) return
+    const groups = fromClipboardEntries(clip, {
+      baseX: at ? at.x : PAD,
+      baseY: at ? at.y : stackBottom(items, heightOf, PAD - GAP) + GAP,
+      canvasW,
+      itemW,
+    })
+    setItems((prev) => layout.settle([...prev, ...groups.flat()], groups.map((group) => group[0].id)))
+    setSelectedIds(groups.map((group) => group[0].id))
+  }
+
+  /* ── 캔버스 상호작용 ── */
+  const zoomBy = (direction) => {
+    setZoom((current) => {
+      const index = ZOOM_STEPS.findIndex((step) => Math.abs(step - current) < 0.01)
+      return ZOOM_STEPS[Math.max(0, Math.min(ZOOM_STEPS.length - 1, (index < 0 ? 4 : index) + direction))]
+    })
+  }
+
+  /* 러버밴드(마퀴) 다중 선택: 빈 캔버스를 드래그 */
+  const onCanvasPointerDown = (event) => {
+    if (previewMode) return
+    if (event.target !== event.currentTarget || event.button !== 0) return
+    const rect = event.currentTarget.getBoundingClientRect()
+    const sx = (event.clientX - rect.left) / zoom
+    const sy = (event.clientY - rect.top) / zoom
+    const baseSelection = event.shiftKey ? [...selectedIds] : []
+    if (!event.shiftKey) setSelectedIds([])
+    const move = (moveEvent) => {
+      const cx = (moveEvent.clientX - rect.left) / zoom
+      const cy = (moveEvent.clientY - rect.top) / zoom
+      const box = { x: Math.min(sx, cx), y: Math.min(sy, cy), w: Math.abs(cx - sx), h: Math.abs(cy - sy) }
+      if (box.w < 3 && box.h < 3) return
+      setMarquee(box)
+      const hit = topItems
+        .filter((item) => {
+          const height = heightOf(item)
+          return item.x < box.x + box.w && item.x + item.w > box.x
+            && item.y < box.y + box.h && item.y + height > box.y
+        })
+        .map((item) => item.id)
+      setSelectedIds([...new Set([...baseSelection, ...hit])])
     }
-    if (data.exploreItems) api.updateExplore({ ...api.explore, items: data.exploreItems })
-  }
-
-  const pushHistory = () => {
-    const h = historyRef.current
-    const now = Date.now()
-    if (now - h.lastPush < 500) return // 연속 변경 병합
-    h.past.push(takeSnapshot())
-    if (h.past.length > 60) h.past.shift()
-    h.future = []
-    h.lastPush = now
-    setHistVer((v) => v + 1)
-  }
-
-  const undo = () => {
-    if (previewMode) return
-    const h = historyRef.current
-    const snap = h.past.pop()
-    if (!snap) return
-    h.future.push(takeSnapshot())
-    h.lastPush = 0
-    setHistVer((v) => v + 1)
-    applySnapshot(snap)
-  }
-
-  const redo = () => {
-    if (previewMode) return
-    const h = historyRef.current
-    const snap = h.future.pop()
-    if (!snap) return
-    h.past.push(takeSnapshot())
-    h.lastPush = 0
-    setHistVer((v) => v + 1)
-    applySnapshot(snap)
-  }
-
-  /* ── 아이템 변경 — 탐색은 계정 공유 페이지에, 설문/계획은 시나리오에 저장 ──
-     탐색은 함수 업데이터 필수: setTimeout 커밋(드래그/보정)이 낡은 클로저로 덮어쓰지 않게 */
-  const setItems = (updater) => {
-    if (previewMode) return
-    pushHistory()
-    if (isExplore) {
-      api.updateExplore((prev) => ({ ...prev, items: updater(prev.items || []) }))
-    } else if (stageKey === 'plan') {
-      api.updateScenario(scenario.id, (s) => ({
-        ...s,
-        planCases: (s.planCases || planCasesForScenario(s)).map((planCase) =>
-          planCase.id === planCaseId
-            ? { ...planCase, items: updater(planCase.items || []) }
-            : planCase
-        ),
-      }))
-    } else {
-      api.updateScenario(scenario.id, (s) => ({
-        ...s,
-        stages: { ...s.stages, [stageKey]: updater(s.stages[stageKey] || []) },
-      }))
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      setMarquee(null)
     }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
   }
 
-  /* 이미지 로딩·반응형 줄바꿈 등으로 실제 높이가 바뀌면, 편집 목록 높이가 아니라
-     캔버스에 보이는 뷰포트 높이를 기준으로 조용히 재컴팩트한다.
-     측정 자체는 사용자 편집이 아니므로 Undo 스냅샷에는 넣지 않는다. */
-  const setItemsFromMeasure = (updater) => {
+  const openCtxMenu = (event, itemId) => {
     if (previewMode) return
-    if (isExplore) {
-      api.updateExplore((prev) => ({ ...prev, items: updater(prev.items || []) }))
-    } else if (stageKey === 'plan') {
-      api.updateScenario(scenario.id, (s) => ({
-        ...s,
-        planCases: (s.planCases || planCasesForScenario(s)).map((planCase) =>
-          planCase.id === planCaseId
-            ? { ...planCase, items: updater(planCase.items || []) }
-            : planCase
-        ),
-      }))
-    } else {
-      api.updateScenario(scenario.id, (s) => ({
-        ...s,
-        stages: { ...s.stages, [stageKey]: updater(s.stages[stageKey] || []) },
-      }))
-    }
+    event.preventDefault()
+    event.stopPropagation()
+    if (itemId && !selectedIds.includes(itemId)) setSelectedIds([itemId])
+    const rect = canvasRef.current ? canvasRef.current.getBoundingClientRect() : null
+    setCtxMenu({
+      sx: event.clientX,
+      sy: event.clientY,
+      cx: rect ? (event.clientX - rect.left) / zoom : PAD,
+      cy: rect ? (event.clientY - rect.top) / zoom : PAD,
+      itemId: itemId || null,
+    })
   }
 
+  /* 선택된 컴포넌트들의 잠금/숨김을 클릭한 아이템 기준으로 일괄 토글 */
+  const toggleSelected = (key) => {
+    const target = items.find((item) => item.id === (ctxMenu && ctxMenu.itemId))
+    const next = target ? !target[key] : true
+    const ids = new Set(selectedIds)
+    setItems((prev) => prev.map((item) => (ids.has(item.id) ? { ...item, [key]: next } : item)))
+  }
+
+  /* 팔레트 → 캔버스 HTML5 드래그 */
+  const paletteDragOver = (event) => {
+    if (previewMode) return
+    if (![...event.dataTransfer.types].includes('text/sb-type')) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'copy'
+    const rect = canvasRef.current.getBoundingClientRect()
+    const cx = (event.clientX - rect.left) / zoom
+    const cy = (event.clientY - rect.top) / zoom
+    const hover = containerAt(cx, cy)
+    setDropTargetId(hover ? hover.id : null)
+    setInsertHint(hover ? insertHintOf(hover, cx, cy) : null)
+  }
+  const paletteDragLeave = (event) => {
+    if (event.currentTarget.contains(event.relatedTarget)) return
+    setDropTargetId(null)
+    setInsertHint(null)
+  }
+  const paletteDrop = (event) => {
+    if (previewMode) return
+    const type = event.dataTransfer.getData('text/sb-type')
+    if (!type) return
+    event.preventDefault()
+    setDropTargetId(null)
+    setInsertHint(null)
+    const rect = canvasRef.current.getBoundingClientRect()
+    const cx = (event.clientX - rect.left) / zoom
+    const cy = (event.clientY - rect.top) / zoom
+    // 컨테이너 위에 놓으면 그 위치의 슬롯에 자식으로 배치
+    const target = !LIBRARY[type]?.container && containerAt(cx, cy)
+    if (target) nesting.addChild(type, target.id, { containerType: target.type, cx, cy })
+    else addItemAt(type, cx, cy)
+  }
+
+  /* 이미지 로딩·줄바꿈으로 실제 높이가 바뀌면 조용히 재컴팩트한다.
+     측정은 사용자 편집이 아니므로 Undo 스냅샷에 넣지 않는다. */
   const onItemMeasure = () => {
-    setMeasureVer((v) => v + 1)
-    if (previewMode || !compactOn || dragPosRef.current || sizeDraftRef.current) return
+    setMeasureVer((version) => version + 1)
+    if (previewMode || !layout.compactOn || drag.isDragging()) return
     clearTimeout(measureLayoutTimerRef.current)
     measureLayoutTimerRef.current = setTimeout(() => {
-      setItemsFromMeasure((prev) =>
-        withTopOnly(prev, (top) => compactItems(top, heightsRef.current, compactOpts()))
-      )
+      setItemsFromMeasure((prev) => layout.compact(prev))
     }, 80)
   }
-
   useEffect(() => () => clearTimeout(measureLayoutTimerRef.current), [])
 
-  /* Undo/삭제/가져오기로 현재 케이스가 사라진 경우 유효한 케이스로 이동한다. */
-  useEffect(() => {
-    if (planCases.some((planCase) => planCase.id === planCaseId)) return
-    setPlanCaseId(planCases[0]?.id || null)
-  }, [planCaseId, planCases])
+  /* ── 상단 바 액션 ── */
+  const toggleMenu = (key) => setOpenMenu((current) => (current === key ? null : key))
+  const closeMenu = () => setOpenMenu(null)
+  const patchScenario = (patch) => api.updateScenario(scenario.id, (current) => ({ ...current, ...patch }))
 
-  const updatePlanCases = (updater) => {
+  const changeDevice = (preset) => {
     if (previewMode) return
-    pushHistory()
-    api.updateScenario(scenario.id, (s) => ({
-      ...s,
-      planCases: updater(s.planCases || planCasesForScenario(s)),
+    closeMenu()
+    if (preset.key === (scenario.device || 'desktop')) return
+    history.pushHistory()
+    api.updateScenario(scenario.id, (current) => ({
+      ...current,
+      ...rescaleForDevice(current, preset, { pad: PAD, minItemW: MIN_ITEM_W, currentCanvasW: canvasW }),
     }))
+    // 폭 변경으로 높이가 다시 측정된 뒤 겹침/간격을 보정한다
+    setTimeout(() => setItems((prev) => layoutCompactUp(prev, heightsRef.current)), 200)
+    api.showToast(`${preset.label} 폭 기준으로 캔버스를 전환했어요.`)
   }
 
-  const updateActivePlanCase = (patch) => {
-    updatePlanCases((current) => current.map((planCase) =>
-      planCase.id === planCaseId ? { ...planCase, ...patch } : planCase
-    ))
+  const changeCompact = (type) => {
+    if (previewMode) return
+    closeMenu()
+    if (type.key === compactType) return
+    patchScenario({ compact: type.key })
+    if (type.key !== 'none') setItems((prev) => layout.compactTo(prev, type.key))
+    api.showToast(`${type.label} — ${type.desc}`)
   }
 
-  const [caseGenOpen, setCaseGenOpen] = useState(false)
-
-  /* 자동 생성 초안 케이스를 폴백 앞에 일괄 삽입 */
-  const applyGeneratedCases = (generatedCases) => {
-    if (!Array.isArray(generatedCases) || generatedCases.length === 0) return
-    updatePlanCases((current) => {
-      const fallbackIndex = current.findIndex((planCase) => planCase.isFallback)
-      const next = [...current]
-      next.splice(fallbackIndex >= 0 ? fallbackIndex : next.length, 0, ...generatedCases)
-      return next
-    })
-    setPlanCaseId(generatedCases[0].id)
-    api.showToast(`케이스 ${generatedCases.length}개를 초안으로 추가했어요. 평가 탭에서 검수해주세요.`)
-  }
-
-  const addPlanCase = () => {
-    const next = createPlanCase({ name: `계획 케이스 ${planCases.length + 1}` })
-    updatePlanCases((current) => {
-      const fallbackIndex = current.findIndex((planCase) => planCase.isFallback)
-      const nextCases = [...current]
-      nextCases.splice(fallbackIndex >= 0 ? fallbackIndex : current.length, 0, next)
-      return nextCases
-    })
-    setPlanCaseId(next.id)
-    setOpenMenu('case')
-  }
-
-  const duplicatePlanCase = () => {
-    if (!activePlanCase) return
-    const idMap = {}
-    activePlanCase.items.forEach((item) => { idMap[item.id] = uid() })
-    const itemsCopy = activePlanCase.items.map((item) => ({
-      ...item,
-      id: idMap[item.id],
-      parentId: item.parentId ? idMap[item.parentId] : undefined,
-      props: JSON.parse(JSON.stringify(item.props || {})),
-      style: item.style ? { ...item.style } : undefined,
-    }))
-    const copy = createPlanCase({
-      ...activePlanCase,
-      id: uid(),
-      name: `${activePlanCase.name} 복사본`,
-      isFallback: false,
-      conditions: (activePlanCase.conditions || []).map((condition) => ({
-        ...condition,
-        id: uid(),
-        values: [...(condition.values || [])],
-      })),
-      items: itemsCopy,
-      evaluation: remapCaseEvaluation(activePlanCase.evaluation, idMap, { selected: false, slot: null }),
-    })
-    updatePlanCases((current) => {
-      const index = current.findIndex((planCase) => planCase.id === activePlanCase.id)
-      const fallbackIndex = current.findIndex((planCase) => planCase.isFallback)
-      const next = [...current]
-      const insertAt = activePlanCase.isFallback
-        ? (fallbackIndex >= 0 ? fallbackIndex : next.length)
-        : Math.min(index + 1, fallbackIndex >= 0 ? fallbackIndex : next.length)
-      next.splice(insertAt, 0, copy)
-      return next
-    })
-    setPlanCaseId(copy.id)
-    api.showToast(`"${copy.name}" 케이스를 만들었어요.`)
-  }
-
-  const removePlanCase = () => {
-    if (!activePlanCase || planCases.length <= 1) return
-    if (!window.confirm(`"${activePlanCase.name}" 계획 케이스를 삭제할까요?`)) return
-    const index = planCases.findIndex((planCase) => planCase.id === activePlanCase.id)
-    const remaining = planCases.filter((planCase) => planCase.id !== activePlanCase.id)
-    if (activePlanCase.isFallback && remaining.length > 0) {
-      remaining[remaining.length - 1] = { ...remaining[remaining.length - 1], isFallback: true }
+  const runAutoLayout = (mode) => {
+    if (previewMode) return
+    closeMenu()
+    setItems((prev) => layout.withTopOnly(prev, (top) => mode.fn(top, heightsRef.current, { itemW, canvasW })))
+    // 너비가 바뀌는 정렬은 높이가 다시 측정된 뒤 한 번 더 보정한다
+    if (mode.key !== 'compact') {
+      setTimeout(() => {
+        setItems((prev) => layout.withTopOnly(prev, (top) => layoutCompactUp(top, heightsRef.current)))
+      }, 180)
     }
-    updatePlanCases(() => remaining)
-    setPlanCaseId(remaining[Math.min(index, remaining.length - 1)]?.id || null)
-    setOpenMenu(null)
+    api.showToast(`${mode.label}로 겹침 없이 배치했어요.`)
   }
 
-  const setFallbackPlanCase = () => {
-    updatePlanCases((current) => {
-      const target = current.find((planCase) => planCase.id === planCaseId)
-      if (!target) return current
-      const regular = current
-        .filter((planCase) => planCase.id !== planCaseId)
-        .map((planCase) => ({ ...planCase, isFallback: false }))
-      return [...regular, { ...target, isFallback: true }]
-    })
-  }
-
-  const movePlanCase = (delta) => {
-    if (activePlanCase?.isFallback) return
-    const from = planCases.findIndex((planCase) => planCase.id === planCaseId)
-    const lastRegularIndex = Math.max(0, planCases.findIndex((planCase) => planCase.isFallback) - 1)
-    const to = Math.max(0, Math.min(lastRegularIndex, from + delta))
-    if (from < 0 || from === to) return
-    updatePlanCases((current) => {
-      const next = [...current]
-      const [moved] = next.splice(from, 1)
-      next.splice(to, 0, moved)
-      return next
-    })
-  }
-
-  const updateComponentEvaluation = (caseId, itemId, patch) => {
-    updatePlanCases((current) => current.map((planCase) => {
-      if (planCase.id !== caseId) return planCase
-      const evaluation = normalizeCaseEvaluation(planCase.evaluation)
-      const review = normalizeComponentEvaluation(evaluation.components[itemId])
-      return {
-        ...planCase,
-        evaluation: {
-          ...evaluation,
-          components: {
-            ...evaluation.components,
-            [itemId]: {
-              ...review,
-              ...patch,
-              updatedAt: new Date().toISOString(),
-            },
-          },
-          updatedAt: new Date().toISOString(),
-        },
-      }
+  const publish = () => {
+    const warnings = publishWarnings(scenario, planCases)
+    if (warnings.length > 0 && !window.confirm(`${warnings.join('\n')}\n\n그래도 발행할까요?`)) return
+    const chip = resolveChipLabel(scenario)
+    const snapshot = publishSnapshot(scenario, planCases, chip)
+    api.updateScenario(scenario.id, (current) => ({
+      ...current,
+      status: 'published',
+      chip,
+      versions: [...(current.versions || []), snapshot].slice(-VERSION_LIMIT),
     }))
+    api.showToast(`"#${chip}" 칩이 홈 탐색창 밑에 발행됐어요!`)
+    api.goHome()
   }
 
-  const recommendPlanCases = () => {
-    const recommendation = recommendSignificantCaseIds(planCases, 3)
-    const recommendedIds = new Set(recommendation)
-    const slotById = Object.fromEntries(
-      recommendation.map((caseId, index) => [caseId, EVALUATION_CASE_SLOTS[index] || null])
-    )
-    updatePlanCases((current) => current.map((planCase) => ({
-      ...planCase,
-      evaluation: {
-        ...normalizeCaseEvaluation(planCase.evaluation),
-        selected: recommendedIds.has(planCase.id),
-        slot: slotById[planCase.id] || null,
-        updatedAt: new Date().toISOString(),
-      },
-    })))
-    const first = planCases.find((planCase) => planCase.id === recommendation[0])
-    if (first) setPlanCaseId(first.id)
-    api.showToast(`평가할 CASE A/B/C ${recommendedIds.size}개를 추천했어요.`)
+  /* 발행 버전 복원: 현재 상태는 undo 히스토리로 보존된다 */
+  const restoreVersion = (snapshot) => {
+    if (previewMode) return
+    closeMenu()
+    const when = new Date(snapshot.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    if (!window.confirm(`${when} 발행 시점으로 되돌릴까요?\n(현재 상태는 ⌘Z로 복구할 수 있어요)`)) return
+    history.pushHistory()
+    setSelectedIds([])
+    patchScenario(scenarioFromSnapshot(snapshot))
+    api.showToast('발행 시점 버전으로 복원했어요.')
   }
 
+  /* 공유 링크: URL 해시에 시나리오 전체가 담겨 어디서든 바로 실행된다 */
+  const copyShareLink = () => {
+    const url = buildShareUrl(scenario)
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(url).then(
+        () => api.showToast('공유 링크를 복사했어요. 받는 사람은 링크만 열면 바로 체험할 수 있어요.'),
+        () => window.prompt('아래 링크를 복사하세요', url)
+      )
+    } else {
+      window.prompt('아래 링크를 복사하세요', url)
+    }
+  }
+
+  /* ── 평가 ↔ 편집 이동 ── */
   const editEvaluatedCase = (caseId) => {
     setFeedbackTarget(null)
     setFocusFieldKey(null)
@@ -568,100 +475,44 @@ export default function Builder({ api, scenario }) {
     const label = LIBRARY[component.type]?.label || component.type
     setCanvasView('edit')
     setPlanCaseId(caseId)
-    setFeedbackTarget({
-      caseId,
-      itemId: component.itemId,
-      fieldKey: null,
-      label,
-    })
+    setFeedbackTarget({ caseId, itemId: component.itemId, fieldKey: null, label })
     setFocusFieldKey(null)
     setStageKey('plan')
     setSelectedIds([component.itemId])
     api.showToast(`${label} 컴포넌트와 피드백을 열었어요.`)
   }
 
-  const applyLlmRevisions = (revisions) => {
-    const result = applyLlmRevisionsToPlanCases(planCases, revisions)
-    if (result.applied === 0) {
-      api.showToast('현재 값과 일치하는 수정안이 없어 적용하지 않았어요.')
-      return
-    }
-    updatePlanCases(() => result.planCases)
-    api.showToast(
-      result.skipped > 0
-        ? `AI 수정안 ${result.applied}개를 적용하고, 값이 바뀐 ${result.skipped}개는 건너뛰었어요.`
-        : `AI 수정안 ${result.applied}개를 적용했어요. 실제 화면을 검수해주세요.`
-    )
-  }
+  /* ── 상태 동기화 ── */
 
-  /* 평가 스튜디오는 언제나 정확히 3개 CASE(A/B/C)로 구성한다. */
+  /* Undo/삭제/가져오기로 현재 케이스가 사라지면 유효한 케이스로 이동 */
+  useEffect(() => {
+    if (planCases.some((planCase) => planCase.id === planCaseId)) return
+    setPlanCaseId(planCases[0]?.id || null)
+  }, [planCaseId, planCases])
+
+  /* 평가 스튜디오는 언제나 정확히 3개 CASE(A/B/C)로 구성한다 */
   useEffect(() => {
     if (!isEvaluation) return
-    const selected = evaluationCasesFor(planCases)
-    const slots = new Set(selected.map((planCase) => normalizeCaseEvaluation(planCase.evaluation).slot))
-    if (selected.length === 3 && EVALUATION_CASE_SLOTS.every((slot) => slots.has(slot))) return
-    recommendPlanCases()
+    const selectedCases = evaluationCasesFor(planCases)
+    const slots = new Set(selectedCases.map((planCase) => normalizeCaseEvaluation(planCase.evaluation).slot))
+    if (selectedCases.length === 3 && EVALUATION_CASE_SLOTS.every((slot) => slots.has(slot))) return
+    cases.recommendPlanCases()
   }, [isEvaluation, planCases.length])
 
+  /* 단계·케이스를 옮기면 진행 중이던 편집 상태를 모두 닫는다 */
   useEffect(() => {
     setSelectedIds([])
-    setDragPos(null)
-    setSizeDraft(null)
     setInlineEdit(null)
     setDraggingChildId(null)
     setChildDragGhost(null)
     setInsertHint(null)
+    drag.reset()
   }, [stageKey, planCaseId])
 
-  /* 평가 화면의 "피드백 반영하러 가기"가 단계 전환 초기화 뒤에도 정확한 컴포넌트를 선택한다. */
-  useEffect(() => {
-    if (stageKey !== 'plan' || !feedbackTarget || feedbackTarget.caseId !== planCaseId) return
-    const exists = (activePlanCase?.items || []).some((item) => item.id === feedbackTarget.itemId)
-    if (!exists) return
-    setSelectedIds([feedbackTarget.itemId])
-    setFocusFieldKey(feedbackTarget.fieldKey || null)
-    setFocusTick((tick) => tick + 1)
-  }, [stageKey, planCaseId, feedbackTarget?.caseId, feedbackTarget?.itemId, feedbackTarget?.fieldKey])
-
-  /* 선택한 계획 케이스가 긴 탭 목록 안에서 항상 보이도록 자동 스크롤한다. */
-  useEffect(() => {
-    if (stageKey !== 'plan' || !planCaseId) return
-    const activeTab = planCaseTabsRef.current?.querySelector(`[data-plan-case-id="${planCaseId}"]`)
-    activeTab?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
-  }, [stageKey, planCaseId])
-
-  const scrollPlanCases = (direction) => {
-    const el = planCaseTabsRef.current
-    if (!el) return
-    el.scrollBy({ left: direction * Math.max(280, el.clientWidth * 0.72), behavior: 'smooth' })
-  }
-
-  /* React의 합성 wheel은 브라우저 환경에 따라 문서 기본 스크롤을 늦게 막을 수 있다.
-     비수동 네이티브 리스너에서 기본 동작과 버블링을 선제 차단해 탭 행만 이동시킨다. */
-  useEffect(() => {
-    if (stageKey !== 'plan') return undefined
-    const el = planCaseTabsRef.current
-    if (!el) return undefined
-    const onWheel = (e) => {
-      if (!el.contains(e.target)) return
-      if (el.scrollWidth <= el.clientWidth) return
-      const rawDelta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY
-      if (!rawDelta) return
-      const scale = e.deltaMode === 1 ? 20 : e.deltaMode === 2 ? el.clientWidth : 1
-      e.preventDefault()
-      e.stopImmediatePropagation()
-      el.scrollLeft = Math.max(0, Math.min(el.scrollWidth - el.clientWidth, el.scrollLeft + rawDelta * scale))
-    }
-    window.addEventListener('wheel', onWheel, { passive: false, capture: true })
-    return () => window.removeEventListener('wheel', onWheel, { capture: true })
-  }, [stageKey, planCases.length])
-
-  /* 미리보기 진입 시 남아 있던 모든 편집 상태를 닫는다. */
+  /* 미리보기 진입 시에도 마찬가지 */
   useEffect(() => {
     if (!previewMode) return
     setSelectedIds([])
-    setDragPos(null)
-    setSizeDraft(null)
     setInlineEdit(null)
     setMarquee(null)
     setCtxMenu(null)
@@ -670,961 +521,41 @@ export default function Builder({ api, scenario }) {
     setInsertHint(null)
     setDraggingChildId(null)
     setChildDragGhost(null)
+    drag.reset()
   }, [previewMode])
 
-  /* 탐색 아이템은 계정 공유라 시나리오 기기 폭과 무관하게 저장됨 —
+  /* 평가의 "피드백 반영하러 가기"가 단계 전환 초기화 뒤에도 정확한 컴포넌트를 선택하게 한다 */
+  useEffect(() => {
+    if (stageKey !== 'plan' || !feedbackTarget || feedbackTarget.caseId !== planCaseId) return
+    if (!(activePlanCase?.items || []).some((item) => item.id === feedbackTarget.itemId)) return
+    setSelectedIds([feedbackTarget.itemId])
+    setFocusFieldKey(feedbackTarget.fieldKey || null)
+    setFocusTick((tick) => tick + 1)
+  }, [stageKey, planCaseId, feedbackTarget?.caseId, feedbackTarget?.itemId, feedbackTarget?.fieldKey])
+
+  /* 탐색 아이템은 계정 공유라 시나리오 기기 폭과 무관하게 저장된다 —
      현재 캔버스보다 넓은 아이템은 진입/기기 변경 시 폭에 맞게 보정 */
   useEffect(() => {
     if (!isExplore) return
-    const cur = api.explore.items || []
-    if (!cur.some((it) => it.w > itemW || it.x + it.w > canvasW - PAD)) return
+    const current = api.explore.items || []
+    if (!current.some((item) => item.w > itemW || item.x + item.w > canvasW - PAD)) return
     api.updateExplore((prev) => ({
       ...prev,
-      items: (prev.items || []).map((it) => {
-        if (it.parentId) return it
-        const w = Math.min(it.w, itemW)
-        const x = Math.max(0, Math.min(canvasW - PAD - w, it.x))
-        return { ...it, w, x }
+      items: (prev.items || []).map((item) => {
+        if (item.parentId) return item
+        const w = Math.min(item.w, itemW)
+        return { ...item, w, x: Math.max(0, Math.min(canvasW - PAD - w, item.x)) }
       }),
     }))
-    // 폭 변경으로 높이가 다시 측정된 뒤 겹침 없이 재배치
     setTimeout(() => {
-      setItems((prev) => withTopOnly(prev, (top) => layoutCompactUp(top, heightsRef.current)))
+      setItems((prev) => layout.withTopOnly(prev, (top) => layoutCompactUp(top, heightsRef.current)))
     }, 200)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isExplore, canvasW])
 
-  const addItem = (type) => {
-    const def = LIBRARY[type]
-    const anchor = selectedIds.length === 1 ? items.find((it) => it.id === selectedIds[0]) : null
-    // Webflow/Elementor식 클릭 추가: 컨테이너를 선택하면 그 안에, 자식을 선택하면 바로 뒤에 추가한다.
-    if (!def.container && anchor) {
-      if (LIBRARY[anchor.type]?.container) {
-        addChild(type, anchor.id, { index: Infinity })
-        return
-      }
-      if (anchor.parentId) {
-        addChild(type, anchor.parentId, { index: anchor.slot || Infinity })
-        return
-      }
-    }
-    const item = createItem(type, def.defaults)
-    // 컴포넌트별 기본 폭 (예: 상품/영상/게시글 카드는 세로형으로 시작)
-    const w = Math.min(def.defaultW || itemW, itemW)
-    setItems((prev) => {
-      const bottom = prev
-        .filter((it) => !it.parentId)
-        .reduce((max, it) => Math.max(max, it.y + heightOf(it)), PAD - GAP)
-      return compactTop([...prev, { ...item, x: PAD, y: bottom + GAP, w }])
-    })
-    setSelectedIds([item.id])
-  }
-
-  /* 컨테이너(레이아웃) 안에 자식으로 추가 — 팔레트 드래그를 컨테이너 위에 놓았을 때.
-     at = {cx, cy, type}이 있으면 포인터 위치 기준 슬롯에 삽입 */
-  const addChild = (type, parentId, at) => {
-    const def = LIBRARY[type]
-    if (!def || def.container) {
-      api.showToast('레이아웃 안에 레이아웃은 넣을 수 없어요.')
-      return
-    }
-    const idx = typeof at?.index === 'number'
-      ? at.index
-      : at?.cx != null
-        ? slotIndexAt(parentId, at.containerType, at.cx, at.cy)
-        : Infinity
-    // 컨테이너 안 기본 너비: 컴포넌트 고유 기본값(카드류)을 컨테이너 내부 폭에 맞춰 시작.
-    // 최초 배치 시 한 번만 계산해 저장하므로 이후 컨테이너 리사이즈에는 영향받지 않는다.
-    const contentEl = canvasRef.current?.querySelector(
-      `[data-canvas-item-id="${parentId}"] > .sb-canvas-item__content`
-    )
-    let fitW = itemW
-    if (contentEl) {
-      const cs = getComputedStyle(contentEl)
-      fitW = Math.round(
-        contentEl.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 10
-      )
-    }
-    const w = Math.max(MIN_ITEM_W, Math.min(def.defaultW || 320, fitW))
-    const item = { ...createItem(type, def.defaults), x: 0, y: 0, w }
-    setItems((prev) => placeChild([...prev, item], item.id, parentId, idx))
-    setSelectedIds([item.id])
-    api.showToast(`${def.label}을(를) 레이아웃 안에 배치했어요.`)
-  }
-
-  /* 캔버스에서 컨테이너 자식 직접 조작 (2단계 드래그):
-     클릭 = 선택 · 컨테이너 안에서 드래그 = 실시간 슬롯 재정렬 ·
-     포인터가 컨테이너 경계를 벗어나면 자동으로 꺼내져 일반 드래그로 전환
-     (다시 컨테이너 위에 놓으면 그 위치 슬롯으로 복귀) */
-  const childPointerDown = (e, childId) => {
-    if (previewMode) return
-    if (e.button !== 0) return
-    if (e.target.closest && e.target.closest('.sb-inline-editor')) return
-    e.stopPropagation()
-    const child = items.find((it) => it.id === childId)
-    if (!child) return
-    const parent = items.find((it) => it.id === child.parentId)
-    const startX = e.clientX
-    const startY = e.clientY
-    const shift = e.shiftKey
-    if (!parent || child.locked) {
-      handleSelect(childId, shift)
-      return
-    }
-    const w = Math.min(child.w || 320, itemW)
-    const MARGIN = 18
-    let phase = 'idle' // 'idle' → 'reorder'(컨테이너 안) → 'out'(꺼내진 일반 드래그)
-    let lastSlot = -1
-
-    const toCanvas = (ev) => {
-      const rect = canvasRef.current.getBoundingClientRect()
-      return { cx: (ev.clientX - rect.left) / zoom, cy: (ev.clientY - rect.top) / zoom }
-    }
-    /* 부모 전체 박스를 경계로 사용한다. 제목·패딩·카드 사이 여백을 가로질러도
-       의도치 않게 밖으로 빠지지 않고, 박스를 명확히 벗어났을 때만 꺼낸다. */
-    const insideParent = (clientX, clientY) => {
-      const el = canvasRef.current?.querySelector(`[data-canvas-item-id="${parent.id}"]`)
-      if (!el) return false
-      const r = el.getBoundingClientRect()
-      return (
-        clientX >= r.left - MARGIN &&
-        clientX <= r.right + MARGIN &&
-        clientY >= r.top - MARGIN &&
-        clientY <= r.bottom + MARGIN
-      )
-    }
-    const popOut = (cx, cy) => {
-      phase = 'out'
-      setItems((prev) =>
-        prev.map((it) =>
-          it.id === childId
-            ? {
-                ...it,
-                parentId: undefined,
-                slot: undefined,
-                w,
-                x: Math.max(0, Math.round(cx - w / 2)),
-                y: Math.max(0, Math.round(cy - 20)),
-              }
-            : it
-        )
-      )
-      setSelectedIds([childId])
-      dragStartRef.current = null
-      setChildDragGhost(null)
-    }
-
-    const move = (ev) => {
-      if (phase === 'idle') {
-        if (Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY) <= 6) return
-        phase = 'reorder'
-        setSelectedIds([childId])
-      }
-      const { cx, cy } = toCanvas(ev)
-      if (phase === 'reorder') {
-        if (insideParent(ev.clientX, ev.clientY)) {
-          // 컨테이너 안: 구조는 고정하고 삽입 위치만 미리보기 — 놓을 때 한 번만 커밋한다.
-          setDropTargetId(parent ? parent.id : null)
-          setDraggingChildId(childId)
-          setChildDragGhost({
-            x: ev.clientX + 14,
-            y: ev.clientY + 14,
-            label: LIBRARY[child.type]?.label || '컴포넌트',
-            icon: LIBRARY[child.type]?.icon || '◈',
-          })
-          lastSlot = slotIndexAt(parent.id, parent.type, cx, cy, childId)
-          setInsertHint(insertHintAt(parent, cx, cy, childId))
-          return
-        }
-        // 슬롯 밴드를 벗어남 → 자동으로 꺼내서 일반 드래그로 전환 (가이드/겹침/컴팩트 활성)
-        setDropTargetId(null)
-        setDraggingChildId(null)
-        setInsertHint(null)
-        popOut(cx, cy)
-      }
-      if (phase === 'out') {
-        onDrag(childId, cx - w / 2, cy - 20, ev.clientX, ev.clientY)
-      }
-    }
-    const up = () => {
-      window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', up)
-      window.removeEventListener('pointercancel', up)
-      setDraggingChildId(null)
-      setChildDragGhost(null)
-      setInsertHint(null)
-      if (phase === 'out') onDragEnd(childId)
-      else if (phase === 'reorder') {
-        setDropTargetId(null)
-        if (lastSlot >= 0) setItems((prev) => placeChild(prev, childId, parent.id, lastSlot))
-      }
-      else handleSelect(childId, shift)
-    }
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', up)
-    window.addEventListener('pointercancel', up)
-  }
-
-  /* 자식 리사이즈 핸들 — 바깥 컴포넌트와 동일하게 우하단 드래그로 너비/높이 조절 */
-  const childResizeDown = (e, childId) => {
-    if (e.button !== 0) return
-    e.preventDefault()
-    e.stopPropagation()
-    setSelectedIds([childId])
-    const child = items.find((it) => it.id === childId)
-    if (!child) return
-    const shellEl = e.target.closest && e.target.closest('.sb-child')
-    const r = shellEl ? shellEl.getBoundingClientRect() : null
-    const origW = child.w || (r ? Math.round(r.width / zoom) : 320)
-    const origH = child.h || (r ? Math.round(r.height / zoom) : 120)
-    const sx = e.clientX
-    const sy = e.clientY
-    const move = (ev) => {
-      const w = Math.max(MIN_ITEM_W, Math.min(itemW, Math.round(origW + (ev.clientX - sx) / zoom)))
-      const h = Math.max(48, Math.round(origH + (ev.clientY - sy) / zoom))
-      setItems((prev) => prev.map((it) => (it.id === childId ? { ...it, w, h } : it)))
-    }
-    const up = () => {
-      window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', up)
-    }
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', up)
-  }
-
-  /* 컨테이너에서 꺼내 캔버스 맨 아래로 */
-  const unnestItem = (id) => {
-    setItems((prev) => {
-      const bottom = prev
-        .filter((it) => !it.parentId)
-        .reduce((max, it) => Math.max(max, it.y + heightOf(it)), PAD - GAP)
-      const updated = prev.map((it) =>
-        it.id === id
-          ? { ...it, parentId: undefined, slot: undefined, x: PAD, y: bottom + GAP, w: Math.min(it.w || itemW, itemW) }
-          : it
-      )
-      return settle(updated, [id])
-    })
-    api.showToast('레이아웃에서 꺼내 캔버스 맨 아래에 놓았어요.')
-  }
-
-  /* 팔레트에서 캔버스로 드래그해 원하는 위치에 바로 배치 */
-  const addItemAt = (type, x, y) => {
-    const def = LIBRARY[type]
-    if (!def) return
-    const item = createItem(type, def.defaults)
-    const w = Math.min(def.defaultW || itemW, itemW)
-    const nx = Math.max(0, Math.min(canvasW - w, Math.round(x - w / 2)))
-    const ny = Math.max(0, Math.round(y - 16))
-    setItems((prev) => settle([...prev, { ...item, x: nx, y: ny, w }], [item.id]))
-    setSelectedIds([item.id])
-  }
-
-  /* ── 복사 / 붙여넣기 (⌘C/⌘X/⌘V — 단계를 건너 붙여넣기 가능, 컨테이너는 자식 포함) ── */
-  const itemPayload = (it) => ({
-    type: it.type,
-    w: it.w,
-    h: it.h,
-    hidden: it.hidden,
-    slot: it.slot,
-    style: it.style ? { ...it.style } : undefined,
-    props: JSON.parse(JSON.stringify(it.props)),
-  })
-
-  const copySelected = () => {
-    const srcs = items.filter((it) => selectedIds.includes(it.id))
-    if (srcs.length === 0) return false
-    const minX = Math.min(...srcs.map((it) => it.x))
-    const minY = Math.min(...srcs.map((it) => it.y))
-    clipboardRef.current = srcs.map((it) => ({
-      ...itemPayload(it),
-      relX: it.parentId ? 0 : it.x - minX,
-      relY: it.parentId ? 0 : it.y - minY,
-      children: items.filter((k) => k.parentId === it.id).map(itemPayload),
-    }))
-    api.showToast(`${srcs.length}개 컴포넌트를 복사했어요. ⌘V로 붙여넣어요.`)
-    return true
-  }
-
-  /* at을 주면 그 지점(캔버스 좌표)에, 없으면 스택 맨 아래에 붙여넣는다 */
-  const pasteClipboard = (at) => {
-    const clip = clipboardRef.current
-    if (!clip || clip.length === 0) return
-    const bottom = topItems.reduce(
-      (max, it) => Math.max(max, it.y + heightOf(it)),
-      PAD - GAP
-    )
-    const baseX = at ? at.x : PAD
-    const baseY = at ? at.y : bottom + GAP
-    const groups = clip.map((c) => {
-      const top = {
-        ...cloneItem(c, {
-          x: Math.max(0, Math.min(canvasW - c.w, Math.round(baseX + c.relX))),
-          y: Math.max(0, Math.round(baseY + c.relY)),
-        }),
-        w: Math.min(c.w, itemW),
-      }
-      const kids = (c.children || []).map((k) => ({
-        ...cloneItem(k, { x: 0, y: 0 }),
-        parentId: top.id,
-        slot: k.slot,
-      }))
-      return [top, ...kids]
-    })
-    const flat = groups.flat()
-    setItems((prev) => settle([...prev, ...flat], groups.map((g) => g[0].id)))
-    setSelectedIds(groups.map((g) => g[0].id))
-  }
-
-  /* ── 캔버스 줌 ── */
-  const ZOOM_STEPS = [0.5, 0.67, 0.8, 0.9, 1, 1.1, 1.25, 1.5]
-  const zoomBy = (dir) => {
-    setZoom((z) => {
-      const idx = ZOOM_STEPS.findIndex((s) => Math.abs(s - z) < 0.01)
-      const next = ZOOM_STEPS[Math.max(0, Math.min(ZOOM_STEPS.length - 1, (idx < 0 ? 4 : idx) + dir))]
-      return next
-    })
-  }
-
-  /* ── 러버밴드(마퀴) 다중 선택: 빈 캔버스를 드래그 ── */
-  const onCanvasPointerDown = (e) => {
-    if (previewMode) return
-    if (e.target !== e.currentTarget || e.button !== 0) return
-    const rect = e.currentTarget.getBoundingClientRect()
-    const sx = (e.clientX - rect.left) / zoom
-    const sy = (e.clientY - rect.top) / zoom
-    const baseSel = e.shiftKey ? [...selectedIds] : []
-    if (!e.shiftKey) setSelectedIds([])
-    const move = (ev) => {
-      const cx = (ev.clientX - rect.left) / zoom
-      const cy = (ev.clientY - rect.top) / zoom
-      const box = { x: Math.min(sx, cx), y: Math.min(sy, cy), w: Math.abs(cx - sx), h: Math.abs(cy - sy) }
-      if (box.w < 3 && box.h < 3) return
-      setMarquee(box)
-      const hit = topItems
-        .filter((it) => {
-          const ih = heightOf(it)
-          return it.x < box.x + box.w && it.x + it.w > box.x && it.y < box.y + box.h && it.y + ih > box.y
-        })
-        .map((it) => it.id)
-      setSelectedIds([...new Set([...baseSel, ...hit])])
-    }
-    const up = () => {
-      window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', up)
-      setMarquee(null)
-    }
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', up)
-  }
-
-  /* ── 우클릭 컨텍스트 메뉴 ── */
-  const openCtxMenu = (e, itemId) => {
-    if (previewMode) return
-    e.preventDefault()
-    e.stopPropagation()
-    if (itemId && !selectedIds.includes(itemId)) setSelectedIds([itemId])
-    const rect = canvasRef.current ? canvasRef.current.getBoundingClientRect() : null
-    setCtxMenu({
-      sx: e.clientX,
-      sy: e.clientY,
-      cx: rect ? (e.clientX - rect.left) / zoom : PAD,
-      cy: rect ? (e.clientY - rect.top) / zoom : PAD,
-      itemId: itemId || null,
-    })
-  }
-
-  /* 선택된 컴포넌트들의 잠금/숨김을 클릭한 아이템 기준으로 일괄 토글 */
-  const toggleSelected = (key) => {
-    const target = items.find((it) => it.id === (ctxMenu && ctxMenu.itemId))
-    const next = target ? !target[key] : true
-    const ids = new Set(selectedIds)
-    setItems((prev) => prev.map((it) => (ids.has(it.id) ? { ...it, [key]: next } : it)))
-  }
-
-  const updateItem = (id, patch) => {
-    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)))
-  }
-
-  const updateProps = (id, key, value) => {
-    setItems((prev) =>
-      prev.map((it) => (it.id === id ? { ...it, props: { ...it.props, [key]: value } } : it))
-    )
-  }
-
-  /* 삭제 — 컨테이너를 지우면 안의 자식도 함께 */
-  const removeItem = (id) => {
-    setItems((prev) => compactTop(prev.filter((it) => it.id !== id && it.parentId !== id)))
-    setSelectedIds((prev) => prev.filter((x) => x !== id))
-  }
-
-  const removeSelected = () => {
-    const ids = new Set(selectedIds)
-    setItems((prev) => compactTop(prev.filter((it) => !ids.has(it.id) && !ids.has(it.parentId))))
-    setSelectedIds([])
-  }
-
-  /* 아이템 사본 생성 — id 재발급 + props/style 딥카피 (복제·붙여넣기 공용) */
-  const cloneItem = (src, pos) => ({
-    ...createItem(src.type, src.props),
-    x: pos.x,
-    y: pos.y,
-    w: src.w,
-    h: src.h,
-    locked: false,
-    hidden: src.hidden,
-    style: src.style ? { ...src.style } : undefined,
-    props: JSON.parse(JSON.stringify(src.props)),
-  })
-
-  const cloneOf = (src) =>
-    cloneItem(src, { x: src.x, y: src.y + heightOf(src) + GAP })
-
-  /* 사본 그룹: 컨테이너면 자식까지, 자식이면 같은 컨테이너 안 다음 슬롯으로 */
-  const cloneGroup = (src, list) => {
-    if (src.parentId) {
-      return [{ ...cloneItem(src, { x: 0, y: 0 }), parentId: src.parentId, slot: nextSlot(list, src.parentId) }]
-    }
-    const copy = cloneOf(src)
-    const kids = list
-      .filter((k) => k.parentId === src.id)
-      .map((k) => ({ ...cloneItem(k, { x: 0, y: 0 }), parentId: copy.id, slot: k.slot }))
-    return [copy, ...kids]
-  }
-
-  const duplicateItem = (id) => {
-    const src = items.find((it) => it.id === id)
-    if (!src) return
-    const group = cloneGroup(src, items)
-    setItems((prev) => settle([...prev, ...group], [group[0].id]))
-    setSelectedIds([group[0].id])
-  }
-
-  /* 선택된 모든 컴포넌트 복제 (⌘D) */
-  const duplicateSelected = () => {
-    const srcs = items.filter((it) => selectedIds.includes(it.id))
-    if (srcs.length === 0) return
-    const groups = srcs.map((s) => cloneGroup(s, items))
-    const flat = groups.flat()
-    setItems((prev) => settle([...prev, ...flat], groups.map((g) => g[0].id)))
-    setSelectedIds(groups.map((g) => g[0].id))
-  }
-
-  /* ── 드래그 / 리사이즈 ── */
-
-  /* 그룹 드래그: 시작 시점에 선택 그룹(잠긴 것 제외)의 원래 위치를 기록 */
-  const onGroupDragStart = (id) => {
-    const groupIds = selectedIds.includes(id) && selectedIds.length > 1 ? selectedIds : [id]
-    const positions = {}
-    items.forEach((it) => {
-      if (groupIds.includes(it.id) && !it.locked) positions[it.id] = { x: it.x, y: it.y }
-    })
-    dragStartRef.current = { primary: id, positions }
-  }
-
-  /* 밀림 게이트: 깊은 겹침이 지속시간(deadline)을 채운 아이템만 밀림을 허용한다.
-     아직 대기 중인 게 있으면 경과 시점에 재렌더를 깨운다 */
-  const refreshPushGate = () => {
-    const now = Date.now()
-    const gate = pushGateRef.current
-    const ready = new Set()
-    let nextWake = Infinity
-    Object.entries(gate).forEach(([itemId, at]) => {
-      if (now >= at) ready.add(itemId)
-      else nextWake = Math.min(nextWake, at - now)
-    })
-    pushReadyRef.current = ready
-    if (nextWake < Infinity && !pushWakeRef.current) {
-      pushWakeRef.current = setTimeout(() => {
-        pushWakeRef.current = null
-        if (!dragPosRef.current) return // 이미 드롭됨
-        refreshPushGate()
-        dragLayoutPosRef.current = dragPosRef.current
-        setDragLayoutPos({ ...dragPosRef.current }) // 새 객체로 재렌더 유도
-      }, nextWake + 16)
-    }
-  }
-
-  /* 드래그 위치 발행: 드래그 아이템은 즉시, 겹침 회피 미리보기 기준 위치는
-     DRAG_PREVIEW_MS 간격으로만 갱신해 주변 아이템이 차분하게 반응하도록 */
-  const publishDragPos = (pos) => {
-    dragPosRef.current = pos
-    setDragPos(pos)
-    if (!dragLayoutPosRef.current) {
-      dragLayoutPosRef.current = pos
-      setDragLayoutPos(pos)
-    } else if (!dragLayoutTimerRef.current) {
-      dragLayoutTimerRef.current = setTimeout(() => {
-        dragLayoutTimerRef.current = null
-        if (!dragPosRef.current) return // 이미 드롭됨
-        dragLayoutPosRef.current = dragPosRef.current
-        setDragLayoutPos(dragPosRef.current)
-      }, DRAG_PREVIEW_MS)
-    }
-  }
-
-  const onDrag = (id, x, y, clientX, clientY) => {
-    // 포인터의 캔버스 좌표 — 컨테이너 드롭 판정에 사용 (아이템 중심보다 정확)
-    const pointer =
-      clientX != null && canvasRef.current
-        ? (() => {
-            const rect = canvasRef.current.getBoundingClientRect()
-            return { x: (clientX - rect.left) / zoom, y: (clientY - rect.top) / zoom }
-          })()
-        : null
-    const start = dragStartRef.current
-    const groupIds = start ? Object.keys(start.positions) : [id]
-
-    // 다중 선택 그룹 이동: 스냅 없이 함께 이동
-    if (start && groupIds.length > 1) {
-      const dx = x - start.positions[id].x
-      const dy = y - start.positions[id].y
-      const positions = {}
-      groupIds.forEach((k) => {
-        const it = items.find((i) => i.id === k)
-        const w = it ? it.w : itemW
-        positions[k] = {
-          x: Math.max(0, Math.min(canvasW - w, start.positions[k].x + dx)),
-          y: Math.max(0, start.positions[k].y + dy),
-        }
-      })
-      const pos = { id, positions }
-      publishDragPos(pos)
-      setGuides([])
-      setDropTargetId(null)
-      setInsertHint(null)
-      return
-    }
-
-    // 단일 드래그: 스마트 스냅 (캔버스 가장자리/중앙, 다른 아이템 모서리·간격)
-    const it = items.find((i) => i.id === id)
-    const w = it ? it.w : itemW
-    const hh = it ? heightOf(it) : 80
-    let nx = Math.max(0, Math.min(canvasW - w, x))
-    let ny = Math.max(0, y)
-    const activeGuides = []
-
-    const vCands = [
-      [PAD, PAD],
-      [(canvasW - w) / 2, canvasW / 2],
-      [canvasW - PAD - w, canvasW - PAD],
-    ]
-    topItems.forEach((o) => {
-      if (o.id === id) return
-      vCands.push([o.x, o.x])
-      vCands.push([o.x + o.w - w, o.x + o.w])
-    })
-    for (const [cand, line] of vCands) {
-      if (Math.abs(nx - cand) <= SNAP) {
-        nx = cand
-        activeGuides.push({ type: 'v', pos: line })
-        break
-      }
-    }
-
-    const hCands = [[PAD, PAD]]
-    topItems.forEach((o) => {
-      if (o.id === id) return
-      const oh = heightOf(o)
-      hCands.push([o.y, o.y])
-      hCands.push([o.y + oh + GAP, o.y + oh + GAP])
-      hCands.push([o.y - hh - GAP, o.y - GAP / 2])
-    })
-    for (const [cand, line] of hCands) {
-      if (cand >= 0 && Math.abs(ny - cand) <= SNAP) {
-        ny = cand
-        activeGuides.push({ type: 'h', pos: line })
-        break
-      }
-    }
-
-    setGuides(activeGuides)
-    // 컨테이너 위에 있으면 "안에 배치" 드롭 대상 하이라이트 + 삽입 위치 가이드 라인
-    const probe = pointer || { x: nx + w / 2, y: ny + hh / 2 }
-    const hoverRaw = !LIBRARY[it?.type]?.container ? containerAt(probe.x, probe.y, id) : null
-    // 밀려나 있는 컨테이너는 삽입 대상에서 제외 — 비워진 원래 자리는 순수한 빈자리로 취급
-    const hover = hoverRaw && !pushReadyRef.current.has(hoverRaw.id) ? hoverRaw : null
-    setDropTargetId(hover ? hover.id : null)
-    setInsertHint(hover ? insertHintAt(hover, probe.x, probe.y) : null)
-
-    // 밀림 지속시간 추적: 임계 이상 깊게 겹친 아이템만 gate에 deadline을 기록하고,
-    // 조건이 깨지면 즉시 리셋 (스치듯 지나가면 아무것도 밀리지 않는다)
-    const gate = pushGateRef.current
-    const now = Date.now()
-    const nestable = !LIBRARY[it?.type]?.container
-    topItems.forEach((o) => {
-      if (o.id === id) return
-      const isCont = !!LIBRARY[o.type]?.container
-      const oh = heightOf(o)
-      // 삽입 가능한 드래그에서 포인터가 컨테이너 삽입 존(중앙부)이면 삽입 의도 — 밀림에서 보호.
-      // 상/하 가장자리 밴드는 밀어내기 존이라 보호하지 않는다 (containerAt과 동일 구역 기준)
-      const band = Math.min(NEST_EDGE_ZONE, oh / 4)
-      const guarded =
-        isCont && nestable &&
-        probe.x >= o.x && probe.x <= o.x + o.w &&
-        probe.y >= o.y + band && probe.y <= o.y + oh - band
-      const ox = Math.min(nx + w, o.x + o.w) - Math.max(nx, o.x)
-      const oy = Math.min(ny + hh, o.y + oh) - Math.max(ny, o.y)
-      const area = ox > 0 && oy > 0 ? ox * oy : 0
-      const minArea = Math.min(w * hh, o.w * oh)
-      const ratio = isCont ? CONTAINER_SOFT_RATIO : DRAG_SOFT_RATIO
-      // 히스테리시스: 이미 밀린 아이템은 (원래 자리를 차지하고 있는 동안) 삽입 존 보호를
-      // 무시하고 낮은 유지 임계로 밀림을 지속 — 빈자리로 파고들어도 되돌아오지 않는다
-      const holds = pushReadyRef.current.has(o.id)
-        ? area >= PUSH_EXIT_RATIO * minArea
-        : area >= ratio * minArea && !guarded
-      if (holds) {
-        if (!gate[o.id]) gate[o.id] = now + (isCont ? CONTAINER_PUSH_DELAY_MS : DRAG_PUSH_DELAY_MS)
-      } else {
-        delete gate[o.id]
-      }
-    })
-    refreshPushGate()
-
-    const pos = { id, positions: { [id]: { x: nx, y: ny } }, pointer: probe }
-    publishDragPos(pos)
-  }
-
-  const onDragEnd = (id) => {
-    const pos = dragPosRef.current
-    // 드롭 시점에 밀려나 있던 컨테이너 — 커밋에서도 삽입 대상에서 제외 (빈자리 배치 유지)
-    const pushedIds = new Set(pushReadyRef.current)
-    // 밀 자리가 없어 제자리에 남은 아이템이 있으면 이 드롭은 무효 — 드래그를 원위치로
-    const blockedDrop = dragBlockedRef.current.size > 0
-    // 마지막 미리보기 레이아웃 — 드롭 커밋이 미리보기와 동일한 배치가 되도록 기준으로 사용
-    const previewPos = previewLayoutRef.current
-    previewLayoutRef.current = null
-    dragBlockedRef.current = new Set()
-    dragPosRef.current = null
-    dragStartRef.current = null
-    if (dragLayoutTimerRef.current) {
-      clearTimeout(dragLayoutTimerRef.current)
-      dragLayoutTimerRef.current = null
-    }
-    if (pushWakeRef.current) {
-      clearTimeout(pushWakeRef.current)
-      pushWakeRef.current = null
-    }
-    pushGateRef.current = {}
-    pushReadyRef.current = new Set()
-    dragLayoutPosRef.current = null
-    setDragLayoutPos(null)
-    setGuides([])
-    setDropTargetId(null)
-    setInsertHint(null)
-    // 진행 중인 React 렌더와 커밋이 겹치지 않도록 다음 틱으로 미룬다
-    setTimeout(() => {
-      if (pos && pos.id === id && blockedDrop) {
-        // 커밋하지 않고 미리보기만 해제 → 드래그 아이템이 원래 자리로 돌아간다
-        api.showToast('밀어낼 자리가 없어 원래 위치로 되돌렸어요.')
-        setDragPos(null)
-        return
-      }
-      if (pos && pos.id === id) {
-        setItems((prev) => {
-          const draggedIds = Object.keys(pos.positions)
-          // 단일 드래그를 컨테이너 위에 놓으면 안으로 배치
-          if (draggedIds.length === 1) {
-            const dId = draggedIds[0]
-            const dragged = prev.find((it) => it.id === dId)
-            if (dragged && !LIBRARY[dragged.type]?.container) {
-              const p2 = pos.positions[dId]
-              // 드롭 판정: 포인터 위치 우선, 없으면 아이템 중심
-              const cx = pos.pointer ? pos.pointer.x : p2.x + dragged.w / 2
-              const cy = pos.pointer ? pos.pointer.y : p2.y + heightOf(dragged) / 2
-              // 삽입 판정은 드래그 중 하이라이트와 동일하게 삽입 존(중앙부)만 (containerAt과 동일 기준)
-              const target = prev.find((it) => {
-                if (it.id === dId || it.parentId || !LIBRARY[it.type]?.container) return false
-                if (pushedIds.has(it.id)) return false // 밀려나 있던 컨테이너의 빈자리는 배치로
-                const hh = heightOf(it)
-                const band = Math.min(NEST_EDGE_ZONE, hh / 4)
-                return cx >= it.x && cx <= it.x + it.w && cy >= it.y + band && cy <= it.y + hh - band
-              })
-              if (target) {
-                const idx = slotIndexAt(target.id, target.type, cx, cy)
-                const nested = placeChild(prev, dId, target.id, idx)
-                api.showToast(`${LIBRARY[dragged.type]?.label}을(를) ${LIBRARY[target.type]?.label} 안에 배치했어요.`)
-                // 드롭 직후 컴팩트가 대상 컨테이너를 다시 움직이지 않도록 자리를 고정한다.
-                return settle(nested, [target.id])
-              }
-            }
-          }
-          // 회피가 발동하지 않은 겹침 상태로는 배치 불가 — 커밋하지 않고 원위치 복귀.
-          // (회피로 밀린 아이템은 미리보기 위치previewPos 기준이라 겹침이 아님)
-          const overlapped = prev.some((it) => {
-            if (it.parentId || pos.positions[it.id]) return false
-            const pp = (previewPos && previewPos[it.id]) || it
-            const hh = heightOf(it)
-            return draggedIds.some((dId) => {
-              const d = prev.find((x) => x.id === dId)
-              if (!d) return false
-              const dp = pos.positions[dId]
-              return (
-                dp.x < pp.x + it.w && dp.x + d.w > pp.x &&
-                dp.y < pp.y + hh && dp.y + heightOf(d) > pp.y
-              )
-            })
-          })
-          if (overlapped) {
-            api.showToast('겹친 채로는 배치할 수 없어 원래 위치로 되돌렸어요.')
-            return prev
-          }
-          // 드래그 아이템은 최종 드롭 위치, 나머지 최상위 아이템은 미리보기에서 밀린 위치를
-          // 기준으로 커밋 — 드롭 결과가 미리보기 화면과 동일해진다
-          const movedList = prev.map((it) => {
-            if (pos.positions[it.id]) return { ...it, ...pos.positions[it.id] }
-            if (!it.parentId && previewPos && previewPos[it.id]) return { ...it, ...previewPos[it.id] }
-            return it
-          })
-          return settle(movedList, draggedIds)
-        })
-      }
-      setDragPos(null)
-    }, 0)
-  }
-
-  const onResize = (id, w, h) => {
-    const draft = {
-      id,
-      w: Math.max(MIN_ITEM_W, Math.min(itemW, Math.round(w))),
-      h: Math.max(48, Math.round(h)),
-    }
-    sizeDraftRef.current = draft
-    setSizeDraft(draft)
-  }
-
-  const onResizeEnd = (id) => {
-    const draft = sizeDraftRef.current
-    sizeDraftRef.current = null
-    setTimeout(() => {
-      if (draft && draft.id === id) {
-        heightsRef.current[id] = draft.h
-        setItems((prev) => {
-          const resized = prev.map((it) =>
-            it.id === id
-              ? { ...it, w: draft.w, h: draft.h, x: Math.min(it.x, canvasW - draft.w) }
-              : it
-          )
-          return settle(resized, id)
-        })
-      }
-      setSizeDraft(null)
-    }, 0)
-  }
-
-  /* 크기 변경(인스펙터) 시에도 즉시 겹침 해소 */
-  const setSize = (id, patch) => {
-    if (patch.h != null) heightsRef.current[id] = patch.h
-    setItems((prev) => {
-      const updated = prev.map((it) => (it.id === id ? { ...it, ...patch } : it))
-      return settle(updated, id)
-    })
-  }
-
-  /* 방향키 미세 이동 (다중 선택 지원, 잠긴 것 제외) */
-  const nudgeSelected = (dx, dy) => {
-    const ids = new Set(
-      items.filter((it) => selectedIds.includes(it.id) && !it.locked && !it.parentId).map((it) => it.id)
-    )
-    if (ids.size === 0) return
-    setItems((prev) => {
-      const moved = prev.map((it) =>
-        ids.has(it.id)
-          ? {
-              ...it,
-              x: Math.max(0, Math.min(canvasW - it.w, it.x + dx)),
-              y: Math.max(0, it.y + dy),
-            }
-          : it
-      )
-      // 중력이 켜져 있으면 세로 미세 이동은 다시 스택되므로 가로 이동/재배열 용도
-      return settle(moved, [...ids])
-    })
-  }
-
-  /* 다중 선택 정렬 도구 */
-  const alignSelected = (mode) => {
-    if (selectedIds.length < 2) return
-    setItems((prev) =>
-      withTopOnly(prev, (top) => {
-        const aligned = alignItems(top, selectedIds, mode, { canvasW }, heightsRef.current)
-        return compactOn ? compactItems(aligned, heightsRef.current, compactOpts()) : aligned
-      })
-    )
-  }
-
-  /* 레이어 패널에서 순서 바꾸기 — 최상위는 자리 교환+컴팩트, 컨테이너 자식은 슬롯 순서 교환 */
-  const moveLayer = (id, dir) => {
-    setItems((prev) => {
-      const target = prev.find((it) => it.id === id)
-      if (target && target.parentId) {
-        const sibs = prev
-          .filter((it) => it.parentId === target.parentId)
-          .sort((a, b) => (a.slot || 0) - (b.slot || 0))
-        const idx = sibs.findIndex((it) => it.id === id)
-        const j = idx + dir
-        if (idx < 0 || j < 0 || j >= sibs.length) return prev
-        const order = sibs.map((s) => s.id)
-        ;[order[idx], order[j]] = [order[j], order[idx]]
-        return prev.map((it) => {
-          const k = order.indexOf(it.id)
-          return k >= 0 ? { ...it, slot: k + 1 } : it
-        })
-      }
-      return withTopOnly(prev, (top) => {
-        const sorted = [...top].sort((a, b) => (a.y - b.y) || (a.x - b.x))
-        const idx = sorted.findIndex((it) => it.id === id)
-        const j = idx + dir
-        if (idx < 0 || j < 0 || j >= sorted.length) return top
-        const a = sorted[idx]
-        const b = sorted[j]
-        const swapped = top.map((it) =>
-          it.id === a.id ? { ...it, x: b.x, y: b.y } : it.id === b.id ? { ...it, x: a.x, y: a.y } : it
-        )
-        return layoutCompactUp(swapped, heightsRef.current)
-      })
-    })
-  }
-
-  /* 레이어 트리 드래그 — 캔버스에서 잡기 어려운 중첩 구조를 정밀하게 변경한다. */
-  const dropLayer = (id, targetId, placement) => {
-    const source = items.find((it) => it.id === id)
-    const target = items.find((it) => it.id === targetId)
-    if (!source || !target || source.id === target.id || source.locked) return
-
-    if (placement === 'inside') {
-      if (!LIBRARY[target.type]?.container || LIBRARY[source.type]?.container) {
-        api.showToast('레이아웃 안에는 일반 컴포넌트만 넣을 수 있어요.')
-        return
-      }
-      setItems((prev) => placeChild(prev, id, targetId, Infinity))
-      setSelectedIds([id])
-      api.showToast(`${LIBRARY[source.type]?.label}을(를) ${LIBRARY[target.type]?.label} 안에 배치했어요.`)
-      return
-    }
-
-    if (target.parentId) {
-      if (LIBRARY[source.type]?.container) {
-        api.showToast('레이아웃 안에 레이아웃은 넣을 수 없어요.')
-        return
-      }
-      setItems((prev) => {
-        const siblings = prev
-          .filter((it) => it.parentId === target.parentId && it.id !== id)
-          .sort((a, b) => (a.slot || 0) - (b.slot || 0))
-        const targetIndex = siblings.findIndex((it) => it.id === targetId)
-        const index = Math.max(0, targetIndex + (placement === 'after' ? 1 : 0))
-        return placeChild(prev, id, target.parentId, index)
-      })
-      setSelectedIds([id])
-      return
-    }
-
-    // 최상위끼리는 현재 캔버스 자리 집합을 유지한 채 레이어 순서를 바꾼다.
-    if (!source.parentId) {
-      setItems((prev) => {
-        const sorted = [...prev.filter((it) => !it.parentId)].sort((a, b) => (a.y - b.y) || (a.x - b.x))
-        const slots = sorted.map((it) => ({ x: it.x, y: it.y }))
-        const order = sorted.filter((it) => it.id !== id).map((it) => it.id)
-        const targetIndex = order.indexOf(targetId)
-        order.splice(Math.max(0, targetIndex + (placement === 'after' ? 1 : 0)), 0, id)
-        return prev.map((it) => {
-          const index = order.indexOf(it.id)
-          return index >= 0 ? { ...it, ...slots[index] } : it
-        })
-      })
-      setSelectedIds([id])
-    }
-  }
-
-  /* ── 키보드 단축키 ── */
+  /* 더블클릭 시 인스펙터 첫 입력란(또는 지정된 필드)에 포커스 */
   useEffect(() => {
-    const onKey = (e) => {
-      if (e.target.closest && e.target.closest('input, textarea, select, [contenteditable]')) return
-      if (previewMode) return
-      const meta = e.metaKey || e.ctrlKey
-      if (meta && e.key.toLowerCase() === 'z') {
-        e.preventDefault()
-        e.shiftKey ? redo() : undo()
-        return
-      }
-      if (meta && e.key.toLowerCase() === 'a') {
-        e.preventDefault()
-        setSelectedIds(topItems.map((it) => it.id))
-        return
-      }
-      if (meta && e.key.toLowerCase() === 'd' && selectedIds.length > 0) {
-        e.preventDefault()
-        duplicateSelected()
-        return
-      }
-      if (meta && e.key.toLowerCase() === 'c') {
-        if (copySelected()) e.preventDefault()
-        return
-      }
-      if (meta && e.key.toLowerCase() === 'x') {
-        if (copySelected()) {
-          e.preventDefault()
-          removeSelected()
-        }
-        return
-      }
-      if (meta && e.key.toLowerCase() === 'v') {
-        if (clipboardRef.current && clipboardRef.current.length > 0) {
-          e.preventDefault()
-          pasteClipboard()
-        }
-        return
-      }
-      if (meta && (e.key === '=' || e.key === '+')) {
-        e.preventDefault()
-        zoomBy(1)
-        return
-      }
-      if (meta && e.key === '-') {
-        e.preventDefault()
-        zoomBy(-1)
-        return
-      }
-      if (meta && e.key === '0') {
-        e.preventDefault()
-        setZoom(1)
-        return
-      }
-      if (e.key === 'Escape' && ctxMenu) {
-        setCtxMenu(null)
-        return
-      }
-      if (selectedIds.length === 0) return
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        e.preventDefault()
-        removeSelected()
-        return
-      }
-      if (e.key === 'Escape') {
-        setSelectedIds([])
-        return
-      }
-      const step = e.shiftKey ? 1 : 8
-      const dir = {
-        ArrowUp: [0, -step],
-        ArrowDown: [0, step],
-        ArrowLeft: [-step, 0],
-        ArrowRight: [step, 0],
-      }[e.key]
-      if (dir) {
-        e.preventDefault()
-        nudgeSelected(dir[0], dir[1])
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  })
-
-  /* 더블클릭 시 인스펙터 첫 입력란에 포커스 */
-  useEffect(() => {
-    if (previewMode) return
-    if (!focusTick) return
+    if (previewMode || !focusTick) return
     const selector = focusFieldKey
       ? `.sb-inspector [data-fkey="${focusFieldKey}"]`
       : '.sb-inspector input[type="text"], .sb-inspector textarea'
@@ -1635,215 +566,73 @@ export default function Builder({ api, scenario }) {
     }
   }, [focusTick, previewMode, focusFieldKey])
 
-  /* ── 상단 바 액션 ── */
-  const changeDevice = (preset) => {
-    if (previewMode) return
-    setOpenMenu(null)
-    if (preset.key === (scenario.device || 'desktop')) return
-    pushHistory()
-    const ratio = (preset.w - PAD * 2) / (canvasW - PAD * 2)
-    const newItemW = preset.w - PAD * 2
-    api.updateScenario(scenario.id, (s) => {
-      const resizeItems = (list) => (list || []).map((it) => {
-        const w = Math.max(MIN_ITEM_W, Math.min(newItemW, Math.round(it.w * ratio)))
-        const x = Math.max(0, Math.min(preset.w - PAD - w, Math.round(PAD + (it.x - PAD) * ratio)))
-        return { ...it, w, x }
-      })
-      const stages = {}
-      Object.keys(s.stages).forEach((k) => {
-        stages[k] = resizeItems(s.stages[k])
-      })
-      const resizedPlanCases = (s.planCases || planCasesForScenario(s)).map((planCase) => ({
-        ...planCase,
-        items: resizeItems(planCase.items),
-      }))
-      return { ...s, device: preset.key, stages, planCases: resizedPlanCases }
-    })
-    // 폭 변경으로 높이가 다시 측정된 뒤 겹침/간격을 보정한다
-    setTimeout(() => {
-      setItems((prev) => layoutCompactUp(prev, heightsRef.current))
-    }, 200)
-    api.showToast(`${preset.label} 폭 기준으로 캔버스를 전환했어요.`)
-  }
-
-  const runAutoLayout = (mode) => {
-    if (previewMode) return
-    setOpenMenu(null)
-    setItems((prev) => withTopOnly(prev, (top) => mode.fn(top, heightsRef.current, { itemW, canvasW })))
-    // 너비가 바뀌는 정렬은 높이가 다시 측정된 뒤 한 번 더 컴팩트하게 보정한다
-    if (mode.key !== 'compact') {
-      setTimeout(() => {
-        setItems((prev) => withTopOnly(prev, (top) => layoutCompactUp(top, heightsRef.current)))
-      }, 180)
-    }
-    api.showToast(`${mode.label}로 겹침 없이 배치했어요.`)
-  }
-
-  const publish = () => {
-    const warnings = []
-    if ((scenario.stages.survey || []).length === 0) warnings.push('설문 단계가 비어 있어요.')
-    const emptyCases = planCases.filter((planCase) => (planCase.items || []).length === 0)
-    if (emptyCases.length > 0) warnings.push(`빈 계획 케이스: ${emptyCases.map((planCase) => planCase.name).join(', ')}`)
-    const incompleteCases = planCases.filter((planCase) =>
-      !planCase.isFallback && (
-        !planCase.conditions.length
-        || planCase.conditions.some((condition) => {
-          const operator = condition.operator
-          const needsValues = !['answered', 'unanswered'].includes(operator)
-          return !condition.questionId || (needsValues && (!condition.values || condition.values.length === 0))
-        })
-      )
-    )
-    if (incompleteCases.length > 0) {
-      warnings.push(`조건 미완성 케이스: ${incompleteCases.map((planCase) => planCase.name).join(', ')}`)
-    }
-    if (warnings.length > 0) {
-      const ok = window.confirm(
-        `${warnings.join('\n')}\n\n그래도 발행할까요?`
-      )
-      if (!ok) return
-    }
-    // 칩 라벨이 비어 있으면 제목에서 만들어 채운다 (빈 "✦#" 칩 방지)
-    const cleaned = (scenario.chip || '').replace(/^#+/, '').trim()
-    const fallback = (scenario.title || '').trim().replace(/\s+/g, '_') || '시나리오'
-    const finalChip = cleaned || fallback
-    // 발행 시점 스냅샷을 버전으로 보관 (최근 10개)
-    const snapshot = {
-      at: new Date().toISOString(),
-      title: scenario.title,
-      chip: finalChip,
-      device: scenario.device,
-      stages: JSON.parse(JSON.stringify(scenario.stages)),
-      planCases: JSON.parse(JSON.stringify(planCases)),
-    }
-    api.updateScenario(scenario.id, (s) => ({
-      ...s,
-      status: 'published',
-      chip: finalChip,
-      versions: [...(s.versions || []), snapshot].slice(-10),
-    }))
-    api.showToast(`"#${finalChip}" 칩이 홈 탐색창 밑에 발행됐어요!`)
-    api.goHome()
-  }
-
-  /* 발행 버전 복원: 현재 상태는 undo 히스토리로 보존 */
-  const restoreVersion = (snap) => {
-    if (previewMode) return
-    setOpenMenu(null)
-    const when = new Date(snap.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-    if (!window.confirm(`${when} 발행 시점으로 되돌릴까요?\n(현재 상태는 ⌘Z로 복구할 수 있어요)`)) return
-    pushHistory()
-    setSelectedIds([])
-    api.updateScenario(scenario.id, (s) => ({
-      ...s,
-      title: snap.title,
-      chip: snap.chip,
-      device: snap.device,
-      stages: JSON.parse(JSON.stringify(snap.stages)),
-      planCases: JSON.parse(JSON.stringify(planCasesForScenario({
-        stages: snap.stages,
-        planCases: snap.planCases,
-      }))),
-    }))
-    api.showToast('발행 시점 버전으로 복원했어요.')
-  }
-
-  const unpublish = () => {
-    api.updateScenario(scenario.id, (s) => ({ ...s, status: 'draft' }))
-    api.showToast('발행을 취소했어요.')
-  }
-
-  /* 공유 링크 복사: URL 해시에 시나리오 전체가 담겨 어디서든 바로 실행된다 */
-  const copyShareLink = () => {
-    const url = buildShareUrl(scenario)
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(url).then(
-        () => api.showToast('공유 링크를 복사했어요. 받는 사람은 링크만 열면 바로 체험할 수 있어요.'),
-        () => window.prompt('아래 링크를 복사하세요', url)
-      )
-    } else {
-      window.prompt('아래 링크를 복사하세요', url)
-    }
-  }
+  useBuilderShortcuts({
+    enabled: !previewMode,
+    actions: {
+      undo: history.undo,
+      redo: history.redo,
+      selectAll: () => setSelectedIds(topItems.map((item) => item.id)),
+      hasSelection: () => selectedIds.length > 0,
+      duplicate: duplicateSelected,
+      copy: copySelected,
+      paste: () => pasteClipboard(),
+      canPaste: () => !!(clipboardRef.current && clipboardRef.current.length > 0),
+      remove: removeSelected,
+      clearSelection: () => setSelectedIds([]),
+      closeContextMenu: () => {
+        if (!ctxMenu) return false
+        setCtxMenu(null)
+        return true
+      },
+      nudge: drag.nudgeSelected,
+      zoomIn: () => zoomBy(1),
+      zoomOut: () => zoomBy(-1),
+      zoomReset: () => setZoom(1),
+    },
+  })
 
   /* ── 렌더 ── */
-
-  /* 드래그 중 미리보기 레이아웃 — 지속시간 게이트를 통과한 아이템만 밀림에 참여하고
-     나머지는 전부 제자리 고정(핀). 겹치자마자 반응하지 않고, 오래 겹친 것만 비켜난다.
-     둔화: 재배치 기준 위치는 스로틀된 dragLayoutPos를 쓰고(드래그 아이템 렌더는
-     CanvasItem의 dragPos prop이 즉시 반영), 겹침 판정은 soft 임계값을 적용 */
-  let displayItems = items
-  if (dragPos) {
-    const layoutPos = dragLayoutPos || dragPos
-    const moved = items.map((it) =>
-      layoutPos.positions[it.id] ? { ...it, ...layoutPos.positions[it.id] } : it
-    )
-    const draggedIds = Object.keys(dragPos.positions)
-    displayItems = withTopOnly(moved, (top) => {
-      // 게이트 통과 아이템만 드래그 박스에서 밀리고, 밀린 아이템이 덮친 아이템은 연쇄로 밀림.
-      // 잠긴 아이템에 막혀 자리가 없는 아이템은 제자리 유지 → 드롭 시 드래그를 원위치 복귀
-      const { items: resolvedTop, displacedIds, blockedIds } = previewResolve(
-        top, draggedIds, pushReadyRef.current, heightsRef.current
-      )
-      dragBlockedRef.current = blockedIds
-      if (!compactOn) {
-        previewLayoutRef.current = Object.fromEntries(
-          resolvedTop.filter((it) => !draggedIds.includes(it.id)).map((it) => [it.id, { x: it.x, y: it.y }])
-        )
-        return resolvedTop
-      }
-      // 게이트가 열려 실제 밀림이 시작된 뒤에는 나머지 아이템도 함께 재배치(연쇄 스택 이동) —
-      // 멀리 있는 아이템이 중간 아이템을 건너뛰어 빈자리로 순간이동하지 않고 한 칸씩 밀린다.
-      // 아무도 밀리지 않았다면 전부 제자리 고정(정적 캔버스 유지)
-      const pinnedIds =
-        displacedIds.size > 0
-          ? top
-              .filter((it) => draggedIds.includes(it.id) || blockedIds.has(it.id))
-              .map((it) => it.id)
-          : top.map((it) => it.id)
-      const finalTop = compactItems(resolvedTop, heightsRef.current, compactOpts(pinnedIds))
-      // 드롭 시 미리보기 그대로 커밋되도록 마지막 레이아웃을 기억 (드래그 아이템 제외)
-      previewLayoutRef.current = Object.fromEntries(
-        finalTop.filter((it) => !draggedIds.includes(it.id)).map((it) => [it.id, { x: it.x, y: it.y }])
-      )
-      return finalTop
-    })
-  }
-
+  const displayItems = drag.decorateForDrag(items)
   const canvasHeight = Math.max(
     560,
-    ...displayItems.map((it) => {
-      const y = (dragPos && dragPos.positions[it.id]?.y) ?? it.y
-      return y + heightOf(it) + 120
+    ...displayItems.map((item) => {
+      const y = (drag.dragPos && drag.dragPos.positions[item.id]?.y) ?? item.y
+      return y + heightOf(item) + 120
     })
   )
 
   const ensureKeyword = (word) => {
     if (!word) return
-    if ((api.keywords || []).some((k) => k.word === word)) return
+    if ((api.keywords || []).some((keyword) => keyword.word === word)) return
     api.updateKeywords([...(api.keywords || []), { word, desc: '', points: '' }])
     api.showToast(`"${word}" 키워드를 사전에 추가했어요. 탐색 편집기에서 설명을 채워주세요.`)
   }
 
-  /* 캔버스 렌더 컨텍스트: 미리보기에서는 편집 콜백을 제외해 모든 컴포넌트를 읽기 전용으로 만든다. */
+  const summaryPreview = {
+    profile: visibleProfileItems(api.profile, scenario),
+    questions: (scenario.stages.survey || [])
+      .filter((item) => item.type === 'surveyQuestion')
+      .map((question) => ({ q: question.props.question, a: '아무거나' })),
+  }
+
+  /* 캔버스 렌더 컨텍스트 — 미리보기에서는 편집 콜백을 빼서 전부 읽기 전용으로 만든다 */
   const canvasCtx = {
     mode: 'canvas',
-    canvasView, // 'edit' = 편집 크롬 표시, 'preview' = 실사용 모습
-    allItems: items, // 컨테이너가 자식을 찾아 렌더할 때 사용
-    selectedIds, // 자식 셸의 선택 표시
-    draggingChildId, // 컨테이너 안 재정렬 중인 자식 강조
-    childPointerDown, // 자식 클릭 선택 / 드래그 꺼내기
-    childResizeDown, // 자식 리사이즈 핸들
+    canvasView,
+    allItems: items,
+    selectedIds,
+    draggingChildId,
+    childPointerDown: nesting.childPointerDown,
+    childResizeDown: nesting.childResizeDown,
     inspectChild: (id) => {
       if (previewMode) return
       setSelectedIds([id])
       setFocusFieldKey(null)
-      setFocusTick((t) => t + 1)
+      setFocusTick((tick) => tick + 1)
     },
     profile: api.profile,
     ...(previewMode ? {} : {
-      updateProps: (id, key, value) => updateProps(id, key, value),
-      /* 컴포넌트 안 더블클릭 인라인 편집 */
+      updateProps,
       editing: inlineEdit,
       beginEdit: (id, key) => {
         setSelectedIds([id])
@@ -1854,32 +643,16 @@ export default function Builder({ api, scenario }) {
         setInlineEdit(null)
       },
     }),
-    summaryPreview: {
-      profile: visibleProfileItems(api.profile, scenario),
-      questions: (scenario.stages.survey || [])
-        .filter((it) => it.type === 'surveyQuestion')
-        .map((q) => ({ q: q.props.question, a: '아무거나' })),
-    },
+    summaryPreview,
   }
 
-  const surveyQuestions = (scenario.stages.survey || []).filter((item) => item.type === 'surveyQuestion')
-  const activePlanCaseIndex = planCases.findIndex((planCase) => planCase.id === activePlanCase?.id)
-  const evaluatedCaseCount = planCases.filter((planCase) => normalizeCaseEvaluation(planCase.evaluation).selected).length
-  const feedbackPlanCase = feedbackTarget
-    ? planCases.find((planCase) => planCase.id === feedbackTarget.caseId)
-    : null
+  const feedbackPlanCase = feedbackTarget ? planCases.find((planCase) => planCase.id === feedbackTarget.caseId) : null
   const feedbackItem = feedbackPlanCase
     ? (feedbackPlanCase.items || []).find((item) => item.id === feedbackTarget.itemId)
     : null
   const feedbackReview = feedbackPlanCase && feedbackTarget
-    ? normalizeComponentEvaluation(
-        normalizeCaseEvaluation(feedbackPlanCase.evaluation).components[feedbackTarget.itemId]
-      )
+    ? normalizeComponentEvaluation(normalizeCaseEvaluation(feedbackPlanCase.evaluation).components[feedbackTarget.itemId])
     : null
-
-  const chevron = (
-    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" /></svg>
-  )
 
   return (
     <div className={
@@ -1889,339 +662,63 @@ export default function Builder({ api, scenario }) {
       + (isEvaluation ? ' sb-builder--evaluation' : '')
       + (feedbackReview ? ' sb-builder--feedback' : '')
     }>
-      {/* 상단 바 — 1행: 문서 정보 + 발행, 2행: 단계 탭 + 편집 도구 그룹 */}
-      <div className="sb-topbar">
-        <div className="sb-topbar__row">
-        <button type="button" className="sb-icon-btn" onClick={api.goHome} aria-label="홈으로">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M15 19l-7-7 7-7" /></svg>
-        </button>
-
-        <div className="sb-topbar__meta">
-          <input
-            className="sb-title-input"
-            value={scenario.title}
-            placeholder="시나리오 제목"
-            onChange={(e) => api.updateScenario(scenario.id, (s) => ({ ...s, title: e.target.value }))}
-          />
-          <div className="sb-chip-input-wrap" style={{ color: chipColor }}>
-            <span>#</span>
-            <input
-              className="sb-chip-input"
-              style={{ color: chipColor }}
-              value={scenario.chip}
-              placeholder="칩_라벨"
-              onChange={(e) =>
-                api.updateScenario(scenario.id, (s) => ({ ...s, chip: e.target.value.replace(/\s+/g, '_') }))
-              }
-            />
-          </div>
-          <Dropdown
-            open={openMenu === 'color'}
-            onClose={() => setOpenMenu(null)}
-            menuClass="sb-color-menu"
-            button={
-              <button type="button" className="sb-color-btn" title="칩 색상 선택" aria-label="칩 색상 선택" onClick={() => toggleMenu('color')}>
-                <span className="sb-color-dot" style={{ background: chipColor }} />
-              </button>
-            }
-          >
-            {CHIP_COLORS.map((c) => (
-              <button
-                key={c.key}
-                type="button"
-                className={'sb-color-swatch' + (chipColor === c.color ? ' sb-color-swatch--active' : '')}
-                title={c.label}
-                style={{ background: c.color }}
-                onClick={() => {
-                  api.updateScenario(scenario.id, (s) => ({ ...s, color: c.color }))
-                  setOpenMenu(null)
-                }}
-              />
-            ))}
-          </Dropdown>
-        </div>
-
-        <span className={'sb-status ' + (scenario.status === 'published' ? 'sb-status--live' : '')}>
-          {scenario.status === 'published' ? '발행됨' : '작성 중'}
-        </span>
-        <span className="sb-autosave" title={scenario.updatedAt}>
-          자동 저장됨 · {new Date(scenario.updatedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
-        </span>
-
-        <div className="sb-topbar__actions">
-          <button type="button" className="sb-btn" onClick={() => api.playScenario(scenario.id)}>시험해보기</button>
-
-          {(scenario.versions || []).length > 0 && (
-            <Dropdown
-              open={openMenu === 'version'}
-              onClose={() => setOpenMenu(null)}
-              button={
-                <button type="button" disabled={previewMode} className={'sb-btn' + (openMenu === 'version' ? ' sb-btn--open' : '')} onClick={() => toggleMenu('version')} title="발행 시점 버전 복원">
-                  버전 {(scenario.versions || []).length}
-                </button>
-              }
-            >
-              {[...(scenario.versions || [])].reverse().map((v, i, arr) => {
-                const versionCases = v.planCases || planCasesForScenario({ stages: v.stages })
-                const planItemCount = versionCases.reduce((sum, planCase) => sum + (planCase.items || []).length, 0)
-                return (
-                  <button key={v.at} type="button" className="sb-menu__item" onClick={() => restoreVersion(v)}>
-                    <strong>발행 v{arr.length - i}</strong>
-                    <small>
-                      {new Date(v.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                      {' · '}설문 {(v.stages.survey || []).length} · 계획 {versionCases.length}케이스/{planItemCount}개
-                    </small>
-                  </button>
-                )
-              })}
-            </Dropdown>
-          )}
-
-          {scenario.status === 'published' && (
-            <button type="button" className="sb-btn sb-btn--ghost" onClick={unpublish}>발행 취소</button>
-          )}
-          <button type="button" className="sb-btn sb-btn--primary" onClick={publish}>
-            {scenario.status === 'published' ? '변경사항 재발행' : '발행하기'}
-          </button>
-        </div>
-        </div>
-
-        {/* 2행: 편집 도구 그룹 (구분선 분리) */}
-        <div className="sb-topbar__row sb-topbar__row--tools" hidden={isEvaluation}>
-          <div className="sb-tb-group" role="group" aria-label="히스토리">
-            <button type="button" className="sb-icon-btn" title="실행 취소 (⌘Z)" aria-label="실행 취소" disabled={previewMode || historyRef.current.past.length === 0} onClick={undo}>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M9 14L4 9l5-5M4 9h10a6 6 0 010 12h-3" /></svg>
-            </button>
-            <button type="button" className="sb-icon-btn" title="다시 실행 (⇧⌘Z)" aria-label="다시 실행" disabled={previewMode || historyRef.current.future.length === 0} onClick={redo}>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M15 14l5-5-5-5M20 9H10a6 6 0 000 12h3" /></svg>
-            </button>
-          </div>
-          <span className="sb-tb-sep" aria-hidden="true" />
-          <div className="sb-tb-group" role="group" aria-label="보기">
-            <button
-              type="button"
-              className={'sb-btn' + (canvasView === 'preview' ? ' sb-btn--compact-on' : '')}
-              title={canvasView === 'preview'
-                ? '미리보기 모드 — 실제 사용자가 보는 모습 (클릭해 편집 모드로)'
-                : '편집 모드 — 레이아웃 클리핑을 풀고 모든 자식을 온전히 표시 (클릭해 미리보기로)'}
-              onClick={() => setCanvasView((v) => (v === 'edit' ? 'preview' : 'edit'))}
-            >
-              {canvasView === 'preview' ? '👁 미리보기' : '✏️ 편집 모드'}
-            </button>
-            <div className="sb-zoom-ctl">
-              <button type="button" title="축소 (⌘-)" aria-label="축소" onClick={() => zoomBy(-1)}>−</button>
-              <button type="button" className="sb-zoom-ctl__val" title="100%로 (⌘0)" onClick={() => setZoom(1)}>
-                {Math.round(zoom * 100)}%
-              </button>
-              <button type="button" title="확대 (⌘+)" aria-label="확대" onClick={() => zoomBy(1)}>+</button>
-            </div>
-          </div>
-          <span className="sb-tb-sep" aria-hidden="true" />
-          <div className="sb-tb-group" role="group" aria-label="레이아웃">
-          <Dropdown
-            open={openMenu === 'device'}
-            onClose={() => setOpenMenu(null)}
-            button={
-              <button type="button" disabled={previewMode} className={'sb-btn' + (openMenu === 'device' ? ' sb-btn--open' : '')} onClick={() => toggleMenu('device')} title="캔버스 기기 폭 선택">
-                {device.icon} {device.label}
-                {chevron}
-              </button>
-            }
-          >
-            {DEVICE_PRESETS.map((p) => (
-              <button
-                key={p.key}
-                type="button"
-                className={'sb-menu__item' + (p.key === device.key ? ' sb-menu__item--active' : '')}
-                onClick={() => changeDevice(p)}
-              >
-                <strong>{p.icon} {p.label}</strong>
-                <small>캔버스 폭 {p.w}px{p.key === device.key ? ' · 사용 중' : ''}</small>
-              </button>
-            ))}
-          </Dropdown>
-
-          <Dropdown
-            open={openMenu === 'compact'}
-            onClose={() => setOpenMenu(null)}
-            button={
-              <button
-                type="button"
-                disabled={previewMode}
-                className={'sb-btn' + (compactOn ? ' sb-btn--compact-on' : '') + (openMenu === 'compact' ? ' sb-btn--open' : '')}
-                title="컴팩트 방향 — 배치가 바뀔 때 빈 공간 없이 스택되는 방향"
-                onClick={() => toggleMenu('compact')}
-              >
-                🧲 {COMPACT_TYPES.find((t) => t.key === compactType)?.label || '컴팩트'}
-                {chevron}
-              </button>
-            }
-          >
-            {COMPACT_TYPES.map((t) => (
-              <button
-                key={t.key}
-                type="button"
-                className={'sb-menu__item' + (t.key === compactType ? ' sb-menu__item--active' : '')}
-                onClick={() => changeCompact(t)}
-              >
-                <strong>{t.label}</strong>
-                <small>{t.desc}{t.key === compactType ? ' · 사용 중' : ''}</small>
-              </button>
-            ))}
-          </Dropdown>
-
-          <Dropdown
-            open={openMenu === 'layout'}
-            onClose={() => setOpenMenu(null)}
-            button={
-              <button type="button" disabled={previewMode} className={'sb-btn' + (openMenu === 'layout' ? ' sb-btn--open' : '')} onClick={() => toggleMenu('layout')}>
-                자동 정렬
-                {chevron}
-              </button>
-            }
-          >
-            {LAYOUT_MODES.map((mode) => (
-              <button key={mode.key} type="button" className="sb-menu__item" onClick={() => runAutoLayout(mode)}>
-                <strong>{mode.label}</strong>
-                <small>{mode.desc}</small>
-              </button>
-            ))}
-          </Dropdown>
-          </div>
-          <span className="sb-tb-sep" aria-hidden="true" />
-          <div className="sb-tb-group" role="group" aria-label="공유">
-            <button type="button" className="sb-icon-btn" title="공유 링크 복사 — 링크만 열면 바로 체험" aria-label="공유 링크 복사" onClick={copyShareLink}>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5M10.172 13.828a4 4 0 010-5.656l3-3a4 4 0 015.656 5.656l-1.5 1.5" /></svg>
-            </button>
-          </div>
-        </div>
-
-        {/* 3행: 단계 탭 — 탐색(공통 캔버스)도 설문/계획처럼 직접 편집 */}
-        <div className="sb-topbar__row sb-topbar__row--tabs">
-          <div className="sb-stage-tabs">
-            {BUILD_STAGES.map((s, i) => (
-              <React.Fragment key={s.key}>
-                {i === 1 && <span className="sb-stage-tabs__divider" aria-hidden="true" />}
-                <button
-                  type="button"
-                  className={
-                    'sb-stage-tab' +
-                    (s.common ? ' sb-stage-tab--common' : '') +
-                    (s.review ? ' sb-stage-tab--review' : '') +
-                    (stageKey === s.key ? ' sb-stage-tab--active' : '')
-                  }
-                  title={s.desc}
-                  onClick={() => setStageKey(s.key)}
-                >
-                  <span className="sb-stage-tab__num">{s.common ? '🧭' : i}</span>
-                  {s.label}
-                  <span className="sb-stage-tab__count">
-                    {s.common
-                      ? (api.explore.items || []).length
-                      : s.key === 'evaluation'
-                        ? evaluatedCaseCount
-                      : s.key === 'plan'
-                        ? planCases.length
-                        : (scenario.stages[s.key] || []).length}
-                  </span>
-                </button>
-              </React.Fragment>
-            ))}
-            {isExplore && <span className="sb-stage-tabs__note">공통 페이지 · 모든 시나리오 홈에 즉시 반영</span>}
-          </div>
-        </div>
-
+      <BuilderTopBar
+        scenario={scenario}
+        planCases={planCases}
+        stageKey={stageKey}
+        setStageKey={setStageKey}
+        previewMode={previewMode}
+        isExplore={isExplore}
+        isEvaluation={isEvaluation}
+        exploreItemCount={(api.explore.items || []).length}
+        evaluatedCaseCount={planCases.filter((planCase) => normalizeCaseEvaluation(planCase.evaluation).selected).length}
+        chipColor={scenario.color || '#5f7465'}
+        device={device}
+        compactType={compactType}
+        compactOn={layout.compactOn}
+        canvasView={canvasView}
+        setCanvasView={setCanvasView}
+        zoom={zoom}
+        openMenu={openMenu}
+        toggleMenu={toggleMenu}
+        closeMenu={closeMenu}
+        history={history}
+        onGoHome={api.goHome}
+        onPlay={() => api.playScenario(scenario.id)}
+        onPatchScenario={patchScenario}
+        onChangeDevice={changeDevice}
+        onChangeCompact={changeCompact}
+        onAutoLayout={runAutoLayout}
+        onZoomIn={() => zoomBy(1)}
+        onZoomOut={() => zoomBy(-1)}
+        onZoomReset={() => setZoom(1)}
+        onPublish={publish}
+        onUnpublish={() => {
+          patchScenario({ status: 'draft' })
+          api.showToast('발행을 취소했어요.')
+        }}
+        onRestoreVersion={restoreVersion}
+        onCopyShareLink={copyShareLink}
+      >
         {stageKey === 'plan' && activePlanCase && (
-          <div className="sb-topbar__row sb-topbar__row--cases">
-            <span className="sb-plan-cases__label">계획 케이스</span>
-            <div className="sb-plan-case-tabs-wrap">
-              <button
-                type="button"
-                className="sb-plan-case-scroll"
-                aria-label="이전 계획 케이스 보기"
-                title="이전 계획 케이스"
-                onClick={() => scrollPlanCases(-1)}
-              >
-                ‹
-              </button>
-              <div
-                ref={planCaseTabsRef}
-                className="sb-plan-case-tabs"
-                role="tablist"
-                aria-label="계획 케이스"
-              >
-                {planCases.map((planCase, index) => (
-                  <button
-                    key={planCase.id}
-                    type="button"
-                    role="tab"
-                    data-plan-case-id={planCase.id}
-                    aria-selected={planCase.id === activePlanCase.id}
-                    className={'sb-plan-case-tab' + (planCase.id === activePlanCase.id ? ' sb-plan-case-tab--active' : '')}
-                    title={`${index + 1}순위 · ${planCase.isFallback ? '기본 케이스' : `${planCase.conditionMode === 'all' ? 'AND' : 'OR'} 조건 ${planCase.conditions.length}개`}`}
-                    onClick={() => setPlanCaseId(planCase.id)}
-                  >
-                    <span>{index + 1}</span>
-                    {planCase.name || `계획 케이스 ${index + 1}`}
-                    <b>{planCase.isFallback ? '기본' : planCase.conditions.length}</b>
-                  </button>
-                ))}
-              </div>
-              <button
-                type="button"
-                className="sb-plan-case-scroll"
-                aria-label="다음 계획 케이스 보기"
-                title="다음 계획 케이스"
-                onClick={() => scrollPlanCases(1)}
-              >
-                ›
-              </button>
-            </div>
-            <button type="button" className="sb-btn sb-btn--small sb-plan-case-add" disabled={previewMode} onClick={addPlanCase}>
-              + 새 케이스
-            </button>
-            <button
-              type="button"
-              className="sb-btn sb-btn--small sb-btn--ai"
-              disabled={previewMode}
-              onClick={() => setCaseGenOpen(true)}
-              title="페르소나·상품 카탈로그로 조합별 케이스를 만드는 프롬프트를 생성"
-            >
-              ✦ 케이스 만들기
-            </button>
-            <Dropdown
-              open={openMenu === 'case'}
-              onClose={() => setOpenMenu(null)}
-              menuClass="sb-plan-case-menu"
-              button={
-                <button
-                  type="button"
-                  className={'sb-btn sb-btn--small' + (openMenu === 'case' ? ' sb-btn--open' : '')}
-                  disabled={previewMode}
-                  onClick={() => toggleMenu('case')}
-                >
-                  조건 · 우선순위 설정
-                </button>
-              }
-            >
-              <PlanCaseEditor
-                planCase={activePlanCase}
-                caseIndex={activePlanCaseIndex}
-                caseCount={planCases.length}
-                questions={surveyQuestions}
-                onChange={updateActivePlanCase}
-                onSetFallback={setFallbackPlanCase}
-                onDuplicate={duplicatePlanCase}
-                onDelete={removePlanCase}
-                onMove={movePlanCase}
-              />
-            </Dropdown>
-            <span className="sb-plan-cases__note">
-              {activePlanCase.isFallback
-                ? '조건 미일치 시 실행되는 기본 페이지'
-                : `${activePlanCase.conditionMode === 'all' ? '모든 조건' : '조건 중 하나'} 만족 시 실행 · 앞 케이스 우선`}
-            </span>
-          </div>
+          <PlanCaseBar
+            planCases={planCases}
+            activePlanCase={activePlanCase}
+            activeCaseIndex={planCases.findIndex((planCase) => planCase.id === activePlanCase.id)}
+            surveyQuestions={(scenario.stages.survey || []).filter((item) => item.type === 'surveyQuestion')}
+            previewMode={previewMode}
+            openMenu={openMenu}
+            toggleMenu={toggleMenu}
+            closeMenu={closeMenu}
+            onSelectCase={setPlanCaseId}
+            onAddCase={() => { cases.addPlanCase(); setOpenMenu('case') }}
+            onGenerateCases={() => setCaseGenOpen(true)}
+            onChangeCase={cases.updateActivePlanCase}
+            onSetFallback={cases.setFallbackPlanCase}
+            onDuplicate={cases.duplicatePlanCase}
+            onDelete={() => { if (cases.removePlanCase()) closeMenu() }}
+            onMove={cases.movePlanCase}
+          />
         )}
 
         {stageKey === 'plan' && feedbackReview && feedbackItem && (
@@ -2234,10 +731,9 @@ export default function Builder({ api, scenario }) {
               type="button"
               className={feedbackReview.resolved ? 'sb-btn sb-btn--compact-on' : 'sb-btn'}
               disabled={!feedbackReview.feedback.trim()}
-              onClick={() => {
-                const patch = { resolved: !feedbackReview.resolved }
-                updateComponentEvaluation(feedbackPlanCase.id, feedbackTarget.itemId, patch)
-              }}
+              onClick={() => cases.updateComponentEvaluation(
+                feedbackPlanCase.id, feedbackTarget.itemId, { resolved: !feedbackReview.resolved }
+              )}
             >
               {feedbackReview.resolved ? '✓ 반영 완료됨' : '반영 완료'}
             </button>
@@ -2246,15 +742,15 @@ export default function Builder({ api, scenario }) {
             </button>
           </div>
         )}
-      </div>
+      </BuilderTopBar>
 
       {caseGenOpen && (
         <CaseGenerationDialog
           scenario={scenario}
           planCases={planCases}
           activeCaseId={planCaseId}
-          profile={canvasCtx.profile}
-          onApply={applyGeneratedCases}
+          profile={api.profile}
+          onApply={cases.applyGeneratedCases}
           onClose={() => setCaseGenOpen(false)}
           onToast={api.showToast}
         />
@@ -2265,195 +761,134 @@ export default function Builder({ api, scenario }) {
           planCases={planCases}
           activeCaseId={planCaseId}
           onSelectCase={setPlanCaseId}
-          onRecommend={recommendPlanCases}
-          onUpdateComponent={updateComponentEvaluation}
+          onRecommend={cases.recommendPlanCases}
+          onUpdateComponent={cases.updateComponentEvaluation}
           onEditCase={editEvaluatedCase}
           onEditComponent={editEvaluatedComponent}
-          onApplyLlmRevisions={applyLlmRevisions}
+          onApplyLlmRevisions={cases.applyRevisions}
           onToast={api.showToast}
-          profile={canvasCtx.profile}
-          summaryPreview={canvasCtx.summaryPreview}
+          profile={api.profile}
+          summaryPreview={summaryPreview}
         />
       ) : (
-      <div className="sb-workspace">
-        <Palette
-          disabled={previewMode}
-          stageKey={stageKey}
-          items={items}
-          selectedIds={selectedIds}
-          onSelect={handleSelect}
-          onAdd={addItem}
-          onMoveLayer={moveLayer}
-          onRemove={removeItem}
-          onToggleLock={(id) => updateItem(id, { locked: !items.find((it) => it.id === id)?.locked })}
-          onToggleHide={(id) => updateItem(id, { hidden: !items.find((it) => it.id === id)?.hidden })}
-          onUnnest={unnestItem}
-          onDropLayer={dropLayer}
-        />
-
-        {/* 캔버스 */}
-        <main className="sb-canvas-wrap" onPointerDown={(e) => { if (!previewMode && e.target === e.currentTarget) setSelectedIds([]) }}>
-          <div className="sb-canvas-col" style={{ width: canvasW * zoom }}>
-            <div className="sb-canvas-scale" style={{ width: canvasW * zoom, height: canvasHeight * zoom }}>
-              <div
-                ref={canvasRef}
-                className={'sb-canvas' + (canvasView === 'preview' ? ' sb-canvas--preview' : ' sb-canvas--edit')}
-                style={{ width: canvasW, height: canvasHeight, transform: `scale(${zoom})`, transformOrigin: '0 0' }}
-                onPointerDown={previewMode ? undefined : onCanvasPointerDown}
-                onContextMenu={previewMode ? undefined : (e) => { if (e.target === e.currentTarget) openCtxMenu(e, null) }}
-                onDragOver={(e) => {
-                  if (previewMode) return
-                  if ([...e.dataTransfer.types].includes('text/sb-type')) {
-                    e.preventDefault()
-                    e.dataTransfer.dropEffect = 'copy'
-                    const rect = canvasRef.current.getBoundingClientRect()
-                    const cx = (e.clientX - rect.left) / zoom
-                    const cy = (e.clientY - rect.top) / zoom
-                    const hover = containerAt(cx, cy)
-                    setDropTargetId(hover ? hover.id : null)
-                    setInsertHint(hover ? insertHintAt(hover, cx, cy) : null)
-                  }
-                }}
-                onDragLeave={(e) => {
-                  if (!e.currentTarget.contains(e.relatedTarget)) {
-                    setDropTargetId(null)
-                    setInsertHint(null)
-                  }
-                }}
-                onDrop={(e) => {
-                  if (previewMode) return
-                  const type = e.dataTransfer.getData('text/sb-type')
-                  if (!type) return
-                  e.preventDefault()
-                  setDropTargetId(null)
-                  setInsertHint(null)
-                  const rect = canvasRef.current.getBoundingClientRect()
-                  const cx = (e.clientX - rect.left) / zoom
-                  const cy = (e.clientY - rect.top) / zoom
-                  // 컨테이너 위에 놓으면 그 위치의 슬롯에 자식으로 배치
-                  const target = !LIBRARY[type]?.container && containerAt(cx, cy)
-                  if (target) addChild(type, target.id, { containerType: target.type, cx, cy })
-                  else addItemAt(type, cx, cy)
-                }}
-              >
-                {items.length === 0 && (
-                  <div className="sb-canvas__empty">
-                    왼쪽 팔레트에서 컴포넌트를 누르거나 끌어다 놓으세요.<br />
-                    <span>추가한 컴포넌트는 마우스로 끌어 배치할 수 있어요.</span>
-                  </div>
-                )}
-                {guides.map((g, i) => (
-                  <div
-                    key={i}
-                    className={'sb-guide sb-guide--' + g.type}
-                    style={g.type === 'v' ? { left: g.pos } : { top: g.pos }}
-                  />
-                ))}
-                {insertHint && (
-                  <div
-                    className={'sb-insert-line sb-insert-line--' + insertHint.dir}
-                    style={
-                      insertHint.dir === 'v'
-                        ? { left: insertHint.x, top: insertHint.y, height: insertHint.len }
-                        : { left: insertHint.x, top: insertHint.y, width: insertHint.len }
-                    }
-                  />
-                )}
-                {marquee && (
-                  <div
-                    className="sb-marquee"
-                    style={{ left: marquee.x, top: marquee.y, width: marquee.w, height: marquee.h }}
-                  />
-                )}
-                {displayItems.filter((it) => !it.parentId).map((it) => (
-                  <CanvasItem
-                    key={it.id}
-                    item={it}
-                    editable={!previewMode}
-                    zoom={zoom}
-                    dropTarget={dropTargetId === it.id}
-                    selected={selectedIds.includes(it.id)}
-                    dragPos={dragPos && dragPos.positions[it.id] ? dragPos.positions[it.id] : null}
-                    sizeDraft={sizeDraft && sizeDraft.id === it.id ? sizeDraft : null}
-                    heightsRef={heightsRef}
-                    onMeasure={onItemMeasure}
-                    renderCtx={canvasCtx}
-                    onSelect={handleSelect}
-                    onDragStart={onGroupDragStart}
-                    onDrag={onDrag}
-                    onDragEnd={onDragEnd}
-                    onResize={onResize}
-                    onResizeEnd={onResizeEnd}
-                    onInspect={(id) => { setSelectedIds([id]); setFocusFieldKey(null); setFocusTick((t) => t + 1) }}
-                    onContextMenu={openCtxMenu}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-        </main>
-
-        <Inspector
-          disabled={previewMode}
-          stageKey={stageKey}
-          containerPanel={
-            !previewMode && managedContainer ? (
-              <ContainerContents
-                container={managedContainer}
-                children={managedChildren}
-                selectedId={selectedId}
-                onSelect={selectManagedItem}
-                onSelectContainer={() => setSelectedIds([managedContainer.id])}
-                onMove={moveLayer}
-                onUpdate={updateItem}
-                onDuplicate={duplicateItem}
-                onRemove={removeItem}
-                onUnnest={unnestItem}
-              />
-            ) : null
-          }
-          selected={selected}
-          selectedIds={selectedIds}
-          itemW={itemW}
-          canvasW={canvasW}
-          heightsRef={heightsRef}
-          updateProps={updateProps}
-          updateItem={updateItem}
-          setSize={setSize}
-          duplicateSelected={duplicateSelected}
-          removeSelected={removeSelected}
-          duplicateItem={duplicateItem}
-          removeItem={removeItem}
-          alignSelected={alignSelected}
-          ensureKeyword={ensureKeyword}
-          unnestItem={unnestItem}
-        />
-
-        <CanvasTextToolbar active={!previewMode && !!inlineEdit} ensureKeyword={ensureKeyword} />
-
-        {!previewMode && (
-          /* 우클릭 컨텍스트 메뉴 (Figma/Canva식) */
-          <ContextMenu
-            menu={ctxMenu}
+        <div className="sb-workspace">
+          <Palette
+            disabled={previewMode}
+            stageKey={stageKey}
             items={items}
-            hasClipboard={!!(clipboardRef.current && clipboardRef.current.length > 0)}
-            onClose={() => setCtxMenu(null)}
-            onDuplicate={duplicateSelected}
-            onCopy={copySelected}
-            onPaste={pasteClipboard}
-            onToggle={toggleSelected}
-            onRemove={removeSelected}
-            onSelectAll={() => setSelectedIds(items.map((it) => it.id))}
+            selectedIds={selectedIds}
+            onSelect={handleSelect}
+            onAdd={addItem}
+            onMoveLayer={nesting.moveLayer}
+            onRemove={removeItem}
+            onToggleLock={(id) => updateItem(id, { locked: !items.find((item) => item.id === id)?.locked })}
+            onToggleHide={(id) => updateItem(id, { hidden: !items.find((item) => item.id === id)?.hidden })}
+            onUnnest={nesting.unnestItem}
+            onDropLayer={nesting.dropLayer}
           />
-        )}
-      </div>
+
+          <BuilderCanvas
+            canvasRef={canvasRef}
+            canvasW={canvasW}
+            canvasHeight={canvasHeight}
+            zoom={zoom}
+            canvasView={canvasView}
+            previewMode={previewMode}
+            items={items}
+            displayItems={displayItems}
+            selectedIds={selectedIds}
+            dropTargetId={dropTargetId}
+            dragPos={drag.dragPos}
+            sizeDraft={drag.sizeDraft}
+            guides={drag.guides}
+            insertHint={insertHint}
+            marquee={marquee}
+            heightsRef={heightsRef}
+            renderCtx={canvasCtx}
+            onClearSelection={() => setSelectedIds([])}
+            onCanvasPointerDown={onCanvasPointerDown}
+            onContextMenu={openCtxMenu}
+            onPaletteDragOver={paletteDragOver}
+            onPaletteDragLeave={paletteDragLeave}
+            onPaletteDrop={paletteDrop}
+            onItemMeasure={onItemMeasure}
+            onSelect={handleSelect}
+            onDragStart={drag.onGroupDragStart}
+            onDrag={drag.onDrag}
+            onDragEnd={drag.onDragEnd}
+            onResize={drag.onResize}
+            onResizeEnd={drag.onResizeEnd}
+            onInspect={(id) => { setSelectedIds([id]); setFocusFieldKey(null); setFocusTick((tick) => tick + 1) }}
+          />
+
+          <Inspector
+            disabled={previewMode}
+            stageKey={stageKey}
+            containerPanel={
+              !previewMode && managedContainer ? (
+                <ContainerContents
+                  container={managedContainer}
+                  children={managedChildren}
+                  selectedId={selectedId}
+                  onSelect={(id) => {
+                    if (previewMode) return
+                    setSelectedIds([id])
+                    setTimeout(() => {
+                      canvasRef.current
+                        ?.querySelector(`[data-child-id="${id}"]`)
+                        ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+                    }, 0)
+                  }}
+                  onSelectContainer={() => setSelectedIds([managedContainer.id])}
+                  onMove={nesting.moveLayer}
+                  onUpdate={updateItem}
+                  onDuplicate={duplicateItem}
+                  onRemove={removeItem}
+                  onUnnest={nesting.unnestItem}
+                />
+              ) : null
+            }
+            selected={selected}
+            selectedIds={selectedIds}
+            itemW={itemW}
+            canvasW={canvasW}
+            heightsRef={heightsRef}
+            updateProps={updateProps}
+            updateItem={updateItem}
+            setSize={drag.setSize}
+            duplicateSelected={duplicateSelected}
+            removeSelected={removeSelected}
+            duplicateItem={duplicateItem}
+            removeItem={removeItem}
+            alignSelected={(mode) => {
+              if (selectedIds.length < 2) return
+              setItems((prev) => layout.align(prev, selectedIds, mode))
+            }}
+            ensureKeyword={ensureKeyword}
+            unnestItem={nesting.unnestItem}
+          />
+
+          <CanvasTextToolbar active={!previewMode && !!inlineEdit} ensureKeyword={ensureKeyword} />
+
+          {!previewMode && (
+            <ContextMenu
+              menu={ctxMenu}
+              items={items}
+              hasClipboard={!!(clipboardRef.current && clipboardRef.current.length > 0)}
+              onClose={() => setCtxMenu(null)}
+              onDuplicate={duplicateSelected}
+              onCopy={copySelected}
+              onPaste={pasteClipboard}
+              onToggle={toggleSelected}
+              onRemove={removeSelected}
+              onSelectAll={() => setSelectedIds(items.map((item) => item.id))}
+            />
+          )}
+        </div>
       )}
+
       {childDragGhost && (
-        <div
-          className="sb-child-drag-ghost"
-          style={{ left: childDragGhost.x, top: childDragGhost.y }}
-          aria-hidden="true"
-        >
+        <div className="sb-child-drag-ghost" style={{ left: childDragGhost.x, top: childDragGhost.y }} aria-hidden="true">
           <span>{childDragGhost.icon}</span>
           {childDragGhost.label}
         </div>
