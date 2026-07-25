@@ -589,8 +589,8 @@ export default function Builder({ api, scenario }) {
     updatePlanCases(() => result.planCases)
     api.showToast(
       result.skipped > 0
-        ? `LLM 수정안 ${result.applied}개를 적용하고, 값이 바뀐 ${result.skipped}개는 건너뛰었어요.`
-        : `LLM 수정안 ${result.applied}개를 적용했어요. 실제 화면을 검수해주세요.`
+        ? `AI 수정안 ${result.applied}개를 적용하고, 값이 바뀐 ${result.skipped}개는 건너뛰었어요.`
+        : `AI 수정안 ${result.applied}개를 적용했어요. 실제 화면을 검수해주세요.`
     )
   }
 
@@ -2182,7 +2182,7 @@ export default function Builder({ api, scenario }) {
             </button>
             <button
               type="button"
-              className="sb-btn sb-btn--small sb-plan-case-generate"
+              className="sb-btn sb-btn--small sb-btn--ai"
               disabled={previewMode}
               onClick={() => setCaseGenOpen(true)}
               title="페르소나·상품 카탈로그로 조합별 케이스를 만드는 프롬프트를 생성"

@@ -402,8 +402,8 @@ export default function EvaluationPanel({
           <p>대표 CASE 3개의 실제 콘텐츠 컴포넌트를 인스턴스별로 한 번씩 평가하고 수정합니다.</p>
         </div>
         <div className="sb-qa-intro__actions">
-          <button type="button" className="sb-btn sb-btn--primary" onClick={() => setLlmDialogOpen(true)}>
-            ✦ LLM 수정 요청
+          <button type="button" className="sb-btn sb-btn--ai" onClick={() => setLlmDialogOpen(true)}>
+            ✦ AI 수정 요청
           </button>
           <button type="button" className="sb-btn" onClick={rerunRecommendation}>CASE A/B/C 다시 선정</button>
         </div>
