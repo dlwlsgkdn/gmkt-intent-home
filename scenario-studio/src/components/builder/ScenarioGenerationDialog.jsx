@@ -455,6 +455,8 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onImport, 
                 시나리오 <b>DB JSON 전체</b>(설문 화면 + 계획 케이스들)를 만들어 달라는 프롬프트입니다.
                 사용 가능한 컴포넌트 목록과 배치·조건 규칙이 함께 들어가고,
                 <b> 설문 선택지의 모든 조합</b>에 대한 계획 케이스와 평가용 A/B/C 케이스 지정까지 요청합니다.
+                계획 내용은 질문 하나당 단계 하나로 나누지 말고 <b>답변 전체와 페르소나를 함께 보고</b> 설계하도록,
+                참고 콘텐츠(영상·게시글)는 <b>국내 기준으로 검색</b>해 붙이도록 지시합니다.
                 Claude 앱에 붙여넣고 받은 <b>.json 파일</b>을 아래에서 올리세요.
               </p>
               <div className="sb-gen-grid">
