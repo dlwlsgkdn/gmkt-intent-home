@@ -317,6 +317,7 @@ export default function HomeView({ api }) {
                     <span className={'sb-status ' + (s.status === 'published' ? 'sb-status--live' : '')}>
                       {s.status === 'published' ? '발행됨' : '작성 중'}
                     </span>
+                    {api.isDefaultScenario(s) && <span className="sb-status sb-status--default">기본</span>}
                     <p className="sb-scenario-row__title">{s.title}</p>
                     <p className="sb-scenario-row__chip" style={{ color: s.color || '#5f7465' }}>#{s.chip}</p>
                   </div>
@@ -324,15 +325,21 @@ export default function HomeView({ api }) {
                     <button type="button" onClick={() => api.playScenario(s.id)}>시험</button>
                     <button type="button" onClick={() => api.openBuilder(s.id)}>편집</button>
                     <button type="button" onClick={() => api.copyScenario(s.id)}>복제</button>
-                    <button
-                      type="button"
-                      className="sb-danger"
-                      onClick={() => {
-                        if (window.confirm(`"${s.title}" 시나리오를 삭제할까요?`)) api.removeScenario(s.id)
-                      }}
-                    >
-                      삭제
-                    </button>
+                    {api.isDefaultScenario(s) ? (
+                      <button type="button" className="sb-default-lock" disabled title="기본 시나리오는 삭제할 수 없어요.">
+                        🔒 기본
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="sb-danger"
+                        onClick={() => {
+                          if (window.confirm(`"${s.title}" 시나리오를 삭제할까요?`)) api.removeScenario(s.id)
+                        }}
+                      >
+                        삭제
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}

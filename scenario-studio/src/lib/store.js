@@ -1,3 +1,5 @@
+import { normalizeCaseEvaluation } from './evaluation.js'
+
 const STORAGE_KEY = 'ddak-scenarios-v1'
 
 export function uid() {
@@ -68,6 +70,7 @@ export function createPlanCase(partial = {}) {
     conditions: [],
     isFallback: false,
     items: [],
+    evaluation: normalizeCaseEvaluation(),
     ...partial,
   }
 }
@@ -90,6 +93,7 @@ function normalizePlanCondition(raw) {
 }
 
 function normalizePlanCase(raw, index) {
+  const items = Array.isArray(raw?.items) ? raw.items : []
   return createPlanCase({
     ...(raw || {}),
     id: String(raw?.id || uid()),
@@ -99,7 +103,8 @@ function normalizePlanCase(raw, index) {
       ? raw.conditions.map(normalizePlanCondition)
       : [],
     isFallback: !!raw?.isFallback,
-    items: Array.isArray(raw?.items) ? raw.items : [],
+    items,
+    evaluation: normalizeCaseEvaluation(raw?.evaluation),
   })
 }
 
@@ -333,18 +338,25 @@ function normalizeAccount(a) {
   return acc
 }
 
+/* {accounts[], activeId} 형태의 원시 데이터(localStorage/서버 공용)를 보정.
+   구조가 유효하지 않으면 null */
+export function normalizeAccountsState(parsed) {
+  if (parsed && Array.isArray(parsed.accounts) && parsed.accounts.length > 0) {
+    const accounts = parsed.accounts.map(normalizeAccount)
+    const activeId = accounts.some((a) => a.id === parsed.activeId)
+      ? parsed.activeId
+      : accounts[0].id
+    return { accounts, activeId }
+  }
+  return null
+}
+
 export function loadAccounts() {
   try {
     const raw = localStorage.getItem(ACCOUNTS_KEY)
     if (raw) {
-      const parsed = JSON.parse(raw)
-      if (parsed && Array.isArray(parsed.accounts) && parsed.accounts.length > 0) {
-        const accounts = parsed.accounts.map(normalizeAccount)
-        const activeId = accounts.some((a) => a.id === parsed.activeId)
-          ? parsed.activeId
-          : accounts[0].id
-        return { accounts, activeId }
-      }
+      const state = normalizeAccountsState(JSON.parse(raw))
+      if (state) return state
     }
   } catch (e) {
     /* 손상 시 아래 마이그레이션 경로로 */

@@ -153,9 +153,16 @@ export default function Player({ api, scenario, resume }) {
       const hit = (api.keywords || []).find((k) => k.word === word)
       setKeyword({ word, desc: hit?.desc, points: hit?.points })
     },
-    /* 외부 콘텐츠(영상/게시글) 클릭 목업 */
-    openExternal: (label) => {
-      api.showToast(`${label}(으)로 이동하는 목업이에요.`)
+    /* 외부 콘텐츠(영상/게시글)는 http(s) URL만 새 탭으로 연다. */
+    openExternal: (label, rawUrl) => {
+      try {
+        const url = new URL(String(rawUrl || '').trim())
+        if (!['http:', 'https:'].includes(url.protocol)) throw new Error('unsupported protocol')
+        window.open(url.href, '_blank', 'noopener,noreferrer')
+        api.showToast(`${label}을(를) 새 탭에서 열었어요.`)
+      } catch {
+        api.showToast(`${label}의 링크 URL을 먼저 입력해주세요.`)
+      }
     },
     /* 프로필 요약 패널 / 설문 요약 패널 컴포넌트용 */
     excludedProfile,

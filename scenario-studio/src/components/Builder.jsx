@@ -14,6 +14,16 @@ import ContainerContents from './builder/ContainerContents.jsx'
 import CanvasTextToolbar from './builder/CanvasTextToolbar.jsx'
 import ContextMenu from './builder/ContextMenu.jsx'
 import PlanCaseEditor from './builder/PlanCaseEditor.jsx'
+import EvaluationPanel from './builder/EvaluationPanel.jsx'
+import {
+  EVALUATION_CASE_SLOTS,
+  evaluationCasesFor,
+  normalizeCaseEvaluation,
+  normalizeComponentEvaluation,
+  recommendSignificantCaseIds,
+  remapCaseEvaluation,
+} from '../lib/evaluation.js'
+import { applyLlmRevisionsToPlanCases } from '../lib/llmRevision.js'
 
 const SNAP = 6
 /* 드래그 겹침 회피 둔화 — 지속시간 게이트:
@@ -39,11 +49,13 @@ const CONTAINER_PUSH_DELAY_MS = 400
 const BUILD_STAGES = [
   { key: 'explore', label: '탐색', desc: '모든 시나리오가 공유하는 공통 탐색(홈) 페이지 — 저장 즉시 홈에 반영', common: true },
   ...STAGES,
+  { key: 'evaluation', label: '평가 · 보강', desc: '대표 CASE의 실제 콘텐츠 컴포넌트를 인스턴스별로 0~5점 QA', review: true },
 ]
 
 export default function Builder({ api, scenario }) {
   const [stageKey, setStageKey] = useState(STAGES[0].key)
   const isExplore = stageKey === 'explore'
+  const isEvaluation = stageKey === 'evaluation'
   const planCases = scenario.planCases || planCasesForScenario(scenario)
   const [planCaseId, setPlanCaseId] = useState(() => planCases[0]?.id || null)
   const activePlanCase = planCases.find((planCase) => planCase.id === planCaseId) || planCases[0]
@@ -58,9 +70,11 @@ export default function Builder({ api, scenario }) {
   const [, setHistVer] = useState(0) // undo/redo 버튼 활성화 갱신용
   const [zoom, setZoom] = useState(1) // 캔버스 줌 (Figma식 ⌘+/-/0)
   const [canvasView, setCanvasView] = useState('edit') // 'edit'(클리핑 해제+경계 표시) | 'preview'(실사용 모습)
-  const previewMode = canvasView === 'preview'
+  const previewMode = !isEvaluation && canvasView === 'preview'
   const [marquee, setMarquee] = useState(null) // 빈 캔버스 드래그 → 러버밴드 선택 박스
   const [ctxMenu, setCtxMenu] = useState(null) // 우클릭 컨텍스트 메뉴 {sx, sy, cx, cy, itemId}
+  const [feedbackTarget, setFeedbackTarget] = useState(null) // {caseId,itemId,fieldKey,label}
+  const [focusFieldKey, setFocusFieldKey] = useState(null) // 평가에서 인스펙터의 정확한 필드로 이동
   const dragPosRef = useRef(null)
   const dragLayoutPosRef = useRef(null) // 스로틀된 미리보기 재배치 기준 위치
   const dragLayoutTimerRef = useRef(null)
@@ -72,11 +86,15 @@ export default function Builder({ api, scenario }) {
   const dragStartRef = useRef(null) // 그룹 드래그 시작 시점의 위치들
   const sizeDraftRef = useRef(null)
   const heightsRef = useRef({})
+  const measureLayoutTimerRef = useRef(null)
   const historyRef = useRef({ past: [], future: [], lastPush: 0 })
   const clipboardRef = useRef(null) // ⌘C 복사한 컴포넌트 스냅샷 (단계 간 붙여넣기 가능)
   const canvasRef = useRef(null)
+  const planCaseTabsRef = useRef(null)
 
-  const items = isExplore
+  const items = isEvaluation
+    ? []
+    : isExplore
     ? (api.explore.items || [])
     : stageKey === 'plan'
       ? (activePlanCase?.items || [])
@@ -86,7 +104,7 @@ export default function Builder({ api, scenario }) {
   const [dropTargetId, setDropTargetId] = useState(null) // 드래그 중 컨테이너 드롭 대상 하이라이트
   const [draggingChildId, setDraggingChildId] = useState(null) // 컨테이너 안 재정렬 중인 자식 (시각 피드백)
   const [childDragGhost, setChildDragGhost] = useState(null) // { x, y, label, icon } — 내부 재정렬 포인터 피드백
-  const [, setMeasureVer] = useState(0) // 편집 중 클리핑 해제 높이를 캔버스 스크롤 범위에 반영
+  const [, setMeasureVer] = useState(0) // 실제 표시 높이 변경을 캔버스 스크롤 범위에 반영
   const heightOf = (it) => {
     const measured = heightsRef.current[it.id]
     if (!previewMode && LIBRARY[it.type]?.container) return Math.max(it.h || 0, measured || 0, 80)
@@ -332,6 +350,43 @@ export default function Builder({ api, scenario }) {
     }
   }
 
+  /* 이미지 로딩·반응형 줄바꿈 등으로 실제 높이가 바뀌면, 편집 목록 높이가 아니라
+     캔버스에 보이는 뷰포트 높이를 기준으로 조용히 재컴팩트한다.
+     측정 자체는 사용자 편집이 아니므로 Undo 스냅샷에는 넣지 않는다. */
+  const setItemsFromMeasure = (updater) => {
+    if (previewMode) return
+    if (isExplore) {
+      api.updateExplore((prev) => ({ ...prev, items: updater(prev.items || []) }))
+    } else if (stageKey === 'plan') {
+      api.updateScenario(scenario.id, (s) => ({
+        ...s,
+        planCases: (s.planCases || planCasesForScenario(s)).map((planCase) =>
+          planCase.id === planCaseId
+            ? { ...planCase, items: updater(planCase.items || []) }
+            : planCase
+        ),
+      }))
+    } else {
+      api.updateScenario(scenario.id, (s) => ({
+        ...s,
+        stages: { ...s.stages, [stageKey]: updater(s.stages[stageKey] || []) },
+      }))
+    }
+  }
+
+  const onItemMeasure = () => {
+    setMeasureVer((v) => v + 1)
+    if (previewMode || !compactOn || dragPosRef.current || sizeDraftRef.current) return
+    clearTimeout(measureLayoutTimerRef.current)
+    measureLayoutTimerRef.current = setTimeout(() => {
+      setItemsFromMeasure((prev) =>
+        withTopOnly(prev, (top) => compactItems(top, heightsRef.current, compactOpts()))
+      )
+    }, 80)
+  }
+
+  useEffect(() => () => clearTimeout(measureLayoutTimerRef.current), [])
+
   /* Undo/삭제/가져오기로 현재 케이스가 사라진 경우 유효한 케이스로 이동한다. */
   useEffect(() => {
     if (planCases.some((planCase) => planCase.id === planCaseId)) return
@@ -387,6 +442,7 @@ export default function Builder({ api, scenario }) {
         values: [...(condition.values || [])],
       })),
       items: itemsCopy,
+      evaluation: remapCaseEvaluation(activePlanCase.evaluation, idMap, { selected: false, slot: null }),
     })
     updatePlanCases((current) => {
       const index = current.findIndex((planCase) => planCase.id === activePlanCase.id)
@@ -440,6 +496,97 @@ export default function Builder({ api, scenario }) {
     })
   }
 
+  const updateComponentEvaluation = (caseId, itemId, patch) => {
+    updatePlanCases((current) => current.map((planCase) => {
+      if (planCase.id !== caseId) return planCase
+      const evaluation = normalizeCaseEvaluation(planCase.evaluation)
+      const review = normalizeComponentEvaluation(evaluation.components[itemId])
+      return {
+        ...planCase,
+        evaluation: {
+          ...evaluation,
+          components: {
+            ...evaluation.components,
+            [itemId]: {
+              ...review,
+              ...patch,
+              updatedAt: new Date().toISOString(),
+            },
+          },
+          updatedAt: new Date().toISOString(),
+        },
+      }
+    }))
+  }
+
+  const recommendPlanCases = () => {
+    const recommendation = recommendSignificantCaseIds(planCases, 3)
+    const recommendedIds = new Set(recommendation)
+    const slotById = Object.fromEntries(
+      recommendation.map((caseId, index) => [caseId, EVALUATION_CASE_SLOTS[index] || null])
+    )
+    updatePlanCases((current) => current.map((planCase) => ({
+      ...planCase,
+      evaluation: {
+        ...normalizeCaseEvaluation(planCase.evaluation),
+        selected: recommendedIds.has(planCase.id),
+        slot: slotById[planCase.id] || null,
+        updatedAt: new Date().toISOString(),
+      },
+    })))
+    const first = planCases.find((planCase) => planCase.id === recommendation[0])
+    if (first) setPlanCaseId(first.id)
+    api.showToast(`평가할 CASE A/B/C ${recommendedIds.size}개를 추천했어요.`)
+  }
+
+  const editEvaluatedCase = (caseId) => {
+    setFeedbackTarget(null)
+    setFocusFieldKey(null)
+    setCanvasView('edit')
+    setPlanCaseId(caseId)
+    setStageKey('plan')
+    setSelectedIds([])
+  }
+
+  const editEvaluatedComponent = (caseId, component) => {
+    const label = LIBRARY[component.type]?.label || component.type
+    setCanvasView('edit')
+    setPlanCaseId(caseId)
+    setFeedbackTarget({
+      caseId,
+      itemId: component.itemId,
+      fieldKey: null,
+      label,
+    })
+    setFocusFieldKey(null)
+    setStageKey('plan')
+    setSelectedIds([component.itemId])
+    api.showToast(`${label} 컴포넌트와 피드백을 열었어요.`)
+  }
+
+  const applyLlmRevisions = (revisions) => {
+    const result = applyLlmRevisionsToPlanCases(planCases, revisions)
+    if (result.applied === 0) {
+      api.showToast('현재 값과 일치하는 수정안이 없어 적용하지 않았어요.')
+      return
+    }
+    updatePlanCases(() => result.planCases)
+    api.showToast(
+      result.skipped > 0
+        ? `LLM 수정안 ${result.applied}개를 적용하고, 값이 바뀐 ${result.skipped}개는 건너뛰었어요.`
+        : `LLM 수정안 ${result.applied}개를 적용했어요. 실제 화면을 검수해주세요.`
+    )
+  }
+
+  /* 평가 스튜디오는 언제나 정확히 3개 CASE(A/B/C)로 구성한다. */
+  useEffect(() => {
+    if (!isEvaluation) return
+    const selected = evaluationCasesFor(planCases)
+    const slots = new Set(selected.map((planCase) => normalizeCaseEvaluation(planCase.evaluation).slot))
+    if (selected.length === 3 && EVALUATION_CASE_SLOTS.every((slot) => slots.has(slot))) return
+    recommendPlanCases()
+  }, [isEvaluation, planCases.length])
+
   useEffect(() => {
     setSelectedIds([])
     setDragPos(null)
@@ -449,6 +596,49 @@ export default function Builder({ api, scenario }) {
     setChildDragGhost(null)
     setInsertHint(null)
   }, [stageKey, planCaseId])
+
+  /* 평가 화면의 "피드백 반영하러 가기"가 단계 전환 초기화 뒤에도 정확한 컴포넌트를 선택한다. */
+  useEffect(() => {
+    if (stageKey !== 'plan' || !feedbackTarget || feedbackTarget.caseId !== planCaseId) return
+    const exists = (activePlanCase?.items || []).some((item) => item.id === feedbackTarget.itemId)
+    if (!exists) return
+    setSelectedIds([feedbackTarget.itemId])
+    setFocusFieldKey(feedbackTarget.fieldKey || null)
+    setFocusTick((tick) => tick + 1)
+  }, [stageKey, planCaseId, feedbackTarget?.caseId, feedbackTarget?.itemId, feedbackTarget?.fieldKey])
+
+  /* 선택한 계획 케이스가 긴 탭 목록 안에서 항상 보이도록 자동 스크롤한다. */
+  useEffect(() => {
+    if (stageKey !== 'plan' || !planCaseId) return
+    const activeTab = planCaseTabsRef.current?.querySelector(`[data-plan-case-id="${planCaseId}"]`)
+    activeTab?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+  }, [stageKey, planCaseId])
+
+  const scrollPlanCases = (direction) => {
+    const el = planCaseTabsRef.current
+    if (!el) return
+    el.scrollBy({ left: direction * Math.max(280, el.clientWidth * 0.72), behavior: 'smooth' })
+  }
+
+  /* React의 합성 wheel은 브라우저 환경에 따라 문서 기본 스크롤을 늦게 막을 수 있다.
+     비수동 네이티브 리스너에서 기본 동작과 버블링을 선제 차단해 탭 행만 이동시킨다. */
+  useEffect(() => {
+    if (stageKey !== 'plan') return undefined
+    const el = planCaseTabsRef.current
+    if (!el) return undefined
+    const onWheel = (e) => {
+      if (!el.contains(e.target)) return
+      if (el.scrollWidth <= el.clientWidth) return
+      const rawDelta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY
+      if (!rawDelta) return
+      const scale = e.deltaMode === 1 ? 20 : e.deltaMode === 2 ? el.clientWidth : 1
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      el.scrollLeft = Math.max(0, Math.min(el.scrollWidth - el.clientWidth, el.scrollLeft + rawDelta * scale))
+    }
+    window.addEventListener('wheel', onWheel, { passive: false, capture: true })
+    return () => window.removeEventListener('wheel', onWheel, { capture: true })
+  }, [stageKey, planCases.length])
 
   /* 미리보기 진입 시 남아 있던 모든 편집 상태를 닫는다. */
   useEffect(() => {
@@ -1419,12 +1609,15 @@ export default function Builder({ api, scenario }) {
   useEffect(() => {
     if (previewMode) return
     if (!focusTick) return
-    const el = document.querySelector('.sb-inspector input[type="text"], .sb-inspector textarea')
+    const selector = focusFieldKey
+      ? `.sb-inspector [data-fkey="${focusFieldKey}"]`
+      : '.sb-inspector input[type="text"], .sb-inspector textarea'
+    const el = document.querySelector(selector)
     if (el) {
       el.focus()
       if (el.select) el.select()
     }
-  }, [focusTick, previewMode])
+  }, [focusTick, previewMode, focusFieldKey])
 
   /* ── 상단 바 액션 ── */
   const changeDevice = (preset) => {
@@ -1619,7 +1812,7 @@ export default function Builder({ api, scenario }) {
   /* 캔버스 렌더 컨텍스트: 미리보기에서는 편집 콜백을 제외해 모든 컴포넌트를 읽기 전용으로 만든다. */
   const canvasCtx = {
     mode: 'canvas',
-    canvasView, // 'edit' = 컨테이너 클리핑 해제, 'preview' = 실사용 모습
+    canvasView, // 'edit' = 편집 크롬 표시, 'preview' = 실사용 모습
     allItems: items, // 컨테이너가 자식을 찾아 렌더할 때 사용
     selectedIds, // 자식 셸의 선택 표시
     draggingChildId, // 컨테이너 안 재정렬 중인 자식 강조
@@ -1628,6 +1821,7 @@ export default function Builder({ api, scenario }) {
     inspectChild: (id) => {
       if (previewMode) return
       setSelectedIds([id])
+      setFocusFieldKey(null)
       setFocusTick((t) => t + 1)
     },
     profile: api.profile,
@@ -1654,6 +1848,18 @@ export default function Builder({ api, scenario }) {
 
   const surveyQuestions = (scenario.stages.survey || []).filter((item) => item.type === 'surveyQuestion')
   const activePlanCaseIndex = planCases.findIndex((planCase) => planCase.id === activePlanCase?.id)
+  const evaluatedCaseCount = planCases.filter((planCase) => normalizeCaseEvaluation(planCase.evaluation).selected).length
+  const feedbackPlanCase = feedbackTarget
+    ? planCases.find((planCase) => planCase.id === feedbackTarget.caseId)
+    : null
+  const feedbackItem = feedbackPlanCase
+    ? (feedbackPlanCase.items || []).find((item) => item.id === feedbackTarget.itemId)
+    : null
+  const feedbackReview = feedbackPlanCase && feedbackTarget
+    ? normalizeComponentEvaluation(
+        normalizeCaseEvaluation(feedbackPlanCase.evaluation).components[feedbackTarget.itemId]
+      )
+    : null
 
   const chevron = (
     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" /></svg>
@@ -1664,6 +1870,8 @@ export default function Builder({ api, scenario }) {
       'sb-builder'
       + (previewMode ? ' sb-builder--preview' : '')
       + (stageKey === 'plan' ? ' sb-builder--plan' : '')
+      + (isEvaluation ? ' sb-builder--evaluation' : '')
+      + (feedbackReview ? ' sb-builder--feedback' : '')
     }>
       {/* 상단 바 — 1행: 문서 정보 + 발행, 2행: 단계 탭 + 편집 도구 그룹 */}
       <div className="sb-topbar">
@@ -1763,7 +1971,7 @@ export default function Builder({ api, scenario }) {
         </div>
 
         {/* 2행: 편집 도구 그룹 (구분선 분리) */}
-        <div className="sb-topbar__row sb-topbar__row--tools">
+        <div className="sb-topbar__row sb-topbar__row--tools" hidden={isEvaluation}>
           <div className="sb-tb-group" role="group" aria-label="히스토리">
             <button type="button" className="sb-icon-btn" title="실행 취소 (⌘Z)" aria-label="실행 취소" disabled={previewMode || historyRef.current.past.length === 0} onClick={undo}>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M9 14L4 9l5-5M4 9h10a6 6 0 010 12h-3" /></svg>
@@ -1883,6 +2091,7 @@ export default function Builder({ api, scenario }) {
                   className={
                     'sb-stage-tab' +
                     (s.common ? ' sb-stage-tab--common' : '') +
+                    (s.review ? ' sb-stage-tab--review' : '') +
                     (stageKey === s.key ? ' sb-stage-tab--active' : '')
                   }
                   title={s.desc}
@@ -1893,6 +2102,8 @@ export default function Builder({ api, scenario }) {
                   <span className="sb-stage-tab__count">
                     {s.common
                       ? (api.explore.items || []).length
+                      : s.key === 'evaluation'
+                        ? evaluatedCaseCount
                       : s.key === 'plan'
                         ? planCases.length
                         : (scenario.stages[s.key] || []).length}
@@ -1907,22 +2118,48 @@ export default function Builder({ api, scenario }) {
         {stageKey === 'plan' && activePlanCase && (
           <div className="sb-topbar__row sb-topbar__row--cases">
             <span className="sb-plan-cases__label">계획 케이스</span>
-            <div className="sb-plan-case-tabs" role="tablist" aria-label="계획 케이스">
-              {planCases.map((planCase, index) => (
-                <button
-                  key={planCase.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={planCase.id === activePlanCase.id}
-                  className={'sb-plan-case-tab' + (planCase.id === activePlanCase.id ? ' sb-plan-case-tab--active' : '')}
-                  title={`${index + 1}순위 · ${planCase.isFallback ? '기본 케이스' : `${planCase.conditionMode === 'all' ? 'AND' : 'OR'} 조건 ${planCase.conditions.length}개`}`}
-                  onClick={() => setPlanCaseId(planCase.id)}
-                >
-                  <span>{index + 1}</span>
-                  {planCase.name || `계획 케이스 ${index + 1}`}
-                  <b>{planCase.isFallback ? '기본' : planCase.conditions.length}</b>
-                </button>
-              ))}
+            <div className="sb-plan-case-tabs-wrap">
+              <button
+                type="button"
+                className="sb-plan-case-scroll"
+                aria-label="이전 계획 케이스 보기"
+                title="이전 계획 케이스"
+                onClick={() => scrollPlanCases(-1)}
+              >
+                ‹
+              </button>
+              <div
+                ref={planCaseTabsRef}
+                className="sb-plan-case-tabs"
+                role="tablist"
+                aria-label="계획 케이스"
+              >
+                {planCases.map((planCase, index) => (
+                  <button
+                    key={planCase.id}
+                    type="button"
+                    role="tab"
+                    data-plan-case-id={planCase.id}
+                    aria-selected={planCase.id === activePlanCase.id}
+                    className={'sb-plan-case-tab' + (planCase.id === activePlanCase.id ? ' sb-plan-case-tab--active' : '')}
+                    title={`${index + 1}순위 · ${planCase.isFallback ? '기본 케이스' : `${planCase.conditionMode === 'all' ? 'AND' : 'OR'} 조건 ${planCase.conditions.length}개`}`}
+                    onClick={() => setPlanCaseId(planCase.id)}
+                  >
+                    <span>{index + 1}</span>
+                    {planCase.name || `계획 케이스 ${index + 1}`}
+                    <b>{planCase.isFallback ? '기본' : planCase.conditions.length}</b>
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="sb-plan-case-scroll"
+                aria-label="다음 계획 케이스 보기"
+                title="다음 계획 케이스"
+                onClick={() => scrollPlanCases(1)}
+              >
+                ›
+              </button>
             </div>
             <button type="button" className="sb-btn sb-btn--small sb-plan-case-add" disabled={previewMode} onClick={addPlanCase}>
               + 새 케이스
@@ -1961,8 +2198,46 @@ export default function Builder({ api, scenario }) {
             </span>
           </div>
         )}
+
+        {stageKey === 'plan' && feedbackReview && feedbackItem && (
+          <div className="sb-topbar__row sb-feedback-focus">
+            <span className="sb-feedback-focus__badge">피드백 반영 중</span>
+            <strong>{feedbackTarget.label}</strong>
+            <p>{feedbackReview.feedback || '작성된 수정사항 없이 결과를 확인 중입니다.'}</p>
+            {feedbackReview.score != null && <span className="sb-feedback-focus__score">{feedbackReview.score}/5점</span>}
+            <button
+              type="button"
+              className={feedbackReview.resolved ? 'sb-btn sb-btn--compact-on' : 'sb-btn'}
+              disabled={!feedbackReview.feedback.trim()}
+              onClick={() => {
+                const patch = { resolved: !feedbackReview.resolved }
+                updateComponentEvaluation(feedbackPlanCase.id, feedbackTarget.itemId, patch)
+              }}
+            >
+              {feedbackReview.resolved ? '✓ 반영 완료됨' : '반영 완료'}
+            </button>
+            <button type="button" className="sb-btn sb-btn--ghost" onClick={() => setStageKey('evaluation')}>
+              평가로 돌아가기
+            </button>
+          </div>
+        )}
       </div>
 
+      {isEvaluation ? (
+        <EvaluationPanel
+          planCases={planCases}
+          activeCaseId={planCaseId}
+          onSelectCase={setPlanCaseId}
+          onRecommend={recommendPlanCases}
+          onUpdateComponent={updateComponentEvaluation}
+          onEditCase={editEvaluatedCase}
+          onEditComponent={editEvaluatedComponent}
+          onApplyLlmRevisions={applyLlmRevisions}
+          onToast={api.showToast}
+          profile={canvasCtx.profile}
+          summaryPreview={canvasCtx.summaryPreview}
+        />
+      ) : (
       <div className="sb-workspace">
         <Palette
           disabled={previewMode}
@@ -2064,7 +2339,7 @@ export default function Builder({ api, scenario }) {
                     dragPos={dragPos && dragPos.positions[it.id] ? dragPos.positions[it.id] : null}
                     sizeDraft={sizeDraft && sizeDraft.id === it.id ? sizeDraft : null}
                     heightsRef={heightsRef}
-                    onMeasure={() => setMeasureVer((v) => v + 1)}
+                    onMeasure={onItemMeasure}
                     renderCtx={canvasCtx}
                     onSelect={handleSelect}
                     onDragStart={onGroupDragStart}
@@ -2072,7 +2347,7 @@ export default function Builder({ api, scenario }) {
                     onDragEnd={onDragEnd}
                     onResize={onResize}
                     onResizeEnd={onResizeEnd}
-                    onInspect={(id) => { setSelectedIds([id]); setFocusTick((t) => t + 1) }}
+                    onInspect={(id) => { setSelectedIds([id]); setFocusFieldKey(null); setFocusTick((t) => t + 1) }}
                     onContextMenu={openCtxMenu}
                   />
                 ))}
@@ -2135,6 +2410,7 @@ export default function Builder({ api, scenario }) {
           />
         )}
       </div>
+      )}
       {childDragGhost && (
         <div
           className="sb-child-drag-ghost"

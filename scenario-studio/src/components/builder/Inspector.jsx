@@ -142,6 +142,9 @@ export default function Inspector({
         {selected.locked ? ' · 🔒 잠김' : ''}
         {selected.hidden ? ' · 🚫 실행 시 숨김' : ''}
       </p>
+
+      {containerPanel}
+
       {def?.fields.map((f) => (
         <div key={f.key} className="sb-field sb-field--rel">
           <label>{f.label}</label>
@@ -175,9 +178,12 @@ export default function Inspector({
             </button>
           ) : (
             <input
-              type="text"
+              type={f.kind === 'url' ? 'url' : 'text'}
               data-fkey={f.key}
               value={fieldValue(f)}
+              placeholder={f.placeholder || ''}
+              inputMode={f.kind === 'url' ? 'url' : undefined}
+              spellCheck={f.kind === 'url' ? false : undefined}
               onChange={(e) => updateProps(selected.id, f.key, e.target.value)}
               onSelect={(e) => onFieldSelect(f.key, e.target, f.list)}
             />
@@ -187,8 +193,6 @@ export default function Inspector({
       <p className="sb-profile-config__hint">
         ✍️ 문구를 드래그로 선택하면 서식 툴바가 떠요 — 볼드/폰트/크기/색, 그리고 점선 밑줄(설명 모달 연결).
       </p>
-
-      {containerPanel}
 
       {selected.parentId && (
         <>

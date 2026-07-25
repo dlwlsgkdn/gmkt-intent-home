@@ -12,6 +12,30 @@ import { FONT_OPTIONS, TOKEN_RE, richSpanPresentation, InlineEditor } from './ri
 
 const FALLBACK_IMG = './makeup-clone-assets/d9b261330f3ffccf.avif'
 
+/* 유튜브 URL이면 별도 썸네일 입력 없이 공개 썸네일을 사용한다. */
+function youtubeThumbnail(rawUrl) {
+  const raw = String(rawUrl || '').trim()
+  if (!raw) return ''
+  try {
+    const url = new URL(raw)
+    const host = url.hostname.replace(/^www\./, '')
+    let videoId = ''
+    if (host === 'youtu.be') videoId = url.pathname.split('/').filter(Boolean)[0] || ''
+    if (host === 'youtube.com' || host === 'm.youtube.com') {
+      videoId = url.searchParams.get('v') || ''
+      if (!videoId) {
+        const [kind, id] = url.pathname.split('/').filter(Boolean)
+        if (kind === 'shorts' || kind === 'embed' || kind === 'live') videoId = id || ''
+      }
+    }
+    return /^[\w-]{6,}$/.test(videoId)
+      ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
+      : ''
+  } catch {
+    return ''
+  }
+}
+
 function Img({ src, alt }) {
   // draggable=false: 브라우저 기본 이미지 드래그(고스트)가 트랙 드래그 스크롤을 가로채지 않게
   return (
@@ -149,8 +173,8 @@ function ScrollTrack({ className, children, interactive, arrows, slideGap = 12, 
   )
 }
 
-/* 캔버스 편집 모드 여부 — 컨테이너 클리핑을 풀고 경계를 점선으로 표시 (Figma의 clip 무시,
-   Webflow/Framer의 편집 캔버스 ↔ 미리보기 토글 패턴) */
+/* 캔버스 편집 모드 여부 — 컨테이너 경계와 자식 선택 셸만 표시한다.
+   전체 자식 목록은 인스펙터 Navigator가 담당하므로 실제 뷰포트 크기는 늘리지 않는다. */
 const isEditView = (ctx) => ctx.mode === 'canvas' && ctx.canvasView !== 'preview'
 const isInteractionView = (ctx) => ctx.mode === 'player' || (ctx.mode === 'canvas' && ctx.canvasView === 'preview')
 
@@ -617,8 +641,12 @@ export const LIBRARY = {
     defaults: { title: '설문 요약' },
     fields: [{ key: 'title', label: '제목', kind: 'text' }],
     render: (p, ctx) => {
-      const data =
+      const rawData =
         (ctx.mode === 'player' ? ctx.player.summary : ctx.summaryPreview) || { profile: [], questions: [] }
+      const data = {
+        profile: Array.isArray(rawData.profile) ? rawData.profile : [],
+        questions: Array.isArray(rawData.questions) ? rawData.questions : [],
+      }
       const empty = data.profile.length === 0 && data.questions.length === 0
       // 원본 clean-survey-lock 마크업/클래스 그대로
       return (
@@ -828,22 +856,32 @@ export const LIBRARY = {
       channel: '뷰티크리에이터 소은 · 조회 12만',
       duration: '5:24',
       imageUrl: './makeup-clone-assets/d9b261330f3ffccf.avif',
+      url: '',
     },
     fields: [
       { key: 'source', label: '출처 (유튜브/틱톡 등)', kind: 'text' },
       { key: 'title', label: '영상 제목', kind: 'text' },
       { key: 'channel', label: '채널 · 부가 정보', kind: 'text' },
       { key: 'duration', label: '길이', kind: 'text' },
-      { key: 'imageUrl', label: '썸네일 URL', kind: 'text' },
+      { key: 'url', label: '영상 링크 URL', kind: 'url', placeholder: 'https://www.youtube.com/watch?v=...' },
+      { key: 'imageUrl', label: '썸네일 URL (비우면 YouTube 자동)', kind: 'url' },
     ],
     render: (p, ctx) => (
       <div
         className="sb-media-card sb-video-card"
-        role="button"
-        onClick={() => { if (ctx.mode === 'player') ctx.player.openExternal(`${p.source} 영상`) }}
+        role={ctx.mode === 'player' ? 'link' : undefined}
+        tabIndex={ctx.mode === 'player' ? 0 : undefined}
+        title={ctx.mode === 'player' ? `${p.source} 영상 새 탭에서 열기` : undefined}
+        onClick={() => { if (ctx.mode === 'player') ctx.player.openExternal(`${p.source} 영상`, p.url) }}
+        onKeyDown={(e) => {
+          if (ctx.mode === 'player' && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault()
+            ctx.player.openExternal(`${p.source} 영상`, p.url)
+          }
+        }}
       >
         <div className="sb-media-card__thumb">
-          <Img src={p.imageUrl} alt={p.title} />
+          <Img src={p.imageUrl || youtubeThumbnail(p.url)} alt={p.title} />
           <span className="sb-video-card__play" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5-11-6.5z" /></svg>
           </span>
@@ -872,19 +910,29 @@ export const LIBRARY = {
       snippet: '지성 볼, 건성 T존이라는 최악의 조합에서 안 무너지는 조합을 드디어 찾았습니다. 핵심은 부위별로…',
       author: 'skincare_log · 2일 전',
       imageUrl: './makeup-clone-assets/42072b0ad4be9333.avif',
+      url: '',
     },
     fields: [
       { key: 'source', label: '출처 (블로그/커뮤니티)', kind: 'text' },
       { key: 'title', label: '글 제목', kind: 'text' },
       { key: 'snippet', label: '본문 미리보기', kind: 'textarea' },
       { key: 'author', label: '작성자 · 시각', kind: 'text' },
-      { key: 'imageUrl', label: '대표 이미지 URL', kind: 'text' },
+      { key: 'url', label: '게시글 링크 URL', kind: 'url', placeholder: 'https://blog.naver.com/...' },
+      { key: 'imageUrl', label: '대표 이미지 URL', kind: 'url' },
     ],
     render: (p, ctx) => (
       <div
         className="sb-media-card sb-article-card"
-        role="button"
-        onClick={() => { if (ctx.mode === 'player') ctx.player.openExternal(`${p.source} 게시글`) }}
+        role={ctx.mode === 'player' ? 'link' : undefined}
+        tabIndex={ctx.mode === 'player' ? 0 : undefined}
+        title={ctx.mode === 'player' ? `${p.source} 게시글 새 탭에서 열기` : undefined}
+        onClick={() => { if (ctx.mode === 'player') ctx.player.openExternal(`${p.source} 게시글`, p.url) }}
+        onKeyDown={(e) => {
+          if (ctx.mode === 'player' && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault()
+            ctx.player.openExternal(`${p.source} 게시글`, p.url)
+          }
+        }}
       >
         <div className="sb-media-card__thumb">
           <Img src={p.imageUrl} alt={p.title} />
@@ -1028,7 +1076,7 @@ export const LIBRARY = {
           {p.title ? <p className="sb-hscroll__title">{kText(p.title, ctx, 'title')}</p> : null}
           <ScrollTrack
             interactive={isInteractionView(ctx)}
-            className={'sb-hscroll__track' + scrollCls(p.scrollbar) + (edit ? ' sb-hscroll__track--edit' : '')}
+            className={'sb-hscroll__track' + scrollCls(p.scrollbar)}
           >
             {kids.length > 0 ? (
               /* 자식은 편집자가 정한 자체 너비 유지 (없으면 카드 너비), 높이 지정 시 그대로 */
@@ -1152,20 +1200,18 @@ export const LIBRARY = {
       return (
         <div className={'sb-carousel' + (edit ? ' sb-container-edit' : '')}>
           {p.title ? <p className="sb-hscroll__title">{kText(p.title, ctx, 'title')}</p> : null}
-          {edit && slideCount > 1 && <p className="sb-edit-note">편집 모드 — 슬라이드를 모두 펼쳐 표시 중 (실사용은 한 장씩 스냅)</p>}
           <ScrollTrack
             interactive={isInteractionView(ctx)}
             arrows={!edit && !!p.arrows && slideCount > 1}
-            className={'sb-carousel__track' + scrollCls(p.scrollbar) + (edit ? ' sb-carousel__track--edit' : '')}
+            className={'sb-carousel__track' + scrollCls(p.scrollbar)}
           >
             {kids.length > 0 && kids.map((c) => (
-              /* 자식이 고유 크기를 가지면 슬라이드도 그 크기를 따른다 (없으면 한 장 = 컨테이너 폭).
-                 편집 모드 트랙은 세로 방향이라 flex-basis 대신 width로 지정 */
+              /* 자식이 고유 크기를 가지면 슬라이드도 그 크기를 따른다 (없으면 한 장 = 컨테이너 폭). */
               <div
                 key={c.key}
                 className="sb-carousel__slot"
                 style={{
-                  ...(c.item.w ? (edit ? { width: c.item.w } : { flex: `0 0 ${c.item.w}px` }) : null),
+                  ...(c.item.w ? { flex: `0 0 ${c.item.w}px` } : null),
                   ...(c.item.h ? { height: c.item.h } : null),
                 }}
               >
@@ -1282,14 +1328,9 @@ export const LIBRARY = {
           <ScrollTrack
             axis="y"
             interactive={isInteractionView(ctx)}
-            className={'sb-vscroll__list' + scrollCls(p.scrollbar) + (edit ? ' sb-vscroll__list--edit' : '')}
-            style={edit ? { minHeight: 80 } : { height: panelH }}
+            className={'sb-vscroll__list' + scrollCls(p.scrollbar)}
+            style={{ height: panelH }}
           >
-            {edit && (
-              <span className="sb-edit-extent" style={{ top: panelH }} aria-hidden="true">
-                실제 표시 높이 {panelH}px
-              </span>
-            )}
             {kids.length > 0 &&
               kids.map((c) => (
                 <div
@@ -1391,6 +1432,6 @@ export function renderItem(item, ctx) {
   if (fontStack) { style['--sb-font'] = fontStack; cls.push('sb-style-font') }
   if (st.color) { style['--sb-color'] = st.color; cls.push('sb-style-color') }
   if (st.size) { style['--sb-size'] = `${st.size}px`; cls.push('sb-style-size') }
-  if (st.bold) cls.push('sb-style-bold')
+  if (st.bold) { cls.push('sb-style-bold'); style.fontWeight = 700 }
   return <div className={cls.join(' ')} style={style}>{el}</div>
 }

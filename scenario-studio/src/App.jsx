@@ -1,11 +1,17 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { createScenario, normalizeScenario, uid, loadKeywords, saveKeywords, loadViewerDevice, saveViewerDevice, loadAccounts, saveAccounts, createAccount, createDataBackup, parseDataBackup } from './lib/store.js'
+import { createScenario, normalizeScenario, uid, loadKeywords, saveKeywords, loadViewerDevice, saveViewerDevice, loadAccounts, saveAccounts, createAccount, createDataBackup, parseDataBackup, normalizeAccountsState, DEFAULT_KEYWORDS } from './lib/store.js'
+import { fetchRemoteState, saveRemoteState } from './lib/remote.js'
 import { readShareFromHash, clearShareHash } from './lib/share.js'
 import HomeView from './components/HomeView.jsx'
 import Builder from './components/Builder.jsx'
 import Player from './components/Player.jsx'
 import ExploreEditor from './components/ExploreEditor.jsx'
-import { installDateMakeupPack } from './lib/dateMakeupPack.js'
+import {
+  installDateMakeupPack,
+  installDateMakeupScenario,
+  isDefaultScenario,
+} from './lib/dateMakeupPack.js'
+import { remapCaseEvaluation } from './lib/evaluation.js'
 
 export default function App() {
   /* 프로필별 워크스페이스(계정): 프로필 + 탐색 페이지 + 시나리오 + 쓰레드 묶음 */
@@ -38,13 +44,58 @@ export default function App() {
   const [route, setRoute] = useState({ name: 'home' })
   const [toast, setToast] = useState(null)
 
+  /* 서버 하이드레이션: 최초 1회 서버 상태를 가져와 로컬을 덮는다.
+     서버가 비어 있으면(최초 이관) 아래 미러링 이펙트가 현재 로컬 상태를 첫 저장으로 올린다.
+     가져오기 실패 시 이번 세션은 서버 미러링을 끈다 — 오래된 로컬로 서버를 덮지 않기 위함.
+     시딩 가드: 빈 브라우저가 먼저 접속해 기본 데이터로 서버를 시드한 경우,
+     사용자 데이터를 가진 로컬이 기본값에 덮이지 않도록 로컬을 유지한다(→ 서버로 올라감). */
+  const [remoteReady, setRemoteReady] = useState(false)
+  useEffect(() => {
+    const hasUserData = (accs) =>
+      accs.length > 1 ||
+      accs.some(
+        (a) =>
+          (a.scenarios || []).some((s) => !isDefaultScenario(s)) || (a.threads || []).length > 0
+      )
+    let cancelled = false
+    fetchRemoteState()
+      .then((state) => {
+        if (cancelled) return
+        let remote = state.accounts && normalizeAccountsState(state.accounts.data)
+        if (remote && !hasUserData(remote.accounts) && hasUserData(init.accounts)) remote = null
+        if (remote) {
+          const withPack = installDateMakeupPack(remote)
+          setAccounts(withPack.accounts)
+          setActiveAccountId((prev) =>
+            withPack.accounts.some((a) => a.id === prev) ? prev : withPack.activeId
+          )
+        }
+        if (state.keywords && Array.isArray(state.keywords.data)) {
+          // 시딩 가드: 서버가 기본 사전 그대로면 커스텀 로컬 사전을 유지한다
+          const isDefaultDict = (list) => JSON.stringify(list) === JSON.stringify(DEFAULT_KEYWORDS)
+          setKeywords((prev) =>
+            isDefaultDict(state.keywords.data) && !isDefaultDict(prev) ? prev : state.keywords.data
+          )
+        }
+        setRemoteReady(true)
+      })
+      .catch((e) => {
+        if (!cancelled) console.warn('[remote] 서버 상태 불러오기 실패 — 이번 세션은 로컬 저장만 사용:', e)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   useEffect(() => {
     saveAccounts(accounts, activeAccountId)
-  }, [accounts, activeAccountId])
+    if (remoteReady) saveRemoteState('accounts', { accounts, activeId: activeAccountId })
+  }, [accounts, activeAccountId, remoteReady])
 
   useEffect(() => {
     saveKeywords(keywords)
-  }, [keywords])
+    if (remoteReady) saveRemoteState('keywords', keywords)
+  }, [keywords, remoteReady])
 
   useEffect(() => {
     saveViewerDevice(viewerDevice)
@@ -63,6 +114,11 @@ export default function App() {
   }
 
   const removeScenario = (id) => {
+    const target = scenarios.find((scenario) => scenario.id === id)
+    if (isDefaultScenario(target)) {
+      setToast('기본 시나리오는 삭제할 수 없어요.')
+      return
+    }
     setScenarios((prev) => prev.filter((s) => s.id !== id))
     if (route.id === id) setRoute({ name: 'home' })
   }
@@ -125,10 +181,13 @@ export default function App() {
         values: [...(condition.values || [])],
       })),
       items: cloneItems(planCase.items || []),
+      evaluation: remapCaseEvaluation(planCase.evaluation, idMap),
     }))
     const copy = normalizeScenario({
       ...src,
       id: uid(),
+      sourcePackId: undefined,
+      isDefaultScenario: false,
       title: `${src.title} 복사본`,
       chip: src.chip ? `${src.chip}_복사` : '복사본',
       status: 'draft',
@@ -152,6 +211,8 @@ export default function App() {
       .map((s) => normalizeScenario({
         ...s,
         id: uid(),
+        sourcePackId: undefined,
+        isDefaultScenario: false,
         updatedAt: new Date().toISOString(),
       }))
     if (cleaned.length === 0) {
@@ -173,8 +234,12 @@ export default function App() {
   const importDataBackup = (payload) => {
     try {
       const restored = parseDataBackup(payload)
-      setAccounts(restored.accounts)
-      setActiveAccountId(restored.activeId)
+      const installed = installDateMakeupPack({
+        accounts: restored.accounts,
+        activeId: restored.activeId,
+      })
+      setAccounts(installed.accounts)
+      setActiveAccountId(installed.activeId)
       setKeywords(restored.keywords)
       setViewerDevice(restored.viewerDevice)
       setRoute({ name: 'home' })
@@ -211,9 +276,10 @@ export default function App() {
 
   const addAccount = (name) => {
     const nm = String(name || '').trim() || `사용자 ${accounts.length + 1}`
-    const acc = createAccount()
+    let acc = createAccount()
     acc.profile = { ...acc.profile, name: nm }
     acc.explore = { ...acc.explore, greeting: `${nm}님, 오늘은 어떤 쇼핑을 도와드릴까요?` }
+    acc = installDateMakeupScenario(acc)
     setAccounts((prev) => [...prev, acc])
     setActiveAccountId(acc.id)
     setRoute({ name: 'home' })
@@ -242,6 +308,7 @@ export default function App() {
     copyScenario,
     reorderScenario,
     importScenarios,
+    isDefaultScenario,
     exportDataBackup,
     importDataBackup,
     goHome: () => setRoute({ name: 'home' }),
@@ -277,7 +344,14 @@ export default function App() {
       clearShareHash()
     }
     const adoptShared = () => {
-      const s = normalizeScenario({ ...shared, id: uid(), status: 'draft', versions: [] })
+      const s = normalizeScenario({
+        ...shared,
+        id: uid(),
+        sourcePackId: undefined,
+        isDefaultScenario: false,
+        status: 'draft',
+        versions: [],
+      })
       setScenarios((prev) => [...prev, s])
       exitShared()
       setRoute({ name: 'builder', id: s.id })

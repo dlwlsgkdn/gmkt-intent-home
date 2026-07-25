@@ -45,7 +45,9 @@ export function richSpanPresentation(optsStr) {
   const spec = parseRichOpts(optsStr)
   const cls = ['sb-rich']
   const style = {}
-  if (spec.bold) cls.push('sb-rich-b')
+  // 캔버스의 contentEditable 즉시 미리보기에서도 플레이어와 같은 굵기를 보장한다.
+  // CSS 클래스는 레거시 !important 규칙을 이기기 위해 함께 유지한다.
+  if (spec.bold) { cls.push('sb-rich-b'); style.fontWeight = 700 }
   if (spec.size) { cls.push('sb-rich-size'); style['--sb-size'] = `${spec.size}px` }
   if (spec.color) { cls.push('sb-rich-color'); style['--sb-color'] = spec.color }
   if (spec.font) {

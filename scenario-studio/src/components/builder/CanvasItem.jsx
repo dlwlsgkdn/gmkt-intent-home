@@ -28,7 +28,6 @@ export default function CanvasItem({
   const resizing = sizeDraft != null
   const locked = !!item.locked
   const preview = renderCtx?.canvasView === 'preview'
-  const revealContainerContents = editable && !preview && !!def?.container
   const childCount = def?.container
     ? (renderCtx?.allItems || []).filter((child) => child.parentId === item.id).length
     : 0
@@ -36,11 +35,10 @@ export default function CanvasItem({
   useEffect(() => {
     const el = ref.current
     if (!el) return
-    const content = el.querySelector(':scope > .sb-canvas-item__content')
     const report = () => {
-      const next = revealContainerContents
-        ? Math.max(el.offsetHeight, (content?.scrollHeight || 0) + 20)
-        : el.offsetHeight
+      // 컨테이너도 캔버스에 실제 표시되는 뷰포트 높이만 레이아웃에 반영한다.
+      // 전체 자식 목록은 오른쪽 인스펙터 Navigator에서 별도로 관리한다.
+      const next = el.offsetHeight
       const prev = heightsRef.current[item.id]
       heightsRef.current[item.id] = next
       if (prev == null || Math.abs(prev - next) >= 1) onMeasure?.(item.id, next, prev)
@@ -48,11 +46,8 @@ export default function CanvasItem({
     report()
     const ro = new ResizeObserver(report)
     ro.observe(el)
-    // 명시 높이가 있는 컨테이너는 바깥 박스가 고정되어도 내부 자식 목록은 계속 커질 수 있다.
-    // 콘텐츠 자체도 관찰해야 새 자식 추가/복제 시 캔버스 스크롤 범위가 즉시 갱신된다.
-    if (content) ro.observe(content)
     return () => ro.disconnect()
-  }, [item.id, heightsRef, revealContainerContents])
+  }, [item.id, heightsRef])
 
   const onPointerDown = (e) => {
     if (!editable) return
@@ -124,7 +119,6 @@ export default function CanvasItem({
         (resizing ? ' sb-canvas-item--resizing' : '') +
         (locked ? ' sb-canvas-item--locked' : '') +
         (item.hidden ? ' sb-canvas-item--hidden' : '') +
-        (revealContainerContents ? ' sb-canvas-item--container-revealed' : '') +
         (dropTarget ? ' sb-canvas-item--drop-target' : '')
       }
       data-canvas-item-id={item.id}
@@ -145,19 +139,13 @@ export default function CanvasItem({
       <div
         className="sb-canvas-item__content"
         style={{
-          ...(h && !revealContainerContents ? { height: '100%', overflow: 'hidden' } : null),
-          ...(revealContainerContents ? { height: 'auto', minHeight: h || undefined, overflow: 'visible' } : null),
+          ...(h ? { height: '100%', overflow: 'hidden' } : null),
           // 미리보기는 스크롤 같은 실사용 동작만 열고, 편집 모드는 등록된 예외 컴포넌트만 내부 클릭을 연다.
           ...((preview || (editable && def?.canvasInteractive && !locked)) ? { pointerEvents: 'auto' } : null),
         }}
       >
         {renderItem(item, renderCtx || { mode: 'canvas' })}
       </div>
-      {revealContainerContents && h && selected && (
-        <span className="sb-canvas-item__viewport-end" style={{ top: h }} aria-hidden="true">
-          실제 컨테이너 영역 끝 · {h}px
-        </span>
-      )}
       {editable && !locked && <span className="sb-resize-handle" onPointerDown={onResizeDown} title="크기 조절" />}
     </div>
   )

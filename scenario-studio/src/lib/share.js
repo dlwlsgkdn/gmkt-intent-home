@@ -1,7 +1,9 @@
 /* 시나리오 공유 링크 — URL 해시에 base64url(JSON)로 담는다 (서버 불필요) */
 
 export function encodeShare(scenario) {
-  const payload = { v: 1, scenario: { ...scenario, versions: [] } }
+  // 평가 메모는 제작자 내부 정보다. 실행용 공유 링크에는 포함하지 않는다.
+  const planCases = (scenario.planCases || []).map(({ evaluation, ...planCase }) => planCase)
+  const payload = { v: 1, scenario: { ...scenario, versions: [], planCases } }
   const bytes = new TextEncoder().encode(JSON.stringify(payload))
   let bin = ''
   bytes.forEach((b) => { bin += String.fromCharCode(b) })
