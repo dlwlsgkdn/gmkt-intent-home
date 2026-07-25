@@ -61,7 +61,6 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onClose, o
 
   const problems = []
   if (!query.trim()) problems.push('검색어를 입력해주세요. 시나리오의 출발점이 됩니다.')
-  if (catalog.length === 0) problems.push('추천할 상품을 한 줄 이상 입력해주세요.')
   catalogErrors.forEach((error) => problems.push(`카탈로그 ${error}`))
 
   const runGeneration = async () => {
@@ -175,10 +174,12 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onClose, o
                   <span>STEP 2</span>
                   <strong>추천 상품 · 구성</strong>
                 </div>
-                <span>{catalog.length}개 상품</span>
+                <span>{catalog.length > 0 ? `${catalog.length}개 상품` : '상품 없이 진행'}</span>
               </div>
               <label className="sb-gen-field">
-                <span>추천할 상품 — 한 줄에 하나. LLM은 이 목록에서 고르기만 하고 가격·사실을 만들지 않습니다.</span>
+                <span>
+                  추천할 상품 <em>선택</em> — 한 줄에 하나. LLM은 이 목록에서 고르기만 하고 가격·사실을 만들지 않습니다.
+                </span>
                 <textarea
                   className="sb-gen-catalog"
                   rows={6}
@@ -187,6 +188,11 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onClose, o
                   spellCheck={false}
                   onChange={(event) => setCatalogText(event.target.value)}
                 />
+                <small>
+                  {catalog.length > 0
+                    ? '각 계획 단계에 이 상품들이 배치됩니다.'
+                    : '비워두면 상품을 지어내지 않고, 각 단계에 "어떤 상품을 넣을 자리인지" 안내만 남깁니다. 나중에 빌더에서 상품 카드를 배치하세요.'}
+                </small>
               </label>
               <div className="sb-gen-grid">
                 <label className="sb-gen-field">
@@ -347,7 +353,7 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onClose, o
                             .map((pick) => catalog.find((entry) => entry.id === pick.catalogId)?.name)
                             .filter(Boolean)
                             .join(' · ')
-                          : '배치된 상품 없음'}
+                          : (step.productHint ? `상품 자리 — ${step.productHint}` : '배치된 상품 없음')}
                       </em>
                     </div>
                   ))}

@@ -22,9 +22,11 @@ const PLAN_SUMMARY_Y = 24
 const PLAN_TITLE_Y = 178
 const PLAN_NOTICE_Y = 300
 const PLAN_STEP_Y = 440
-const PLAN_GROUP_GAP = 660 // planStep → 다음 planStep 간격
-const PLAN_PANEL_OFFSET = 280 // planStep → 상품 패널 간격
-const PLAN_CTA_GAP = 400
+const PLAN_GROUP_GAP = 660 // planStep + 상품 패널 한 묶음의 높이
+const PLAN_HINT_GAP = 480 // planStep + 상품 자리 안내 카드 묶음 (패널보다 낮다)
+const PLAN_STEP_ONLY_GAP = 280 // planStep 단독
+const PLAN_PANEL_OFFSET = 280 // planStep → 아래 붙는 패널/안내 카드 간격
+const PLAN_CTA_OFFSET = 120 // 마지막 묶음 → CTA
 const PRODUCT_CARD_W = 232
 
 export const MIN_QUESTIONS = 2
@@ -106,12 +108,14 @@ export const SCENARIO_RESPONSE_SCHEMA = {
           items: {
             type: 'object',
             additionalProperties: false,
-            required: ['title', 'desc', 'points', 'groupTitle', 'products'],
+            required: ['title', 'desc', 'points', 'groupTitle', 'products', 'productHint'],
             properties: {
               title: { type: 'string' },
               desc: { type: 'string' },
               points: { type: 'string' },
               groupTitle: { type: 'string' },
+              /* 카탈로그가 없을 때만 채우는 "어떤 상품을 넣으면 좋을지" 안내 (상품명을 지어내지 않는다) */
+              productHint: { type: 'string' },
               products: {
                 type: 'array',
                 items: {
@@ -164,23 +168,35 @@ export function buildScenarioRequest({ persona, query, catalog, questionCount, s
 }
 
 export function buildScenarioPrompt(request) {
+  const hasCatalog = request.catalog.length > 0
+  const productRules = hasCatalog
+    ? [
+      '3. 각 단계의 products는 catalog의 id 중에서만 고르고, 단계 주제에 맞는 상품을 1~3개 배치합니다. 같은 상품을 여러 단계에 반복하지 않습니다.',
+      '4. summary(추천 이유)는 1~2줄, 줄바꿈은 \\n. catalog의 desc와 페르소나에만 근거하고 가격·효능·링크 등 사실을 새로 만들지 않습니다. productHint는 빈 문자열로 둡니다.',
+    ]
+    : [
+      '3. 추천할 상품 목록이 주어지지 않았습니다. products는 반드시 빈 배열([])로 두고, 실제 상품명·브랜드·가격을 절대 만들어내지 마세요.',
+      '4. 대신 productHint에 그 단계에 어떤 "종류"의 상품을 넣으면 좋을지 한 문장으로 적습니다. (예: "속당김을 잡아줄 저분자 수분 세럼") 특정 제품명이 아니라 카테고리와 기준으로 씁니다.',
+    ]
   return [
     '당신은 쇼핑 시나리오 기획자입니다. 사용자의 검색 의도를 "설문 → 맞춤 계획" 흐름으로 설계합니다.',
     '',
     '만들 것:',
     '1) 설문 화면 — 안내 문구와 선택형 질문들. 각 질문은 계획을 실제로 갈라지게 하는 축이어야 합니다',
     `   (질문 ${request.plan.questionCount}개, 질문당 선택지 ${request.plan.optionsPerQuestion.min}~${request.plan.optionsPerQuestion.max}개).`,
-    `2) 계획 화면 — 단계 ${request.plan.stepCount}개. 각 단계는 제목·설명·체크포인트와 추천 상품 묶음을 가집니다.`,
+    `2) 계획 화면 — 단계 ${request.plan.stepCount}개. 각 단계는 제목·설명·체크포인트를 가집니다.`,
     '',
     '규칙:',
     '1. 질문의 선택지는 서로 겹치지 않는 짧은 명사구로 씁니다. 선택지 안에 쉼표(,)와 세로줄(|)을 쓰지 않습니다.',
     '2. 질문 축은 사용자가 실제로 다르게 답할 만한 것이어야 합니다(고민·목적·상황 등). 예/아니오 질문은 피합니다.',
-    '3. 각 단계의 products는 catalog의 id 중에서만 고르고, 단계 주제에 맞는 상품을 1~3개 배치합니다. 같은 상품을 여러 단계에 반복하지 않습니다.',
-    '4. summary(추천 이유)는 1~2줄, 줄바꿈은 \\n. catalog의 desc와 페르소나에만 근거하고 가격·효능·링크 등 사실을 새로 만들지 않습니다.',
+    ...productRules,
     '5. points(체크포인트)는 쉼표로 구분한 2~3개의 짧은 실행 항목입니다.',
     '6. 계획 단계는 설문에서 물어본 축의 순서와 대응되게 구성합니다.',
     '7. 페르소나의 호칭·상황을 자연스럽게 반영한 한국어 존댓말로 씁니다.',
-    '8. 설명 없이 아래 스키마의 JSON 하나만 출력합니다.',
+    hasCatalog
+      ? '8. cta의 price는 배치한 상품 가격의 합으로 씁니다.'
+      : '8. 상품이 없으므로 cta의 countLabel과 price는 빈 문자열로 두고, buttonText만 이 계획에 어울리는 다음 행동으로 씁니다.',
+    '9. 설명 없이 아래 스키마의 JSON 하나만 출력합니다.',
     '',
     '출력 스키마:',
     JSON.stringify(SCENARIO_RESPONSE_SCHEMA, null, 2),
@@ -272,6 +288,7 @@ export function validateScenarioResponse(raw, request) {
         desc: String(entry?.desc || ''),
         points: String(entry?.points || ''),
         groupTitle: String(entry?.groupTitle || '추천 상품'),
+        productHint: String(entry?.productHint || ''),
         products,
       }
     })
@@ -281,8 +298,11 @@ export function validateScenarioResponse(raw, request) {
   if (steps.length < MIN_STEPS) {
     errors.push(`계획 단계가 ${steps.length}개뿐입니다. 최소 ${MIN_STEPS}개가 필요해요.`)
   }
-  const emptySteps = steps.filter((step) => step.products.length === 0).length
-  if (emptySteps > 0) warnings.push(`상품이 배치되지 않은 단계가 ${emptySteps}개 있습니다.`)
+  /* 카탈로그를 준 경우에만 "상품이 비었다"가 경고다. 안 준 경우는 의도된 동작 */
+  if (catalogIds.size > 0) {
+    const emptySteps = steps.filter((step) => step.products.length === 0).length
+    if (emptySteps > 0) warnings.push(`상품이 배치되지 않은 단계가 ${emptySteps}개 있습니다.`)
+  }
 
   if (errors.length > 0) return { draft: null, errors, warnings }
 
@@ -307,7 +327,7 @@ export function validateScenarioResponse(raw, request) {
         noticeBody: String(plan.noticeBody || ''),
         steps,
         cta: {
-          countLabel: String(cta.countLabel || `${usedProducts.size}개 선택`),
+          countLabel: String(cta.countLabel || (usedProducts.size > 0 ? `${usedProducts.size}개 선택` : '')),
           price: String(cta.price || ''),
           buttonText: String(cta.buttonText || '한 번에 담기'),
         },
@@ -356,22 +376,36 @@ export function assembleScenario({ draft, catalog, query }) {
     make('noticeCard', { title: draft.plan.noticeTitle, body: draft.plan.noticeBody }, PLAN_NOTICE_Y),
   ]
 
+  /* 단계마다 붙는 블록 높이가 달라서(상품 패널 / 상품 자리 안내 / 없음) y를 누적한다 */
+  let y = PLAN_STEP_Y
   draft.plan.steps.forEach((step, index) => {
-    const baseY = PLAN_STEP_Y + index * PLAN_GROUP_GAP
     planItems.push(make('planStep', {
       no: String(index + 1),
       title: step.title,
       desc: step.desc,
       points: step.points,
-    }, baseY))
+    }, y))
 
-    if (step.products.length === 0) return
+    if (step.products.length === 0) {
+      // 상품을 안 받았을 때: 상품을 지어내지 않고, 어떤 상품을 넣을 자리인지만 남긴다
+      if (step.productHint.trim()) {
+        planItems.push(make('noticeCard', {
+          title: `${step.groupTitle} — 상품을 넣을 자리`,
+          body: `${step.productHint} · 빌더에서 "추천 상품 카드"를 이 자리에 배치하세요.`,
+        }, y + PLAN_PANEL_OFFSET))
+        y += PLAN_HINT_GAP
+      } else {
+        y += PLAN_STEP_ONLY_GAP
+      }
+      return
+    }
+
     const panel = make('hscroll', {
       title: step.groupTitle,
       cardW: String(PRODUCT_CARD_W),
       scrollbar: false,
       items: '',
-    }, baseY + PLAN_PANEL_OFFSET)
+    }, y + PLAN_PANEL_OFFSET)
     planItems.push(panel)
     step.products.forEach((pick, slot) => {
       const product = catalogById[pick.catalogId] || {}
@@ -394,13 +428,14 @@ export function assembleScenario({ draft, catalog, query }) {
       card.slot = slot
       planItems.push(card)
     })
+    y += PLAN_GROUP_GAP
   })
 
   planItems.push(make('ctaBar', {
     countLabel: draft.plan.cta.countLabel,
     price: draft.plan.cta.price,
     buttonText: draft.plan.cta.buttonText,
-  }, PLAN_STEP_Y + draft.plan.steps.length * PLAN_GROUP_GAP + PLAN_CTA_GAP - PLAN_PANEL_OFFSET))
+  }, y + PLAN_CTA_OFFSET))
 
   const generationId = `sgen-${uid()}`
   return {
