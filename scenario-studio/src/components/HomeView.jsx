@@ -5,20 +5,12 @@ import ThreadPanel from './ThreadPanel.jsx'
 import { TEMPLATES } from '../lib/templates.js'
 import { hexToRgba, DEVICE_PRESETS, sortByPosition } from '../lib/store.js'
 import { renderItem } from '../lib/registry.jsx'
-import { isLikelyAnthropicKey, loadLlmApiKey, saveLlmApiKey } from '../lib/llmClient.js'
 import ScenarioGenerationDialog from './builder/ScenarioGenerationDialog.jsx'
 
 export default function HomeView({ api }) {
   const [query, setQuery] = useState('')
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [llmApiKey, setLlmApiKey] = useState(loadLlmApiKey)
-  const [llmKeyVisible, setLlmKeyVisible] = useState(false)
   const [scenarioGenOpen, setScenarioGenOpen] = useState(false)
-
-  const updateLlmApiKey = (value) => {
-    setLlmApiKey(value)
-    saveLlmApiKey(value) // localStorage에만 저장 — 자동 생성 등 LLM 기능이 공유
-  }
   const [threadOrigin, setThreadOrigin] = useState(null) // null=닫힘 | 'left'|'center'|'right'
   const [draggingChipId, setDraggingChipId] = useState(null)
   const [scenarioFilter, setScenarioFilter] = useState('')
@@ -316,44 +308,6 @@ export default function HomeView({ api }) {
               </button>
               <input ref={backupImportInputRef} type="file" accept=".json,application/json" className="hidden" onChange={handleBackupImportFile} />
             </div>
-
-            <p className="sb-panel-label">LLM 연결</p>
-            <p className="sb-drawer__backup-hint">
-              계획 케이스 자동 생성 등 LLM 기능에 쓸 내 Anthropic API 키.
-              이 브라우저(localStorage)에만 저장되고 Anthropic API로 직접 전송됩니다.
-            </p>
-            <div className="sb-llm-key">
-              <input
-                type={llmKeyVisible ? 'text' : 'password'}
-                value={llmApiKey}
-                placeholder="sk-ant-…"
-                autoComplete="off"
-                spellCheck={false}
-                aria-label="Anthropic API 키"
-                onChange={(event) => updateLlmApiKey(event.target.value)}
-              />
-              <button
-                type="button"
-                onClick={() => setLlmKeyVisible((visible) => !visible)}
-                aria-label={llmKeyVisible ? 'API 키 가리기' : 'API 키 보기'}
-              >
-                {llmKeyVisible ? '가리기' : '보기'}
-              </button>
-            </div>
-            <p
-              className={
-                'sb-llm-key__state'
-                + (llmApiKey.trim()
-                  ? (isLikelyAnthropicKey(llmApiKey) ? ' sb-llm-key__state--ok' : ' sb-llm-key__state--warn')
-                  : '')
-              }
-            >
-              {llmApiKey.trim()
-                ? (isLikelyAnthropicKey(llmApiKey)
-                  ? '✓ 키 저장됨 — 빌더의 "✦ 자동 생성"에서 바로 사용됩니다.'
-                  : 'Anthropic API 키는 보통 sk-ant-로 시작해요. 키를 다시 확인해주세요.')
-                : '키가 없으면 서버 프록시(운영자 키) 또는 수동 모드로 동작합니다. 비우면 저장된 키도 삭제됩니다.'}
-            </p>
 
             <div className="sb-drawer__list">
               {api.scenarios.length === 0 && (

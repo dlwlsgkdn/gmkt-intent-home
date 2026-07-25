@@ -1,9 +1,10 @@
-import { CHIP_COLORS, createItem, createPlanCase, uid } from './store.js'
-import { LIBRARY } from './registry.jsx'
+import { CHIP_COLORS, createItem, createPlanCase, uid } from '../store.js'
+import { LIBRARY } from '../registry.jsx'
+import { parseJsonAnswer } from './jsonAnswer.js'
 
 /*
  * 시나리오 전체(설문 + 골든 계획 케이스) 자동 생성.
- * 계획 케이스 자동 생성(caseGeneration.js)이 "골든 케이스가 이미 있을 때 조합을 늘리는" 도구라면,
+ * 계획 케이스 자동 생성(planCases.js)이 "골든 케이스가 이미 있을 때 조합을 늘리는" 도구라면,
  * 이쪽은 그 골든 케이스 자체를 페르소나·검색어·상품만으로 처음부터 만든다.
  *
  * 역할 분담은 동일하다:
@@ -208,15 +209,6 @@ export function buildScenarioPrompt(request) {
 
 /* ── 응답 검증 ─────────────────────────────────────────────────────── */
 
-const stripCodeFence = (value) => {
-  const text = String(value || '').trim()
-  const fenced = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i)
-  if (fenced) return fenced[1].trim()
-  const start = text.indexOf('{')
-  const end = text.lastIndexOf('}')
-  return start >= 0 && end > start ? text.slice(start, end + 1) : text
-}
-
 const cleanOption = (value) =>
   String(value || '')
     .replace(/[,|]/g, ' ') // 선택지는 쉼표로 join되므로 내부 쉼표·세로줄 제거
@@ -226,10 +218,7 @@ const cleanOption = (value) =>
 export function validateScenarioResponse(raw, request) {
   let payload
   try {
-    payload = typeof raw === 'string' ? JSON.parse(stripCodeFence(raw)) : raw
-    if (payload && typeof payload.output_text === 'string') {
-      payload = JSON.parse(stripCodeFence(payload.output_text))
-    }
+    payload = parseJsonAnswer(raw)
   } catch (error) {
     return { draft: null, errors: [`JSON 해석 실패: ${error.message}`], warnings: [] }
   }

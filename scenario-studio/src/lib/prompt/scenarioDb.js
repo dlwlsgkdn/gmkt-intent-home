@@ -1,10 +1,11 @@
-import { LIBRARY } from './registry.jsx'
-import { CHIP_COLORS, DEVICE_PRESETS } from './store.js'
+import { LIBRARY } from '../registry.jsx'
+import { CHIP_COLORS, DEVICE_PRESETS } from '../store.js'
+import { parseJsonAnswer } from './jsonAnswer.js'
 
 /*
  * "AI 프롬프트 생성" — 시나리오 DB JSON(내보내기와 같은 형식)을 통째로 만들어 달라는 프롬프트.
  *
- * 앞서 만든 시나리오 생성(scenarioGeneration.js)은 레이아웃을 코드가 소유하고 LLM은 텍스트만 채우는 방식이라
+ * 앞서 만든 시나리오 생성(scenarioDraft.js)은 레이아웃을 코드가 소유하고 LLM은 텍스트만 채우는 방식이라
  * 구성이 스캐폴드에 고정된다. 이 경로는 반대로 LLM에게 DB JSON 전체(컴포넌트 선택·좌표 포함)를 맡겨
  * 자유로운 구성을 얻고, 결과는 기존 "가져오기"와 동일한 검증(normalizeScenario)을 거쳐 들어온다.
  * 컴포넌트 목록은 레지스트리에서 자동 생성하므로 컴포넌트가 늘면 프롬프트도 따라 늘어난다.
@@ -174,23 +175,11 @@ export function buildScenarioDbPrompt({
 
 /* ── 붙여넣은 결과 파싱 ────────────────────────────────────────────── */
 
-const stripCodeFence = (value) => {
-  const text = String(value || '').trim()
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)
-  if (fenced) return fenced[1].trim()
-  const arrayStart = text.indexOf('[')
-  const objectStart = text.indexOf('{')
-  const start = arrayStart >= 0 && (objectStart < 0 || arrayStart < objectStart) ? arrayStart : objectStart
-  if (start < 0) return text
-  const end = Math.max(text.lastIndexOf(']'), text.lastIndexOf('}'))
-  return end > start ? text.slice(start, end + 1) : text
-}
-
 /* import 가능한 배열로 정규화 — 문제가 있으면 사람이 읽을 수 있는 이유를 돌려준다 */
 export function parseScenarioDbJson(raw) {
   let payload
   try {
-    payload = JSON.parse(stripCodeFence(raw))
+    payload = parseJsonAnswer(raw)
   } catch (error) {
     return { scenarios: [], errors: [`JSON 해석 실패: ${error.message}`], warnings: [] }
   }

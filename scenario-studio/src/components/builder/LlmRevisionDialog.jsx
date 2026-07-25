@@ -1,38 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
-  LLM_REVISION_PROXY_STORAGE_KEY,
-  LLM_REVISION_RESPONSE_SCHEMA,
   buildLlmRevisionPrompt,
   buildLlmRevisionRequest,
-  isSafeRevisionProxyUrl,
   validateLlmRevisionResponse,
-} from '../../lib/llmRevision.js'
+} from '../../lib/prompt/revision.js'
+import { wrapForChatApp } from '../../lib/prompt/chatPrompt.js'
+import PromptExchange from './PromptExchange.jsx'
 
 const revisionKey = (revision) =>
   [revision.caseId, revision.criterionKey, revision.itemId, revision.fieldKey].join(':')
-
-const loadProxyUrl = () => {
-  try {
-    return window.localStorage.getItem(LLM_REVISION_PROXY_STORAGE_KEY) || ''
-  } catch {
-    return ''
-  }
-}
-
-const copyText = async (value) => {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(value)
-    return
-  }
-  const textarea = document.createElement('textarea')
-  textarea.value = value
-  textarea.style.position = 'fixed'
-  textarea.style.opacity = '0'
-  document.body.appendChild(textarea)
-  textarea.select()
-  document.execCommand('copy')
-  textarea.remove()
-}
 
 export default function LlmRevisionDialog({
   planCases,
@@ -41,17 +17,17 @@ export default function LlmRevisionDialog({
   onToast,
 }) {
   const [includeResolved, setIncludeResolved] = useState(false)
-  const [proxyUrl, setProxyUrl] = useState(loadProxyUrl)
   const [responseText, setResponseText] = useState('')
   const [validation, setValidation] = useState(null)
   const [selectedKeys, setSelectedKeys] = useState(new Set())
-  const [requesting, setRequesting] = useState(false)
   const request = useMemo(
     () => buildLlmRevisionRequest(planCases, { includeResolved }),
     [planCases, includeResolved]
   )
-  const prompt = useMemo(() => buildLlmRevisionPrompt(request), [request])
-  const safeProxy = isSafeRevisionProxyUrl(proxyUrl)
+  const prompt = useMemo(
+    () => wrapForChatApp(buildLlmRevisionPrompt(request), { json: true, pasteTarget: '결과 가져오기' }),
+    [request]
+  )
 
   useEffect(() => {
     setResponseText('')
@@ -64,62 +40,13 @@ export default function LlmRevisionDialog({
     setSelectedKeys(new Set(validation.revisions.map(revisionKey)))
   }, [validation])
 
-  const copyPrompt = async () => {
-    try {
-      await copyText(prompt)
-      onToast('피드백과 출력 스키마를 포함한 LLM 수정 요청을 복사했어요.')
-    } catch {
-      onToast('복사하지 못했어요. 프롬프트 펼치기에서 직접 복사해주세요.')
-    }
-  }
-
-  const validateResponse = (value = responseText) => {
-    const result = validateLlmRevisionResponse(value, request)
+  const validateResponse = () => {
+    const result = validateLlmRevisionResponse(responseText, request)
     setValidation(result)
     if (result.errors.length > 0) {
       onToast(`수정안 검증에서 ${result.errors.length}개 문제를 찾았어요.`)
     } else {
       onToast(`적용 가능한 수정안 ${result.revisions.length}개를 확인했어요.`)
-    }
-  }
-
-  const callProxy = async () => {
-    if (!safeProxy || request.feedbackCount === 0) return
-    setRequesting(true)
-    try {
-      window.localStorage.setItem(LLM_REVISION_PROXY_STORAGE_KEY, proxyUrl.trim())
-      const response = await fetch(proxyUrl.trim(), {
-        method: 'POST',
-        credentials: 'omit',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          operation: 'revise_scenario_from_feedback',
-          prompt,
-          input: request,
-          responseSchema: LLM_REVISION_RESPONSE_SCHEMA,
-        }),
-      })
-      const rawText = await response.text()
-      if (!response.ok) {
-        throw new Error(rawText.slice(0, 180) || `HTTP ${response.status}`)
-      }
-      let raw = rawText
-      try {
-        raw = JSON.parse(rawText)
-      } catch {
-        // 텍스트 응답도 아래 공통 검증기가 JSON 블록을 추출한다.
-      }
-      setResponseText(typeof raw === 'string' ? raw : JSON.stringify(raw, null, 2))
-      validateResponse(raw)
-    } catch (error) {
-      setValidation({
-        summary: '',
-        revisions: [],
-        errors: [`프록시 요청 실패: ${error.message}`],
-        warnings: [],
-      })
-    } finally {
-      setRequesting(false)
     }
   }
 
@@ -148,19 +75,11 @@ export default function LlmRevisionDialog({
       <section className="sb-llm-dialog" role="dialog" aria-modal="true" aria-labelledby="sb-llm-title">
         <div className="sb-llm-dialog__head">
           <div>
-            <p className="sb-panel-label">FEEDBACK → LLM → SAFE PATCH</p>
-            <h2 id="sb-llm-title">LLM에게 시나리오 수정 요청</h2>
-            <p>피드백을 구조화해 보내고, 허용된 컴포넌트 필드만 검토 후 선택 적용합니다.</p>
+            <p className="sb-panel-label">피드백 → 내 AI → 안전한 부분 수정</p>
+            <h2 id="sb-llm-title">AI에게 시나리오 수정 요청</h2>
+            <p>피드백을 구조화해 프롬프트로 만들고, 허용된 컴포넌트 필드만 검토 후 선택 적용합니다.</p>
           </div>
           <button type="button" className="sb-icon-btn" onClick={onClose} aria-label="닫기">×</button>
-        </div>
-
-        <div className="sb-llm-flow" aria-label="LLM 수정 흐름">
-          <span><b>1</b> 요청 만들기</span>
-          <i>→</i>
-          <span><b>2</b> JSON 응답 검증</span>
-          <i>→</i>
-          <span><b>3</b> 선택 적용</span>
         </div>
 
         <div className="sb-llm-scope">
@@ -185,104 +104,47 @@ export default function LlmRevisionDialog({
           </div>
         ) : (
           <>
-            <section className="sb-llm-section">
-              <div className="sb-llm-section__head">
-                <div>
-                  <span>STEP 1</span>
-                  <strong>요청 전달</strong>
-                </div>
-                <button type="button" className="sb-btn sb-btn--primary" onClick={copyPrompt}>
-                  LLM 수정 요청 복사
-                </button>
-              </div>
-              <p className="sb-llm-help">
-                복사한 내용을 사용하는 LLM에 붙여넣고 JSON 응답을 받아오세요. 프롬프트에는 실제 필드 값과
-                수정 가능한 ID가 함께 들어갑니다.
-              </p>
-              <details className="sb-llm-details">
-                <summary>전송할 프롬프트 펼치기</summary>
-                <textarea readOnly rows={9} value={prompt} aria-label="LLM 수정 요청 프롬프트" />
-              </details>
+            <PromptExchange
+              title="수정 요청 프롬프트"
+              hint="실제 필드 값과 수정 가능한 ID가 함께 들어갑니다. 쓰던 AI에 붙여넣고 돌아온 JSON을 아래에 붙여넣으세요."
+              prompt={prompt}
+              onCopied={(ok) => onToast(ok
+                ? '피드백과 출력 스키마를 포함한 수정 요청을 복사했어요.'
+                : '복사하지 못했어요. 프롬프트를 펼쳐 직접 복사해주세요.')}
+              answerText={responseText}
+              answerPlaceholder={'AI가 반환한 {"summary":"...","revisions":[...]} JSON을 붙여넣으세요.'}
+              onAnswerChange={(value) => {
+                setResponseText(value)
+                setValidation(null)
+              }}
+              onVerify={validateResponse}
+            />
 
-              <div className="sb-llm-proxy">
-                <div>
-                  <strong>보안 프록시로 바로 요청 <em>선택</em></strong>
-                  <small>API 키는 브라우저에 저장하지 않습니다. 서버에서 키를 보관하는 HTTPS 엔드포인트만 입력하세요.</small>
-                </div>
-                <input
-                  type="url"
-                  value={proxyUrl}
-                  placeholder="https://your-domain.example/api/revise-scenario"
-                  onChange={(event) => setProxyUrl(event.target.value)}
-                  aria-label="LLM 보안 프록시 URL"
-                />
-                <button
-                  type="button"
-                  className="sb-btn"
-                  disabled={!safeProxy || requesting}
-                  onClick={callProxy}
-                >
-                  {requesting ? '요청 중…' : '프록시로 요청'}
-                </button>
+            {validation && (
+              <div className="sb-llm-validation">
+                {validation.errors.length > 0 && (
+                  <div className="sb-llm-validation__errors">
+                    <strong>적용 차단</strong>
+                    {validation.errors.map((error, index) => <p key={index}>{error}</p>)}
+                  </div>
+                )}
+                {validation.warnings.map((warning, index) => (
+                  <p key={index} className="sb-llm-warning">{warning}</p>
+                ))}
+                {validation.errors.length === 0 && (
+                  <div className="sb-llm-validation__ok">
+                    <strong>✓ 스키마와 허용 필드 검증 완료</strong>
+                    <span>{validation.revisions.length}개 수정안을 검토할 수 있어요.</span>
+                  </div>
+                )}
               </div>
-              {proxyUrl && !safeProxy && (
-                <p className="sb-llm-error">HTTPS URL만 사용할 수 있습니다. 로컬 개발은 localhost HTTP를 허용합니다.</p>
-              )}
-            </section>
-
-            <section className="sb-llm-section">
-              <div className="sb-llm-section__head">
-                <div>
-                  <span>STEP 2</span>
-                  <strong>LLM JSON 응답 검증</strong>
-                </div>
-                <button
-                  type="button"
-                  className="sb-btn"
-                  disabled={!responseText.trim()}
-                  onClick={() => validateResponse()}
-                >
-                  응답 검증
-                </button>
-              </div>
-              <textarea
-                className="sb-llm-response"
-                rows={8}
-                value={responseText}
-                placeholder={'LLM이 반환한 {"summary":"...","revisions":[...]} JSON을 붙여넣으세요.'}
-                onChange={(event) => {
-                  setResponseText(event.target.value)
-                  setValidation(null)
-                }}
-                aria-label="LLM JSON 응답"
-              />
-
-              {validation && (
-                <div className="sb-llm-validation">
-                  {validation.errors.length > 0 && (
-                    <div className="sb-llm-validation__errors">
-                      <strong>적용 차단</strong>
-                      {validation.errors.map((error, index) => <p key={index}>{error}</p>)}
-                    </div>
-                  )}
-                  {validation.warnings.map((warning, index) => (
-                    <p key={index} className="sb-llm-warning">{warning}</p>
-                  ))}
-                  {validation.errors.length === 0 && (
-                    <div className="sb-llm-validation__ok">
-                      <strong>✓ 스키마와 허용 필드 검증 완료</strong>
-                      <span>{validation.revisions.length}개 수정안을 검토할 수 있어요.</span>
-                    </div>
-                  )}
-                </div>
-              )}
-            </section>
+            )}
 
             {validation?.errors.length === 0 && validation.revisions.length > 0 && (
               <section className="sb-llm-section">
                 <div className="sb-llm-section__head">
                   <div>
-                    <span>STEP 3</span>
+                    <span>STEP C</span>
                     <strong>수정안 선택 적용</strong>
                   </div>
                   <span>{selectedKeys.size}/{validation.revisions.length}개 선택</span>

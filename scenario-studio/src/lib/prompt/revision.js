@@ -1,11 +1,18 @@
+/*
+ * 평가 피드백 → 수정안 왕복.
+ *
+ * 평가 탭에 적힌 피드백을 구조화한 요청으로 만들고(buildLlmRevisionRequest),
+ * 그 요청을 담은 프롬프트를 사용자가 쓰던 AI에 붙여넣게 한다.
+ * 돌아온 JSON은 요청에 들어 있던 허용 목록(caseId·itemId·fieldKey)과 대조해
+ * 허용되지 않은 필드·구조 변경·before 불일치를 전부 걸러낸 뒤에야 적용 후보가 된다.
+ */
 import {
   componentEvaluationStructureForCase,
   evaluationCasesFor,
   normalizeCaseEvaluation,
   normalizeComponentEvaluation,
-} from './evaluation.js'
-
-export const LLM_REVISION_PROXY_STORAGE_KEY = 'ddak-llm-revision-proxy-v1'
+} from '../evaluation.js'
+import { parseJsonAnswer } from './jsonAnswer.js'
 
 export const LLM_REVISION_RESPONSE_SCHEMA = {
   type: 'object',
@@ -122,25 +129,15 @@ export function buildLlmRevisionPrompt(request) {
   ].join('\n')
 }
 
-const stripCodeFence = (value) => {
-  const text = String(value || '').trim()
-  const fenced = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i)
-  if (fenced) return fenced[1].trim()
-  const start = text.indexOf('{')
-  const end = text.lastIndexOf('}')
-  return start >= 0 && end > start ? text.slice(start, end + 1) : text
-}
-
 const responsePayload = (raw) => {
-  if (typeof raw === 'string') return JSON.parse(stripCodeFence(raw))
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+  const payload = parseJsonAnswer(raw)
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     throw new Error('응답이 JSON 객체가 아닙니다.')
   }
-  if (Array.isArray(raw.revisions)) return raw
-  if (typeof raw.output_text === 'string') return JSON.parse(stripCodeFence(raw.output_text))
-  if (typeof raw.outputText === 'string') return JSON.parse(stripCodeFence(raw.outputText))
-  if (raw.result && typeof raw.result === 'object') return responsePayload(raw.result)
-  throw new Error('응답에서 revisions 배열을 찾을 수 없습니다.')
+  if (!Array.isArray(payload.revisions)) {
+    throw new Error('응답에서 revisions 배열을 찾을 수 없습니다.')
+  }
+  return payload
 }
 
 const allowlistForRequest = (request) => {
@@ -233,17 +230,6 @@ export function validateLlmRevisionResponse(raw, request) {
     revisions,
     errors,
     warnings,
-  }
-}
-
-export function isSafeRevisionProxyUrl(value) {
-  try {
-    const url = new URL(String(value || '').trim())
-    if (url.username || url.password) return false
-    if (url.protocol === 'https:') return true
-    return url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
-  } catch {
-    return false
   }
 }
 

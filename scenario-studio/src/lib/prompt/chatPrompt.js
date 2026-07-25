@@ -1,10 +1,11 @@
 /*
- * Claude 앱(claude.ai) 붙여넣기용 프롬프트 래퍼.
+ * 채팅형 AI(claude.ai 등)에 붙여넣을 프롬프트 봉투(envelope).
  *
- * API 호출은 output_config.format으로 스키마를 강제하지만, 채팅 앱에는 그 장치가 없다.
- * 그래서 채팅용 프롬프트는 (1) 출력 형식을 앞뒤로 두 번 못 박고,
- * (2) 스키마 밖 키를 막고, (3) 결과를 어디에 붙여넣을지까지 알려준다.
- * Pro·Max 구독으로 API 크레딧 없이 시나리오를 만들 때 쓰는 경로.
+ * 스튜디오는 API 키를 쓰지 않는다. 모든 AI 기능은 "프롬프트를 복사해 쓰던 AI에 붙여넣고,
+ * 돌아온 결과를 다시 붙여넣는다"는 하나의 왕복으로 통일돼 있다.
+ * API 호출이라면 응답 스키마를 강제할 수 있지만 채팅창에는 그 장치가 없으므로,
+ * 봉투가 (1) 출력 형식을 앞뒤로 두 번 못 박고, (2) 스키마 밖 키를 막고,
+ * (3) 결과를 스튜디오 어디에 붙여넣을지까지 알려준다.
  */
 
 const JSON_RULES = [
@@ -32,25 +33,4 @@ export function wrapForChatApp(prompt, options = {}) {
   if (pasteTarget) tailLines.push(`(이 결과는 스튜디오의 "${pasteTarget}"에 붙여넣습니다.)`)
 
   return `${headLines.join('\n')}\n${prompt}\n${tailLines.join('\n')}`
-}
-
-/* 클립보드 복사 — 권한이 없거나 실패하면 false */
-export async function copyToClipboard(text) {
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text)
-      return true
-    }
-    const textarea = document.createElement('textarea')
-    textarea.value = text
-    textarea.style.position = 'fixed'
-    textarea.style.opacity = '0'
-    document.body.appendChild(textarea)
-    textarea.select()
-    document.execCommand('copy')
-    textarea.remove()
-    return true
-  } catch {
-    return false
-  }
 }

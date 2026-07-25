@@ -3,7 +3,6 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.115.0",
     "@neondatabase/serverless": "^0.10.4"
   }
 }

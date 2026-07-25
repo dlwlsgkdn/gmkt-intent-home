@@ -1,9 +1,4 @@
 {
   "buildCommand": null,
-  "outputDirectory": "docs",
-  "functions": {
-    "api/generate.js": {
-      "maxDuration": 300
-    }
-  }
+  "outputDirectory": "docs"
 }

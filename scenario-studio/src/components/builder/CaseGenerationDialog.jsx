@@ -10,20 +10,14 @@ import {
   comboSignature,
   expandCombinations,
   generationAxes,
-  GENERATION_RESPONSE_SCHEMA,
   parseCatalogText,
   templateFromCase,
   validateGenerationResponse,
-} from '../../lib/caseGeneration.js'
+} from '../../lib/prompt/planCases.js'
+import { wrapForChatApp } from '../../lib/prompt/chatPrompt.js'
 import { plainEvaluationText } from '../../lib/evaluation.js'
 import { uid } from '../../lib/store.js'
-import {
-  isLikelyAnthropicKey,
-  loadLlmApiKey,
-  requestCaseGeneration,
-  saveLlmApiKey,
-} from '../../lib/llmClient.js'
-import { copyToClipboard, wrapForChatApp } from '../../lib/chatPrompt.js'
+import PromptExchange from './PromptExchange.jsx'
 
 const personaFromProfile = (profile) => {
   const name = profile?.name ? `${profile.name}.` : ''
@@ -65,26 +59,18 @@ export default function CaseGenerationDialog({
   const [catalogText, setCatalogText] = useState(() => catalogToText(baseCatalog))
   const [notes, setNotes] = useState('')
   const [skipExisting, setSkipExisting] = useState(true)
-  const [manualMode, setManualMode] = useState(false)
-  const [apiKey, setApiKey] = useState(loadLlmApiKey)
 
-  const updateApiKey = (value) => {
-    setApiKey(value)
-    saveLlmApiKey(value)
-  }
-
-  const [phase, setPhase] = useState('setup') // setup | running | review
+  const [phase, setPhase] = useState('setup') // setup | exchange | review
   const [progress, setProgress] = useState({ done: 0, total: 0 })
   const [runErrors, setRunErrors] = useState([])
   const [runWarnings, setRunWarnings] = useState([])
   const [results, setResults] = useState([]) // [{ combo, generated }]
   const [selectedKeys, setSelectedKeys] = useState(new Set())
-  const cancelRef = React.useRef(false)
 
-  // 수동 모드(프롬프트 복사 → 응답 붙여넣기) 상태
-  const [manualBatches, setManualBatches] = useState([])
-  const [manualIndex, setManualIndex] = useState(0)
-  const [manualResponse, setManualResponse] = useState('')
+  /* 조합이 많으면 한 번에 다 만들기 어려우므로 배치로 나눠 프롬프트를 주고받는다 */
+  const [batches, setBatches] = useState([])
+  const [batchIndex, setBatchIndex] = useState(0)
+  const [answerText, setAnswerText] = useState('')
 
   const goldenCase = candidateCases.find((planCase) => planCase.id === goldenCaseId) || null
   const template = useMemo(() => (goldenCase ? templateFromCase(goldenCase) : null), [goldenCase])
@@ -129,6 +115,16 @@ export default function CaseGenerationDialog({
     notes,
   })
 
+  const activeBatch = batches[batchIndex] || []
+  const batchPrompt = useMemo(() => (
+    activeBatch.length > 0
+      ? wrapForChatApp(buildGenerationPrompt(requestForBatch(activeBatch)), {
+        json: true,
+        pasteTarget: '결과 가져오기',
+      })
+      : ''
+  ), [activeBatch, persona, notes, catalogText, template, selectedAxes])
+
   const collectBatchResult = (batch, validation) => {
     setRunWarnings((current) => [...current, ...validation.warnings])
     if (validation.errors.length > 0) {
@@ -146,73 +142,32 @@ export default function CaseGenerationDialog({
     })
   }
 
-  const startAuto = async () => {
-    cancelRef.current = false
-    const batches = chunk(combos, GENERATION_BATCH_SIZE)
-    setPhase('running')
+  const start = () => {
+    setPhase('exchange')
     setResults([])
     setSelectedKeys(new Set())
     setRunErrors([])
     setRunWarnings([])
+    setBatches(chunk(combos, GENERATION_BATCH_SIZE))
+    setBatchIndex(0)
+    setAnswerText('')
     setProgress({ done: 0, total: combos.length })
-
-    for (const batch of batches) {
-      if (cancelRef.current) break
-      try {
-        const request = requestForBatch(batch)
-        const payload = await requestCaseGeneration({
-          apiKey,
-          prompt: buildGenerationPrompt(request),
-          responseSchema: GENERATION_RESPONSE_SCHEMA,
-        })
-        collectBatchResult(batch, validateGenerationResponse(payload, request))
-      } catch (error) {
-        setRunErrors((current) => [...current, `${batch.map((c) => c.key).join(', ')}: ${error.message}`])
-      }
-      setProgress((current) => ({ ...current, done: Math.min(current.total, current.done + batch.length) }))
-    }
-    setPhase('review')
   }
 
-  const startManual = () => {
-    setPhase('running')
-    setResults([])
-    setSelectedKeys(new Set())
+  const submitAnswer = () => {
+    if (activeBatch.length === 0) return
     setRunErrors([])
-    setRunWarnings([])
-    const batches = chunk(combos, GENERATION_BATCH_SIZE)
-    setManualBatches(batches)
-    setManualIndex(0)
-    setManualResponse('')
-    setProgress({ done: 0, total: combos.length })
-  }
-
-  const copyManualPrompt = async () => {
-    const batch = manualBatches[manualIndex]
-    if (!batch) return
-    const prompt = wrapForChatApp(buildGenerationPrompt(requestForBatch(batch)), {
-      json: true,
-      pasteTarget: '아래 응답 붙여넣기 칸',
-    })
-    onToast(await copyToClipboard(prompt)
-      ? `배치 ${manualIndex + 1}/${manualBatches.length} 프롬프트를 복사했어요.`
-      : '복사하지 못했어요. 브라우저 권한을 확인해주세요.')
-  }
-
-  const submitManualResponse = () => {
-    const batch = manualBatches[manualIndex]
-    if (!batch) return
-    const request = requestForBatch(batch)
-    const validation = validateGenerationResponse(manualResponse, request)
+    const validation = validateGenerationResponse(answerText, requestForBatch(activeBatch))
     if (validation.cases.length === 0 && validation.errors.length > 0) {
+      setRunErrors(validation.errors)
       onToast(`응답 검증 실패: ${validation.errors[0]}`)
       return
     }
-    collectBatchResult(batch, validation)
-    setProgress((current) => ({ ...current, done: Math.min(current.total, current.done + batch.length) }))
-    setManualResponse('')
-    if (manualIndex + 1 >= manualBatches.length) setPhase('review')
-    else setManualIndex(manualIndex + 1)
+    collectBatchResult(activeBatch, validation)
+    setProgress((current) => ({ ...current, done: Math.min(current.total, current.done + activeBatch.length) }))
+    setAnswerText('')
+    if (batchIndex + 1 >= batches.length) setPhase('review')
+    else setBatchIndex(batchIndex + 1)
   }
 
   const toggleResult = (comboKey) => {
@@ -250,17 +205,30 @@ export default function CaseGenerationDialog({
 
   return (
     <div className="sb-llm-modal" role="presentation" onMouseDown={(event) => {
-      if (event.target === event.currentTarget && phase !== 'running') onClose()
+      if (event.target === event.currentTarget) onClose()
     }}>
       <section className="sb-llm-dialog sb-gen-dialog" role="dialog" aria-modal="true" aria-labelledby="sb-gen-title">
         <div className="sb-llm-dialog__head">
           <div>
-            <p className="sb-panel-label">PERSONA + CATALOG → LLM → DRAFT CASES</p>
-            <h2 id="sb-gen-title">계획 케이스 자동 생성</h2>
-            <p>골든 케이스의 레이아웃과 상품 카탈로그는 고정하고, LLM이 조합별 문구와 상품 선택만 채웁니다.</p>
+            <p className="sb-panel-label">골든 케이스 + 카탈로그 → 내 AI → 조합별 케이스</p>
+            <h2 id="sb-gen-title">계획 케이스 만들기</h2>
+            <p>골든 케이스의 레이아웃과 상품 카탈로그는 고정하고, AI는 조합별 문구와 상품 선택만 채웁니다.</p>
           </div>
           <button type="button" className="sb-icon-btn" onClick={onClose} aria-label="닫기">×</button>
         </div>
+
+        <ol className="sb-steps" aria-label="진행 단계">
+          <li className={'sb-steps__item' + (phase === 'setup' ? ' is-active' : ' is-done')}>
+            <b>1</b> 구조 · 조합
+          </li>
+          <li className={'sb-steps__item'
+            + (phase === 'exchange' ? ' is-active' : (phase === 'review' ? ' is-done' : ''))}>
+            <b>2</b> 프롬프트 · 결과
+          </li>
+          <li className={'sb-steps__item' + (phase === 'review' ? ' is-active' : '')}>
+            <b>3</b> 검토 · 추가
+          </li>
+        </ol>
 
         {phase === 'setup' && (
           <>
@@ -342,7 +310,7 @@ export default function CaseGenerationDialog({
                 </label>
               </div>
               <label className="sb-gen-field">
-                <span>상품 카탈로그 — 한 줄에 하나, "브랜드 | 상품명 | 가격 | 정가 | 특징". LLM은 이 목록에서 고르기만 합니다.</span>
+                <span>상품 카탈로그 — 한 줄에 하나, "브랜드 | 상품명 | 가격 | 정가 | 특징". AI는 이 목록에서 고르기만 합니다.</span>
                 <textarea
                   className="sb-gen-catalog"
                   rows={7}
@@ -354,48 +322,6 @@ export default function CaseGenerationDialog({
               </label>
             </section>
 
-            <section className="sb-llm-section">
-              <div className="sb-llm-section__head">
-                <div>
-                  <span>STEP 3</span>
-                  <strong>LLM 연결</strong>
-                </div>
-              </div>
-              <div className="sb-gen-keyrow">
-                <label className="sb-gen-field">
-                  <span>내 Anthropic API 키</span>
-                  <input
-                    type="password"
-                    value={apiKey}
-                    onChange={(event) => updateApiKey(event.target.value)}
-                    placeholder="sk-ant-…"
-                    autoComplete="off"
-                    spellCheck={false}
-                    aria-label="Anthropic API 키"
-                  />
-                  <small>
-                    이 브라우저(localStorage)에만 저장되고 Anthropic API로 직접 전송됩니다. 스튜디오 서버로는 보내지 않아요.
-                    {' '}비우면 저장된 키도 삭제됩니다.
-                  </small>
-                </label>
-                <div className="sb-gen-keystate">
-                  {apiKey.trim()
-                    ? (isLikelyAnthropicKey(apiKey)
-                      ? <p className="sb-gen-keystate--ok">✓ 키 입력됨 — 브라우저에서 직접 생성합니다.</p>
-                      : <p className="sb-llm-error">Anthropic API 키는 보통 sk-ant-로 시작해요. 키를 다시 확인해주세요.</p>)
-                    : <p>키가 없으면 서버 프록시(운영자 키)로 시도하고, 그것도 없으면 아래 Claude 앱 모드를 사용하세요.</p>}
-                </div>
-              </div>
-              <label className="sb-gen-skip">
-                <input
-                  type="checkbox"
-                  checked={manualMode}
-                  onChange={(event) => setManualMode(event.target.checked)}
-                />
-                Claude 앱으로 만들기 — API 키·크레딧 없이 Pro·Max 구독으로 진행
-              </label>
-            </section>
-
             {setupProblems.length > 0 && (
               <div className="sb-llm-validation__errors sb-gen-problems">
                 {setupProblems.map((problem, index) => <p key={index}>{problem}</p>)}
@@ -404,8 +330,8 @@ export default function CaseGenerationDialog({
 
             <div className="sb-llm-dialog__foot">
               <p>
+                조합 {combos.length}개를 {GENERATION_BATCH_SIZE}개씩 나눠 프롬프트로 주고받습니다.
                 생성된 케이스는 초안으로 추가되며, 평가 탭에서 검수한 뒤 발행하세요.
-                영상 등 외부 콘텐츠는 골든 케이스 것이 복제됩니다.
               </p>
               <div>
                 <button type="button" className="sb-btn sb-btn--ghost" onClick={onClose}>취소</button>
@@ -413,65 +339,46 @@ export default function CaseGenerationDialog({
                   type="button"
                   className="sb-btn sb-btn--primary"
                   disabled={setupProblems.length > 0}
-                  onClick={manualMode ? startManual : startAuto}
+                  onClick={start}
                 >
-                  {combos.length}개 조합 생성 시작
+                  프롬프트 만들기
                 </button>
               </div>
             </div>
           </>
         )}
 
-        {phase === 'running' && !manualMode && (
-          <section className="sb-llm-section sb-gen-progress">
-            <div className="sb-llm-section__head">
+        {phase === 'exchange' && (
+          <>
+            <div className="sb-batch-bar">
               <div>
-                <span>GENERATING</span>
-                <strong>LLM이 케이스를 생성하고 있어요</strong>
+                <strong>배치 {batchIndex + 1} / {batches.length}</strong>
+                <small>{activeBatch.map((combo) => combo.key).join(' · ')}</small>
+              </div>
+              <div className="sb-batch-bar__meter" aria-hidden="true">
+                <i style={{ width: `${progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0}%` }} />
               </div>
               <span>{progress.done} / {progress.total} 조합</span>
             </div>
-            <div className="sb-gen-progress__bar">
-              <i style={{ width: `${progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0}%` }} />
-            </div>
-            <p className="sb-llm-help">
-              {GENERATION_BATCH_SIZE}개 조합씩 요청합니다. 완료된 배치의 결과는 아래에 쌓이고, 중단해도 이미 생성된 케이스는 검토·적용할 수 있어요.
-            </p>
-            {results.length > 0 && <p className="sb-llm-summary">지금까지 {results.length}개 케이스 생성됨</p>}
-            {runErrors.map((error, index) => <p key={index} className="sb-llm-error">{error}</p>)}
-            <div className="sb-llm-dialog__foot">
-              <p />
-              <div>
-                <button type="button" className="sb-btn" onClick={() => { cancelRef.current = true }}>
-                  현재 배치까지만 하고 중단
-                </button>
-              </div>
-            </div>
-          </section>
-        )}
 
-        {phase === 'running' && manualMode && (
-          <section className="sb-llm-section">
-            <div className="sb-llm-section__head">
-              <div>
-                <span>MANUAL BATCH {manualIndex + 1} / {manualBatches.length}</span>
-                <strong>{(manualBatches[manualIndex] || []).map((combo) => combo.key).join(' · ')}</strong>
-              </div>
-              <button type="button" className="sb-btn sb-btn--primary" onClick={copyManualPrompt}>
-                Claude 앱용 프롬프트 복사
-              </button>
-            </div>
-            <p className="sb-llm-help">복사한 프롬프트를 사용하는 LLM에 붙여넣고, 반환된 JSON을 아래에 붙여넣으세요.</p>
-            <textarea
-              className="sb-llm-response"
+            <PromptExchange
+              title="이 배치의 프롬프트"
+              hint="복사한 프롬프트를 쓰던 AI에 붙여넣고, 돌아온 JSON을 아래에 붙여넣으세요. 검증에 성공하면 다음 배치로 넘어갑니다."
+              prompt={batchPrompt}
+              onCopied={(ok) => onToast(ok
+                ? `배치 ${batchIndex + 1}/${batches.length} 프롬프트를 복사했어요.`
+                : '복사하지 못했어요. 프롬프트를 펼쳐 직접 복사해주세요.')}
+              answerText={answerText}
+              answerPlaceholder={'{"cases":[...]} JSON을 붙여넣으세요.'}
+              onAnswerChange={setAnswerText}
               rows={8}
-              value={manualResponse}
-              onChange={(event) => setManualResponse(event.target.value)}
-              placeholder={'{"cases":[...]} JSON을 붙여넣으세요.'}
             />
+
             {runErrors.map((error, index) => <p key={index} className="sb-llm-error">{error}</p>)}
+            {results.length > 0 && <p className="sb-llm-summary">지금까지 {results.length}개 케이스 생성됨</p>}
+
             <div className="sb-llm-dialog__foot">
-              <p>{progress.done} / {progress.total} 조합 완료</p>
+              <p>중간에 그만둬도 이미 검증된 케이스는 검토·적용할 수 있어요.</p>
               <div>
                 <button type="button" className="sb-btn sb-btn--ghost" onClick={() => setPhase('review')}>
                   여기까지만 검토
@@ -479,14 +386,14 @@ export default function CaseGenerationDialog({
                 <button
                   type="button"
                   className="sb-btn sb-btn--primary"
-                  disabled={!manualResponse.trim()}
-                  onClick={submitManualResponse}
+                  disabled={!answerText.trim()}
+                  onClick={submitAnswer}
                 >
-                  응답 검증 · 다음 배치
+                  {batchIndex + 1 >= batches.length ? '응답 검증 · 검토로' : '응답 검증 · 다음 배치'}
                 </button>
               </div>
             </div>
-          </section>
+          </>
         )}
 
         {phase === 'review' && (

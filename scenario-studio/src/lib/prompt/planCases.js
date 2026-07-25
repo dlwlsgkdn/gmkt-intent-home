@@ -1,5 +1,6 @@
-import { createPlanCase, uid } from './store.js'
-import { plainEvaluationText } from './evaluation.js'
+import { createPlanCase, uid } from '../store.js'
+import { plainEvaluationText } from '../evaluation.js'
+import { parseJsonAnswer } from './jsonAnswer.js'
 
 /*
  * 계획 케이스 자동 생성 파이프라인.
@@ -295,7 +296,10 @@ export function buildGenerationPrompt(request) {
     '5. 문체·길이·구성은 goldenExample을 따르되, 조합마다 조합의 답변이 드러나게 표현을 달리합니다. 케이스 간에 같은 문장을 복사하지 않습니다.',
     '6. goldenExample에 {{옵션|텍스트}} 또는 [[키워드]] 마크업이 있으면 같은 방식으로 활용해도 좋습니다(필수 아님).',
     '7. persona와 scenario.query의 검색 의도를 반영해 한국어로 작성합니다.',
-    '8. 설명 없이 JSON 하나만 출력합니다.',
+    '8. 설명 없이 아래 스키마의 JSON 하나만 출력합니다.',
+    '',
+    '출력 스키마:',
+    JSON.stringify(GENERATION_RESPONSE_SCHEMA, null, 2),
     '',
     '입력 데이터:',
     JSON.stringify(request, null, 2),
@@ -304,19 +308,10 @@ export function buildGenerationPrompt(request) {
 
 /* ── 응답 검증 ─────────────────────────────────────────────────────── */
 
-const stripCodeFence = (value) => {
-  const text = String(value || '').trim()
-  const fenced = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i)
-  if (fenced) return fenced[1].trim()
-  const start = text.indexOf('{')
-  const end = text.lastIndexOf('}')
-  return start >= 0 && end > start ? text.slice(start, end + 1) : text
-}
-
 export function validateGenerationResponse(raw, request) {
   let payload
   try {
-    payload = typeof raw === 'string' ? JSON.parse(stripCodeFence(raw)) : raw
+    payload = parseJsonAnswer(raw)
     if (payload && typeof payload.output_text === 'string') payload = JSON.parse(stripCodeFence(payload.output_text))
   } catch (error) {
     return { cases: [], errors: [`JSON 해석 실패: ${error.message}`], warnings: [] }

@@ -24,7 +24,7 @@ import {
   recommendSignificantCaseIds,
   remapCaseEvaluation,
 } from '../lib/evaluation.js'
-import { applyLlmRevisionsToPlanCases } from '../lib/llmRevision.js'
+import { applyLlmRevisionsToPlanCases } from '../lib/prompt/revision.js'
 
 const SNAP = 6
 /* 드래그 겹침 회피 둔화 — 지속시간 게이트:
@@ -2185,9 +2185,9 @@ export default function Builder({ api, scenario }) {
               className="sb-btn sb-btn--small sb-plan-case-generate"
               disabled={previewMode}
               onClick={() => setCaseGenOpen(true)}
-              title="페르소나·검색어·상품 카탈로그로 조합별 케이스를 LLM이 생성"
+              title="페르소나·상품 카탈로그로 조합별 케이스를 만드는 프롬프트를 생성"
             >
-              ✦ 자동 생성
+              ✦ 케이스 만들기
             </button>
             <Dropdown
               open={openMenu === 'case'}
