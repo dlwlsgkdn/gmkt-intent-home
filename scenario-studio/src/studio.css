@@ -4728,3 +4728,12 @@ button.sb-info-chip:hover { border-color: #94a3b8; background: #f8fafc; }
 @media (max-width: 640px) {
   .sb-sgen-preview { grid-template-columns: 1fr; }
 }
+
+/* 웹에서 상품 찾기 버튼 */
+.sb-btn--search {
+  color: #7c3aed;
+  border-color: rgba(124, 58, 237, 0.35);
+  font-size: 10.5px;
+}
+.sb-btn--search:hover:not(:disabled) { background: rgba(124, 58, 237, 0.08); }
+.sb-btn--search:disabled { opacity: 0.45; cursor: not-allowed; }

@@ -75,11 +75,61 @@ export async function requestCaseGeneration({ apiKey, prompt, responseSchema, ef
     return { output_text: textFromContent(data.content), model: data.model, usage: data.usage }
   }
 
-  // 키 미입력 → 서버 프록시 폴백
+  return proxyRequest({ prompt, responseSchema, effort })
+}
+
+/*
+ * 웹 검색(서버 도구)을 켠 호출 — 구조화 출력 대신 텍스트를 그대로 받는다.
+ * 서버 도구는 Anthropic 쪽에서 실행되며, 검색 루프가 길어지면 stop_reason='pause_turn'으로
+ * 끊기므로 assistant 응답을 되돌려 보내 이어서 진행한다.
+ */
+export async function requestWebSearch({ apiKey, prompt, maxSearches = 6, maxContinuations = 4 }) {
+  const key = String(apiKey || '').trim()
+  if (!key) {
+    const payload = await proxyRequest({ prompt, webSearch: true, maxSearches })
+    return payload.output_text || ''
+  }
+
+  const messages = [{ role: 'user', content: prompt }]
+  let text = ''
+  for (let turn = 0; turn <= maxContinuations; turn++) {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-opus-5',
+        max_tokens: 8000,
+        output_config: { effort: 'medium' },
+        tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: maxSearches }],
+        messages,
+      }),
+    })
+    const data = await response.json().catch(() => null)
+    if (!response.ok) {
+      const message = data?.error?.message || `HTTP ${response.status}`
+      if (response.status === 401) throw new Error(`API 키가 유효하지 않아요. (${message})`)
+      if (response.status === 429) throw new Error(`요청 한도에 걸렸어요. 잠시 후 다시 시도해주세요. (${message})`)
+      throw new Error(`Anthropic API 오류: ${message}`)
+    }
+    if (data.stop_reason === 'refusal') throw new Error('모델이 검색 요청을 거절했어요.')
+    text += textFromContent(data.content)
+    if (data.stop_reason !== 'pause_turn') return text
+    // 서버 도구 루프가 일시 정지됨 — 응답을 그대로 돌려보내 이어서 실행
+    messages.push({ role: 'assistant', content: data.content })
+  }
+  return text
+}
+
+async function proxyRequest(body) {
   const response = await fetch('/api/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, responseSchema, effort }),
+    body: JSON.stringify(body),
   })
   const rawText = await response.text()
   let payload = null

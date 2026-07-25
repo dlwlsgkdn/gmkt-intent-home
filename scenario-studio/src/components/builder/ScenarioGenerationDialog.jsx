@@ -15,8 +15,15 @@ import {
   isLikelyAnthropicKey,
   loadLlmApiKey,
   requestCaseGeneration,
+  requestWebSearch,
   saveLlmApiKey,
 } from '../../lib/llmClient.js'
+import {
+  DEFAULT_SEARCH_COUNT,
+  buildProductSearchPrompt,
+  mergeCatalogText,
+  parseProductSearchResult,
+} from '../../lib/productSearch.js'
 
 const personaFromProfile = (profile) => {
   const name = profile?.name ? `${profile.name}.` : ''
@@ -43,6 +50,8 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onClose, o
   const [phase, setPhase] = useState('setup') // setup | running | review
   const [result, setResult] = useState(null) // { draft, warnings }
   const [errors, setErrors] = useState([])
+  const [searching, setSearching] = useState(false)
+  const [searchNote, setSearchNote] = useState('')
 
   const { entries: catalog, errors: catalogErrors } = useMemo(
     () => parseCatalogText(catalogText, []),
@@ -84,6 +93,35 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onClose, o
     } catch (error) {
       setErrors([error.message])
       setPhase('setup')
+    }
+  }
+
+  const searchProducts = async () => {
+    setSearching(true)
+    setSearchNote('')
+    setErrors([])
+    try {
+      const text = await requestWebSearch({
+        apiKey,
+        prompt: buildProductSearchPrompt({ query, persona, notes, count: DEFAULT_SEARCH_COUNT }),
+        maxSearches: DEFAULT_SEARCH_COUNT,
+      })
+      const rows = parseProductSearchResult(text)
+      if (rows.length === 0) {
+        setSearchNote('검색 결과에서 상품 줄을 찾지 못했어요. 검색어를 더 구체적으로 바꿔보세요.')
+        return
+      }
+      const merged = mergeCatalogText(catalogText, rows)
+      setCatalogText(merged.text)
+      setSearchNote(
+        `상품 ${merged.addedCount}개를 추가했어요`
+        + (merged.skipped > 0 ? ` (중복 ${merged.skipped}개 제외)` : '')
+        + '. 가격은 검색 시점 기준이라 정확하지 않을 수 있으니 확인 후 수정하세요.'
+      )
+    } catch (error) {
+      setErrors([`상품 검색 실패: ${error.message}`])
+    } finally {
+      setSearching(false)
     }
   }
 
@@ -174,7 +212,15 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onClose, o
                   <span>STEP 2</span>
                   <strong>추천 상품 · 구성</strong>
                 </div>
-                <span>{catalog.length > 0 ? `${catalog.length}개 상품` : '상품 없이 진행'}</span>
+                <button
+                  type="button"
+                  className="sb-btn sb-btn--search"
+                  disabled={searching || !query.trim()}
+                  title={query.trim() ? '검색어에 맞는 실제 상품을 웹에서 찾아 카탈로그에 채웁니다' : '검색어를 먼저 입력해주세요'}
+                  onClick={searchProducts}
+                >
+                  {searching ? '검색 중…' : '✦ 웹에서 상품 찾기'}
+                </button>
               </div>
               <label className="sb-gen-field">
                 <span>
@@ -189,9 +235,9 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onClose, o
                   onChange={(event) => setCatalogText(event.target.value)}
                 />
                 <small>
-                  {catalog.length > 0
-                    ? '각 계획 단계에 이 상품들이 배치됩니다.'
-                    : '비워두면 상품을 지어내지 않고, 각 단계에 "어떤 상품을 넣을 자리인지" 안내만 남깁니다. 나중에 빌더에서 상품 카드를 배치하세요.'}
+                  {searchNote || (catalog.length > 0
+                    ? `${catalog.length}개 상품 인식됨 — 각 계획 단계에 배치됩니다.`
+                    : '비워두면 상품을 지어내지 않고, 각 단계에 "어떤 상품을 넣을 자리인지" 안내만 남깁니다. 위 버튼으로 웹에서 찾아올 수도 있어요.')}
                 </small>
               </label>
               <div className="sb-gen-grid">

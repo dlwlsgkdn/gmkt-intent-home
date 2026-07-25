@@ -5,6 +5,29 @@ import Anthropic from '@anthropic-ai/sdk'
 
 const EFFORTS = new Set(['low', 'medium', 'high'])
 
+const textFrom = (content) =>
+  (content || []).filter((block) => block.type === 'text').map((block) => block.text).join('')
+
+/* 웹 검색 서버 도구는 검색 루프가 길어지면 pause_turn으로 끊긴다 — 응답을 되돌려 보내 이어간다 */
+async function runWebSearch(client, prompt, maxSearches) {
+  const messages = [{ role: 'user', content: prompt }]
+  let text = ''
+  for (let turn = 0; turn <= 4; turn++) {
+    const response = await client.messages.create({
+      model: 'claude-opus-5',
+      max_tokens: 8000,
+      output_config: { effort: 'medium' },
+      tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: maxSearches }],
+      messages,
+    })
+    if (response.stop_reason === 'refusal') throw new Error('모델이 검색 요청을 거절했어요.')
+    text += textFrom(response.content)
+    if (response.stop_reason !== 'pause_turn') return text
+    messages.push({ role: 'assistant', content: response.content })
+  }
+  return text
+}
+
 export default async function handler(req, res) {
   // GitHub Pages 등 다른 오리진에서도 같은 함수를 쓸 수 있게 CORS 허용 (state.js와 동일 정책)
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -26,7 +49,7 @@ export default async function handler(req, res) {
     return
   }
 
-  const { prompt, responseSchema, effort } = req.body || {}
+  const { prompt, responseSchema, effort, webSearch, maxSearches } = req.body || {}
   if (typeof prompt !== 'string' || !prompt.trim()) {
     res.status(400).json({ error: 'prompt가 필요해요.' })
     return
@@ -34,6 +57,13 @@ export default async function handler(req, res) {
 
   try {
     const client = new Anthropic()
+
+    if (webSearch) {
+      const text = await runWebSearch(client, prompt, Number(maxSearches) || 6)
+      res.status(200).json({ output_text: text })
+      return
+    }
+
     const outputConfig = { effort: EFFORTS.has(effort) ? effort : 'low' }
     if (responseSchema && typeof responseSchema === 'object') {
       outputConfig.format = { type: 'json_schema', schema: responseSchema }
