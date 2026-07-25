@@ -409,6 +409,7 @@ export default function HomeView({ api }) {
         <ScenarioGenerationDialog
           profile={api.profile}
           onCreate={(partial) => api.newScenarioFrom(partial)}
+          onImport={(scenarios) => api.importScenarios(scenarios)}
           onClose={() => setScenarioGenOpen(false)}
           onToast={api.showToast}
         />

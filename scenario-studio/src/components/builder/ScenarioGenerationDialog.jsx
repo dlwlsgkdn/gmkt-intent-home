@@ -25,6 +25,7 @@ import {
   parseProductSearchResult,
 } from '../../lib/productSearch.js'
 import { copyToClipboard, wrapForChatApp } from '../../lib/chatPrompt.js'
+import { buildScenarioDbPrompt, parseScenarioDbJson } from '../../lib/scenarioJsonPrompt.js'
 
 const personaFromProfile = (profile) => {
   const name = profile?.name ? `${profile.name}.` : ''
@@ -37,7 +38,7 @@ const CATALOG_PLACEHOLDER = [
   '예) 클리오 | 킬커버 픽서 쿠션 | 22,900 | 32,000 | 밀착력 좋은 픽서 타입으로 밀림 최소화',
 ].join('\n')
 
-export default function ScenarioGenerationDialog({ profile, onCreate, onClose, onToast }) {
+export default function ScenarioGenerationDialog({ profile, onCreate, onImport, onClose, onToast }) {
   const [query, setQuery] = useState('')
   const [persona, setPersona] = useState(() => personaFromProfile(profile))
   const [catalogText, setCatalogText] = useState('')
@@ -53,6 +54,10 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onClose, o
   const [errors, setErrors] = useState([])
   const [searching, setSearching] = useState(false)
   const [searchNote, setSearchNote] = useState('')
+  /* DB JSON 프롬프트 경로 상태 */
+  const [caseCount, setCaseCount] = useState(3)
+  const [importText, setImportText] = useState('')
+  const [importResult, setImportResult] = useState(null)
 
   const { entries: catalog, errors: catalogErrors } = useMemo(
     () => parseCatalogText(catalogText, []),
@@ -156,6 +161,34 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onClose, o
     setResult(validation)
     setErrors([])
     setPhase('review')
+  }
+
+  /* DB JSON을 통째로 만들어 달라는 프롬프트 — 레지스트리 기반이라 컴포넌트가 늘면 함께 갱신된다 */
+  const dbPrompt = useMemo(
+    () => buildScenarioDbPrompt({ query, persona, notes, catalogText, questionCount, stepCount, caseCount }),
+    [query, persona, notes, catalogText, questionCount, stepCount, caseCount]
+  )
+
+  const copyDbPrompt = async () => {
+    onToast(await copyToClipboard(dbPrompt)
+      ? 'AI 프롬프트를 복사했어요. Claude 앱에 붙여넣고 결과 JSON을 받아오세요.'
+      : '복사하지 못했어요. 프롬프트 칸에서 직접 복사해주세요.')
+  }
+
+  const verifyImport = () => {
+    const parsed = parseScenarioDbJson(importText)
+    setImportResult(parsed)
+    if (parsed.errors.length > 0) onToast(`가져오기 검증에서 ${parsed.errors.length}개 문제를 찾았어요.`)
+  }
+
+  const runImport = () => {
+    const parsed = importResult || parseScenarioDbJson(importText)
+    if (parsed.errors.length > 0 || parsed.scenarios.length === 0) {
+      setImportResult(parsed)
+      return
+    }
+    onImport(parsed.scenarios)
+    onClose()
   }
 
   const createScenario = () => {
@@ -350,6 +383,15 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onClose, o
               <p>생성 결과는 미리 확인한 뒤 시나리오로 만듭니다. 만든 뒤에는 빌더에서 자유롭게 수정할 수 있어요.</p>
               <div>
                 <button type="button" className="sb-btn sb-btn--ghost" onClick={onClose}>취소</button>
+                <button
+                  type="button"
+                  className="sb-btn"
+                  disabled={!query.trim()}
+                  title="시나리오 DB JSON을 통째로 만들어 달라는 프롬프트를 생성합니다. 결과는 붙여넣어 가져옵니다."
+                  onClick={() => setPhase('prompt')}
+                >
+                  ✦ AI 프롬프트 생성
+                </button>
                 {manualMode ? (
                   <button
                     type="button"
@@ -369,6 +411,100 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onClose, o
                     시나리오 생성
                   </button>
                 )}
+              </div>
+            </div>
+          </>
+        )}
+
+        {phase === 'prompt' && (
+          <>
+            <section className="sb-llm-section">
+              <div className="sb-llm-section__head">
+                <div>
+                  <span>STEP A</span>
+                  <strong>AI 프롬프트 복사</strong>
+                </div>
+                <button type="button" className="sb-btn sb-btn--primary" onClick={copyDbPrompt}>
+                  프롬프트 복사
+                </button>
+              </div>
+              <p className="sb-llm-help">
+                시나리오 <b>DB JSON 전체</b>(설문 화면 + 계획 케이스들)를 만들어 달라는 프롬프트입니다.
+                사용 가능한 컴포넌트 목록과 배치·조건 규칙이 함께 들어갑니다.
+                Claude 앱에 붙여넣고 받은 JSON을 아래에 넣으세요.
+              </p>
+              <label className="sb-gen-field sb-gen-casecount">
+                <span>만들 계획 케이스 수</span>
+                <select value={caseCount} onChange={(event) => setCaseCount(Number(event.target.value))}>
+                  {[2, 3, 4, 5, 6, 8].map((count) => (
+                    <option key={count} value={count}>{count}개 + 기본 케이스</option>
+                  ))}
+                </select>
+              </label>
+              <details className="sb-llm-details">
+                <summary>프롬프트 펼쳐보기 ({dbPrompt.length.toLocaleString()}자)</summary>
+                <textarea readOnly rows={12} value={dbPrompt} aria-label="AI 프롬프트" />
+              </details>
+            </section>
+
+            <section className="sb-llm-section">
+              <div className="sb-llm-section__head">
+                <div>
+                  <span>STEP B</span>
+                  <strong>결과 JSON 붙여넣기</strong>
+                </div>
+                <button
+                  type="button"
+                  className="sb-btn"
+                  disabled={!importText.trim()}
+                  onClick={verifyImport}
+                >
+                  검증
+                </button>
+              </div>
+              <textarea
+                className="sb-llm-response"
+                rows={8}
+                value={importText}
+                placeholder={'AI가 만든 [{ "title": …, "stages": …, "planCases": … }] JSON을 붙여넣으세요.'}
+                onChange={(event) => {
+                  setImportText(event.target.value)
+                  setImportResult(null)
+                }}
+              />
+              {importResult && (
+                <div className="sb-llm-validation">
+                  {importResult.errors.length > 0 && (
+                    <div className="sb-llm-validation__errors">
+                      <strong>가져올 수 없음</strong>
+                      {importResult.errors.map((error, index) => <p key={index}>{error}</p>)}
+                    </div>
+                  )}
+                  {importResult.warnings.slice(0, 8).map((warning, index) => (
+                    <p key={index} className="sb-llm-warning">{warning}</p>
+                  ))}
+                  {importResult.errors.length === 0 && (
+                    <div className="sb-llm-validation__ok">
+                      <strong>✓ 시나리오 {importResult.scenarios.length}개를 가져올 수 있어요</strong>
+                      <span>가져오면 홈 목록에 추가됩니다.</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+
+            <div className="sb-llm-dialog__foot">
+              <p>가져온 뒤에는 빌더에서 자유롭게 수정할 수 있고, 배치가 어긋나면 상단 "자동 정렬"로 정리하세요.</p>
+              <div>
+                <button type="button" className="sb-btn sb-btn--ghost" onClick={() => setPhase('setup')}>설정으로</button>
+                <button
+                  type="button"
+                  className="sb-btn sb-btn--primary"
+                  disabled={!importText.trim() || (importResult ? importResult.errors.length > 0 : false)}
+                  onClick={runImport}
+                >
+                  가져오기
+                </button>
               </div>
             </div>
           </>
