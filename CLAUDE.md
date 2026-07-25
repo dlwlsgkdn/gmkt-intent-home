@@ -25,6 +25,8 @@ cd scenario-studio && npm run build   # vite build && cp -R ../legacy ../docs/le
 ```
 개발 서버: `.claude/launch.json`의 `scenario-studio` (포트 5173), 정적 검증용 `pages-static` (포트 8899, 저장소 루트 서빙).
 
+**데이터 프로필** (`lib/remote.js`): 개발 서버 = `local`(localStorage 전용, 서버 동기화 없음), 빌드 산출물 = `prod`(localStorage + Neon DB 미러링). 로컬에서 운영 DB에 붙으려면 `VITE_DATA_PROFILE=prod npm run dev`. 콘솔 `[remote] 데이터 프로필:` 로그로 확인.
+
 ## 아키텍처 (scenario-studio/src)
 
 - `App.jsx` — 라우팅(home/builder/player/explore-editor + 공유 링크 모드), **계정(프로필별 워크스페이스) 상태** + localStorage 저장. 활성 계정에서 scenarios/explore/profile/threads를 파생하고, 시나리오 CRUD·복제·순서변경·가져오기/내보내기·계정 전환/추가/삭제·쓰레드 기록 API 제공

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { createScenario, normalizeScenario, uid, loadKeywords, saveKeywords, loadViewerDevice, saveViewerDevice, loadAccounts, saveAccounts, createAccount, createDataBackup, parseDataBackup, normalizeAccountsState, DEFAULT_KEYWORDS } from './lib/store.js'
-import { fetchRemoteState, saveRemoteState } from './lib/remote.js'
+import { REMOTE_ENABLED, fetchRemoteState, saveRemoteState } from './lib/remote.js'
 import { readShareFromHash, clearShareHash } from './lib/share.js'
 import HomeView from './components/HomeView.jsx'
 import Builder from './components/Builder.jsx'
@@ -57,6 +57,7 @@ export default function App() {
         (a) =>
           (a.scenarios || []).some((s) => !isDefaultScenario(s)) || (a.threads || []).length > 0
       )
+    if (!REMOTE_ENABLED) return undefined // local 프로필: 서버 하이드레이션 없이 localStorage만 사용
     let cancelled = false
     fetchRemoteState()
       .then((state) => {
