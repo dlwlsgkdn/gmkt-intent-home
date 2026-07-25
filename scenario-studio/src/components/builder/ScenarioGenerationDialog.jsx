@@ -24,6 +24,7 @@ import {
   mergeCatalogText,
   parseProductSearchResult,
 } from '../../lib/productSearch.js'
+import { copyToClipboard, wrapForChatApp } from '../../lib/chatPrompt.js'
 
 const personaFromProfile = (profile) => {
   const name = profile?.name ? `${profile.name}.` : ''
@@ -126,12 +127,24 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onClose, o
   }
 
   const copyPrompt = async () => {
-    try {
-      await navigator.clipboard.writeText(buildScenarioPrompt(request))
-      onToast('시나리오 생성 프롬프트를 복사했어요.')
-    } catch {
-      onToast('복사하지 못했어요. 브라우저 권한을 확인해주세요.')
-    }
+    const prompt = wrapForChatApp(buildScenarioPrompt(request), {
+      json: true,
+      pasteTarget: '아래 응답 붙여넣기 칸',
+    })
+    onToast(await copyToClipboard(prompt)
+      ? 'Claude 앱용 시나리오 생성 프롬프트를 복사했어요.'
+      : '복사하지 못했어요. 브라우저 권한을 확인해주세요.')
+  }
+
+  /* 웹 검색도 구독으로 돌릴 수 있게 — claude.ai에 붙여넣을 검색 프롬프트 */
+  const copySearchPrompt = async () => {
+    const prompt = wrapForChatApp(
+      buildProductSearchPrompt({ query, persona, notes, count: DEFAULT_SEARCH_COUNT }),
+      { json: false, webSearch: true, pasteTarget: '추천할 상품 입력란' }
+    )
+    onToast(await copyToClipboard(prompt)
+      ? 'Claude 앱용 상품 검색 프롬프트를 복사했어요. 결과를 상품 입력란에 붙여넣으세요.'
+      : '복사하지 못했어요. 브라우저 권한을 확인해주세요.')
   }
 
   const submitManual = () => {
@@ -212,15 +225,26 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onClose, o
                   <span>STEP 2</span>
                   <strong>추천 상품 · 구성</strong>
                 </div>
-                <button
-                  type="button"
-                  className="sb-btn sb-btn--search"
-                  disabled={searching || !query.trim()}
-                  title={query.trim() ? '검색어에 맞는 실제 상품을 웹에서 찾아 카탈로그에 채웁니다' : '검색어를 먼저 입력해주세요'}
-                  onClick={searchProducts}
-                >
-                  {searching ? '검색 중…' : '✦ 웹에서 상품 찾기'}
-                </button>
+                <div className="sb-gen-headbtns">
+                  <button
+                    type="button"
+                    className="sb-btn sb-btn--search"
+                    disabled={searching || !query.trim()}
+                    title={query.trim() ? '검색어에 맞는 실제 상품을 웹에서 찾아 카탈로그에 채웁니다 (API 크레딧 사용)' : '검색어를 먼저 입력해주세요'}
+                    onClick={searchProducts}
+                  >
+                    {searching ? '검색 중…' : '✦ 웹에서 상품 찾기'}
+                  </button>
+                  <button
+                    type="button"
+                    className="sb-btn sb-btn--ghost sb-btn--tiny"
+                    disabled={!query.trim()}
+                    title="Claude 앱(Pro·Max 구독)에 붙여넣을 검색 프롬프트를 복사합니다"
+                    onClick={copySearchPrompt}
+                  >
+                    Claude 앱용 프롬프트
+                  </button>
+                </div>
               </div>
               <label className="sb-gen-field">
                 <span>
@@ -292,13 +316,17 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onClose, o
                   checked={manualMode}
                   onChange={(event) => setManualMode(event.target.checked)}
                 />
-                수동 모드 — API 키 없이 프롬프트 복사 → LLM 응답 붙여넣기로 진행
+                Claude 앱으로 만들기 — API 키·크레딧 없이 Pro·Max 구독으로 진행
               </label>
 
               {manualMode && (
                 <div className="sb-gen-manual">
+                  <p className="sb-llm-help">
+                    프롬프트를 복사해 <b>claude.ai</b>에 붙여넣고, 돌아온 JSON을 아래에 붙여넣으세요.
+                    스키마와 출력 형식이 프롬프트에 함께 들어갑니다.
+                  </p>
                   <button type="button" className="sb-btn" disabled={problems.length > 0} onClick={copyPrompt}>
-                    프롬프트 복사
+                    Claude 앱용 프롬프트 복사
                   </button>
                   <textarea
                     className="sb-llm-response"

@@ -37,6 +37,7 @@ cd scenario-studio && npm run build   # vite build && cp -R ../legacy ../docs/le
 - `lib/richtext.jsx` — 인라인 리치텍스트 엔진: `{{옵션|텍스트}}`/`[[키워드]]` 마크업 ↔ contentEditable 변환, 서식 적용/병합, InlineEditor, FONT_OPTIONS/TEXT_COLORS
 - `lib/templates.js` — 새 시나리오 템플릿 (빈/뷰티 브리프/선물 추천)
 - `lib/scenarioGeneration.js` — **시나리오 전체 자동 생성**: 검색어·페르소나·상품 카탈로그 → 설문 화면 + 골든 계획 케이스 1개. 레이아웃은 코드가 소유한 스캐폴드 상수(좌표·컨테이너 중첩), LLM은 텍스트와 상품 배치만. UI는 `components/builder/ScenarioGenerationDialog.jsx`(홈 드로어 "✦ AI로 시나리오 만들기"), 등록은 `App.newScenarioFrom`
+- `lib/chatPrompt.js` — **Claude 앱(구독) 경로**: `wrapForChatApp()`이 API용 프롬프트에 채팅 앱용 출력 규칙(코드블록 하나·스키마 밖 키 금지·붙여넣을 위치)을 덧댄다. 두 생성 다이얼로그의 "Claude 앱으로 만들기" 체크와 상품 검색 프롬프트 복사가 공유. API 크레딧 없이 Pro·Max 구독으로 전 구간 진행 가능
 - `lib/productSearch.js` — **웹 검색 상품 수집**: 검색 프롬프트 + 출력 파싱(마크다운 표·번호·불릿 제거) + 카탈로그 병합(상품명 중복 제거). 호출은 `llmClient.requestWebSearch`(web_search 서버 도구, `pause_turn` 이어받기), 서버 경로는 `api/generate.js`의 `webSearch` 플래그
 - `lib/caseGeneration.js` — **계획 케이스 자동 생성**: 설문 축 데카르트 곱 전개, 골든 케이스 슬롯 추출(사실 필드 제외), 상품 카탈로그 파싱, LLM 프롬프트/스키마/검증, 케이스 조립(id 재발급+parentId 재매핑, `generation` 태그). UI는 `components/builder/CaseGenerationDialog.jsx`(계획 탭 "✦ 자동 생성"). LLM 호출은 `lib/llmClient.js` — 사용자 입력 키(localStorage)로 브라우저→Anthropic 직접 호출이 기본, 키 없으면 루트 `api/generate.js` 서버 프록시(운영자 ANTHROPIC_API_KEY) 폴백, 수동 복사/붙여넣기 모드 병행
 - `components/Builder.jsx` — 편집기 오케스트레이터 (상태/드래그/히스토리/발행). Undo/Redo(500ms 병합), 스마트 스냅, 다중 선택(⇧클릭·⌘A·러버밴드·그룹 드래그·정렬 도구), ⌘C/X/V 클립보드(단계 간), 캔버스 줌(⌘+/-/0), 우클릭 컨텍스트 메뉴, 팔레트 드래그 배치, 기기 프리셋, 발행 버전 스냅샷·복원, 공유 링크 복사

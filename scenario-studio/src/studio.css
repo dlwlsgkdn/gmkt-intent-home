@@ -4737,3 +4737,6 @@ button.sb-info-chip:hover { border-color: #94a3b8; background: #f8fafc; }
 }
 .sb-btn--search:hover:not(:disabled) { background: rgba(124, 58, 237, 0.08); }
 .sb-btn--search:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.sb-gen-headbtns { display: flex; align-items: center; gap: 6px; }
+.sb-btn--tiny { padding: 5px 9px; font-size: 9.5px; }

@@ -23,6 +23,7 @@ import {
   requestCaseGeneration,
   saveLlmApiKey,
 } from '../../lib/llmClient.js'
+import { copyToClipboard, wrapForChatApp } from '../../lib/chatPrompt.js'
 
 const personaFromProfile = (profile) => {
   const name = profile?.name ? `${profile.name}.` : ''
@@ -189,13 +190,13 @@ export default function CaseGenerationDialog({
   const copyManualPrompt = async () => {
     const batch = manualBatches[manualIndex]
     if (!batch) return
-    const prompt = buildGenerationPrompt(requestForBatch(batch))
-    try {
-      await navigator.clipboard.writeText(prompt)
-      onToast(`배치 ${manualIndex + 1}/${manualBatches.length} 프롬프트를 복사했어요.`)
-    } catch {
-      onToast('복사하지 못했어요. 브라우저 권한을 확인해주세요.')
-    }
+    const prompt = wrapForChatApp(buildGenerationPrompt(requestForBatch(batch)), {
+      json: true,
+      pasteTarget: '아래 응답 붙여넣기 칸',
+    })
+    onToast(await copyToClipboard(prompt)
+      ? `배치 ${manualIndex + 1}/${manualBatches.length} 프롬프트를 복사했어요.`
+      : '복사하지 못했어요. 브라우저 권한을 확인해주세요.')
   }
 
   const submitManualResponse = () => {
@@ -382,7 +383,7 @@ export default function CaseGenerationDialog({
                     ? (isLikelyAnthropicKey(apiKey)
                       ? <p className="sb-gen-keystate--ok">✓ 키 입력됨 — 브라우저에서 직접 생성합니다.</p>
                       : <p className="sb-llm-error">Anthropic API 키는 보통 sk-ant-로 시작해요. 키를 다시 확인해주세요.</p>)
-                    : <p>키가 없으면 서버 프록시(운영자 키)로 시도하고, 그것도 없으면 아래 수동 모드를 사용하세요.</p>}
+                    : <p>키가 없으면 서버 프록시(운영자 키)로 시도하고, 그것도 없으면 아래 Claude 앱 모드를 사용하세요.</p>}
                 </div>
               </div>
               <label className="sb-gen-skip">
@@ -391,7 +392,7 @@ export default function CaseGenerationDialog({
                   checked={manualMode}
                   onChange={(event) => setManualMode(event.target.checked)}
                 />
-                수동 모드 — API 키 없이 프롬프트 복사 → LLM 응답 붙여넣기로 진행
+                Claude 앱으로 만들기 — API 키·크레딧 없이 Pro·Max 구독으로 진행
               </label>
             </section>
 
@@ -457,7 +458,7 @@ export default function CaseGenerationDialog({
                 <strong>{(manualBatches[manualIndex] || []).map((combo) => combo.key).join(' · ')}</strong>
               </div>
               <button type="button" className="sb-btn sb-btn--primary" onClick={copyManualPrompt}>
-                이 배치 프롬프트 복사
+                Claude 앱용 프롬프트 복사
               </button>
             </div>
             <p className="sb-llm-help">복사한 프롬프트를 사용하는 LLM에 붙여넣고, 반환된 JSON을 아래에 붙여넣으세요.</p>
