@@ -4614,3 +4614,42 @@ button.sb-info-chip:hover { border-color: #94a3b8; background: #f8fafc; }
   .sb-gen-keyrow { grid-template-columns: 1fr; }
   .sb-gen-keystate { padding-top: 0; }
 }
+
+/* 스튜디오 드로어 — LLM API 키 */
+.sb-llm-key {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.sb-llm-key input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--sb-ink);
+  background: #fff;
+}
+.sb-llm-key input:focus {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.14);
+  outline: none;
+}
+.sb-llm-key button {
+  flex: 0 0 auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  padding: 0 11px;
+  background: #fff;
+  color: #475569;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.sb-llm-key button:hover { background: #f8fafc; }
+.sb-llm-key__state { margin: 0 0 14px; color: #94a3b8; font-size: 9.5px; line-height: 1.55; }
+.sb-llm-key__state--ok { color: #15803d; font-weight: 700; }
+.sb-llm-key__state--warn { color: #b45309; }
