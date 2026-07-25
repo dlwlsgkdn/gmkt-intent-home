@@ -4584,3 +4584,33 @@ button.sb-info-chip:hover { border-color: #94a3b8; background: #f8fafc; }
 @media (max-width: 640px) {
   .sb-gen-grid { grid-template-columns: 1fr; }
 }
+
+/* 자동 생성 — API 키 입력 */
+.sb-gen-keyrow {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.sb-gen-field input[type='password'] {
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--sb-ink);
+  background: #fff;
+}
+.sb-gen-field input[type='password']:focus {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.14);
+  outline: none;
+}
+.sb-gen-keystate { padding-top: 22px; }
+.sb-gen-keystate p { margin: 0; color: #64748b; font-size: 10px; line-height: 1.55; }
+.sb-gen-keystate--ok { color: #15803d !important; font-weight: 700; }
+@media (max-width: 640px) {
+  .sb-gen-keyrow { grid-template-columns: 1fr; }
+  .sb-gen-keystate { padding-top: 0; }
+}

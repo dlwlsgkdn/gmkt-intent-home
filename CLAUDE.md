@@ -34,7 +34,7 @@ cd scenario-studio && npm run build   # vite build && cp -R ../legacy ../docs/le
 - `lib/registry.jsx` — **컴포넌트 레지스트리** (팔레트의 모든 컴포넌트). `{ label, stage, icon, defaults, fields[], render(props, ctx), canvasInteractive?, defaultW? }`. ctx.mode='canvas'|'player', ctx.player(실행 API), ctx.profile, ctx.updateProps(캔버스 내 편집), ctx.summaryPreview. kText() 텍스트 렌더러(키워드+부분 서식+인라인 편집 진입)
 - `lib/richtext.jsx` — 인라인 리치텍스트 엔진: `{{옵션|텍스트}}`/`[[키워드]]` 마크업 ↔ contentEditable 변환, 서식 적용/병합, InlineEditor, FONT_OPTIONS/TEXT_COLORS
 - `lib/templates.js` — 새 시나리오 템플릿 (빈/뷰티 브리프/선물 추천)
-- `lib/caseGeneration.js` — **계획 케이스 자동 생성**: 설문 축 데카르트 곱 전개, 골든 케이스 슬롯 추출(사실 필드 제외), 상품 카탈로그 파싱, LLM 프롬프트/스키마/검증, 케이스 조립(id 재발급+parentId 재매핑, `generation` 태그). UI는 `components/builder/CaseGenerationDialog.jsx`(계획 탭 "✦ 자동 생성"), 서버는 루트 `api/generate.js`(claude-opus-5, ANTHROPIC_API_KEY 필요, 수동 복사/붙여넣기 모드 병행)
+- `lib/caseGeneration.js` — **계획 케이스 자동 생성**: 설문 축 데카르트 곱 전개, 골든 케이스 슬롯 추출(사실 필드 제외), 상품 카탈로그 파싱, LLM 프롬프트/스키마/검증, 케이스 조립(id 재발급+parentId 재매핑, `generation` 태그). UI는 `components/builder/CaseGenerationDialog.jsx`(계획 탭 "✦ 자동 생성"). LLM 호출은 `lib/llmClient.js` — 사용자 입력 키(localStorage)로 브라우저→Anthropic 직접 호출이 기본, 키 없으면 루트 `api/generate.js` 서버 프록시(운영자 ANTHROPIC_API_KEY) 폴백, 수동 복사/붙여넣기 모드 병행
 - `components/Builder.jsx` — 편집기 오케스트레이터 (상태/드래그/히스토리/발행). Undo/Redo(500ms 병합), 스마트 스냅, 다중 선택(⇧클릭·⌘A·러버밴드·그룹 드래그·정렬 도구), ⌘C/X/V 클립보드(단계 간), 캔버스 줌(⌘+/-/0), 우클릭 컨텍스트 메뉴, 팔레트 드래그 배치, 기기 프리셋, 발행 버전 스냅샷·복원, 공유 링크 복사
 - `components/builder/CanvasItem.jsx` — 캔버스 아이템 (드래그/리사이즈/잠금/숨김, zoom 좌표 보정, 우클릭)
 - `components/builder/Palette.jsx` — 팔레트(검색·클릭 추가·캔버스로 드래그)/레이어 패널(잠금·숨김·순서)

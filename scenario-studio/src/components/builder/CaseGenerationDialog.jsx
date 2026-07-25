@@ -17,6 +17,12 @@ import {
 } from '../../lib/caseGeneration.js'
 import { plainEvaluationText } from '../../lib/evaluation.js'
 import { uid } from '../../lib/store.js'
+import {
+  isLikelyAnthropicKey,
+  loadLlmApiKey,
+  requestCaseGeneration,
+  saveLlmApiKey,
+} from '../../lib/llmClient.js'
 
 const personaFromProfile = (profile) => {
   const name = profile?.name ? `${profile.name}.` : ''
@@ -59,6 +65,12 @@ export default function CaseGenerationDialog({
   const [notes, setNotes] = useState('')
   const [skipExisting, setSkipExisting] = useState(true)
   const [manualMode, setManualMode] = useState(false)
+  const [apiKey, setApiKey] = useState(loadLlmApiKey)
+
+  const updateApiKey = (value) => {
+    setApiKey(value)
+    saveLlmApiKey(value)
+  }
 
   const [phase, setPhase] = useState('setup') // setup | running | review
   const [progress, setProgress] = useState({ done: 0, total: 0 })
@@ -147,23 +159,12 @@ export default function CaseGenerationDialog({
       if (cancelRef.current) break
       try {
         const request = requestForBatch(batch)
-        const response = await fetch('/api/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            prompt: buildGenerationPrompt(request),
-            responseSchema: GENERATION_RESPONSE_SCHEMA,
-          }),
+        const payload = await requestCaseGeneration({
+          apiKey,
+          prompt: buildGenerationPrompt(request),
+          responseSchema: GENERATION_RESPONSE_SCHEMA,
         })
-        const rawText = await response.text()
-        let payload = rawText
-        try { payload = JSON.parse(rawText) } catch { /* 검증기가 텍스트에서 JSON을 추출한다 */ }
-        if (!response.ok) {
-          const message = (payload && payload.error) || `HTTP ${response.status}`
-          setRunErrors((current) => [...current, `${batch.map((c) => c.key).join(', ')}: ${message}`])
-        } else {
-          collectBatchResult(batch, validateGenerationResponse(payload, request))
-        }
+        collectBatchResult(batch, validateGenerationResponse(payload, request))
       } catch (error) {
         setRunErrors((current) => [...current, `${batch.map((c) => c.key).join(', ')}: ${error.message}`])
       }
@@ -350,13 +351,47 @@ export default function CaseGenerationDialog({
                 />
                 <small>{catalog.length}개 상품 인식됨 · 기존 케이스와 상품명이 같으면 이미지·색상 등 표시 정보를 승계합니다.</small>
               </label>
+            </section>
+
+            <section className="sb-llm-section">
+              <div className="sb-llm-section__head">
+                <div>
+                  <span>STEP 3</span>
+                  <strong>LLM 연결</strong>
+                </div>
+              </div>
+              <div className="sb-gen-keyrow">
+                <label className="sb-gen-field">
+                  <span>내 Anthropic API 키</span>
+                  <input
+                    type="password"
+                    value={apiKey}
+                    onChange={(event) => updateApiKey(event.target.value)}
+                    placeholder="sk-ant-…"
+                    autoComplete="off"
+                    spellCheck={false}
+                    aria-label="Anthropic API 키"
+                  />
+                  <small>
+                    이 브라우저(localStorage)에만 저장되고 Anthropic API로 직접 전송됩니다. 스튜디오 서버로는 보내지 않아요.
+                    {' '}비우면 저장된 키도 삭제됩니다.
+                  </small>
+                </label>
+                <div className="sb-gen-keystate">
+                  {apiKey.trim()
+                    ? (isLikelyAnthropicKey(apiKey)
+                      ? <p className="sb-gen-keystate--ok">✓ 키 입력됨 — 브라우저에서 직접 생성합니다.</p>
+                      : <p className="sb-llm-error">Anthropic API 키는 보통 sk-ant-로 시작해요. 키를 다시 확인해주세요.</p>)
+                    : <p>키가 없으면 서버 프록시(운영자 키)로 시도하고, 그것도 없으면 아래 수동 모드를 사용하세요.</p>}
+                </div>
+              </div>
               <label className="sb-gen-skip">
                 <input
                   type="checkbox"
                   checked={manualMode}
                   onChange={(event) => setManualMode(event.target.checked)}
                 />
-                수동 모드 — 서버 없이 프롬프트 복사 → LLM 응답 붙여넣기로 진행
+                수동 모드 — API 키 없이 프롬프트 복사 → LLM 응답 붙여넣기로 진행
               </label>
             </section>
 
