@@ -1,154 +1,80 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { createScenario, normalizeScenario, uid, loadKeywords, saveKeywords, loadViewerDevice, saveViewerDevice, loadAccounts, saveAccounts, createAccount, createDataBackup, parseDataBackup, normalizeAccountsState, DEFAULT_KEYWORDS } from './lib/store.js'
-import { REMOTE_ENABLED, fetchRemoteState, saveRemoteState } from './lib/remote.js'
+import { createScenario, normalizeScenario } from './lib/store.js'
 import { readShareFromHash, clearShareHash } from './lib/share.js'
+import { adoptSharedScenario, duplicateScenario, scenariosFromImport } from './lib/scenarioOps.js'
+import { isDefaultScenario } from './lib/dateMakeupPack.js'
+import { useWorkspace } from './hooks/useWorkspace.js'
 import HomeView from './components/HomeView.jsx'
 import Builder from './components/Builder.jsx'
 import Player from './components/Player.jsx'
 import ExploreEditor from './components/ExploreEditor.jsx'
-import {
-  installDateMakeupPack,
-  installDateMakeupScenario,
-  isDefaultScenario,
-} from './lib/dateMakeupPack.js'
-import { remapCaseEvaluation } from './lib/evaluation.js'
 
+/*
+ * 앱 셸 — 라우팅과 토스트를 갖고, 화면들이 쓰는 api 객체를 조립한다.
+ *
+ * 워크스페이스 상태와 저장은 useWorkspace가, 시나리오 복사·가져오기 규칙은
+ * lib/scenarioOps가 담당한다. 여기서는 "무엇을 보여줄지"만 결정한다.
+ */
 export default function App() {
-  /* 프로필별 워크스페이스(계정): 프로필 + 탐색 페이지 + 시나리오 + 쓰레드 묶음 */
-  const [init] = useState(() => installDateMakeupPack(loadAccounts()))
-  const [accounts, setAccounts] = useState(init.accounts)
-  const [activeAccountId, setActiveAccountId] = useState(init.activeId)
-  const [keywords, setKeywords] = useState(loadKeywords)
-  const [viewerDevice, setViewerDevice] = useState(loadViewerDevice)
+  // route: {name:'home'} | {name:'builder', id} | {name:'player', id, resume} | {name:'explore-editor', back}
+  const [route, setRoute] = useState({ name: 'home' })
+  const [toast, setToast] = useState(null)
+  const showToast = (message) => setToast(message)
+  const goHome = () => setRoute({ name: 'home' })
 
-  const active = accounts.find((a) => a.id === activeAccountId) || accounts[0]
-  const { scenarios, explore, profile, threads } = active
+  const workspace = useWorkspace({ showToast, onReset: goHome })
+  const { scenarios, setScenarios } = workspace
 
-  /* 활성 계정의 일부 필드만 갱신 — 값 또는 함수 업데이터 모두 지원 */
-  const patchActive = (key, v) =>
-    setAccounts((prev) =>
-      prev.map((a) =>
-        a.id === activeAccountId ? { ...a, [key]: typeof v === 'function' ? v(a[key]) : v } : a
-      )
-    )
-  const setScenarios = (v) => patchActive('scenarios', v)
-  const setExplore = (v) => patchActive('explore', v)
-  const setProfile = (v) => patchActive('profile', v)
-  const setThreads = (v) => patchActive('threads', v)
-  // 공유 링크(#s=...)로 들어온 경우: 저장하지 않고 바로 체험
+  /* 공유 링크(#s=...)로 들어온 경우: 저장하지 않고 바로 체험 */
   const [shared, setShared] = useState(() => {
     const value = readShareFromHash()
     return value ? normalizeScenario(value) : null
   })
-  // route: {name:'home'} | {name:'builder', id} | {name:'player', id} | {name:'explore-editor'}
-  const [route, setRoute] = useState({ name: 'home' })
-  const [toast, setToast] = useState(null)
-
-  /* 서버 하이드레이션: 최초 1회 서버 상태를 가져와 로컬을 덮는다.
-     서버가 비어 있으면(최초 이관) 아래 미러링 이펙트가 현재 로컬 상태를 첫 저장으로 올린다.
-     가져오기 실패 시 이번 세션은 서버 미러링을 끈다 — 오래된 로컬로 서버를 덮지 않기 위함.
-     시딩 가드: 빈 브라우저가 먼저 접속해 기본 데이터로 서버를 시드한 경우,
-     사용자 데이터를 가진 로컬이 기본값에 덮이지 않도록 로컬을 유지한다(→ 서버로 올라감). */
-  const [remoteReady, setRemoteReady] = useState(false)
-  useEffect(() => {
-    const hasUserData = (accs) =>
-      accs.length > 1 ||
-      accs.some(
-        (a) =>
-          (a.scenarios || []).some((s) => !isDefaultScenario(s)) || (a.threads || []).length > 0
-      )
-    if (!REMOTE_ENABLED) return undefined // local 프로필: 서버 하이드레이션 없이 localStorage만 사용
-    let cancelled = false
-    fetchRemoteState()
-      .then((state) => {
-        if (cancelled) return
-        let remote = state.accounts && normalizeAccountsState(state.accounts.data)
-        if (remote && !hasUserData(remote.accounts) && hasUserData(init.accounts)) remote = null
-        if (remote) {
-          const withPack = installDateMakeupPack(remote)
-          setAccounts(withPack.accounts)
-          setActiveAccountId((prev) =>
-            withPack.accounts.some((a) => a.id === prev) ? prev : withPack.activeId
-          )
-        }
-        if (state.keywords && Array.isArray(state.keywords.data)) {
-          // 시딩 가드: 서버가 기본 사전 그대로면 커스텀 로컬 사전을 유지한다
-          const isDefaultDict = (list) => JSON.stringify(list) === JSON.stringify(DEFAULT_KEYWORDS)
-          setKeywords((prev) =>
-            isDefaultDict(state.keywords.data) && !isDefaultDict(prev) ? prev : state.keywords.data
-          )
-        }
-        setRemoteReady(true)
-      })
-      .catch((e) => {
-        if (!cancelled) console.warn('[remote] 서버 상태 불러오기 실패 — 이번 세션은 로컬 저장만 사용:', e)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   useEffect(() => {
-    saveAccounts(accounts, activeAccountId)
-    if (remoteReady) saveRemoteState('accounts', { accounts, activeId: activeAccountId })
-  }, [accounts, activeAccountId, remoteReady])
-
-  useEffect(() => {
-    saveKeywords(keywords)
-    if (remoteReady) saveRemoteState('keywords', keywords)
-  }, [keywords, remoteReady])
-
-  useEffect(() => {
-    saveViewerDevice(viewerDevice)
-  }, [viewerDevice])
-
-  useEffect(() => {
-    if (!toast) return
-    const t = setTimeout(() => setToast(null), 2600)
-    return () => clearTimeout(t)
+    if (!toast) return undefined
+    const timer = setTimeout(() => setToast(null), 2600)
+    return () => clearTimeout(timer)
   }, [toast])
 
+  /* ── 시나리오 ── */
   const updateScenario = (id, updater) => {
-    setScenarios((prev) =>
-      prev.map((s) => (s.id === id ? { ...updater(s), updatedAt: new Date().toISOString() } : s))
-    )
+    setScenarios((prev) => prev.map((scenario) => (
+      scenario.id === id ? { ...updater(scenario), updatedAt: new Date().toISOString() } : scenario
+    )))
   }
 
   const removeScenario = (id) => {
-    const target = scenarios.find((scenario) => scenario.id === id)
-    if (isDefaultScenario(target)) {
-      setToast('기본 시나리오는 삭제할 수 없어요.')
+    if (isDefaultScenario(scenarios.find((scenario) => scenario.id === id))) {
+      showToast('기본 시나리오는 삭제할 수 없어요.')
       return
     }
-    setScenarios((prev) => prev.filter((s) => s.id !== id))
-    if (route.id === id) setRoute({ name: 'home' })
+    setScenarios((prev) => prev.filter((scenario) => scenario.id !== id))
+    if (route.id === id) goHome()
+  }
+
+  const registerScenario = (scenario) => {
+    setScenarios((prev) => [...prev, scenario])
+    setRoute({ name: 'builder', id: scenario.id })
+    return scenario
   }
 
   /* 템플릿을 넘기면 해당 구성으로, 없거나 blank면 빈 시나리오로 생성 */
-  const newScenario = (tpl) => {
-    const s = createScenario(
-      tpl && tpl.key && tpl.key !== 'blank'
-        ? { title: tpl.name, chip: tpl.chip, stages: tpl.build() }
-        : {}
-    )
-    setScenarios((prev) => [...prev, s])
-    setRoute({ name: 'builder', id: s.id })
-  }
+  const newScenario = (template) => registerScenario(createScenario(
+    template && template.key && template.key !== 'blank'
+      ? { title: template.name, chip: template.chip, stages: template.build() }
+      : {}
+  ))
 
-  /* LLM이 만든 시나리오 초안(설문 + 골든 계획 케이스)을 그대로 등록하고 빌더로 이동 */
-  const newScenarioFrom = (partial) => {
-    const s = createScenario(partial)
-    setScenarios((prev) => [...prev, s])
-    setRoute({ name: 'builder', id: s.id })
-    return s
-  }
+  /* AI가 만든 시나리오 초안(설문 + 골든 계획 케이스)을 그대로 등록하고 빌더로 이동 */
+  const newScenarioFrom = (partial) => registerScenario(createScenario(partial))
 
   /* 홈 칩 드래그 순서 변경: dragId를 targetId 위치로 이동 */
   const reorderScenario = (dragId, targetId) => {
     if (dragId === targetId) return
     setScenarios((prev) => {
-      const from = prev.findIndex((s) => s.id === dragId)
-      const to = prev.findIndex((s) => s.id === targetId)
+      const from = prev.findIndex((scenario) => scenario.id === dragId)
+      const to = prev.findIndex((scenario) => scenario.id === targetId)
       if (from < 0 || to < 0) return prev
       const next = [...prev]
       const [moved] = next.splice(from, 1)
@@ -157,155 +83,40 @@ export default function App() {
     })
   }
 
-  /* 시나리오 복제 — 설문/모든 계획 케이스의 아이템 id를 함께 재발급하고,
-     계획 조건이 참조하는 설문 질문 id도 새 사본에 맞게 연결한다. */
   const copyScenario = (id) => {
-    const src = scenarios.find((s) => s.id === id)
-    if (!src) return
-    const idMap = {}
-    const allItemLists = [
-      src.stages.survey || [],
-      ...(src.planCases || []).map((planCase) => planCase.items || []),
-    ]
-    allItemLists.flat().forEach((item) => { idMap[item.id] = uid() })
-    const cloneItems = (list) => list.map((it) => ({
-        ...it,
-        id: idMap[it.id],
-        parentId: it.parentId ? idMap[it.parentId] : undefined,
-        props: JSON.parse(JSON.stringify(it.props || {})),
-        style: it.style ? { ...it.style } : undefined,
-      }))
-    const stages = {
-      ...src.stages,
-      survey: cloneItems(src.stages.survey || []),
-      plan: [],
-    }
-    const planCases = (src.planCases || []).map((planCase) => ({
-      ...planCase,
-      id: uid(),
-      conditions: (planCase.conditions || []).map((condition) => ({
-        ...condition,
-        id: uid(),
-        questionId: idMap[condition.questionId] || condition.questionId,
-        values: [...(condition.values || [])],
-      })),
-      items: cloneItems(planCase.items || []),
-      evaluation: remapCaseEvaluation(planCase.evaluation, idMap),
-    }))
-    const copy = normalizeScenario({
-      ...src,
-      id: uid(),
-      sourcePackId: undefined,
-      isDefaultScenario: false,
-      title: `${src.title} 복사본`,
-      chip: src.chip ? `${src.chip}_복사` : '복사본',
-      status: 'draft',
-      stages,
-      planCases,
-      versions: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    })
+    const source = scenarios.find((scenario) => scenario.id === id)
+    if (!source) return
+    const copy = duplicateScenario(source)
     setScenarios((prev) => [...prev, copy])
-    setToast(`"${copy.title}" 을(를) 만들었어요. (작성 중 상태)`)
+    showToast(`"${copy.title}" 을(를) 만들었어요. (작성 중 상태)`)
   }
 
-  const importScenarios = (arr) => {
-    if (!Array.isArray(arr)) {
-      setToast('가져오기 실패: 시나리오 배열(JSON)이 아니에요.')
+  const importScenarios = (list) => {
+    const cleaned = scenariosFromImport(list)
+    if (!cleaned) {
+      showToast('가져오기 실패: 시나리오 배열(JSON)이 아니에요.')
       return
     }
-    const cleaned = arr
-      .filter((s) => s && typeof s === 'object' && s.stages)
-      .map((s) => normalizeScenario({
-        ...s,
-        id: uid(),
-        sourcePackId: undefined,
-        isDefaultScenario: false,
-        updatedAt: new Date().toISOString(),
-      }))
     if (cleaned.length === 0) {
-      setToast('가져올 수 있는 시나리오가 없어요.')
+      showToast('가져올 수 있는 시나리오가 없어요.')
       return
     }
     setScenarios((prev) => [...prev, ...cleaned])
-    setToast(`시나리오 ${cleaned.length}개를 가져왔어요.`)
-  }
-
-  /* 모든 프로필 워크스페이스와 공통 설정을 단일 JSON으로 백업/복원 */
-  const exportDataBackup = () => createDataBackup({
-    accounts,
-    activeAccountId,
-    keywords,
-    viewerDevice,
-  })
-
-  const importDataBackup = (payload) => {
-    try {
-      const restored = parseDataBackup(payload)
-      const installed = installDateMakeupPack({
-        accounts: restored.accounts,
-        activeId: restored.activeId,
-      })
-      setAccounts(installed.accounts)
-      setActiveAccountId(installed.activeId)
-      setKeywords(restored.keywords)
-      setViewerDevice(restored.viewerDevice)
-      setRoute({ name: 'home' })
-      setToast(`전체 데이터를 복원했어요. (프로필 ${restored.accounts.length}개)`)
-      return true
-    } catch (err) {
-      setToast(`전체 복원 실패: ${err.message || '백업 파일을 확인해주세요.'}`)
-      return false
-    }
+    showToast(`시나리오 ${cleaned.length}개를 가져왔어요.`)
   }
 
   const current = useMemo(
-    () => scenarios.find((s) => s.id === route.id) || null,
+    () => scenarios.find((scenario) => scenario.id === route.id) || null,
     [scenarios, route.id]
   )
 
   /* 쓰레드 upsert — 같은 id가 있으면 갱신, 없으면 맨 앞에 추가 (최신순, 최근 30개 유지) */
   const recordThread = (entry) => {
-    setThreads((prev) => {
-      const rest = prev.filter((t) => t.id !== entry.id)
-      const existing = prev.find((t) => t.id === entry.id)
+    workspace.setThreads((prev) => {
+      const rest = prev.filter((thread) => thread.id !== entry.id)
+      const existing = prev.find((thread) => thread.id === entry.id)
       return [{ ...existing, ...entry, updatedAt: new Date().toISOString() }, ...rest].slice(0, 30)
     })
-  }
-
-  /* ── 프로필(계정) 관리 ── */
-  const switchAccount = (id) => {
-    const acc = accounts.find((a) => a.id === id)
-    if (!acc || id === activeAccountId) return
-    setActiveAccountId(id)
-    setRoute({ name: 'home' })
-    setToast(`"${acc.profile.name}" 프로필로 전환했어요.`)
-  }
-
-  const addAccount = (name) => {
-    const nm = String(name || '').trim() || `사용자 ${accounts.length + 1}`
-    let acc = createAccount()
-    acc.profile = { ...acc.profile, name: nm }
-    acc.explore = { ...acc.explore, greeting: `${nm}님, 오늘은 어떤 쇼핑을 도와드릴까요?` }
-    acc = installDateMakeupScenario(acc)
-    setAccounts((prev) => [...prev, acc])
-    setActiveAccountId(acc.id)
-    setRoute({ name: 'home' })
-    setToast(`"${nm}" 프로필을 만들었어요. 탐색 페이지와 시나리오가 새로 시작돼요.`)
-  }
-
-  const removeAccount = (id) => {
-    if (accounts.length <= 1) {
-      setToast('마지막 프로필은 삭제할 수 없어요.')
-      return
-    }
-    const rest = accounts.filter((a) => a.id !== id)
-    setAccounts(rest)
-    if (id === activeAccountId) {
-      setActiveAccountId(rest[0].id)
-      setRoute({ name: 'home' })
-    }
   }
 
   const api = {
@@ -319,53 +130,46 @@ export default function App() {
     reorderScenario,
     importScenarios,
     isDefaultScenario,
-    exportDataBackup,
-    importDataBackup,
-    goHome: () => setRoute({ name: 'home' }),
+    exportDataBackup: workspace.exportDataBackup,
+    importDataBackup: workspace.importDataBackup,
+    goHome,
     openBuilder: (id) => setRoute({ name: 'builder', id }),
-    /* resume = { threadId, stage } — 쓰레드 이동: 기존 쓰레드를 이어서 해당 단계부터 */
+    /* resume = { threadId, stage } — 기존 쓰레드를 이어서 해당 단계부터 */
     playScenario: (id, resume) => setRoute({ name: 'player', id, resume }),
     openExploreEditor: () => setRoute((prev) => ({ name: 'explore-editor', back: prev })),
     closeExploreEditor: () => setRoute((prev) => prev.back || { name: 'home' }),
-    explore,
-    updateExplore: setExplore,
-    profile,
-    updateProfile: setProfile,
-    keywords,
-    updateKeywords: setKeywords,
-    viewerDevice,
-    setViewerDevice,
-    accounts,
-    activeAccountId,
-    switchAccount,
-    addAccount,
-    removeAccount,
-    threads,
+    explore: workspace.explore,
+    updateExplore: workspace.setExplore,
+    profile: workspace.profile,
+    updateProfile: workspace.setProfile,
+    keywords: workspace.keywords,
+    updateKeywords: workspace.setKeywords,
+    viewerDevice: workspace.viewerDevice,
+    setViewerDevice: workspace.setViewerDevice,
+    accounts: workspace.accounts,
+    activeAccountId: workspace.activeAccountId,
+    switchAccount: workspace.switchAccount,
+    addAccount: workspace.addAccount,
+    removeAccount: workspace.removeAccount,
+    threads: workspace.threads,
     recordThread,
-    removeThread: (id) => setThreads((prev) => prev.filter((t) => t.id !== id)),
-    clearThreads: () => setThreads([]),
-    showToast: (msg) => setToast(msg),
+    removeThread: (id) => workspace.setThreads((prev) => prev.filter((thread) => thread.id !== id)),
+    clearThreads: () => workspace.setThreads([]),
+    showToast,
   }
 
-  /* 공유 링크 모드: 임시 시나리오를 바로 실행. '편집' 버튼은 내 스튜디오로 가져오기 */
+  /* 공유 링크 모드: 임시 시나리오를 바로 실행. '편집'은 내 스튜디오로 가져오기 */
   if (shared) {
     const exitShared = () => {
       setShared(null)
       clearShareHash()
     }
     const adoptShared = () => {
-      const s = normalizeScenario({
-        ...shared,
-        id: uid(),
-        sourcePackId: undefined,
-        isDefaultScenario: false,
-        status: 'draft',
-        versions: [],
-      })
-      setScenarios((prev) => [...prev, s])
+      const scenario = adoptSharedScenario(shared)
+      setScenarios((prev) => [...prev, scenario])
       exitShared()
-      setRoute({ name: 'builder', id: s.id })
-      setToast('공유받은 시나리오를 내 스튜디오로 가져왔어요.')
+      setRoute({ name: 'builder', id: scenario.id })
+      showToast('공유받은 시나리오를 내 스튜디오로 가져왔어요.')
     }
     return (
       <>
@@ -381,8 +185,13 @@ export default function App() {
       {route.name === 'explore-editor' && <ExploreEditor api={api} />}
       {route.name === 'builder' && current && <Builder api={api} scenario={current} />}
       {route.name === 'player' && current && (
-        /* key: 같은 시나리오를 다른 쓰레드로 이어볼 때 상태(단계/담기)가 새로 초기화되도록 리마운트 */
-        <Player key={current.id + ':' + (route.resume ? route.resume.threadId : 'new')} api={api} scenario={current} resume={route.resume} />
+        /* key: 같은 시나리오를 다른 쓰레드로 이어볼 때 단계·담기 상태가 새로 초기화되도록 리마운트 */
+        <Player
+          key={`${current.id}:${route.resume ? route.resume.threadId : 'new'}`}
+          api={api}
+          scenario={current}
+          resume={route.resume}
+        />
       )}
       {route.name !== 'home' && route.name !== 'explore-editor' && !current && <HomeView api={api} />}
 
