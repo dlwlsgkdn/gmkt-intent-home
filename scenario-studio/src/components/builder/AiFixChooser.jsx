@@ -8,7 +8,16 @@ import React from 'react'
  * 사용자에게 넘어온다. 그래서 입구는 하나로 두고 여기서 "무엇을 고치고 싶은지"
  * 기준으로 갈라 준다 — 예시 문장이 곧 선택 기준이다.
  */
-export default function AiFixChooser({ activeCaseName, activeSlot, onPickPolish, onPickRebuild, onClose }) {
+export default function AiFixChooser({
+  activeCaseName,
+  activeSlot,
+  seedCount = 0,
+  targetCount = 0,
+  onPickPolish,
+  onPickRebuild,
+  onPickPropagate,
+  onClose,
+}) {
   return (
     <div className="sb-llm-modal" role="presentation" onMouseDown={(event) => {
       if (event.target === event.currentTarget) onClose()
@@ -49,6 +58,26 @@ export default function AiFixChooser({ activeCaseName, activeSlot, onPickPolish,
             </small>
             <span className="sb-fix-chooser__examples">
               예: "영상·게시글을 넣어줘" · "CTA는 빼줘" · "상품을 바꿔줘"
+            </span>
+          </button>
+
+          <button
+            type="button"
+            className="sb-mode-card"
+            disabled={seedCount === 0}
+            title={seedCount === 0 ? '대표 케이스에 피드백을 먼저 남겨주세요' : undefined}
+            onClick={onPickPropagate}
+          >
+            <span className="sb-mode-card__head">
+              <strong>피드백 전체 반영</strong>
+              <em>나머지 {targetCount}개 케이스 · 필드 단위</em>
+            </span>
+            <small>
+              대표 3개에 남긴 피드백 {seedCount}개를 패턴 삼아, <b>평가하지 않은 나머지 케이스</b>의
+              같은 자리에서 같은 문제를 찾아 고칩니다. 대표만 보고 전체에 영향을 주는 단계예요.
+            </small>
+            <span className="sb-fix-chooser__examples">
+              흐름: 대표 평가·수정 → 전체 반영 (수정안은 하나씩 골라 적용)
             </span>
           </button>
         </div>

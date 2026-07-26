@@ -10,6 +10,8 @@ import { sortByPosition } from '../../lib/store.js'
 import { LIBRARY, renderItem } from '../../lib/registry.jsx'
 import LlmRevisionDialog from './LlmRevisionDialog.jsx'
 import AiFixChooser from './AiFixChooser.jsx'
+import PropagationDialog from './PropagationDialog.jsx'
+import { collectPropagationSeeds, propagationTargets } from '../../lib/prompt/propagation.js'
 
 /*
  * 평가 스튜디오 — 주석(annotation) 방식.
@@ -198,6 +200,7 @@ function CommentBubble({
 }
 
 export default function EvaluationPanel({
+  scenario,
   planCases,
   activeCaseId,
   onSelectCase,
@@ -215,7 +218,8 @@ export default function EvaluationPanel({
 }) {
   const [rubricOpen, setRubricOpen] = useState(false)
   const [llmDialogOpen, setLlmDialogOpen] = useState(false)
-  const [fixChooserOpen, setFixChooserOpen] = useState(false) // 문구 다듬기 / 페이지 재구성 선택
+  const [fixChooserOpen, setFixChooserOpen] = useState(false) // 문구 다듬기 / 페이지 재구성 / 전체 반영 선택
+  const [propagationOpen, setPropagationOpen] = useState(false)
   const [activeId, setActiveId] = useState(null) // 선택된 말풍선(=컴포넌트) — '__case__' 포함
   const selectedCases = evaluationCasesFor(planCases)
   const stats = structuredComponentEvaluationStats(planCases)
@@ -512,16 +516,32 @@ export default function EvaluationPanel({
         </div>
       </section>
 
-      {fixChooserOpen && (
-        <AiFixChooser
-          activeCaseName={activeCase?.name || '평가 케이스'}
-          activeSlot={activeSlot}
-          onPickPolish={() => { setFixChooserOpen(false); setLlmDialogOpen(true) }}
-          onPickRebuild={() => {
-            setFixChooserOpen(false)
-            if (activeCase) onReviseCase(activeCase.id)
-          }}
-          onClose={() => setFixChooserOpen(false)}
+      {fixChooserOpen && (() => {
+        const seeds = collectPropagationSeeds(planCases)
+        return (
+          <AiFixChooser
+            activeCaseName={activeCase?.name || '평가 케이스'}
+            activeSlot={activeSlot}
+            seedCount={seeds.componentSeeds.length + seeds.caseNotes.length}
+            targetCount={propagationTargets(planCases, seeds).length}
+            onPickPolish={() => { setFixChooserOpen(false); setLlmDialogOpen(true) }}
+            onPickRebuild={() => {
+              setFixChooserOpen(false)
+              if (activeCase) onReviseCase(activeCase.id)
+            }}
+            onPickPropagate={() => { setFixChooserOpen(false); setPropagationOpen(true) }}
+            onClose={() => setFixChooserOpen(false)}
+          />
+        )
+      })()}
+
+      {propagationOpen && (
+        <PropagationDialog
+          scenario={scenario}
+          planCases={planCases}
+          onApply={onApplyLlmRevisions}
+          onClose={() => setPropagationOpen(false)}
+          onToast={onToast}
         />
       )}
 

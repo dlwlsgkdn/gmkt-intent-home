@@ -785,6 +785,7 @@ export default function Builder({ api, scenario }) {
 
       {isEvaluation ? (
         <EvaluationPanel
+          scenario={scenario}
           planCases={planCases}
           activeCaseId={planCaseId}
           onSelectCase={setPlanCaseId}

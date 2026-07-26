@@ -7,6 +7,7 @@ import {
   remapCaseEvaluation,
 } from '../../../lib/evaluation.js'
 import { applyLlmRevisionsToPlanCases } from '../../../lib/prompt/revision.js'
+import { caseComboSignature } from '../../../lib/prompt/planCases.js'
 
 /*
  * 계획 케이스(설문 답변 조합 → 계획 화면) 목록의 CRUD와 평가 상태를 담당한다.
@@ -58,12 +59,38 @@ export function usePlanCases({
     return next
   }
 
-  /* AI가 만든 초안 케이스를 일괄 삽입 */
-  const applyGeneratedCases = (generatedCases) => {
+  /* AI가 만든 초안 케이스 반영.
+     기본은 폴백 앞 일괄 삽입, replace를 켜면 같은 설문 조합의 기존 케이스를 그 자리에서
+     교체한다 — "페이지 재구성으로 고친 골든 케이스 → 전체 조합 재생성" 전파 경로의 마지막 조각.
+     교체된 케이스의 평가 기록은 새 케이스와 함께 사라진다(호출부가 미리 경고). */
+  const applyGeneratedCases = (generatedCases, { replace = false } = {}) => {
     if (!Array.isArray(generatedCases) || generatedCases.length === 0) return
-    updatePlanCases((current) => insertBeforeFallback(current, generatedCases))
+    if (!replace) {
+      updatePlanCases((current) => insertBeforeFallback(current, generatedCases))
+      setPlanCaseId(generatedCases[0].id)
+      api.showToast(`케이스 ${generatedCases.length}개를 초안으로 추가했어요. 평가 탭에서 검수해주세요.`)
+      return
+    }
+    let replaced = 0
+    updatePlanCases((current) => {
+      const bySignature = new Map(
+        generatedCases.map((generated) => [caseComboSignature(generated), generated])
+      )
+      const next = current.map((planCase) => {
+        if (planCase.isFallback) return planCase
+        const signature = caseComboSignature(planCase)
+        if (!signature || !bySignature.has(signature)) return planCase
+        const generated = bySignature.get(signature)
+        bySignature.delete(signature)
+        replaced++
+        return generated
+      })
+      return insertBeforeFallback(next, [...bySignature.values()])
+    })
     setPlanCaseId(generatedCases[0].id)
-    api.showToast(`케이스 ${generatedCases.length}개를 초안으로 추가했어요. 평가 탭에서 검수해주세요.`)
+    api.showToast(
+      `같은 조합 케이스 ${replaced}개를 교체하고 ${generatedCases.length - replaced}개를 추가했어요. ⌘Z로 되돌릴 수 있어요.`
+    )
   }
 
   const duplicatePlanCase = () => {

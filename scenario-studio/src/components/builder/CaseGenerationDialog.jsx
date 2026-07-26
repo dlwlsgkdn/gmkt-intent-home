@@ -60,6 +60,7 @@ export default function CaseGenerationDialog({
   const [catalogText, setCatalogText] = useState(() => catalogToText(baseCatalog))
   const [notes, setNotes] = useState('')
   const [skipExisting, setSkipExisting] = useState(true)
+  const [replaceExisting, setReplaceExisting] = useState(false) // 같은 조합의 기존 케이스 교체
 
   const [phase, setPhase] = useState('setup') // setup | exchange | review
   const [progress, setProgress] = useState({ done: 0, total: 0 })
@@ -195,7 +196,27 @@ export default function CaseGenerationDialog({
         sequence: existingRegular + index + 1,
       })
     )
-    onApply(cases)
+    if (replaceExisting) {
+      const generatedSignatures = new Set(cases.map(caseComboSignature))
+      const willReplace = (planCases || []).filter(
+        (planCase) => !planCase.isFallback && generatedSignatures.has(caseComboSignature(planCase))
+      )
+      if (willReplace.length > 0) {
+        const withRecords = willReplace.filter((planCase) => {
+          const evaluation = planCase.evaluation || {}
+          return Object.values(evaluation.components || {}).some(
+            (review) => review?.score != null || String(review?.feedback || '').trim()
+          )
+        }).length
+        const ok = window.confirm(
+          `같은 조합의 기존 케이스 ${willReplace.length}개가 교체됩니다.`
+          + (withRecords > 0 ? `\n그중 ${withRecords}개의 평가 기록이 함께 사라져요.` : '')
+          + '\n계속할까요? (⌘Z로 되돌릴 수 있어요)'
+        )
+        if (!ok) return
+      }
+    }
+    onApply(cases, { replace: replaceExisting })
     onClose()
   }
 
@@ -276,10 +297,23 @@ export default function CaseGenerationDialog({
                     <input
                       type="checkbox"
                       checked={skipExisting}
-                      onChange={(event) => setSkipExisting(event.target.checked)}
+                      onChange={(event) => {
+                        setSkipExisting(event.target.checked)
+                        if (event.target.checked) setReplaceExisting(false)
+                      }}
                     />
                     이미 케이스가 있는 조합은 제외
                   </label>
+                  {!skipExisting && (
+                    <label className="sb-gen-skip" title="페이지 재구성으로 고친 골든 케이스를 전체 조합에 전파할 때 사용해요">
+                      <input
+                        type="checkbox"
+                        checked={replaceExisting}
+                        onChange={(event) => setReplaceExisting(event.target.checked)}
+                      />
+                      같은 조합의 기존 케이스를 새로 만든 것으로 교체
+                    </label>
+                  )}
                 </div>
               </div>
             </section>

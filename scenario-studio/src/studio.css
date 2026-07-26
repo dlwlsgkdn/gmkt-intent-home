@@ -5124,6 +5124,18 @@ button.sb-info-chip:hover { border-color: var(--sb-n-400); background: var(--sb-
   .sb-qa-case-note__score { padding-top: 0; }
 }
 
+/* 전파 검토 — 케이스별 묶음 */
+.sb-prop-group { margin-bottom: 6px; }
+.sb-prop-group__name {
+  margin: 10px 0 6px;
+  color: var(--sb-info);
+  font-size: var(--sb-t-micro);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.sb-crev-feedback li > input[type='checkbox'] { flex: 0 0 auto; margin-top: 2px; accent-color: var(--sb-info); }
+.sb-fix-chooser .sb-mode-card:disabled { opacity: 0.45; cursor: not-allowed; }
+
 /* ── 케이스 재구성: 피드백 목록 · 변경 요약(diff) ── */
 .sb-crev-feedback {
   display: flex;
