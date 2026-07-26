@@ -88,6 +88,7 @@ cd scenario-studio && npm run build   # vite build && cp -R ../legacy ../docs/le
 - **라운드** `--sb-r-xs`~`--sb-r-2xl`/`--sb-r-pill`, **그림자** `--sb-shadow-sm`~`xl`, **타이포** `--sb-t-micro`~`--sb-t-title` 5단계, **모션** `--sb-dur`/`--sb-ease`
 - **포커스**: 개별 규칙에 `outline: none`을 쓰지 말 것. 전역 `[class^='sb-']:focus-visible` 규칙이 키보드 포커스 링을 담당한다
 - **버튼**: `.sb-btn` + 성격(`--primary`/`--ghost`/`--danger`/`--ai`/`--open`) + 크기(`--small`/`--tiny`). hover·active·disabled는 기본 정의에만 있다. AI를 부르는 버튼은 전부 `--ai`
+- **AI 왕복 표기 규칙**: AI 기능은 "누르면 만들어진다"고 약속하지 않는다. 트리거는 `✦`(생성)가 아니라 **`⇄`(왕복)** 를 쓰고 라벨에 "프롬프트"를 넣는다. 다이얼로그는 머리말에 `AiRoundTripNote`를 두고, `PromptExchange`가 1 복사 → 2 **스튜디오 밖에서** 붙여넣기 → 3 결과 가져오기를 항상 펼쳐 보인다. 번호는 이 왕복(`.sb-handoff`)에만 쓰고 다이얼로그 단계(`.sb-steps`)는 번호 없는 breadcrumb이다
 
 ## 핵심 설계 결정
 

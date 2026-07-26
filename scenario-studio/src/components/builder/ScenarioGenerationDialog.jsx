@@ -20,6 +20,7 @@ import { wrapForChatApp } from '../../lib/prompt/chatPrompt.js'
 import { buildScenarioDbPrompt, combinationCount, parseScenarioDbJson } from '../../lib/prompt/scenarioDb.js'
 import { copyToClipboard } from '../../lib/clipboard.js'
 import PromptExchange from './PromptExchange.jsx'
+import AiRoundTripNote from './AiRoundTripNote.jsx'
 
 const personaFromProfile = (profile) => {
   const name = profile?.name ? `${profile.name}.` : ''
@@ -193,24 +194,25 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onImport, 
       <section className="sb-llm-dialog sb-gen-dialog" role="dialog" aria-modal="true" aria-labelledby="sb-sgen-title">
         <div className="sb-llm-dialog__head">
           <div>
-            <p className="sb-panel-label">PROMPT → 내 AI → SCENARIO</p>
+            <p className="sb-panel-label">조건 입력 → 프롬프트 → 내 AI → 결과 가져오기</p>
             <h2 id="sb-sgen-title">AI로 시나리오 만들기</h2>
-            <p>검색어와 페르소나, 추천할 상품을 적으면 프롬프트를 만들어 드려요. 쓰던 AI에 붙여넣고 결과만 가져오면 됩니다.</p>
+            <p>검색어와 페르소나, 추천할 상품을 적으면 프롬프트를 만들어 드려요.</p>
+            <AiRoundTripNote>
+              조건을 채우면 <b>프롬프트</b>가 나오고, 그걸 쓰던 AI에 붙여넣어 받은 결과를 여기로 가져오면 시나리오가 만들어집니다.
+            </AiRoundTripNote>
           </div>
           <button type="button" className="sb-icon-btn" onClick={onClose} aria-label="닫기">×</button>
         </div>
 
         <ol className="sb-steps" aria-label="진행 단계">
-          <li className={'sb-steps__item' + (phase === 'setup' ? ' is-active' : ' is-done')}>
-            <b>1</b> 조건 입력
-          </li>
+          <li className={'sb-steps__item' + (phase === 'setup' ? ' is-active' : ' is-done')}>조건 입력</li>
+          <li className="sb-steps__sep" aria-hidden="true">›</li>
           <li className={'sb-steps__item'
             + (phase === 'prompt' ? ' is-active' : (phase === 'review' ? ' is-done' : ''))}>
-            <b>2</b> 프롬프트 · 결과
+            프롬프트 왕복
           </li>
-          <li className={'sb-steps__item' + (phase === 'review' ? ' is-active' : '')}>
-            <b>3</b> 확인 · 만들기
-          </li>
+          <li className="sb-steps__sep" aria-hidden="true">›</li>
+          <li className={'sb-steps__item' + (phase === 'review' ? ' is-active' : '')}>확인 · 만들기</li>
         </ol>
 
         {phase === 'setup' && (
@@ -375,7 +377,7 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onImport, 
             )}
 
             <div className="sb-llm-dialog__foot">
-              <p>API 키는 필요 없어요. 다음 단계에서 프롬프트를 복사해 쓰던 AI에 붙여넣고 결과만 가져옵니다.</p>
+              <p>다음 단계에서 프롬프트가 만들어집니다. 그걸 쓰던 AI에 붙여넣고 결과를 가져오면 완성이에요 — API 키는 필요 없습니다.</p>
               <div>
                 <button type="button" className="sb-btn sb-btn--ghost" onClick={onClose}>취소</button>
                 <button

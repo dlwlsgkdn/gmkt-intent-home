@@ -256,9 +256,9 @@ export default function HomeView({ api }) {
               className="sb-template-card sb-template-card--ai"
               onClick={() => setScenarioGenOpen(true)}
             >
-              <span className="sb-template-card__icon">✦</span>
+              <span className="sb-template-card__icon">⇄</span>
               <strong>AI로 시나리오 만들기</strong>
-              <small>검색어·페르소나·추천 상품만 주면 설문 화면과 계획 화면을 한 번에 구성</small>
+              <small>검색어·페르소나만 주면 <b>프롬프트</b>를 만들어 드려요 · 쓰던 AI에 붙여넣고 결과만 가져오면 완성</small>
             </button>
             <div className="sb-template-grid">
               {TEMPLATES.map((t) => (

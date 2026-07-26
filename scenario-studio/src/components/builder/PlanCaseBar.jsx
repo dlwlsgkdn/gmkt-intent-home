@@ -94,9 +94,9 @@ export default function PlanCaseBar({
         className="sb-btn sb-btn--small sb-btn--ai"
         disabled={previewMode}
         onClick={onGenerateCases}
-        title="페르소나·상품 카탈로그로 조합별 케이스를 만드는 프롬프트를 생성"
+        title="조합별 케이스를 만들 프롬프트를 생성해요. 쓰던 AI에 붙여넣고 결과를 가져오면 케이스가 추가됩니다."
       >
-        ✦ 케이스 만들기
+        ⇄ 케이스 프롬프트
       </button>
       <Dropdown
         open={openMenu === 'case'}

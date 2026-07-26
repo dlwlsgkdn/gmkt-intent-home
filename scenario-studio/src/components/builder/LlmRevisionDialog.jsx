@@ -6,6 +6,7 @@ import {
 } from '../../lib/prompt/revision.js'
 import { wrapForChatApp } from '../../lib/prompt/chatPrompt.js'
 import PromptExchange from './PromptExchange.jsx'
+import AiRoundTripNote from './AiRoundTripNote.jsx'
 
 const revisionKey = (revision) =>
   [revision.caseId, revision.criterionKey, revision.itemId, revision.fieldKey].join(':')
@@ -75,12 +76,26 @@ export default function LlmRevisionDialog({
       <section className="sb-llm-dialog" role="dialog" aria-modal="true" aria-labelledby="sb-llm-title">
         <div className="sb-llm-dialog__head">
           <div>
-            <p className="sb-panel-label">피드백 → 내 AI → 안전한 부분 수정</p>
+            <p className="sb-panel-label">피드백 → 프롬프트 → 내 AI → 안전한 부분 수정</p>
             <h2 id="sb-llm-title">AI에게 시나리오 수정 요청</h2>
             <p>피드백을 구조화해 프롬프트로 만들고, 허용된 컴포넌트 필드만 검토 후 선택 적용합니다.</p>
+            <AiRoundTripNote>
+              여기서 바로 고쳐지지 않습니다. 프롬프트를 쓰던 AI에 붙여넣어 받은 수정안을 가져오면,
+              <b> 허용된 필드인지 검증한 뒤 하나씩 골라</b> 적용합니다.
+            </AiRoundTripNote>
           </div>
           <button type="button" className="sb-icon-btn" onClick={onClose} aria-label="닫기">×</button>
         </div>
+
+        {request.feedbackCount > 0 && (
+          <ol className="sb-steps" aria-label="진행 단계">
+            <li className={'sb-steps__item' + (validation ? ' is-done' : ' is-active')}>피드백 확인</li>
+            <li className="sb-steps__sep" aria-hidden="true">›</li>
+            <li className={'sb-steps__item' + (validation ? ' is-done' : '')}>프롬프트 왕복</li>
+            <li className="sb-steps__sep" aria-hidden="true">›</li>
+            <li className={'sb-steps__item' + (validation?.revisions.length ? ' is-active' : '')}>수정안 적용</li>
+          </ol>
+        )}
 
         <div className="sb-llm-scope">
           <div>
@@ -144,7 +159,7 @@ export default function LlmRevisionDialog({
               <section className="sb-llm-section">
                 <div className="sb-llm-section__head">
                   <div>
-                    <span>STEP C</span>
+                    <span>STEP 4 · 다시 스튜디오에서</span>
                     <strong>수정안 선택 적용</strong>
                   </div>
                   <span>{selectedKeys.size}/{validation.revisions.length}개 선택</span>

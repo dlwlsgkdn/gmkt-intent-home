@@ -4616,6 +4616,138 @@ button.sb-info-chip:hover { border-color: var(--sb-n-400); background: var(--sb-
   .sb-gen-grid--three { grid-template-columns: 1fr; }
 }
 
+/* ── AI 왕복 안내 ──
+   버튼이 "누르면 만들어진다"고 약속하지 않도록, 다이얼로그마다 왕복임을 먼저 말한다 */
+.sb-ai-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 9px 11px;
+  border: 1px solid var(--sb-ai-line);
+  border-radius: var(--sb-r-sm);
+  background: var(--sb-ai-soft);
+  color: var(--sb-ink-2);
+  font-size: var(--sb-t-caption);
+  line-height: 1.55;
+}
+.sb-ai-note b { color: var(--sb-ai); font-weight: 800; }
+.sb-ai-note__mark {
+  flex: 0 0 auto;
+  color: var(--sb-ai);
+  font-size: var(--sb-t-small);
+  font-weight: 800;
+}
+
+/* 3박자 핸드오프 — 가운데(내 AI)는 스튜디오 밖이라 점선으로 떼어 놓는다 */
+.sb-handoff {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  margin: 14px 24px 0;
+  padding: 0;
+  list-style: none;
+}
+.sb-handoff__step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 1px 8px;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--sb-line);
+  border-radius: var(--sb-r-md);
+  background: var(--sb-surface);
+}
+.sb-handoff__step b {
+  grid-row: 1 / span 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--sb-n-200);
+  color: var(--sb-n-500);
+  font-size: var(--sb-t-micro);
+}
+.sb-handoff__step span { color: var(--sb-ink); font-size: var(--sb-t-small); font-weight: 750; }
+.sb-handoff__step small {
+  color: var(--sb-muted);
+  font-size: var(--sb-t-micro);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sb-handoff__step--away {
+  border-style: dashed;
+  border-color: var(--sb-ai-line);
+  background: var(--sb-ai-soft);
+}
+.sb-handoff__step--away b { background: rgba(124, 58, 237, 0.16); color: var(--sb-ai); }
+.sb-handoff__step.is-now { border-color: var(--sb-info); box-shadow: 0 0 0 3px rgba(54, 95, 127, 0.1); }
+.sb-handoff__step.is-now b { background: var(--sb-info); color: var(--sb-n-0); }
+.sb-handoff__step--away.is-now { border-color: var(--sb-ai); box-shadow: 0 0 0 3px var(--sb-ai-soft); }
+.sb-handoff__step--away.is-now b { background: var(--sb-ai); color: var(--sb-n-0); }
+.sb-handoff__step.is-done b { background: rgba(8, 127, 91, 0.14); color: var(--sb-success); }
+.sb-handoff__arrow {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  color: var(--sb-n-300);
+  font-size: var(--sb-t-small);
+}
+
+/* STEP 2 — 스튜디오 밖에서 사람이 해야 하는 일 */
+.sb-away-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 10px 24px;
+  padding: 15px 17px;
+  border: 1px dashed var(--sb-ai-line);
+  border-radius: var(--sb-r-lg);
+  background: var(--sb-ai-soft);
+}
+.sb-away-step.is-now { border-style: solid; border-color: var(--sb-ai); }
+.sb-away-step__mark {
+  flex: 0 0 auto;
+  color: var(--sb-ai);
+  font-size: 19px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.sb-away-step strong {
+  display: block;
+  color: var(--sb-ai);
+  font-size: var(--sb-t-micro);
+  font-weight: 850;
+  letter-spacing: 0.11em;
+}
+.sb-away-step p {
+  margin: 4px 0 0;
+  color: var(--sb-ink-2);
+  font-size: var(--sb-t-caption);
+  line-height: 1.6;
+}
+.sb-away-step p b { color: var(--sb-ink); font-weight: 750; }
+
+/* 복사 버튼 — 누른 뒤 다음 할 일로 라벨이 넘어간다 */
+.sb-copy-btn { transition: background-color var(--sb-dur) var(--sb-ease), border-color var(--sb-dur) var(--sb-ease); }
+.sb-copy-btn.is-copied {
+  background: var(--sb-success);
+  border-color: var(--sb-success);
+  color: var(--sb-n-0);
+}
+
+@media (max-width: 640px) {
+  .sb-handoff { flex-direction: column; margin-inline: 14px; }
+  .sb-handoff__arrow { justify-content: center; transform: rotate(90deg); }
+  .sb-away-step { margin-inline: 14px; }
+}
+
 /* ── AI 왕복 다이얼로그 공통: 진행 표시 · 방식 선택 · 배치 바 ── */
 .sb-steps {
   display: flex;
@@ -4625,37 +4757,26 @@ button.sb-info-chip:hover { border-color: var(--sb-n-400); background: var(--sb-
   padding: 0;
   list-style: none;
 }
+/* 다이얼로그 단계 breadcrumb — 숫자를 쓰지 않는다.
+   번호는 사용자가 직접 수행하는 왕복(.sb-handoff)에만 붙여 둘이 헷갈리지 않게 한다 */
 .sb-steps__item {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 7px 13px 7px 8px;
+  padding: 6px 13px;
   border: 1px solid var(--sb-line);
-  border-radius: 999px;
+  border-radius: var(--sb-r-pill);
   color: var(--sb-n-400);
   font-size: var(--sb-t-caption);
   font-weight: 700;
   white-space: nowrap;
 }
-.sb-steps__item b {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: var(--sb-n-200);
-  color: var(--sb-n-400);
-  font-size: var(--sb-t-micro);
-}
+.sb-steps__sep { color: var(--sb-n-300); font-size: var(--sb-t-small); }
 .sb-steps__item.is-done { color: var(--sb-n-500); border-color: rgba(54, 95, 127, 0.2); }
-.sb-steps__item.is-done b { background: rgba(54, 95, 127, 0.14); color: var(--sb-qa-blue); }
 .sb-steps__item.is-active {
   color: var(--sb-ink);
-  border-color: var(--sb-qa-blue);
+  border-color: var(--sb-info);
   background: rgba(54, 95, 127, 0.06);
 }
-.sb-steps__item.is-active b { background: var(--sb-qa-blue); color: #fff; }
 
 .sb-gen-grid--three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
