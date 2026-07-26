@@ -33,6 +33,7 @@ import CanvasTextToolbar from './builder/CanvasTextToolbar.jsx'
 import ContextMenu from './builder/ContextMenu.jsx'
 import EvaluationPanel from './builder/EvaluationPanel.jsx'
 import CaseGenerationDialog from './builder/CaseGenerationDialog.jsx'
+import CaseRevisionDialog from './builder/CaseRevisionDialog.jsx'
 import BuilderTopBar from './builder/BuilderTopBar.jsx'
 import BuilderCanvas from './builder/BuilderCanvas.jsx'
 import PlanCaseBar from './builder/PlanCaseBar.jsx'
@@ -85,6 +86,7 @@ export default function Builder({ api, scenario }) {
   const [draggingChildId, setDraggingChildId] = useState(null)
   const [childDragGhost, setChildDragGhost] = useState(null) // 자식 재정렬 중 포인터 옆 피드백
   const [caseGenOpen, setCaseGenOpen] = useState(false)
+  const [caseRevOpen, setCaseRevOpen] = useState(false) // 현재 케이스 통째 재구성
   const [feedbackTarget, setFeedbackTarget] = useState(null) // { caseId, itemId, fieldKey, label }
   const [, setMeasureVer] = useState(0) // 실제 표시 높이 변경을 캔버스 스크롤 범위에 반영
 
@@ -475,6 +477,12 @@ export default function Builder({ api, scenario }) {
     setSelectedIds([])
   }
 
+  /* 평가 탭에서 "이 케이스 다시 만들기" — 대상 케이스를 활성화한 뒤 재구성 다이얼로그를 연다 */
+  const reviseEvaluatedCase = (caseId) => {
+    setPlanCaseId(caseId)
+    setCaseRevOpen(true)
+  }
+
   const editEvaluatedComponent = (caseId, component) => {
     const label = LIBRARY[component.type]?.label || component.type
     setCanvasView('edit')
@@ -717,6 +725,7 @@ export default function Builder({ api, scenario }) {
             onSelectCase={setPlanCaseId}
             onAddCase={() => { cases.addPlanCase(); setOpenMenu('case') }}
             onGenerateCases={() => setCaseGenOpen(true)}
+            onReviseCase={() => setCaseRevOpen(true)}
             onChangeCase={cases.updateActivePlanCase}
             onSetFallback={cases.setFallbackPlanCase}
             onDuplicate={cases.duplicatePlanCase}
@@ -748,6 +757,20 @@ export default function Builder({ api, scenario }) {
         )}
       </BuilderTopBar>
 
+      {caseRevOpen && activePlanCase && (
+        <CaseRevisionDialog
+          scenario={scenario}
+          planCase={activePlanCase}
+          planCases={planCases}
+          profile={api.profile}
+          onApply={(nextCase) => cases.updatePlanCases((current) =>
+            current.map((planCase) => (planCase.id === nextCase.id ? nextCase : planCase))
+          )}
+          onClose={() => setCaseRevOpen(false)}
+          onToast={api.showToast}
+        />
+      )}
+
       {caseGenOpen && (
         <CaseGenerationDialog
           scenario={scenario}
@@ -768,6 +791,7 @@ export default function Builder({ api, scenario }) {
           onRecommend={cases.recommendPlanCases}
           onUpdateComponent={cases.updateComponentEvaluation}
           onEditCase={editEvaluatedCase}
+          onReviseCase={reviseEvaluatedCase}
           onEditComponent={editEvaluatedComponent}
           onApplyLlmRevisions={cases.applyRevisions}
           onToast={api.showToast}

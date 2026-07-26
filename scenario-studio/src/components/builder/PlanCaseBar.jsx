@@ -18,6 +18,7 @@ export default function PlanCaseBar({
   onSelectCase,
   onAddCase,
   onGenerateCases,
+  onReviseCase,
   onChangeCase,
   onSetFallback,
   onDuplicate,
@@ -97,6 +98,15 @@ export default function PlanCaseBar({
         title="조합별 케이스를 만들 프롬프트를 생성해요. 쓰던 AI에 붙여넣고 결과를 가져오면 케이스가 추가됩니다."
       >
         ⇄ 케이스 프롬프트
+      </button>
+      <button
+        type="button"
+        className="sb-btn sb-btn--small sb-btn--ai"
+        disabled={previewMode}
+        onClick={onReviseCase}
+        title="현재 케이스의 페이지 전체를 다시 구성할 프롬프트를 만들어요. 컴포넌트 추가·삭제까지 가능합니다."
+      >
+        ⇄ 다시 만들기
       </button>
       <Dropdown
         open={openMenu === 'case'}

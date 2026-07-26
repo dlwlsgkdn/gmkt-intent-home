@@ -335,6 +335,7 @@ export default function EvaluationPanel({
   onRecommend,
   onUpdateComponent,
   onEditCase,
+  onReviseCase,
   onEditComponent,
   onApplyLlmRevisions,
   onToast,
@@ -490,9 +491,19 @@ export default function EvaluationPanel({
             <p>실제 콘텐츠 컴포넌트 {activeCaseStat?.total || 0}개 · 최대 {activeCaseStat?.maxScore || 0}점</p>
           </div>
           {activeCase && (
-            <button type="button" className="sb-btn" onClick={() => onEditCase(activeCase.id)}>
-              전체 결과 화면 열기
-            </button>
+            <div className="sb-qa-case__actions">
+              <button
+                type="button"
+                className="sb-btn sb-btn--ai"
+                title="이 케이스의 피드백을 모아 페이지 전체를 다시 구성할 프롬프트를 만들어요."
+                onClick={() => onReviseCase(activeCase.id)}
+              >
+                ⇄ 이 케이스 다시 만들기
+              </button>
+              <button type="button" className="sb-btn" onClick={() => onEditCase(activeCase.id)}>
+                전체 결과 화면 열기
+              </button>
+            </div>
           )}
         </div>
 

@@ -4757,6 +4757,59 @@ button.sb-info-chip:hover { border-color: var(--sb-n-400); background: var(--sb-
   .sb-away-step { margin-inline: 14px; }
 }
 
+.sb-qa-case__actions { display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
+
+/* ── 케이스 재구성: 피드백 목록 · 변경 요약(diff) ── */
+.sb-crev-feedback {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+.sb-crev-feedback li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 11px;
+  border: 1px solid var(--sb-line);
+  border-radius: var(--sb-r-sm);
+  background: var(--sb-surface-sunken);
+  font-size: var(--sb-t-caption);
+}
+.sb-crev-feedback b { flex: 0 0 auto; color: var(--sb-info); font-size: var(--sb-t-micro); font-weight: 800; }
+.sb-crev-feedback span { color: var(--sb-ink-2); line-height: 1.5; }
+.sb-crev-feedback em {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--sb-subtle);
+  font-style: normal;
+  font-size: var(--sb-t-micro);
+  white-space: nowrap;
+}
+.sb-crev-diff {
+  margin-top: 8px;
+  padding: 11px 13px;
+  border: 1px solid var(--sb-line);
+  border-radius: var(--sb-r-md);
+  background: var(--sb-surface);
+  font-size: var(--sb-t-caption);
+  color: var(--sb-muted);
+}
+.sb-crev-diff__counts {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-weight: 700;
+}
+.sb-crev-diff__counts b { color: var(--sb-ink); font-size: var(--sb-t-small); }
+.sb-crev-diff__add { color: var(--sb-success); }
+.sb-crev-diff__del { color: var(--sb-danger); }
+.sb-crev-diff p { margin: 6px 0 0; line-height: 1.5; }
+.sb-crev-diff__warn { color: var(--sb-warn-ink); font-weight: 700; }
+
 /* ── AI 왕복 다이얼로그 공통: 진행 표시 · 방식 선택 · 배치 바 ── */
 .sb-steps {
   display: flex;
