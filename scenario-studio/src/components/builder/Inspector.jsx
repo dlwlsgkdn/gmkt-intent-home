@@ -61,7 +61,7 @@ export default function Inspector({
         <div className="sb-inspector__empty">
           <p className="sb-panel-label">편집</p>
           캔버스에서 컴포넌트를 선택하면<br />플레이스홀더를 편집할 수 있어요.<br />
-          <span style={{ fontSize: 12 }}>⇧+클릭으로 여러 개를 선택할 수 있어요.</span>
+          <span style={{ fontSize: 'var(--sb-t-small)' }}>⇧+클릭으로 여러 개를 선택할 수 있어요.</span>
           {stageKey === 'survey' && (
             <p className="sb-profile-config__hint" style={{ marginTop: 14 }}>
               💡 프로필 요약 패널은 팔레트의 "프로필 요약 패널" 컴포넌트로 배치하고,
