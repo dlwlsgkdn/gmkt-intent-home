@@ -220,7 +220,6 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onImport, 
             <section className="sb-llm-section">
               <div className="sb-llm-section__head">
                 <div>
-                  <span>STEP 1</span>
                   <strong>검색어 · 페르소나</strong>
                 </div>
               </div>
@@ -259,7 +258,6 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onImport, 
             <section className="sb-llm-section">
               <div className="sb-llm-section__head">
                 <div>
-                  <span>STEP 2</span>
                   <strong>추천 상품 · 구성</strong>
                 </div>
                 <div className="sb-gen-headbtns">
@@ -335,7 +333,6 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onImport, 
             <section className="sb-llm-section">
               <div className="sb-llm-section__head">
                 <div>
-                  <span>STEP 3</span>
                   <strong>만드는 방식</strong>
                 </div>
               </div>
@@ -485,7 +482,6 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onImport, 
             <section className="sb-llm-section">
               <div className="sb-llm-section__head">
                 <div>
-                  <span>REVIEW</span>
                   <strong>{draftResult.draft.title}</strong>
                 </div>
                 <span>질문 {draftResult.draft.survey.questions.length}개 · 단계 {draftResult.draft.plan.steps.length}개</span>

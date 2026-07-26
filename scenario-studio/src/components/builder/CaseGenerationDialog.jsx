@@ -258,7 +258,6 @@ export default function CaseGenerationDialog({
             <section className="sb-llm-section">
               <div className="sb-llm-section__head">
                 <div>
-                  <span>STEP 1</span>
                   <strong>구조 · 조합</strong>
                 </div>
                 <span>{combos.length}개 조합 생성 예정</span>
@@ -321,7 +320,6 @@ export default function CaseGenerationDialog({
             <section className="sb-llm-section">
               <div className="sb-llm-section__head">
                 <div>
-                  <span>STEP 2</span>
                   <strong>페르소나 · 상품 카탈로그</strong>
                 </div>
               </div>
@@ -436,7 +434,6 @@ export default function CaseGenerationDialog({
             <section className="sb-llm-section">
               <div className="sb-llm-section__head">
                 <div>
-                  <span>REVIEW</span>
                   <strong>생성 결과 검토</strong>
                 </div>
                 <span>{selectedKeys.size}/{results.length}개 선택</span>

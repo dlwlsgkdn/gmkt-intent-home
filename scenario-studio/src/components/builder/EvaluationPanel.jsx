@@ -85,10 +85,7 @@ function Rubric({ onClose }) {
   return (
     <section className="sb-qa-rubric" aria-label="별점 기준">
       <div className="sb-qa-rubric__head">
-        <div>
-          <span>SCORING RUBRIC</span>
-          <h3>별점 기준</h3>
-        </div>
+        <h3>별점 기준</h3>
         <button type="button" className="sb-icon-btn" onClick={onClose} aria-label="평가 기준 닫기">×</button>
       </div>
       <p className="sb-qa-rubric__howto">
@@ -121,7 +118,6 @@ function Leaderboard({ board, remaining, onOpenCase }) {
   return (
     <aside className="sb-qa-board" aria-label="케이스 리더보드">
       <div className="sb-qa-board__head">
-        <span>CASE LEADERBOARD</span>
         <h3>케이스 리더보드</h3>
       </div>
       <p className="sb-qa-board__note">
@@ -420,8 +416,6 @@ export default function EvaluationPanel({
   if (selectedCases.length < 3) {
     return (
       <main className="sb-evaluation sb-qa-setup">
-        <span className="sb-qa-setup__mark">QA</span>
-        <p className="sb-panel-label">EVALUATION STUDIO</p>
         <h2>평가할 CASE A / B / C를 준비하고 있어요.</h2>
         <p>전체 계획 케이스 중 품질과 조건 다양성이 높은 3개를 자동으로 선정합니다.</p>
         <button type="button" className="sb-btn sb-btn--primary" onClick={onRecommend}>

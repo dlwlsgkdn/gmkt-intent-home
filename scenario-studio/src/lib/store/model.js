@@ -12,12 +12,19 @@ export function uid() {
 }
 
 /* 캔버스/플레이어 기기 프리셋 (논리 픽셀 너비) */
+/* 폭은 실기기 CSS 뷰포트(px) 기준. 기존 key는 저장된 시나리오가 참조하므로 바꾸지 말 것 */
 export const DEVICE_PRESETS = [
   { key: 'desktop', label: '데스크톱', w: 720, icon: '🖥️' },
+  { key: 'galaxy-fold-cover', label: '갤럭시 Z 폴드 커버 (344)', w: 344, icon: '📱' },
   { key: 'galaxy', label: '갤럭시 S (360)', w: 360, icon: '📱' },
   { key: 'iphone-se', label: 'iPhone SE (375)', w: 375, icon: '📱' },
+  { key: 'galaxy-s-ultra', label: '갤럭시 S 울트라 (384)', w: 384, icon: '📱' },
   { key: 'iphone-15', label: 'iPhone 15 (390)', w: 390, icon: '📱' },
+  { key: 'iphone-16-pro', label: 'iPhone 16 Pro (402)', w: 402, icon: '📱' },
+  { key: 'galaxy-a-flip', label: '갤럭시 플립·A·노트 (412)', w: 412, icon: '📱' },
   { key: 'iphone-pro-max', label: 'iPhone Pro Max (430)', w: 430, icon: '📱' },
+  { key: 'iphone-16-pro-max', label: 'iPhone 16 Pro Max (440)', w: 440, icon: '📱' },
+  { key: 'galaxy-fold-open', label: '갤럭시 Z 폴드 펼침 (690)', w: 690, icon: '📱' },
   { key: 'tablet', label: '태블릿 (768)', w: 768, icon: '💻' },
 ]
 

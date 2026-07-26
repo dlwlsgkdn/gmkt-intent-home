@@ -1798,21 +1798,6 @@
   color: var(--sb-n-500);
   text-align: center;
 }
-.sb-qa-setup__mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 66px;
-  height: 66px;
-  margin-bottom: 18px;
-  border-radius: var(--sb-r-2xl);
-  background: var(--sb-info);
-  color: #fff;
-  font-size: 20px;
-  font-weight: 500;
-  letter-spacing: -0.04em;
-  box-shadow: 0 18px 40px -22px rgba(54, 95, 127, 0.7);
-}
 .sb-qa-setup h2 { margin: 0; color: var(--sb-ink); font-size: 25px; }
 .sb-qa-setup > p:not(.sb-panel-label) { margin: 10px 0 18px; font-size: 13px; }
 .sb-qa-intro {
@@ -1932,8 +1917,7 @@
   gap: 16px;
   margin-bottom: 12px;
 }
-.sb-qa-rubric__head span { color: var(--sb-qa-blue); font-size: 10px; font-weight: 500; letter-spacing: 0.12em; }
-.sb-qa-rubric__head h3 { margin: 3px 0 0; color: var(--sb-ink); font-size: 20px; }
+.sb-qa-rubric__head h3 { margin: 0; color: var(--sb-ink); font-size: 20px; }
 .sb-qa-rubric__head .sb-icon-btn { font-size: 22px; }
 .sb-qa-rubric__howto {
   margin: 10px 0 0;
@@ -2553,10 +2537,7 @@
   gap: 14px;
   margin-bottom: 10px;
 }
-.sb-llm-section__head > div > span,
-.sb-llm-section__head > div > strong { display: block; }
-.sb-llm-section__head > div > span { color: var(--sb-qa-blue); font-size: var(--sb-t-micro); font-weight: 500; letter-spacing: 0.11em; }
-.sb-llm-section__head > div > strong { margin-top: 2px; color: var(--sb-ink); font-size: var(--sb-t-title); }
+.sb-llm-section__head > div > strong { display: block; color: var(--sb-ink); font-size: var(--sb-t-title); }
 .sb-llm-section__head > span { color: var(--sb-n-500); font-size: var(--sb-t-caption); font-weight: 400; }
 .sb-llm-help { margin: 0 0 11px; color: var(--sb-n-500); font-size: var(--sb-t-caption); line-height: 1.55; }
 .sb-llm-details {
@@ -3086,7 +3067,9 @@
   right: 0;
   z-index: 95;
   min-width: 230px;
+  max-height: min(70vh, 620px);
   padding: 6px;
+  overflow-y: auto;
   border-radius: var(--sb-r-xl);
   border: 1px solid var(--sb-line);
   background: #fff;

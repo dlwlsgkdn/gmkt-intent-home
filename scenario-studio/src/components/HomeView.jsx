@@ -232,10 +232,7 @@ export default function HomeView({ api }) {
           <div className="sb-drawer-backdrop" onClick={() => setDrawerOpen(false)} />
           <aside className="sb-drawer">
             <div className="sb-drawer__head">
-              <div>
-                <p className="sb-eyebrow">Scenario Studio</p>
-                <h3>내 시나리오</h3>
-              </div>
+              <h3>내 시나리오</h3>
               <button type="button" className="sb-icon-btn" onClick={() => setDrawerOpen(false)} aria-label="닫기">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
