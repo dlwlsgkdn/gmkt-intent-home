@@ -108,3 +108,5 @@ cd scenario-studio && npm run build   # vite build && cp -R ../legacy ../docs/le
 - 히스토리 스냅샷은 `{stages, planCases, device, exploreItems}` JSON (Builder가 `useBuilderHistory`에 주입) — 시나리오 필드 추가 시 undo 포함 여부 검토
 - 아이템 목록을 바꾸는 함수는 항상 **업데이터 함수**를 넘길 것. 드래그/보정 커밋이 `setTimeout`으로 미뤄지므로 값으로 덮으면 낡은 클로저가 최신 상태를 지운다
 - 배치를 커밋하는 모든 경로는 `layoutOps.settle()`을 통과시킬 것 (겹침 해소 + 컴팩트가 한 곳에 있다)
+- **레이아웃 함수에 아이템 목록을 통째로 넘기지 말 것.** `layout.js`의 함수들(`compactItems`/`layoutCompactUp`/`resolveCollision`)은 받은 목록을 전부 캔버스 아이템으로 취급하므로, 컨테이너 자식이 섞이면 자식에 좌표를 부여하고 그 유령 블록이 최상위 아이템을 아래로 밀어낸다(캔버스 상단에 수백 px 빈 띠). 반드시 `layout.withTopOnly(prev, (top) => ...)`로 감쌀 것
+- `CanvasItem`의 ResizeObserver는 아이템당 한 번만 만들고 콜백은 ref로 갱신한다. 콜백을 그대로 붙잡으면 `previewMode`·컴팩트 방향이 첫 렌더 값에 얼어붙는다

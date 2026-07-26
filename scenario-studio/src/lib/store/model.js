@@ -57,6 +57,15 @@ export function createItem(type, defaults, index = 0) {
   }
 }
 
+/* 컨테이너 자식은 슬롯 순서가 배치를 결정하므로 x/y를 갖지 않는다.
+   좌표가 남아 있으면 레이아웃 연산이 자식을 캔버스 아이템으로 착각할 여지가 생기므로
+   읽어 들이는 지점에서 0으로 되돌린다. (자식까지 컴팩트에 넘기던 옛 버전이 남긴 좌표 복구) */
+export function normalizeItems(list) {
+  return (Array.isArray(list) ? list : []).map((item) => (
+    item && item.parentId && (item.x || item.y) ? { ...item, x: 0, y: 0 } : item
+  ))
+}
+
 /* 어떤 경로로 들어온 시나리오든(생성·가져오기·복원·서버 동기화) 이 함수를 통과한다 */
 export function normalizeScenario(input = {}) {
   const raw = input && typeof input === 'object' && !Array.isArray(input) ? input : {}
@@ -78,7 +87,7 @@ export function normalizeScenario(input = {}) {
     versions: Array.isArray(raw.versions) ? raw.versions : [],
     stages: {
       ...stages,
-      survey: Array.isArray(stages.survey) ? stages.survey : [],
+      survey: normalizeItems(stages.survey),
       // 구버전 호환 입력만 받으며, 실제 계획 아이템은 planCases[].items에 저장한다.
       plan: [],
     },

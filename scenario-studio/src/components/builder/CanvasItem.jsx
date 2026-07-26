@@ -32,6 +32,11 @@ export default function CanvasItem({
     ? (renderCtx?.allItems || []).filter((child) => child.parentId === item.id).length
     : 0
 
+  /* 관찰자는 아이템당 한 번만 만들지만 콜백은 매 렌더 갱신해야 한다 —
+     붙잡아 두면 미리보기 여부·컴팩트 방향이 첫 렌더 값에 얼어붙는다 */
+  const onMeasureRef = useRef(onMeasure)
+  useEffect(() => { onMeasureRef.current = onMeasure })
+
   useEffect(() => {
     const el = ref.current
     if (!el) return
@@ -41,7 +46,7 @@ export default function CanvasItem({
       const next = el.offsetHeight
       const prev = heightsRef.current[item.id]
       heightsRef.current[item.id] = next
-      if (prev == null || Math.abs(prev - next) >= 1) onMeasure?.(item.id, next, prev)
+      if (prev == null || Math.abs(prev - next) >= 1) onMeasureRef.current?.(item.id, next, prev)
     }
     report()
     const ro = new ResizeObserver(report)

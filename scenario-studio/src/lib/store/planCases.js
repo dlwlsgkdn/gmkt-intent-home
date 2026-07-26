@@ -1,5 +1,5 @@
 import { normalizeCaseEvaluation } from '../evaluation.js'
-import { uid } from './model.js'
+import { normalizeItems, uid } from './model.js'
 
 /*
  * 계획 케이스 — 조건의 형태와 평가 규칙.
@@ -65,7 +65,7 @@ function normalizePlanCase(raw, index) {
     conditionMode: raw?.conditionMode === 'any' ? 'any' : 'all',
     conditions: Array.isArray(raw?.conditions) ? raw.conditions.map(normalizePlanCondition) : [],
     isFallback: !!raw?.isFallback,
-    items: Array.isArray(raw?.items) ? raw.items : [],
+    items: normalizeItems(raw?.items),
     evaluation: normalizeCaseEvaluation(raw?.evaluation),
   })
 }

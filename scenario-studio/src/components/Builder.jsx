@@ -394,8 +394,12 @@ export default function Builder({ api, scenario }) {
       ...current,
       ...rescaleForDevice(current, preset, { pad: PAD, minItemW: MIN_ITEM_W, currentCanvasW: canvasW }),
     }))
-    // 폭 변경으로 높이가 다시 측정된 뒤 겹침/간격을 보정한다
-    setTimeout(() => setItems((prev) => layoutCompactUp(prev, heightsRef.current)), 200)
+    // 폭 변경으로 높이가 다시 측정된 뒤 겹침/간격을 보정한다.
+    // withTopOnly 필수 — 자식까지 넘기면 컴팩트가 자식을 캔버스 아이템으로 취급해
+    // 좌표를 부여하고, 그 유령 블록이 최상위 아이템을 아래로 밀어낸다.
+    setTimeout(() => {
+      setItems((prev) => layout.withTopOnly(prev, (top) => layoutCompactUp(top, heightsRef.current)))
+    }, 200)
     api.showToast(`${preset.label} 폭 기준으로 캔버스를 전환했어요.`)
   }
 
