@@ -1559,19 +1559,25 @@
 .sb-stars:hover .sb-star { color: var(--sb-star); }
 .sb-stars .sb-star:hover ~ .sb-star { color: var(--sb-n-300); }
 .sb-star:hover { transform: scale(1.18); }
-.sb-star-zero {
-  margin-left: 5px;
-  width: 20px;
-  height: 20px;
+/* 미평가 상태는 별 전체를 흐리게 — 0점(정상 명도의 빈 별)과 시각적으로 구분된다 */
+.sb-stars.is-unrated .sb-star { opacity: 0.4; }
+/* 별 옆 상태 배지: 미평가(회색) / 0점(빨강). 누르면 미평가로 초기화 */
+.sb-star-state {
+  margin-left: 6px;
+  padding: 2px 8px;
   border: 1px solid var(--sb-line);
-  border-radius: 50%;
+  border-radius: var(--sb-r-pill);
   background: var(--sb-surface);
-  color: var(--sb-muted);
+  color: var(--sb-subtle);
   font-size: var(--sb-t-micro);
   font-weight: 800;
+  white-space: nowrap;
   cursor: pointer;
+  transition: color var(--sb-dur) var(--sb-ease), background-color var(--sb-dur) var(--sb-ease), border-color var(--sb-dur) var(--sb-ease);
 }
-.sb-star-zero.is-on { border-color: var(--sb-danger); background: var(--sb-danger-soft); color: var(--sb-danger); }
+.sb-star-state.is-unrated { background: var(--sb-surface-inset); color: var(--sb-muted); }
+.sb-star-state.is-zero { border-color: var(--sb-danger); background: var(--sb-danger-soft); color: var(--sb-danger); }
+.sb-star-state:hover { border-color: var(--sb-n-400); color: var(--sb-ink-2); }
 
 /* ── 주석 레이아웃: 왼쪽 실제 페이지 + 오른쪽 말풍선 레일 ── */
 .sb-annotate {
@@ -1867,6 +1873,18 @@
 .sb-qa-rubric__head span { color: var(--sb-qa-blue); font-size: 10px; font-weight: 800; letter-spacing: 0.12em; }
 .sb-qa-rubric__head h3 { margin: 3px 0 0; color: var(--sb-ink); font-size: 20px; }
 .sb-qa-rubric__head .sb-icon-btn { font-size: 22px; }
+.sb-qa-rubric__howto {
+  margin: 10px 0 0;
+  padding: 9px 12px;
+  border: 1px solid var(--sb-line);
+  border-radius: var(--sb-r-sm);
+  background: var(--sb-surface-sunken);
+  color: var(--sb-muted);
+  font-size: var(--sb-t-caption);
+  line-height: 1.6;
+}
+.sb-qa-rubric__howto b { color: var(--sb-ink); }
+
 .sb-qa-rubric__distinction {
   display: grid;
   grid-template-columns: auto 1fr 1fr;
@@ -4746,7 +4764,19 @@ button.sb-info-chip:hover { border-color: var(--sb-n-400); background: var(--sb-
   .sb-qa-review__actions { flex-wrap: wrap; }
   .sb-qa-review__actions > span { flex-basis: 100%; }
   .sb-qa-rubric { top: 12px; right: 12px; max-height: calc(100vh - 24px); }
-  .sb-qa-rubric__distinction { grid-template-columns: minmax(0, 1fr); }
+  .sb-qa-rubric__howto {
+  margin: 10px 0 0;
+  padding: 9px 12px;
+  border: 1px solid var(--sb-line);
+  border-radius: var(--sb-r-sm);
+  background: var(--sb-surface-sunken);
+  color: var(--sb-muted);
+  font-size: var(--sb-t-caption);
+  line-height: 1.6;
+}
+.sb-qa-rubric__howto b { color: var(--sb-ink); }
+
+.sb-qa-rubric__distinction { grid-template-columns: minmax(0, 1fr); }
   .sb-qa-rubric__grid { grid-template-columns: minmax(0, 1fr); }
   .sb-qa-intro__actions { width: 100%; flex-wrap: wrap; }
   .sb-qa-intro__actions .sb-btn { flex: 1; }

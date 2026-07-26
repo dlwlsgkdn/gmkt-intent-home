@@ -32,11 +32,17 @@ const SCORE_GUIDE = [
   { score: 0, title: '사용 불가', desc: '결과가 없거나 완전히 잘못되었습니다.' },
 ]
 
-/* 별점 — 데이터는 기존 0~5 그대로. 같은 별을 다시 누르면 미평가(null)로 돌아가고,
-   "0"은 별로 표현할 수 없는 별개 상태(사용 불가)라 작은 배지로 둔다. */
+/* 별점 — 데이터는 기존 0~5 그대로. 별 1~5를 누르면 점수, 같은 별을 다시 누르면
+   별을 다 끈 0점(사용 불가)이 된다. 빈 별만으로는 "0점"과 "아직 평가 안 함"이
+   구분되지 않으므로, 옆 배지가 그 상태를 말한다: 미평가(회색) / 0점(빨강).
+   배지를 누르면 언제든 미평가로 초기화된다. */
 function StarRating({ value, onChange, label }) {
   return (
-    <div className="sb-stars" role="radiogroup" aria-label={`${label} 별점`}>
+    <div
+      className={'sb-stars' + (value == null ? ' is-unrated' : '')}
+      role="radiogroup"
+      aria-label={`${label} 별점`}
+    >
       {[1, 2, 3, 4, 5].map((score) => (
         <button
           key={score}
@@ -44,20 +50,28 @@ function StarRating({ value, onChange, label }) {
           className={'sb-star' + (value != null && value >= score ? ' is-on' : '')}
           aria-label={`${score}점`}
           aria-pressed={value === score}
-          title={SCORE_GUIDE.find((guide) => guide.score === score)?.title}
-          onClick={() => onChange(value === score ? null : score)}
+          title={value === score
+            ? '다시 누르면 별을 모두 끈 0점(사용 불가)이 돼요'
+            : SCORE_GUIDE.find((guide) => guide.score === score)?.title}
+          onClick={() => onChange(value === score ? 0 : score)}
         >
           ★
         </button>
       ))}
       <button
         type="button"
-        className={'sb-star-zero' + (value === 0 ? ' is-on' : '')}
-        aria-pressed={value === 0}
-        title="0점 · 사용 불가 (결과가 없거나 완전히 잘못됨)"
-        onClick={() => onChange(value === 0 ? null : 0)}
+        className={
+          'sb-star-state'
+          + (value == null ? ' is-unrated' : '')
+          + (value === 0 ? ' is-zero' : '')
+        }
+        aria-pressed={value == null}
+        title={value == null
+          ? '아직 평가하지 않은 상태예요'
+          : '누르면 미평가로 초기화돼요'}
+        onClick={() => onChange(null)}
       >
-        0
+        {value === 0 ? '0점' : '미평가'}
       </button>
     </div>
   )
@@ -73,6 +87,10 @@ function Rubric({ onClose }) {
         </div>
         <button type="button" className="sb-icon-btn" onClick={onClose} aria-label="평가 기준 닫기">×</button>
       </div>
+      <p className="sb-qa-rubric__howto">
+        별 1~5를 눌러 점수를 매기고, 같은 별을 다시 누르면 별을 모두 끈 <b>0점(사용 불가)</b>이 됩니다.
+        옆 배지는 상태 표시 — <b>미평가</b>(회색)·<b>0점</b>(빨강)이며, 누르면 미평가로 초기화돼요.
+      </p>
       <div className="sb-qa-rubric__distinction">
         <strong>★5와 ★4의 차이</strong>
         <span><b>★5</b> 수정·추가 의견이 전혀 없음</span>
