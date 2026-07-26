@@ -177,6 +177,7 @@ function ComponentReview({
   slot,
   review,
   onUpdateComponent,
+  onUpdateCase,
   onEditComponent,
   profile,
   summaryPreview,
@@ -335,6 +336,7 @@ export default function EvaluationPanel({
   onSelectCase,
   onRecommend,
   onUpdateComponent,
+  onUpdateCase,
   onEditCase,
   onReviseCase,
   onEditComponent,
@@ -498,6 +500,29 @@ export default function EvaluationPanel({
             </button>
           )}
         </div>
+
+        {activeCase && (() => {
+          const caseReview = normalizeCaseEvaluation(activeCase.evaluation)
+          return (
+            <div className="sb-qa-case-note">
+              <div className="sb-qa-case-note__score">
+                <span>케이스 전체</span>
+                <ScorePicker
+                  value={caseReview.score}
+                  label={`CASE ${activeSlot} 전체`}
+                  onChange={(score) => onUpdateCase(activeCase.id, { score })}
+                />
+                <strong>{caseReview.score == null ? '미평가' : `${caseReview.score}점`}</strong>
+              </div>
+              <textarea
+                rows={2}
+                value={caseReview.feedback}
+                placeholder="케이스 전체 피드백 — 예: 참고 영상 붙여줘, CTA 빼줘 (AI 수정 요청에 자동 포함)"
+                onChange={(event) => onUpdateCase(activeCase.id, { feedback: event.target.value })}
+              />
+            </div>
+          )
+        })()}
 
         <div className="sb-qa-steps">
           {structure.map((section) => {

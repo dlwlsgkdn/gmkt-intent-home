@@ -7,6 +7,7 @@ import {
   mergeRevisedCase,
   validateCaseRevisionResponse,
 } from '../../lib/prompt/caseRevision.js'
+import { normalizeCaseEvaluation } from '../../lib/evaluation.js'
 import { catalogFromScenario } from '../../lib/prompt/planCases.js'
 import { wrapForChatApp } from '../../lib/prompt/chatPrompt.js'
 import PromptExchange from './PromptExchange.jsx'
@@ -31,6 +32,11 @@ export default function CaseRevisionDialog({ scenario, planCase, planCases, prof
   const [validation, setValidation] = useState(null)
 
   const feedbacks = useMemo(() => collectCaseFeedback(planCase), [planCase])
+  /* 케이스 헤더(평가 탭)에 기록된 전체 코멘트 — 요청에 자동 포함되고 여기서도 보여준다 */
+  const caseNote = useMemo(() => {
+    const evaluation = normalizeCaseEvaluation(planCase?.evaluation)
+    return { score: evaluation.score, feedback: evaluation.feedback.trim() }
+  }, [planCase])
   const catalog = useMemo(() => catalogFromScenario(planCases || []), [planCases])
   const persona = useMemo(() => personaFromProfile(profile), [profile])
 
@@ -79,8 +85,7 @@ export default function CaseRevisionDialog({ scenario, planCase, planCases, prof
               컴포넌트 추가·삭제·순서 변경까지. 문구 한두 곳만 고칠 거라면 "문구 다듬기"가 더 안전해요.
             </p>
             <AiRoundTripNote>
-              결과는 <b>통째로 적용</b>됩니다(부분 선택 없음). 적용 전에 변경 요약을 보여드리고, ⌘Z로 되돌릴 수 있어요.
-              조건·우선순위는 바뀌지 않습니다.
+결과는 <b>통째로 적용</b>돼요(⌘Z로 복구). 조건·우선순위는 바뀌지 않습니다.
             </AiRoundTripNote>
           </div>
           <button type="button" className="sb-icon-btn" onClick={onClose} aria-label="닫기">×</button>
@@ -90,11 +95,20 @@ export default function CaseRevisionDialog({ scenario, planCase, planCases, prof
           <div className="sb-llm-section__head">
             <div>
               <span>요청에 담길 피드백</span>
-              <strong>평가 피드백 {feedbacks.length}개 + 추가 지시</strong>
+              <strong>
+                {caseNote.feedback ? '케이스 코멘트 + ' : ''}컴포넌트 피드백 {feedbacks.length}개 + 추가 지시
+              </strong>
             </div>
           </div>
-          {feedbacks.length > 0 ? (
+          {(caseNote.feedback || feedbacks.length > 0) ? (
             <ul className="sb-crev-feedback">
+              {caseNote.feedback && (
+                <li className="sb-crev-feedback__case">
+                  <b>케이스 전체</b>
+                  <span>{caseNote.feedback}</span>
+                  {caseNote.score != null && <em>{caseNote.score}/5점</em>}
+                </li>
+              )}
               {feedbacks.map((entry) => (
                 <li key={entry.itemId}>
                   <b>{entry.type}</b>
@@ -105,7 +119,7 @@ export default function CaseRevisionDialog({ scenario, planCase, planCases, prof
               ))}
             </ul>
           ) : (
-            <p className="sb-llm-help">평가 탭에 적힌 피드백이 없어요. 아래 추가 지시만으로도 재구성할 수 있습니다.</p>
+            <p className="sb-llm-help">평가 탭에 적힌 피드백이 없어요. 평가 탭의 케이스 코멘트나 아래 추가 지시로 요청할 수 있어요.</p>
           )}
           <label className="sb-gen-field">
             <span>추가 지시 <em>선택</em> — 평가 피드백 외에 더 바꾸고 싶은 것</span>
@@ -123,7 +137,7 @@ export default function CaseRevisionDialog({ scenario, planCase, planCases, prof
 
         <PromptExchange
           title="케이스 재구성 프롬프트"
-          hint="현재 페이지 구성 전체와 피드백, 사용할 수 있는 컴포넌트 목록이 들어갑니다. 유지되는 컴포넌트의 가격·이미지·링크는 응답과 무관하게 원본이 보존돼요."
+          hint="페이지 구성 전체와 피드백이 들어가요. 유지되는 컴포넌트의 가격·이미지·링크는 원본이 보존됩니다."
           prompt={prompt}
           onCopied={(ok) => onToast(ok
             ? '재구성 프롬프트를 복사했어요. 쓰던 AI에 붙여넣고 결과를 가져오세요.'

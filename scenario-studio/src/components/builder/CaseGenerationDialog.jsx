@@ -215,7 +215,7 @@ export default function CaseGenerationDialog({
             <h2 id="sb-gen-title">조합 케이스 만들기</h2>
             <p>골든 케이스의 레이아웃과 상품 카탈로그는 고정하고, AI는 조합별 문구와 상품 선택만 채웁니다.</p>
             <AiRoundTripNote>
-              조합이 많으면 프롬프트를 <b>여러 배치로 나눠</b> 주고받습니다. 배치마다 복사 → 붙여넣기 → 결과 가져오기를 반복해요.
+              조합이 많으면 <b>여러 배치로 나눠</b> 왕복해요.
             </AiRoundTripNote>
           </div>
           <button type="button" className="sb-icon-btn" onClick={onClose} aria-label="닫기">×</button>
@@ -332,8 +332,7 @@ export default function CaseGenerationDialog({
 
             <div className="sb-llm-dialog__foot">
               <p>
-                조합 {combos.length}개를 {GENERATION_BATCH_SIZE}개씩 나눠, 배치마다 프롬프트를 복사해
-                AI에 붙여넣고 결과를 가져옵니다. 받은 케이스는 초안으로 추가되며 평가 탭에서 검수한 뒤 발행하세요.
+                조합 {combos.length}개를 {GENERATION_BATCH_SIZE}개씩 나눠 왕복해요. 받은 케이스는 초안으로 추가됩니다.
               </p>
               <div>
                 <button type="button" className="sb-btn sb-btn--ghost" onClick={onClose}>취소</button>
@@ -365,7 +364,7 @@ export default function CaseGenerationDialog({
 
             <PromptExchange
               title="이 배치의 프롬프트"
-              hint="복사한 프롬프트를 쓰던 AI에 붙여넣고, 돌아온 JSON을 아래에 붙여넣으세요. 검증에 성공하면 다음 배치로 넘어갑니다."
+              hint="검증에 성공하면 다음 배치로 넘어가요."
               prompt={batchPrompt}
               onCopied={(ok) => onToast(ok
                 ? `배치 ${batchIndex + 1}/${batches.length} 프롬프트를 복사했어요.`

@@ -62,7 +62,8 @@ export function normalizeCaseEvaluation(raw = {}) {
   return {
     selected: !!value.selected,
     slot: EVALUATION_CASE_SLOTS.includes(value.slot) ? value.slot : null,
-    score: clampRating(value.score),
+    // 케이스 전체 평가 — 컴포넌트에 달기 애매한 피드백("영상을 넣어줘" 등)의 자리
+    score: nullableRating(value.score),
     feedback: String(value.feedback || ''),
     components,
     criteria,

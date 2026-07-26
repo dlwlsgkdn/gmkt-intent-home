@@ -790,6 +790,7 @@ export default function Builder({ api, scenario }) {
           onSelectCase={setPlanCaseId}
           onRecommend={cases.recommendPlanCases}
           onUpdateComponent={cases.updateComponentEvaluation}
+          onUpdateCase={cases.updateCaseEvaluation}
           onEditCase={editEvaluatedCase}
           onReviseCase={reviseEvaluatedCase}
           onEditComponent={editEvaluatedComponent}

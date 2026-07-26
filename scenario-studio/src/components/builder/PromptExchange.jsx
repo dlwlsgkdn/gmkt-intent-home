@@ -86,10 +86,7 @@ export default function PromptExchange({
         <span className="sb-away-step__mark" aria-hidden="true">⇄</span>
         <div>
           <strong>STEP 2 · 스튜디오 밖에서</strong>
-          <p>
-            복사한 프롬프트를 <b>평소 쓰는 AI 채팅</b>에 붙여넣고 답변을 받아오세요.
-            여기서는 아무것도 생성되지 않고, 답변이 올 때까지 이 창은 그대로 기다립니다.
-          </p>
+          <p>복사한 프롬프트를 <b>평소 쓰는 AI 채팅</b>에 붙여넣고 답변을 받아오세요. 이 창은 그대로 기다립니다.</p>
         </div>
       </div>
 

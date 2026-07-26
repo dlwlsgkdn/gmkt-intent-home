@@ -78,7 +78,7 @@ cd scenario-studio && npm run build   # vite build && cp -R ../legacy ../docs/le
 5. **컴포넌트 15종** (+탐색 레거시 5종): 설문 3, 계획 8, 공통 4(텍스트/안내/가로 스크롤 패널/이미지)
 6. **플레이어**: 설문→계획 스테퍼, 프로필 배지 제외, 설문 요약, 담기/완료, 쓰레드 기록
 7. **공유**: URL 해시 링크(즉시 체험, 가져오기), JSON 백업/이관
-8. **AI 기능** (전부 API 키 없이 프롬프트 왕복): 시나리오 만들기 / 조합 케이스(설문 조합별 일괄 생성) / **문구 다듬기**(필드 단위) / **페이지 재구성**(케이스 통째). 평가 탭 진입점은 `⇄ AI에게 수정 요청` 하나 — `AiFixChooser`가 문구 다듬기·페이지 재구성으로 갈라 주고, 문구 다듬기에서 처리 못 한 피드백은 재구성으로 이어진다(onSwitchToRevise)
+8. **AI 기능** (전부 API 키 없이 프롬프트 왕복): 시나리오 만들기 / 조합 케이스(설문 조합별 일괄 생성) / **문구 다듬기**(필드 단위) / **페이지 재구성**(케이스 통째). 평가 탭 진입점은 `⇄ AI에게 수정 요청` 하나 — `AiFixChooser`가 문구 다듬기·페이지 재구성으로 갈라 주고, 문구 다듬기에서 처리 못 한 피드백은 재구성으로 이어진다(onSwitchToRevise). **피드백 입력은 평가 페이지 한 곳**: 컴포넌트 단위 + 케이스 헤더의 케이스 전체 점수·코멘트(`evaluation.score`/`feedback`, nullable) — 케이스 코멘트는 재구성 요청에 지시로, 문구 다듬기에는 맥락(caseNote, 구조 요청 무시 규칙)으로 자동 포함된다
 
 ## 디자인 시스템 (studio.css)
 
@@ -86,7 +86,7 @@ cd scenario-studio && npm run build   # vite build && cp -R ../legacy ../docs/le
 
 - **색**: 중립 11단계(`--sb-n-0`~`--sb-n-900`) + 텍스트 4단계(`--sb-ink`/`--sb-ink-2`/`--sb-muted`/`--sb-subtle`) + 면 3단계 + 역할색(`--sb-accent` 브랜드, `--sb-info` 평가·AI 왕복, `--sb-success`/`--sb-warn`/`--sb-danger`, `--sb-ai` AI 트리거)
 - **--sb-qa-\*** 는 구 이름의 별칭일 뿐이다. 새 코드는 `--sb-info` 등을 쓸 것
-- **라운드** `--sb-r-xs`~`--sb-r-2xl`/`--sb-r-pill`, **그림자** `--sb-shadow-sm`~`xl`, **타이포** `--sb-t-micro`~`--sb-t-title` 5단계, **모션** `--sb-dur`/`--sb-ease`
+- **라운드** `--sb-r-xs`~`--sb-r-2xl`/`--sb-r-pill`, **그림자** `--sb-shadow-sm`~`xl`, **타이포** `--sb-t-micro`(10px)~`--sb-t-title`(16px) 5단계 — 10px 미만 리터럴 금지, **모션** `--sb-dur`/`--sb-ease`. 다이얼로그 본문 블록의 세로 리듬은 `margin: 12px 24px` 기준
 - **포커스**: 개별 규칙에 `outline: none`을 쓰지 말 것. 전역 `[class^='sb-']:focus-visible` 규칙이 키보드 포커스 링을 담당한다
 - **버튼**: `.sb-btn` + 성격(`--primary`/`--ghost`/`--danger`/`--ai`/`--open`) + 크기(`--small`/`--tiny`). hover·active·disabled는 기본 정의에만 있다. AI를 부르는 버튼은 전부 `--ai`
 - **AI 왕복 표기 규칙**: AI 기능은 "누르면 만들어진다"고 약속하지 않는다. 트리거는 `✦`(생성)가 아니라 **`⇄`(왕복)** 를 쓰고 라벨에 "프롬프트"를 넣는다. 다이얼로그는 머리말에 `AiRoundTripNote`를 두고, `PromptExchange`가 1 복사 → 2 **스튜디오 밖에서** 붙여넣기 → 3 결과 가져오기를 항상 펼쳐 보인다. 번호는 이 왕복(`.sb-handoff`)에만 쓰고 다이얼로그 단계(`.sb-steps`)는 번호 없는 breadcrumb이다. 성격이 비슷한 AI 기능을 나란히 버튼으로 두지 말 것 — 진입점을 하나로 합치고 선택 카드(`AiFixChooser` 참고)에서 "무엇을 고치고 싶은지" 예시 문장으로 가른다

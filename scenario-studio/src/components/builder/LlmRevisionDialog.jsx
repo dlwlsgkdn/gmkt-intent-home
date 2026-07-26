@@ -81,8 +81,7 @@ export default function LlmRevisionDialog({
             <h2 id="sb-llm-title">문구 다듬기</h2>
             <p>구성은 그대로 두고 문구·표현만 고칩니다. 허용된 컴포넌트 필드만 검토 후 골라서 적용해요.</p>
             <AiRoundTripNote>
-              여기서 바로 고쳐지지 않습니다. 프롬프트를 쓰던 AI에 붙여넣어 받은 수정안을 가져오면,
-              <b> 허용된 필드인지 검증한 뒤 하나씩 골라</b> 적용합니다.
+받은 수정안은 <b>허용된 필드인지 검증한 뒤 하나씩 골라</b> 적용해요.
             </AiRoundTripNote>
           </div>
           <button type="button" className="sb-icon-btn" onClick={onClose} aria-label="닫기">×</button>
@@ -127,7 +126,7 @@ export default function LlmRevisionDialog({
           <>
             <PromptExchange
               title="수정 요청 프롬프트"
-              hint="실제 필드 값과 수정 가능한 ID가 함께 들어갑니다. 쓰던 AI에 붙여넣고 돌아온 JSON을 아래에 붙여넣으세요."
+              hint="실제 필드 값과 수정 가능한 ID가 함께 들어가요."
               prompt={prompt}
               onCopied={(ok) => onToast(ok
                 ? '피드백과 출력 스키마를 포함한 수정 요청을 복사했어요.'

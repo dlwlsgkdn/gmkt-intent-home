@@ -161,6 +161,15 @@ export function usePlanCases({
     }))
   }
 
+  /* 케이스 전체 평가(점수·코멘트) — 컴포넌트 단위와 별개로 케이스 헤더에 기록된다 */
+  const updateCaseEvaluation = (caseId, patch) => {
+    updatePlanCases((current) => current.map((planCase) => {
+      if (planCase.id !== caseId) return planCase
+      const evaluation = normalizeCaseEvaluation(planCase.evaluation)
+      return { ...planCase, evaluation: { ...evaluation, ...patch, updatedAt: new Date().toISOString() } }
+    }))
+  }
+
   /* 평가 스튜디오는 언제나 정확히 3개 CASE(A/B/C) — 답변 조합이 가장 다른 케이스를 고른다 */
   const recommendPlanCases = () => {
     const recommendation = recommendSignificantCaseIds(planCases, 3)
@@ -208,6 +217,7 @@ export function usePlanCases({
     setFallbackPlanCase,
     movePlanCase,
     updateComponentEvaluation,
+    updateCaseEvaluation,
     recommendPlanCases,
     applyRevisions,
   }

@@ -88,9 +88,11 @@ export function buildLlmRevisionRequest(planCases = [], options = {}) {
       caseId: planCase.id,
       slot: evaluation.slot,
       caseName: planCase.name,
+      // 케이스 전체 코멘트 — 문구에 반영할 맥락으로만 쓰고, 구조 요청은 이 경로에서 처리하지 않는다
+      caseNote: evaluation.feedback.trim(),
       criteria,
     }
-  }).filter((planCase) => planCase.criteria.length > 0)
+  }).filter((planCase) => planCase.criteria.length > 0 || planCase.caseNote)
 
   return {
     schemaVersion: 1,
@@ -119,6 +121,8 @@ export function buildLlmRevisionPrompt(request) {
     '4. 피드백 하나에 여러 필드 수정이 필요하면 revisions를 여러 개 만듭니다.',
     '5. 상품 관련 사실을 추측하거나 새 효능·가격·링크를 만들지 않습니다.',
     '6. 수정할 필요가 없는 피드백은 revisions에 넣지 않습니다.',
+    '6-1. cases[].caseNote는 케이스 전체에 대한 참고 맥락입니다. 문구·톤에 반영할 수 있는 내용만 활용하고,',
+    '     컴포넌트 추가·삭제 같은 구조 요청이 섞여 있으면 그 부분은 무시합니다(다른 도구가 처리합니다).',
     '7. 설명이나 Markdown 없이 아래 스키마의 JSON 하나만 출력합니다.',
     '',
     '출력 스키마:',

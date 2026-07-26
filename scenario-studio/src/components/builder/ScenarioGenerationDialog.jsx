@@ -198,7 +198,7 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onImport, 
             <h2 id="sb-sgen-title">AI로 시나리오 만들기</h2>
             <p>검색어와 페르소나, 추천할 상품을 적으면 프롬프트를 만들어 드려요.</p>
             <AiRoundTripNote>
-              조건을 채우면 <b>프롬프트</b>가 나오고, 그걸 쓰던 AI에 붙여넣어 받은 결과를 여기로 가져오면 시나리오가 만들어집니다.
+              조건을 채우면 <b>프롬프트</b>가 나와요. 쓰던 AI에 붙여넣고 결과만 가져오면 됩니다.
             </AiRoundTripNote>
           </div>
           <button type="button" className="sb-icon-btn" onClick={onClose} aria-label="닫기">×</button>
@@ -377,7 +377,7 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onImport, 
             )}
 
             <div className="sb-llm-dialog__foot">
-              <p>다음 단계에서 프롬프트가 만들어집니다. 그걸 쓰던 AI에 붙여넣고 결과를 가져오면 완성이에요 — API 키는 필요 없습니다.</p>
+              <p>API 키 없이 프롬프트 왕복으로 진행돼요.</p>
               <div>
                 <button type="button" className="sb-btn sb-btn--ghost" onClick={onClose}>취소</button>
                 <button
@@ -398,8 +398,8 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onImport, 
             <PromptExchange
               title={`${activeMode.label} 프롬프트`}
               hint={mode === 'draft'
-                ? '설문 화면과 기본 계획 하나를 채우는 프롬프트입니다. 응답 JSON을 그대로 아래에 붙여넣으세요.'
-                : '시나리오 DB JSON 전체(설문 화면 + 모든 조합의 계획 케이스 + 평가 A/B/C)를 만들어 달라는 프롬프트입니다. 컴포넌트 목록과 배치·조건 규칙이 함께 들어가고, 결과는 ddak-scenario.json 파일로 받게 되어 있어요.'}
+                ? '설문 화면과 기본 계획 하나를 채워요.'
+                : '설문 + 모든 조합 케이스 + 평가 A/B/C 전체를 요청해요. 결과는 ddak-scenario.json 파일로 받아 올립니다.'}
               prompt={prompt}
               onCopied={(ok) => onToast(ok
                 ? '프롬프트를 복사했어요. 쓰던 AI에 붙여넣고 결과를 가져오세요.'

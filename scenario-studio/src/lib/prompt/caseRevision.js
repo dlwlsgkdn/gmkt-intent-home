@@ -109,6 +109,11 @@ export function buildCaseRevisionRequest({ scenario, planCase, persona, notes, c
       caseId: planCase.id,
       name: planCase.name,
       conditionSummary: conditionText(planCase, surveyQuestions),
+      // 케이스 헤더에 기록된 전체 평가 — 재구성의 최우선 지시가 된다
+      note: (() => {
+        const evaluation = normalizeCaseEvaluation(planCase.evaluation)
+        return { score: evaluation.score, feedback: evaluation.feedback.trim() }
+      })(),
     },
     feedback: collectCaseFeedback(planCase),
     catalog: catalog.map((entry) => ({
@@ -137,6 +142,7 @@ export function buildCaseRevisionPrompt(request) {
     '컴포넌트 추가·삭제·순서 변경·문구 수정이 모두 가능합니다.',
     '',
     '규칙:',
+    '0. case.note.feedback(케이스 전체 피드백)과 feedback[](컴포넌트별 피드백), notes(추가 지시)를 모두 반영합니다.',
     '1. **유지하는 컴포넌트는 id를 반드시 그대로 둡니다.** 평가 기록이 id에 연결되어 있습니다.',
     '   새로 추가하는 컴포넌트만 새 id(16자 내외 영숫자, 목록 안에서 유일)를 만듭니다.',
     '2. 피드백이 없는 컴포넌트는 되도록 그대로 유지합니다(불필요한 재작성 금지).',
