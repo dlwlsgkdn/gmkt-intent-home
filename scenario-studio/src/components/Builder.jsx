@@ -798,6 +798,7 @@ export default function Builder({ api, scenario }) {
           onToast={api.showToast}
           profile={api.profile}
           summaryPreview={summaryPreview}
+          deviceW={canvasW}
         />
       ) : (
         <div className="sb-workspace">

@@ -6,9 +6,22 @@ import {
   normalizeComponentEvaluation,
   structuredComponentEvaluationStats,
 } from '../../lib/evaluation.js'
+import { sortByPosition } from '../../lib/store.js'
 import { LIBRARY, renderItem } from '../../lib/registry.jsx'
 import LlmRevisionDialog from './LlmRevisionDialog.jsx'
 import AiFixChooser from './AiFixChooser.jsx'
+
+/*
+ * 평가 스튜디오 — 주석(annotation) 방식.
+ *
+ * 왼쪽에 케이스 페이지를 실제 모습 그대로 렌더하고, 오른쪽 레일에 컴포넌트마다
+ * 말풍선(별점 + 코멘트)을 띄운다. 디자인 리뷰 도구(Figma 코멘트)와 같은 문법이라
+ * "무엇을 평가하는지"가 화면에서 바로 보인다.
+ *
+ * 말풍선 위치는 컴포넌트의 실제 렌더 높이를 측정해 맞춘다. 컨테이너 안 자식
+ * (상품 카드 등)은 컨테이너가 통째로 렌더하므로 자식 말풍선은 부모 위치에 앵커되고,
+ * 겹치면 아래로 밀려 순서대로 쌓인다.
+ */
 
 const SCORE_GUIDE = [
   { score: 5, title: '완벽 · 그대로 사용', desc: '수정하거나 추가할 의견이 전혀 없습니다.' },
@@ -19,49 +32,56 @@ const SCORE_GUIDE = [
   { score: 0, title: '사용 불가', desc: '결과가 없거나 완전히 잘못되었습니다.' },
 ]
 
-function ScorePicker({ value, onChange, label }) {
+/* 별점 — 데이터는 기존 0~5 그대로. 같은 별을 다시 누르면 미평가(null)로 돌아가고,
+   "0"은 별로 표현할 수 없는 별개 상태(사용 불가)라 작은 배지로 둔다. */
+function StarRating({ value, onChange, label }) {
   return (
-    <div className="sb-qa-score-picker" role="group" aria-label={`${label} 점수`}>
-      {[0, 1, 2, 3, 4, 5].map((score) => (
+    <div className="sb-stars" role="radiogroup" aria-label={`${label} 별점`}>
+      {[1, 2, 3, 4, 5].map((score) => (
         <button
           key={score}
           type="button"
-          className={
-            'sb-qa-score'
-            + (value === score ? ' sb-qa-score--active' : '')
-            + (score === 5 ? ' sb-qa-score--best' : '')
-          }
-          aria-label={`${label} ${score}점`}
+          className={'sb-star' + (value != null && value >= score ? ' is-on' : '')}
+          aria-label={`${score}점`}
           aria-pressed={value === score}
           title={SCORE_GUIDE.find((guide) => guide.score === score)?.title}
-          onClick={() => onChange(score)}
+          onClick={() => onChange(value === score ? null : score)}
         >
-          {score}
+          ★
         </button>
       ))}
+      <button
+        type="button"
+        className={'sb-star-zero' + (value === 0 ? ' is-on' : '')}
+        aria-pressed={value === 0}
+        title="0점 · 사용 불가 (결과가 없거나 완전히 잘못됨)"
+        onClick={() => onChange(value === 0 ? null : 0)}
+      >
+        0
+      </button>
     </div>
   )
 }
 
 function Rubric({ onClose }) {
   return (
-    <section className="sb-qa-rubric" aria-label="0~5점 평가 기준">
+    <section className="sb-qa-rubric" aria-label="별점 기준">
       <div className="sb-qa-rubric__head">
         <div>
           <span>SCORING RUBRIC</span>
-          <h3>0~5점 평가 기준</h3>
+          <h3>별점 기준</h3>
         </div>
         <button type="button" className="sb-icon-btn" onClick={onClose} aria-label="평가 기준 닫기">×</button>
       </div>
       <div className="sb-qa-rubric__distinction">
-        <strong>5점과 4점의 차이</strong>
-        <span><b>5점</b> 수정·추가 의견이 전혀 없음</span>
-        <span><b>4점</b> 틀린 것은 없지만 더 좋은 대안·추가 아이디어가 있음</span>
+        <strong>★5와 ★4의 차이</strong>
+        <span><b>★5</b> 수정·추가 의견이 전혀 없음</span>
+        <span><b>★4</b> 틀린 것은 없지만 더 좋은 대안·추가 아이디어가 있음</span>
       </div>
       <div className="sb-qa-rubric__grid">
         {SCORE_GUIDE.map((guide) => (
           <div key={guide.score} className={`sb-qa-rubric__row sb-qa-rubric__row--${guide.score}`}>
-            <strong>{guide.score}점</strong>
+            <strong>{guide.score === 0 ? '0' : '★'.repeat(guide.score)}</strong>
             <div>
               <b>{guide.title}</b>
               <p>{guide.desc}</p>
@@ -71,19 +91,6 @@ function Rubric({ onClose }) {
       </div>
     </section>
   )
-}
-
-const scoreHint = (review) => {
-  if (review.score === 5 && review.feedback.trim()) {
-    return { tone: 'warning', text: '5점은 수정·추가 의견이 전혀 없는 결과예요. 수정사항을 비워주세요.' }
-  }
-  if (review.score === 4 && !review.feedback.trim()) {
-    return { tone: 'info', text: '4점이라면 더 좋은 대안이나 추가 아이디어를 수정사항에 남겨주세요.' }
-  }
-  if (review.score != null && review.score <= 3 && !review.feedback.trim()) {
-    return { tone: 'info', text: '보강할 오류·누락·대안 문구를 수정사항에 남기면 바로 반영할 수 있어요.' }
-  }
-  return null
 }
 
 class EvaluationPreviewBoundary extends React.Component {
@@ -114,218 +121,60 @@ class EvaluationPreviewBoundary extends React.Component {
   }
 }
 
-function EvaluationPreviewRenderer({ item, context }) {
-  return renderItem(item, context)
-}
-
-function EvaluationComponentPreview({ planCase, component, profile, summaryPreview }) {
-  const item = component.item
-  const def = LIBRARY[item.type]
-  const safeSummaryPreview = {
-    profile: Array.isArray(summaryPreview?.profile) ? summaryPreview.profile : [],
-    questions: Array.isArray(summaryPreview?.questions) ? summaryPreview.questions : [],
-  }
-  const previewCtx = {
-    mode: 'canvas',
-    canvasView: 'preview',
-    allItems: planCase?.items || [],
-    selectedIds: [],
-    chips: [],
-    profile: profile || { name: '사용자', items: [] },
-    summaryPreview: safeSummaryPreview,
-    updateProps: () => {},
-    player: {
-      query: '',
-      setQuery: () => {},
-      submitQuery: () => {},
-      answers: {},
-      setAnswer: () => {},
-      excludedProfile: [],
-      toggleProfileItem: () => {},
-      summary: safeSummaryPreview,
-      addToCart: () => {},
-      openExternal: () => {},
-      showKeyword: () => {},
-      complete: () => {},
-    },
-  }
-
-  return (
-    <div className={`sb-qa-live-preview sb-qa-live-preview--component sb-qa-live-preview--${item.type}`}>
-      <div className="sb-qa-live-preview__head">
-        <span>ACTUAL COMPONENT</span>
-        <em>{def?.icon} {def?.label || item.type} 전체</em>
-      </div>
-      <div className="sb-qa-live-preview__viewport" aria-label={`${def?.label || item.type} 실제 컴포넌트 미리보기`}>
-        <div
-          className="sb-qa-live-preview__item"
-          style={{ width: item.w ? Math.min(item.w, 520) : '100%', maxWidth: '100%' }}
-        >
-          <EvaluationPreviewBoundary resetKey={`${item.id}:${item.type}`}>
-            <EvaluationPreviewRenderer item={item} context={previewCtx} />
-          </EvaluationPreviewBoundary>
-        </div>
-      </div>
-      <p className="sb-qa-live-preview__caption">{component.preview}</p>
-    </div>
-  )
-}
-
-function ComponentReview({
-  planCase,
-  component,
-  slot,
+/* 말풍선 하나 — 위치(top)는 부모의 레이아웃 함수가 잡아 준다 */
+function CommentBubble({
+  bubbleRef,
+  active,
   review,
-  onUpdateComponent,
-  onUpdateCase,
-  onEditComponent,
-  profile,
-  summaryPreview,
-  product = false,
+  icon,
+  label,
+  isCase = false,
+  onActivate,
+  onScore,
+  onFeedback,
+  onEdit,
+  onResolve,
 }) {
-  const def = LIBRARY[component.type]
-  const hint = scoreHint(review)
-  const label = def?.label || component.type
+  const warn = review.score === 5 && review.feedback.trim()
   return (
-    <section
+    <div
+      ref={bubbleRef}
       className={
-        'sb-qa-review'
-        + (product ? ' sb-qa-review--product' : '')
-        + (review.score != null ? ' sb-qa-review--scored' : '')
+        'sb-bubble'
+        + (active ? ' is-active' : '')
+        + (isCase ? ' sb-bubble--case' : '')
+        + (review.resolved ? ' is-resolved' : '')
       }
+      onClick={onActivate}
     >
-      <div className="sb-qa-review__source">
-        <div className="sb-qa-review__label">
-          <span>{component.index + 1}</span>
-          <strong>{def?.icon} {label}</strong>
-          {review.resolved && <em>반영 완료</em>}
-        </div>
-        <EvaluationComponentPreview
-          planCase={planCase}
-          component={component}
-          profile={profile}
-          summaryPreview={summaryPreview}
-        />
+      <div className="sb-bubble__head">
+        <span className="sb-bubble__label">{icon} {label}</span>
+        <StarRating value={review.score} label={label} onChange={onScore} />
       </div>
-
-      <div className="sb-qa-review__input">
-        <div className="sb-qa-review__score-row">
-          <span>점수</span>
-          <ScorePicker
-            value={review.score}
-            label={`CASE ${slot} ${label}`}
-            onChange={(score) => onUpdateComponent(planCase.id, component.itemId, { score })}
-          />
-          <strong>{review.score == null ? '미평가' : `${review.score}점`}</strong>
-        </div>
-        <label>
-          <span>컴포넌트 수정사항</span>
-          <textarea
-            rows={3}
-            value={review.feedback}
-            placeholder={`${label} 전체를 기준으로 오류, 누락, 더 좋은 대안과 수정 내용을 기록하세요.`}
-            onChange={(event) => onUpdateComponent(planCase.id, component.itemId, {
-              feedback: event.target.value,
-              resolved: false,
-            })}
-          />
-        </label>
-        {hint && <p className={`sb-qa-review__hint sb-qa-review__hint--${hint.tone}`}>{hint.text}</p>}
-        <div className="sb-qa-review__actions">
-          <span>{review.updatedAt ? '자동 저장됨' : '입력 대기'}</span>
+      <textarea
+        rows={2}
+        value={review.feedback}
+        placeholder={isCase
+          ? '케이스 전체 피드백 — 예: 참고 영상 붙여줘, CTA 빼줘'
+          : '피드백 — 오류·누락·더 좋은 대안'}
+        onChange={(event) => onFeedback(event.target.value)}
+        onClick={(event) => event.stopPropagation()}
+      />
+      {warn && <p className="sb-bubble__warn">★5는 수정 의견이 없는 결과예요 — 피드백을 비우거나 별점을 낮춰주세요.</p>}
+      {!isCase && (
+        <div className="sb-bubble__foot">
+          {review.resolved && <em>✓ 반영 완료</em>}
+          <button type="button" onClick={(event) => { event.stopPropagation(); onEdit() }}>수정하러 가기</button>
           <button
             type="button"
-            className="sb-btn sb-btn--ghost"
-            onClick={() => onEditComponent(planCase.id, component)}
-          >
-            컴포넌트 수정
-          </button>
-          <button
-            type="button"
-            className={review.resolved ? 'sb-btn sb-btn--compact-on' : 'sb-btn'}
             disabled={!review.feedback.trim()}
-            onClick={() => onUpdateComponent(planCase.id, component.itemId, { resolved: !review.resolved })}
+            className={review.resolved ? 'is-on' : ''}
+            onClick={(event) => { event.stopPropagation(); onResolve() }}
           >
-            {review.resolved ? '✓ 반영 완료' : '반영 완료 표시'}
+            {review.resolved ? '반영 해제' : '반영 완료'}
           </button>
         </div>
-      </div>
-    </section>
-  )
-}
-
-function ProductReviewTrack({ children, count }) {
-  const trackRef = useRef(null)
-
-  useEffect(() => {
-    const track = trackRef.current
-    if (!track) return undefined
-    const onWheel = (event) => {
-      const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY
-      if (!delta) return
-      const max = Math.max(0, track.scrollWidth - track.clientWidth)
-      const next = Math.max(0, Math.min(max, track.scrollLeft + delta))
-      if (next === track.scrollLeft) return
-      event.preventDefault()
-      track.scrollLeft = next
-    }
-    track.addEventListener('wheel', onWheel, { passive: false })
-    return () => track.removeEventListener('wheel', onWheel)
-  }, [])
-
-  const onPointerDown = (event) => {
-    const track = trackRef.current
-    if (
-      !track
-      || event.pointerType !== 'mouse'
-      || event.button !== 0
-      || event.target.closest('button, input, textarea, label')
-    ) return
-    const startX = event.clientX
-    const startScroll = track.scrollLeft
-    let moved = false
-    const move = (nextEvent) => {
-      const delta = nextEvent.clientX - startX
-      if (Math.abs(delta) > 4) moved = true
-      if (moved) track.scrollLeft = startScroll - delta
-    }
-    const up = () => {
-      window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', up)
-    }
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', up)
-  }
-
-  const onKeyDown = (event) => {
-    if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return
-    event.preventDefault()
-    trackRef.current?.scrollBy({
-      left: event.key === 'ArrowLeft' ? -520 : 520,
-      behavior: 'smooth',
-    })
-  }
-
-  return (
-    <div className="sb-qa-product-reviews">
-      <div className="sb-qa-product-reviews__head">
-        <div>
-          <strong>추천 상품 컴포넌트 {count}개</strong>
-          <small>각 상품 카드를 독립적으로 평가합니다.</small>
-        </div>
-        <span>← 드래그 · 휠 · 방향키 →</span>
-      </div>
-      <div
-        ref={trackRef}
-        className="sb-qa-product-reviews__track"
-        tabIndex={0}
-        role="region"
-        aria-label={`추천 상품 컴포넌트 ${count}개 가로 목록`}
-        onPointerDown={onPointerDown}
-        onKeyDown={onKeyDown}
-      >
-        {children}
-      </div>
+      )}
     </div>
   )
 }
@@ -344,16 +193,23 @@ export default function EvaluationPanel({
   onToast,
   profile,
   summaryPreview,
+  deviceW = 430,
 }) {
   const [rubricOpen, setRubricOpen] = useState(false)
   const [llmDialogOpen, setLlmDialogOpen] = useState(false)
   const [fixChooserOpen, setFixChooserOpen] = useState(false) // 문구 다듬기 / 페이지 재구성 선택
+  const [activeId, setActiveId] = useState(null) // 선택된 말풍선(=컴포넌트) — '__case__' 포함
   const selectedCases = evaluationCasesFor(planCases)
   const stats = structuredComponentEvaluationStats(planCases)
   const activeSelected = selectedCases.find((planCase) => planCase.id === activeCaseId)
   const [activeSlot, setActiveSlot] = useState(
     () => normalizeCaseEvaluation(activeSelected?.evaluation).slot || 'A'
   )
+
+  const pageRef = useRef(null)
+  const railRef = useRef(null)
+  const anchorRefs = useRef({}) // 최상위 아이템 id → 페이지의 래퍼 엘리먼트
+  const bubbleRefs = useRef({}) // 말풍선 id → 엘리먼트
 
   useEffect(() => {
     const slot = normalizeCaseEvaluation(activeSelected?.evaluation).slot
@@ -368,9 +224,114 @@ export default function EvaluationPanel({
     () => componentEvaluationStructureForCase(activeCase),
     [activeCase]
   )
+  /* 평가 대상을 화면 순서대로 평탄화 — 자식은 부모 최상위 아이템에 앵커된다 */
+  const evaluables = useMemo(() => structure.flatMap((section) => section.components), [structure])
+  const anchorIdOf = (component) => component.item.parentId || component.itemId
+
+  /* 페이지에 그릴 최상위 아이템 (실행 화면과 동일: 숨김 제외, 위→아래) */
+  const pageItems = useMemo(
+    () => sortByPosition((activeCase?.items || []).filter((item) => !item.parentId && !item.hidden)),
+    [activeCase]
+  )
+
+  const pageCtx = useMemo(() => {
+    const safeSummary = {
+      profile: Array.isArray(summaryPreview?.profile) ? summaryPreview.profile : [],
+      questions: Array.isArray(summaryPreview?.questions) ? summaryPreview.questions : [],
+    }
+    return {
+      mode: 'canvas',
+      canvasView: 'preview',
+      allItems: activeCase?.items || [],
+      selectedIds: [],
+      chips: [],
+      profile: profile || { name: '사용자', items: [] },
+      summaryPreview: safeSummary,
+      updateProps: () => {},
+      player: {
+        query: '', setQuery: () => {}, submitQuery: () => {},
+        answers: {}, setAnswer: () => {},
+        excludedProfile: [], toggleProfileItem: () => {},
+        summary: safeSummary,
+        addToCart: () => {}, openExternal: () => {}, showKeyword: () => {}, complete: () => {},
+      },
+    }
+  }, [activeCase, profile, summaryPreview])
+
+  /* ── 말풍선 배치: 앵커의 실제 렌더 높이에 맞추고, 겹치면 아래로 밀어 쌓는다 ── */
+  const layoutBubbles = () => {
+    const page = pageRef.current
+    const rail = railRef.current
+    if (!page || !rail) return
+    const order = ['__case__', ...evaluables.map((component) => component.itemId)]
+    if (window.matchMedia('(max-width: 1100px)').matches) {
+      // 좁은 화면: 말풍선을 일반 흐름으로 두는 CSS로 전환되므로 인라인 배치를 걷어낸다
+      order.forEach((id) => {
+        const bubble = bubbleRefs.current[id]
+        if (bubble) bubble.style.top = ''
+      })
+      rail.style.height = ''
+      return
+    }
+    let cursor = 0
+    order.forEach((id) => {
+      const bubble = bubbleRefs.current[id]
+      if (!bubble) return
+      const component = evaluables.find((entry) => entry.itemId === id)
+      const anchorEl = component ? anchorRefs.current[anchorIdOf(component)] : null
+      const top = Math.max(anchorEl ? anchorEl.offsetTop : 0, cursor)
+      bubble.style.top = `${top}px`
+      cursor = top + bubble.offsetHeight + 12
+    })
+    rail.style.height = `${Math.max(page.offsetHeight, cursor)}px`
+  }
+
+  /* 매 렌더 동기 배치 + 다음 프레임 보정(이미지 로딩으로 높이가 늦게 잡히는 경우).
+     rAF만 쓰면 연속 렌더에서 cleanup이 계속 취소해 한 번도 실행되지 못할 수 있다. */
+  const layoutRef = useRef(layoutBubbles)
+  layoutRef.current = layoutBubbles
+  useEffect(() => {
+    layoutRef.current()
+    const raf = requestAnimationFrame(() => layoutRef.current())
+    return () => cancelAnimationFrame(raf)
+  })
+
+  useEffect(() => {
+    const page = pageRef.current
+    if (!page) return undefined
+    const run = () => layoutRef.current()
+    const observer = new ResizeObserver(run)
+    observer.observe(page)
+    window.addEventListener('resize', run)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', run)
+    }
+  }, [activeCase?.id])
+
+  /* 페이지 아이템 클릭 → 그 아이템(또는 그 안 첫 컴포넌트)의 말풍선으로 */
+  const focusFromPage = (topId) => {
+    const target = evaluables.find((component) => anchorIdOf(component) === topId)
+    if (!target) return
+    setActiveId(target.itemId)
+    bubbleRefs.current[target.itemId]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }
+
+  /* 말풍선 클릭 → 페이지의 해당 컴포넌트 강조 */
+  const focusFromBubble = (component) => {
+    setActiveId(component ? component.itemId : '__case__')
+    if (!component) return
+    anchorRefs.current[anchorIdOf(component)]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }
+
+  const activeAnchorId = useMemo(() => {
+    const component = evaluables.find((entry) => entry.itemId === activeId)
+    return component ? anchorIdOf(component) : null
+  }, [activeId, evaluables])
 
   const chooseCase = (caseStat) => {
     setActiveSlot(caseStat.slot)
+    setActiveId(null)
     if (caseStat.planCase) onSelectCase(caseStat.planCase.id)
   }
 
@@ -400,13 +361,26 @@ export default function EvaluationPanel({
 
   return (
     <main className="sb-evaluation sb-qa">
-      <section className="sb-qa-intro">
-        <div>
-          <p className="sb-panel-label">COMPONENT-LEVEL RESULT QA</p>
-          <h2>Evaluation Studio</h2>
-          <p>대표 CASE 3개의 실제 콘텐츠 컴포넌트를 인스턴스별로 한 번씩 평가하고 수정합니다.</p>
+      {/* 한 줄 툴바 — 진행률·평균과 액션만. 큰 머리말은 두지 않는다 */}
+      <section className="sb-qa-toolbar" aria-label="평가 현황과 도구">
+        <div
+          className="sb-qa-toolbar__ring"
+          style={{ '--sb-qa-progress': `${stats.progress * 3.6}deg` }}
+          aria-label={`평가 진행률 ${stats.progress}%`}
+        >
+          <strong>{stats.progress}%</strong>
         </div>
-        <div className="sb-qa-intro__actions">
+        <div className="sb-qa-toolbar__stat">
+          <strong>{stats.completed}<small> / {stats.total}</small></strong>
+          <span>평가 완료</span>
+        </div>
+        <div className="sb-qa-toolbar__stat">
+          <strong className="sb-qa-toolbar__avg">
+            ★ {stats.average == null ? '—' : stats.average.toFixed(1)}
+          </strong>
+          <span>평균 · 총점 {stats.score}/{stats.maxScore}</span>
+        </div>
+        <div className="sb-qa-toolbar__actions">
           <button
             type="button"
             className="sb-btn sb-btn--ai"
@@ -415,43 +389,15 @@ export default function EvaluationPanel({
           >
             ⇄ AI에게 수정 요청
           </button>
-          <button type="button" className="sb-btn" onClick={rerunRecommendation}>CASE A/B/C 다시 선정</button>
-        </div>
-      </section>
-
-      <section className="sb-qa-sticky" aria-label="전체 평가 현황">
-        <div className="sb-qa-progress">
-          <div
-            className="sb-qa-progress__ring"
-            style={{ '--sb-qa-progress': `${stats.progress * 3.6}deg` }}
-            aria-label={`평가 진행률 ${stats.progress}%`}
+          <button type="button" className="sb-btn" onClick={rerunRecommendation}>다시 선정</button>
+          <button
+            type="button"
+            className={'sb-btn' + (rubricOpen ? ' sb-btn--open' : '')}
+            onClick={() => setRubricOpen((open) => !open)}
           >
-            <strong>{stats.progress}%</strong>
-          </div>
-          <div>
-            <span>전체 진행률</span>
-            <strong>{stats.completed} / {stats.total} 컴포넌트</strong>
-          </div>
+            별점 기준
+          </button>
         </div>
-        <div className="sb-qa-metric">
-          <span>총점</span>
-          <strong>{stats.score}<small> / {stats.maxScore}</small></strong>
-        </div>
-        <div className="sb-qa-metric">
-          <span>평균점수</span>
-          <strong>{stats.average == null ? '—' : stats.average.toFixed(1)}<small> / 5</small></strong>
-        </div>
-        <div className="sb-qa-autosave">
-          <span>✓</span>
-          <div><strong>자동 저장</strong><small>컴포넌트 ID별로 현재 프로필에 보관</small></div>
-        </div>
-        <button
-          type="button"
-          className={'sb-btn sb-qa-rubric-toggle' + (rubricOpen ? ' sb-btn--open' : '')}
-          onClick={() => setRubricOpen((open) => !open)}
-        >
-          0~5 평가 기준
-        </button>
       </section>
 
       {rubricOpen && <Rubric onClose={() => setRubricOpen(false)} />}
@@ -468,126 +414,83 @@ export default function EvaluationPanel({
           >
             <span>CASE {caseStat.slot}</span>
             <strong>{caseStat.planCase?.name || '케이스 준비 중'}</strong>
-            <small>{caseStat.completed}/{caseStat.total} 완료 · {caseStat.score}/{caseStat.maxScore}점</small>
+            <small>{caseStat.completed}/{caseStat.total} 완료</small>
           </button>
         ))}
+        {activeCase && (
+          <button type="button" className="sb-btn sb-qa-case-tabs__open" onClick={() => onEditCase(activeCase.id)}>
+            전체 결과 화면 열기
+          </button>
+        )}
       </section>
 
-      <section className="sb-qa-target-stats" aria-label="컴포넌트 유형별 평균">
-        <div className="sb-qa-target-stats__title">
-          <span>컴포넌트 유형별 평균</span>
-          <small>낮은 유형부터 보강하세요</small>
-        </div>
-        {stats.typeStats.map((target) => (
-          <div key={target.type} className="sb-qa-target-stat">
-            <span>{LIBRARY[target.type]?.icon} {LIBRARY[target.type]?.label || target.type}</span>
-            <div><i style={{ width: `${((target.average || 0) / 5) * 100}%` }} /></div>
-            <strong>{target.average == null ? '—' : target.average.toFixed(1)}</strong>
-          </div>
-        ))}
-      </section>
-
-      <section className="sb-qa-case">
-        <div className="sb-qa-case__head">
-          <div className="sb-qa-case__identity">CASE {activeSlot}</div>
-          <div>
-            <h3>{activeCase?.name || '평가 케이스'}</h3>
-            <p>실제 콘텐츠 컴포넌트 {activeCaseStat?.total || 0}개 · 최대 {activeCaseStat?.maxScore || 0}점</p>
-          </div>
-          {activeCase && (
-            <button type="button" className="sb-btn" onClick={() => onEditCase(activeCase.id)}>
-              전체 결과 화면 열기
-            </button>
-          )}
-        </div>
-
-        {activeCase && (() => {
-          const caseReview = normalizeCaseEvaluation(activeCase.evaluation)
-          return (
-            <div className="sb-qa-case-note">
-              <div className="sb-qa-case-note__score">
-                <span>케이스 전체</span>
-                <ScorePicker
-                  value={caseReview.score}
-                  label={`CASE ${activeSlot} 전체`}
-                  onChange={(score) => onUpdateCase(activeCase.id, { score })}
-                />
-                <strong>{caseReview.score == null ? '미평가' : `${caseReview.score}점`}</strong>
-              </div>
-              <textarea
-                rows={2}
-                value={caseReview.feedback}
-                placeholder="케이스 전체 피드백 — 예: 참고 영상 붙여줘, CTA 빼줘 (AI 수정 요청에 자동 포함)"
-                onChange={(event) => onUpdateCase(activeCase.id, { feedback: event.target.value })}
-              />
-            </div>
-          )
-        })()}
-
-        <div className="sb-qa-steps">
-          {structure.map((section) => {
-            const sectionStat = activeCaseStat?.sectionStats.find((stat) => stat.key === section.key)
-            const regularComponents = section.components.filter((component) => component.type !== 'productCard')
-            const productComponents = section.components.filter((component) => component.type === 'productCard')
+      {/* 왼쪽 = 실제 페이지, 오른쪽 = 말풍선 레일 */}
+      <section className="sb-annotate">
+        <div className="sb-annotate__page" ref={pageRef} style={{ width: deviceW }}>
+          {pageItems.map((item) => {
+            const noted = evaluables.some((component) =>
+              anchorIdOf(component) === item.id
+              && normalizeComponentEvaluation(activeEvaluation.components[component.itemId]).feedback.trim()
+            )
             return (
-              <article key={section.key} className="sb-qa-step">
-                <div className="sb-qa-step__head">
-                  <div className="sb-qa-step__number">{section.step || '•'}</div>
-                  <div>
-                    <span>{section.step ? `STEP ${section.step}` : 'COMMON'}</span>
-                    <strong>{section.title}</strong>
-                  </div>
-                  <div className="sb-qa-step__score">
-                    <span>{sectionStat?.completed || 0}/{sectionStat?.total || 0} 완료</span>
-                    <strong>{sectionStat?.score || 0}<small>/{sectionStat?.maxScore || 0}</small></strong>
-                  </div>
-                </div>
-
-                {regularComponents.length > 0 && (
-                  <div className="sb-qa-review-list">
-                    {regularComponents.map((component) => (
-                      <ComponentReview
-                        key={component.itemId}
-                        planCase={activeCase}
-                        component={component}
-                        slot={activeSlot}
-                        review={normalizeComponentEvaluation(activeEvaluation.components[component.itemId])}
-                        onUpdateComponent={onUpdateComponent}
-                        onEditComponent={onEditComponent}
-                        profile={profile}
-                        summaryPreview={summaryPreview}
-                      />
-                    ))}
-                  </div>
-                )}
-
-                {productComponents.length > 0 && (
-                  <ProductReviewTrack count={productComponents.length}>
-                    {productComponents.map((component) => (
-                      <div key={component.itemId} className="sb-qa-product-reviews__slide">
-                        <ComponentReview
-                          planCase={activeCase}
-                          component={component}
-                          slot={activeSlot}
-                          product
-                          review={normalizeComponentEvaluation(activeEvaluation.components[component.itemId])}
-                          onUpdateComponent={onUpdateComponent}
-                          onEditComponent={onEditComponent}
-                          profile={profile}
-                          summaryPreview={summaryPreview}
-                        />
-                      </div>
-                    ))}
-                  </ProductReviewTrack>
-                )}
-              </article>
+              <div
+                key={item.id}
+                ref={(el) => { anchorRefs.current[item.id] = el }}
+                className={
+                  'sb-annotate__item'
+                  + (activeAnchorId === item.id ? ' is-active' : '')
+                  + (noted ? ' is-noted' : '')
+                }
+                style={{ maxWidth: item.w || undefined }}
+                onClick={() => focusFromPage(item.id)}
+              >
+                <EvaluationPreviewBoundary resetKey={`${item.id}:${item.type}`}>
+                  {renderItem(item, pageCtx)}
+                </EvaluationPreviewBoundary>
+              </div>
             )
           })}
-          {structure.length === 0 && (
-            <div className="sb-qa-empty-components">
-              이 CASE에는 평가할 수 있는 노출 컴포넌트가 없습니다.
-            </div>
+          {pageItems.length === 0 && (
+            <div className="sb-qa-empty-components">이 CASE에는 평가할 수 있는 노출 컴포넌트가 없습니다.</div>
           )}
+        </div>
+
+        <div className="sb-annotate__rail" ref={railRef}>
+          {activeCase && (
+            <CommentBubble
+              bubbleRef={(el) => { bubbleRefs.current.__case__ = el }}
+              active={activeId === '__case__'}
+              isCase
+              icon="🗂"
+              label="케이스 전체"
+              review={{ score: activeEvaluation.score, feedback: activeEvaluation.feedback, resolved: false }}
+              onActivate={() => focusFromBubble(null)}
+              onScore={(score) => onUpdateCase(activeCase.id, { score })}
+              onFeedback={(feedback) => onUpdateCase(activeCase.id, { feedback })}
+            />
+          )}
+          {evaluables.map((component) => {
+            const review = normalizeComponentEvaluation(activeEvaluation.components[component.itemId])
+            const def = LIBRARY[component.type]
+            return (
+              <CommentBubble
+                key={component.itemId}
+                bubbleRef={(el) => { bubbleRefs.current[component.itemId] = el }}
+                active={activeId === component.itemId}
+                icon={def?.icon}
+                label={def?.label || component.type}
+                review={review}
+                onActivate={() => focusFromBubble(component)}
+                onScore={(score) => onUpdateComponent(activeCase.id, component.itemId, { score })}
+                onFeedback={(feedback) => onUpdateComponent(activeCase.id, component.itemId, {
+                  feedback,
+                  resolved: false,
+                })}
+                onEdit={() => onEditComponent(activeCase.id, component)}
+                onResolve={() => onUpdateComponent(activeCase.id, component.itemId, { resolved: !review.resolved })}
+              />
+            )
+          })}
         </div>
       </section>
 
