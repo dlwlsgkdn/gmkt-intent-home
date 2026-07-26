@@ -30,6 +30,7 @@ const SAFE_COMPONENT_FIELD_LABELS = {
 const NON_LLM_EDITABLE_FIELDS = new Set([
   'price', 'was', 'score', 'imageUrl', 'url', 'external', 'mall', 'gradient',
   'emoji', 'no', 'badge', 'cardW', 'panelH', 'cols',
+  'hidden', 'hiddenProfile', 'hiddenQuestions', // 노출 설정 — 사람이 칩 관리 UI로만 조절
 ])
 
 const positionSort = (left, right) =>

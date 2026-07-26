@@ -3,6 +3,7 @@ import { LIBRARY } from '../../lib/registry.jsx'
 import { TEXT_COLORS, SizeMenu, FontMenu, applyOptToRaw } from '../../lib/richtext.jsx'
 import { MIN_ITEM_W } from '../../lib/layout.js'
 import { ListFieldEditor, TableFieldEditor } from './ListEditors.jsx'
+import { ProfileChipManager, SummaryChipManager } from './ChipManagers.jsx'
 
 /* 목록형 필드 GUI 편집기 kind 집합 — 실제 구현은 ListEditors.jsx */
 const LIST_FIELD_KINDS = new Set(['options', 'stringList', 'cards'])
@@ -27,6 +28,9 @@ export default function Inspector({
   alignSelected,
   ensureKeyword,
   unnestItem,
+  profile,
+  updateProfile,
+  surveyQuestions,
 }) {
   /* 드래그 선택 → 플로팅 서식 툴바 상태 (훅은 조기 return보다 앞에) */
   const [sel, setSel] = React.useState(null) // { key, start, end, list }
@@ -163,6 +167,24 @@ export default function Inspector({
                 'data-fkey': f.key,
                 onSelect: (e) => onFieldSelect(f.key, e.target, f.list),
               }}
+            />
+          ) : f.kind === 'profileChips' ? (
+            <ProfileChipManager
+              key={selected.id}
+              hidden={fieldValue(f)}
+              onChangeHidden={(v) => updateProps(selected.id, f.key, v)}
+              profile={profile}
+              updateProfile={updateProfile}
+            />
+          ) : f.kind === 'summaryChips' ? (
+            <SummaryChipManager
+              key={selected.id}
+              hiddenProfile={fieldValue(f)}
+              hiddenQuestions={selected.props[f.questionsKey] ?? ''}
+              onChangeHiddenProfile={(v) => updateProps(selected.id, f.key, v)}
+              onChangeHiddenQuestions={(v) => updateProps(selected.id, f.questionsKey, v)}
+              profile={profile}
+              surveyQuestions={surveyQuestions}
             />
           ) : f.kind === 'table' ? (
             <TableFieldEditor

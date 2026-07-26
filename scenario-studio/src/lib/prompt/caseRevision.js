@@ -30,7 +30,7 @@ import { parseJsonAnswer } from './jsonAnswer.js'
 /* AI가 값을 정하면 안 되는 사실·설정 필드 (evaluation.js의 NON_LLM_EDITABLE_FIELDS와 동일 철학) */
 const FACT_FIELDS = new Set([
   'price', 'was', 'score', 'imageUrl', 'url', 'external', 'mall', 'gradient',
-  'emoji', 'no', 'badge',
+  'emoji', 'no', 'badge', 'hidden', 'hiddenProfile', 'hiddenQuestions',
 ])
 
 /* 새로 추가된 미디어 카드는 url을 스스로 채울 수 있다(국내 기준 실제 주소만) — 검토 경고 대상 */

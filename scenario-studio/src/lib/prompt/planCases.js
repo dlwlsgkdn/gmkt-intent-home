@@ -15,7 +15,7 @@ export const GENERATION_BATCH_SIZE = 6
 const NON_GENERATED_FIELDS = new Set([
   'price', 'was', 'score', 'imageUrl', 'url', 'external', 'mall', 'gradient',
   'emoji', 'no', 'badge', 'cardW', 'panelH', 'cols', 'maxPerRow', 'optionShape',
-  'defaultAnswer', 'hidden', 'items', 'contentCatalog', 'answerLabel', 'catalogId',
+  'defaultAnswer', 'hidden', 'hiddenProfile', 'hiddenQuestions', 'items', 'contentCatalog', 'answerLabel', 'catalogId',
   'source', 'channel', 'duration', 'scrollbar', 'options',
 ])
 

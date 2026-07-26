@@ -143,7 +143,7 @@ export const SURVEY_COMPONENTS = {
     },
     fields: [
       { key: 'hint', label: '우측 안내 문구', kind: 'text' },
-      { key: 'hidden', label: '숨길 항목 라벨 (쉼표 구분 · 캔버스 배지 클릭과 동기화)', kind: 'text', list: true },
+      { key: 'hidden', label: '속성 칩 관리', kind: 'profileChips', list: true },
     ],
     render: (p, ctx) => {
       const profile = ctx.profile || { name: '사용자', items: [] }

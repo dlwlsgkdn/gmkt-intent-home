@@ -2684,6 +2684,38 @@
 .sb-tbledit__colx:disabled { opacity: 0.3; cursor: default; }
 .sb-tbledit .sb-optlist__tools { flex-direction: row; }
 .sb-tbledit__actions { display: flex; gap: 6px; }
+
+/* 속성 칩 관리 (프로필 요약 / 설문 요약) */
+.sb-chipman .sb-optlist__row { grid-template-columns: auto minmax(0, 1fr) auto; }
+.sb-chipman__check { display: grid; place-items: center; align-self: center; cursor: pointer; }
+.sb-chipman input[type='checkbox'] { accent-color: var(--sb-accent); width: 15px; height: 15px; cursor: pointer; }
+.sb-chipman__group {
+  margin: 6px 0 0;
+  font-size: var(--sb-t-micro);
+  letter-spacing: 0.08em;
+  color: var(--sb-n-400);
+}
+.sb-chipman__toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--sb-line);
+  border-radius: var(--sb-r-sm);
+  background: var(--sb-n-0);
+  cursor: pointer;
+  font-size: var(--sb-t-caption);
+}
+.sb-chipman__toggle-row:hover { border-color: var(--sb-n-400); }
+.sb-chipman__label { color: var(--sb-ink); font-weight: 400; white-space: nowrap; }
+.sb-chipman__label--wide { white-space: normal; word-break: keep-all; line-height: 1.4; }
+.sb-chipman__value {
+  color: var(--sb-muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 /* 두 갈래 선택 세그먼트 (예: 검색창 긴 텍스트 처리) */
 .sb-seg {
   display: flex;

@@ -834,6 +834,11 @@ export default function Builder({ api, scenario }) {
             }}
             ensureKeyword={ensureKeyword}
             unnestItem={nesting.unnestItem}
+            profile={api.profile}
+            updateProfile={api.updateProfile}
+            surveyQuestions={(scenario.stages.survey || [])
+              .filter((item) => item.type === 'surveyQuestion')
+              .map((item) => ({ id: item.id, text: item.props.question }))}
           />
 
           <CanvasTextToolbar active={!previewMode && !!inlineEdit} ensureKeyword={ensureKeyword} />

@@ -1,5 +1,5 @@
 import React from 'react'
-import { splitTextList } from '../store.js'
+import { splitList, splitTextList } from '../store.js'
 import { Img, kText, youtubeThumbnail } from './support.jsx'
 
 /* 계획 단계 컴포넌트 — 요약·타이틀·단계 카드·상품/미디어 카드·체크리스트·CTA */
@@ -9,14 +9,23 @@ export const PLAN_COMPONENTS = {
     stage: 'plan',
     icon: '🧾',
     hint: '프로필 + 설문에서 고른 답을 요약 (원본 설문 요약 스타일)',
-    defaults: { title: '설문 요약' },
-    fields: [{ key: 'title', label: '제목', kind: 'text' }],
+    defaults: { title: '설문 요약', hiddenProfile: '', hiddenQuestions: '' },
+    fields: [
+      { key: 'title', label: '제목', kind: 'text' },
+      // 요약 칩 관리 편집기가 hiddenQuestions까지 함께 편집한다
+      { key: 'hiddenProfile', label: '표시 항목 관리', kind: 'summaryChips', questionsKey: 'hiddenQuestions' },
+    ],
     render: (p, ctx) => {
       const rawData =
         (ctx.mode === 'player' ? ctx.player.summary : ctx.summaryPreview) || { profile: [], questions: [] }
+      // 컴포넌트별 숨김 — 프로필 칩은 라벨, 질문은 문구로 매칭 (인스펙터 "표시 항목 관리")
+      const hiddenProfile = splitList(p.hiddenProfile)
+      const hiddenQuestions = splitTextList(p.hiddenQuestions)
       const data = {
-        profile: Array.isArray(rawData.profile) ? rawData.profile : [],
-        questions: Array.isArray(rawData.questions) ? rawData.questions : [],
+        profile: (Array.isArray(rawData.profile) ? rawData.profile : [])
+          .filter((it) => !hiddenProfile.includes(it.label)),
+        questions: (Array.isArray(rawData.questions) ? rawData.questions : [])
+          .filter((q) => !hiddenQuestions.includes(String(q.q || '').trim())),
       }
       const empty = data.profile.length === 0 && data.questions.length === 0
       // 원본 clean-survey-lock 마크업/클래스 그대로
