@@ -2537,7 +2537,10 @@
   gap: 14px;
   margin-bottom: 10px;
 }
-.sb-llm-section__head > div > strong { display: block; color: var(--sb-ink); font-size: var(--sb-t-title); }
+.sb-llm-section__head > div > span,
+.sb-llm-section__head > div > strong { display: block; }
+.sb-llm-section__head > div > span { color: var(--sb-info); font-size: var(--sb-t-micro); font-weight: 500; letter-spacing: 0.11em; }
+.sb-llm-section__head > div > strong { margin-top: 2px; color: var(--sb-ink); font-size: var(--sb-t-title); }
 .sb-llm-section__head > span { color: var(--sb-n-500); font-size: var(--sb-t-caption); font-weight: 400; }
 .sb-llm-help { margin: 0 0 11px; color: var(--sb-n-500); font-size: var(--sb-t-caption); line-height: 1.55; }
 .sb-llm-details {

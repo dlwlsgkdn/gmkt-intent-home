@@ -63,7 +63,7 @@ export default function PromptExchange({
       <section className="sb-llm-section">
         <div className="sb-llm-section__head">
           <div>
-            <span>STEP 1 · 스튜디오에서</span>
+            <span>1단계 · 스튜디오에서</span>
             <strong>{title}</strong>
           </div>
           <button
@@ -85,7 +85,7 @@ export default function PromptExchange({
       <div className={'sb-away-step' + (stage === 2 ? ' is-now' : '')}>
         <span className="sb-away-step__mark" aria-hidden="true">⇄</span>
         <div>
-          <strong>STEP 2 · 스튜디오 밖에서</strong>
+          <strong>2단계 · 스튜디오 밖에서</strong>
           <p>복사한 프롬프트를 <b>평소 쓰는 AI 채팅</b>에 붙여넣고 답변을 받아오세요. 이 창은 그대로 기다립니다.</p>
         </div>
       </div>
@@ -93,7 +93,7 @@ export default function PromptExchange({
       <section className="sb-llm-section">
         <div className="sb-llm-section__head">
           <div>
-            <span>STEP 3 · 다시 스튜디오에서</span>
+            <span>3단계 · 다시 스튜디오에서</span>
             <strong>AI가 준 결과 가져오기</strong>
           </div>
           <div className="sb-gen-headbtns">

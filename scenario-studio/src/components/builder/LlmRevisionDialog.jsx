@@ -179,7 +179,7 @@ export default function LlmRevisionDialog({
               <section className="sb-llm-section">
                 <div className="sb-llm-section__head">
                   <div>
-                    <span>STEP 4 · 다시 스튜디오에서</span>
+                    <span>4단계 · 다시 스튜디오에서</span>
                     <strong>수정안 선택 적용</strong>
                   </div>
                   <span>{selectedKeys.size}/{validation.revisions.length}개 선택</span>
