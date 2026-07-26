@@ -80,6 +80,12 @@
   --sb-t-body: 13.5px;
   --sb-t-title: 16px;
 
+  /* 본문 폰트 — DDAK 메인(clean-home)과 동일한 Pretendard 스택.
+     원본 CSS의 .clean-home-page * 상속에 기대지 않고 스튜디오가 직접 선언한다
+     (원본 CSS가 로드되지 않아도 같은 글꼴). 웹폰트 로드는 index.html. */
+  --sb-font-sans: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont,
+    'Apple SD Gothic Neo', Roboto, 'Noto Sans KR', 'Segoe UI', 'Malgun Gothic', sans-serif;
+
   /* 모션 — 짧고 하나의 이징 */
   --sb-dur: 0.16s;
   --sb-dur-slow: 0.3s;
@@ -87,6 +93,36 @@
 
   /* 포커스 링 — 키보드 사용자에게 어디서나 같은 신호 */
   --sb-focus-ring: 0 0 0 3px rgba(54, 95, 127, 0.26);
+}
+
+/* 스튜디오 크롬 전체가 메인 페이지와 같은 폰트를 쓴다.
+   프롬프트·JSON 영역(ui-monospace 지정)만 예외로 남는다. */
+.sb-builder,
+.sb-evaluation,
+.sb-llm-modal,
+.sb-drawer,
+.sb-toast,
+.sb-topleft,
+.sb-studio-fab,
+.sb-player-stepper {
+  font-family: var(--sb-font-sans);
+}
+.sb-builder button,
+.sb-builder input,
+.sb-builder select,
+.sb-builder textarea,
+.sb-llm-modal button,
+.sb-llm-modal input,
+.sb-llm-modal select,
+.sb-drawer button,
+.sb-drawer input {
+  font-family: inherit;
+}
+/* 모노스페이스 예외 재선언 — 위 inherit가 덮지 않게 */
+.sb-llm-details textarea,
+.sb-llm-response,
+.sb-gen-catalog {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 /* 키보드 포커스는 스튜디오 어디서나 같은 링으로 보인다.

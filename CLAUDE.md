@@ -84,6 +84,7 @@ cd scenario-studio && npm run build   # vite build && cp -R ../legacy ../docs/le
 
 `:root`의 토큰이 스튜디오 UI의 유일한 값 출처다. 규칙 안에 색·반경·그림자를 직접 쓰지 말 것.
 
+- **폰트**: 스튜디오 크롬은 메인(clean-home)과 같은 **Pretendard 스택**(`--sb-font-sans`) — 웹폰트는 index.html에서 jsdelivr CDN으로 로드한다(원본 CSS 스택 1순위가 Pretendard인데 로드하는 곳이 없어 시스템 폰트로 폴백되던 것). 리치텍스트 인라인 서식 폰트는 별개 토큰 `--sb-font`(FONT_OPTIONS 7종)이니 혼동 금지. 프롬프트·JSON 영역만 ui-monospace 예외
 - **색**: 중립 11단계(`--sb-n-0`~`--sb-n-900`) + 텍스트 4단계(`--sb-ink`/`--sb-ink-2`/`--sb-muted`/`--sb-subtle`) + 면 3단계 + 역할색(`--sb-accent` 브랜드, `--sb-info` 평가·AI 왕복, `--sb-success`/`--sb-warn`/`--sb-danger`, `--sb-ai` AI 트리거)
 - **--sb-qa-\*** 는 구 이름의 별칭일 뿐이다. 새 코드는 `--sb-info` 등을 쓸 것
 - **라운드** `--sb-r-xs`~`--sb-r-2xl`/`--sb-r-pill`, **그림자** `--sb-shadow-sm`~`xl`, **타이포** `--sb-t-micro`(10px)~`--sb-t-title`(16px) 5단계 — 10px 미만 리터럴 금지, **모션** `--sb-dur`/`--sb-ease`. 다이얼로그 본문 블록의 세로 리듬은 `margin: 12px 24px` 기준
