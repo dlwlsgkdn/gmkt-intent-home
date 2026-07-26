@@ -2211,7 +2211,8 @@
 .sb-llm-response:focus { border-color: var(--sb-info); box-shadow: var(--sb-focus-ring); }
 .sb-llm-error,
 .sb-llm-warning { margin: 7px 2px 0; color: var(--sb-warn-ink); font-size: var(--sb-t-micro); }
-.sb-llm-validation { margin-top: 10px; }
+/* 다이얼로그 본문 블록들과 같은 좌우 여백에 맞춘다 (.sb-llm-section과 동일) */
+.sb-llm-validation { margin: 10px 24px 0; }
 .sb-llm-validation__errors,
 .sb-llm-validation__ok {
   padding: 10px 12px;
@@ -2231,14 +2232,22 @@
   color: var(--sb-qa-green);
 }
 .sb-llm-validation__ok span { color: var(--sb-n-500); }
+/* 적용할 게 없는 상태는 성공(초록)이 아니라 중립으로 — 아래 summary가 이유를 설명한다 */
+.sb-llm-validation__ok--empty {
+  border-color: var(--sb-line);
+  background: var(--sb-surface-sunken);
+  color: var(--sb-ink);
+}
 .sb-llm-summary {
-  margin: 0 0 10px;
-  padding: 9px 11px;
-  border-left: 3px solid var(--sb-qa-blue);
-  background: var(--sb-qa-blue-soft);
-  color: var(--sb-info);
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--sb-info);
+  border-radius: 0 var(--sb-r-sm) var(--sb-r-sm) 0;
+  background: var(--sb-info-soft);
+  color: var(--sb-ink-2);
   font-size: var(--sb-t-caption);
-  line-height: 1.5;
+  line-height: 1.65;
+  white-space: pre-wrap;
 }
 .sb-llm-revisions { display: flex; flex-direction: column; gap: 8px; }
 .sb-llm-revision {

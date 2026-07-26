@@ -147,11 +147,21 @@ export default function LlmRevisionDialog({
                   <p key={index} className="sb-llm-warning">{warning}</p>
                 ))}
                 {validation.errors.length === 0 && (
-                  <div className="sb-llm-validation__ok">
-                    <strong>✓ 스키마와 허용 필드 검증 완료</strong>
-                    <span>{validation.revisions.length}개 수정안을 검토할 수 있어요.</span>
-                  </div>
+                  validation.revisions.length > 0 ? (
+                    <div className="sb-llm-validation__ok">
+                      <strong>✓ 스키마와 허용 필드 검증 완료</strong>
+                      <span>{validation.revisions.length}개 수정안을 검토할 수 있어요.</span>
+                    </div>
+                  ) : (
+                    /* 적용할 게 없을 때가 오히려 설명이 필요하다 — 왜 못 고치는지는 summary에 있다 */
+                    <div className="sb-llm-validation__ok sb-llm-validation__ok--empty">
+                      <strong>적용할 수정안이 없어요</strong>
+                      <span>AI가 이번 피드백은 문구 수정으로 해결할 수 없다고 판단했어요.</span>
+                    </div>
+                  )
                 )}
+                {/* summary는 수정안 개수와 무관하게 보여준다 — 0개일 때 유일한 설명이다 */}
+                {validation.summary && <p className="sb-llm-summary">{validation.summary}</p>}
               </div>
             )}
 
@@ -164,7 +174,6 @@ export default function LlmRevisionDialog({
                   </div>
                   <span>{selectedKeys.size}/{validation.revisions.length}개 선택</span>
                 </div>
-                {validation.summary && <p className="sb-llm-summary">{validation.summary}</p>}
                 <div className="sb-llm-revisions">
                   {validation.revisions.map((revision) => {
                     const key = revisionKey(revision)
