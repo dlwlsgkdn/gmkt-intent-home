@@ -66,11 +66,20 @@ export function scenarioFromSnapshot(snapshot) {
   }
 }
 
-/* 기기 폭 전환: 모든 아이템의 x/w를 비율로 환산 (스냅샷 저장 형식은 그대로) */
+/* 기기 폭 전환: 최상위 아이템의 x/w만 비율로 환산한다 (스냅샷 저장 형식은 그대로).
+ *
+ * 컨테이너 자식은 건드리지 않는다. 자식 폭은 캔버스 폭이 아니라 "컨테이너 안에서의
+ * 콘텐츠 크기"이고(가로 스크롤 카드는 화면이 좁아져도 같은 크기로 남고 스크롤이 늘어난다),
+ * 무엇보다 자식에 비율 환산을 적용하면 값이 되돌아오지 않는다:
+ * 최상위는 maxItemW 클램프가 "다시 꽉 채우기"로 복원해 주지만 자식은 클램프에 걸리지 않아
+ * 반올림 오차가 왕복마다 증폭된다(실측: 232 → 갤럭시 212 → 데스크톱 457).
+ * 자식의 x/y는 슬롯 배치라 애초에 의미가 없다.
+ * 좁은 기기에서 넘치는 문제는 슬롯 CSS의 max-width가 맡는다(studio.css 자식 슬롯 규칙). */
 export function rescaleForDevice(scenario, preset, { pad, minItemW, currentCanvasW }) {
   const ratio = (preset.w - pad * 2) / (currentCanvasW - pad * 2)
   const maxItemW = preset.w - pad * 2
   const resize = (list) => (list || []).map((item) => {
+    if (item.parentId) return item
     const w = Math.max(minItemW, Math.min(maxItemW, Math.round(item.w * ratio)))
     const x = Math.max(0, Math.min(preset.w - pad - w, Math.round(pad + (item.x - pad) * ratio)))
     return { ...item, w, x }

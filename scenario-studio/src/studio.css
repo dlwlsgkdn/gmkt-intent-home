@@ -2954,16 +2954,21 @@
 .sb-gridpanel__grid { display: grid; gap: 12px; }
 .sb-gridpanel__card { width: auto; }
 
-/* ── 컨테이너(레이아웃) 자식 슬롯 ── */
+/* ── 컨테이너(레이아웃) 자식 슬롯 ──
+   자식 폭(item.w)은 기기 폭이 바뀌어도 재계산하지 않는다(rescaleForDevice 참고).
+   좁은 기기에서 어떻게 보이는지는 컨테이너의 축이 정한다:
+     주 축이 가로(hscroll) → 카드는 원래 크기 그대로, 넘치는 만큼 스크롤이 늘어난다
+     교차 축(vscroll·grid) → 컨테이너를 넘을 수 없으므로 max-width로 눌러 담는다
+     carousel → 가로 축이지만 "한 장 = 한 화면"이 원칙이라 화면을 넘지 않게 막는다 */
 .sb-hscroll__slot {
   flex: 0 0 auto;
   min-width: 0;
   /* 패널 전체가 아닌 슬롯의 실제 너비로 내부 카드의 반응형 레이아웃을 결정 */
   container-type: inline-size;
 }
-.sb-vscroll__slot { flex-shrink: 0; min-width: 0; }
-.sb-gridpanel__slot { min-width: 0; }
-.sb-carousel__slot { flex: 0 0 100%; scroll-snap-align: center; min-width: 0; }
+.sb-vscroll__slot { flex-shrink: 0; min-width: 0; max-width: 100%; }
+.sb-gridpanel__slot { min-width: 0; max-width: 100%; }
+.sb-carousel__slot { flex: 0 0 100%; scroll-snap-align: center; min-width: 0; max-width: 100%; }
 
 /* 드래그 중 "안에 배치" 드롭 대상 하이라이트 */
 .sb-canvas-item--drop-target {
