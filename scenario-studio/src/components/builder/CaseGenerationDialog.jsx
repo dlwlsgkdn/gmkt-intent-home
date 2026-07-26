@@ -212,7 +212,7 @@ export default function CaseGenerationDialog({
         <div className="sb-llm-dialog__head">
           <div>
             <p className="sb-panel-label">골든 케이스 + 카탈로그 → 프롬프트 → 내 AI → 조합별 케이스</p>
-            <h2 id="sb-gen-title">계획 케이스 만들기</h2>
+            <h2 id="sb-gen-title">조합 케이스 만들기</h2>
             <p>골든 케이스의 레이아웃과 상품 카탈로그는 고정하고, AI는 조합별 문구와 상품 선택만 채웁니다.</p>
             <AiRoundTripNote>
               조합이 많으면 프롬프트를 <b>여러 배치로 나눠</b> 주고받습니다. 배치마다 복사 → 붙여넣기 → 결과 가져오기를 반복해요.

@@ -95,18 +95,18 @@ export default function PlanCaseBar({
         className="sb-btn sb-btn--small sb-btn--ai"
         disabled={previewMode}
         onClick={onGenerateCases}
-        title="조합별 케이스를 만들 프롬프트를 생성해요. 쓰던 AI에 붙여넣고 결과를 가져오면 케이스가 추가됩니다."
+        title="설문 조합마다 새 케이스를 만드는 프롬프트예요. 쓰던 AI에 붙여넣고 결과를 가져오면 케이스가 여러 개 추가됩니다."
       >
-        ⇄ 케이스 프롬프트
+        ⇄ 조합 케이스
       </button>
       <button
         type="button"
         className="sb-btn sb-btn--small sb-btn--ai"
         disabled={previewMode}
         onClick={onReviseCase}
-        title="현재 케이스의 페이지 전체를 다시 구성할 프롬프트를 만들어요. 컴포넌트 추가·삭제까지 가능합니다."
+        title="지금 보고 있는 케이스 하나의 페이지 전체를 다시 구성하는 프롬프트예요. 컴포넌트 추가·삭제까지 가능합니다."
       >
-        ⇄ 다시 만들기
+        ⇄ 페이지 재구성
       </button>
       <Dropdown
         open={openMenu === 'case'}

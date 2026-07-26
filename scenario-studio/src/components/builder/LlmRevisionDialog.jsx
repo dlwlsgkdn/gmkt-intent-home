@@ -16,6 +16,7 @@ export default function LlmRevisionDialog({
   onApply,
   onClose,
   onToast,
+  onSwitchToRevise,
 }) {
   const [includeResolved, setIncludeResolved] = useState(false)
   const [responseText, setResponseText] = useState('')
@@ -76,9 +77,9 @@ export default function LlmRevisionDialog({
       <section className="sb-llm-dialog" role="dialog" aria-modal="true" aria-labelledby="sb-llm-title">
         <div className="sb-llm-dialog__head">
           <div>
-            <p className="sb-panel-label">피드백 → 프롬프트 → 내 AI → 안전한 부분 수정</p>
-            <h2 id="sb-llm-title">AI에게 시나리오 수정 요청</h2>
-            <p>피드백을 구조화해 프롬프트로 만들고, 허용된 컴포넌트 필드만 검토 후 선택 적용합니다.</p>
+            <p className="sb-panel-label">피드백 → 프롬프트 → 내 AI → 필드 단위 적용</p>
+            <h2 id="sb-llm-title">문구 다듬기</h2>
+            <p>구성은 그대로 두고 문구·표현만 고칩니다. 허용된 컴포넌트 필드만 검토 후 골라서 적용해요.</p>
             <AiRoundTripNote>
               여기서 바로 고쳐지지 않습니다. 프롬프트를 쓰던 AI에 붙여넣어 받은 수정안을 가져오면,
               <b> 허용된 필드인지 검증한 뒤 하나씩 골라</b> 적용합니다.
@@ -116,6 +117,11 @@ export default function LlmRevisionDialog({
           <div className="sb-llm-empty">
             <strong>요청할 피드백이 없습니다.</strong>
             <p>평가 항목의 수정사항을 작성하거나, 완료된 피드백까지 포함해주세요.</p>
+            {onSwitchToRevise && (
+              <button type="button" className="sb-btn sb-btn--ai" onClick={onSwitchToRevise}>
+                ⇄ 피드백 없이 페이지 재구성하기
+              </button>
+            )}
           </div>
         ) : (
           <>
@@ -157,6 +163,11 @@ export default function LlmRevisionDialog({
                     <div className="sb-llm-validation__ok sb-llm-validation__ok--empty">
                       <strong>적용할 수정안이 없어요</strong>
                       <span>AI가 이번 피드백은 문구 수정으로 해결할 수 없다고 판단했어요.</span>
+                      {onSwitchToRevise && (
+                        <button type="button" className="sb-btn sb-btn--ai sb-btn--small" onClick={onSwitchToRevise}>
+                          ⇄ 페이지 재구성으로 이어가기
+                        </button>
+                      )}
                     </div>
                   )
                 )}

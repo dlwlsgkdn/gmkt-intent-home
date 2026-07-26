@@ -8,6 +8,7 @@ import {
 } from '../../lib/evaluation.js'
 import { LIBRARY, renderItem } from '../../lib/registry.jsx'
 import LlmRevisionDialog from './LlmRevisionDialog.jsx'
+import AiFixChooser from './AiFixChooser.jsx'
 
 const SCORE_GUIDE = [
   { score: 5, title: '완벽 · 그대로 사용', desc: '수정하거나 추가할 의견이 전혀 없습니다.' },
@@ -344,6 +345,7 @@ export default function EvaluationPanel({
 }) {
   const [rubricOpen, setRubricOpen] = useState(false)
   const [llmDialogOpen, setLlmDialogOpen] = useState(false)
+  const [fixChooserOpen, setFixChooserOpen] = useState(false) // 문구 다듬기 / 페이지 재구성 선택
   const selectedCases = evaluationCasesFor(planCases)
   const stats = structuredComponentEvaluationStats(planCases)
   const activeSelected = selectedCases.find((planCase) => planCase.id === activeCaseId)
@@ -406,10 +408,10 @@ export default function EvaluationPanel({
           <button
             type="button"
             className="sb-btn sb-btn--ai"
-            title="피드백을 담은 프롬프트를 만들어 드려요. 쓰던 AI에 붙여넣고 받은 수정안을 가져오면 적용됩니다."
-            onClick={() => setLlmDialogOpen(true)}
+            title="문구만 다듬을지, 케이스 페이지를 통째로 재구성할지 골라서 프롬프트를 만들어 드려요."
+            onClick={() => setFixChooserOpen(true)}
           >
-            ⇄ AI 수정 프롬프트
+            ⇄ AI에게 수정 요청
           </button>
           <button type="button" className="sb-btn" onClick={rerunRecommendation}>CASE A/B/C 다시 선정</button>
         </div>
@@ -491,19 +493,9 @@ export default function EvaluationPanel({
             <p>실제 콘텐츠 컴포넌트 {activeCaseStat?.total || 0}개 · 최대 {activeCaseStat?.maxScore || 0}점</p>
           </div>
           {activeCase && (
-            <div className="sb-qa-case__actions">
-              <button
-                type="button"
-                className="sb-btn sb-btn--ai"
-                title="이 케이스의 피드백을 모아 페이지 전체를 다시 구성할 프롬프트를 만들어요."
-                onClick={() => onReviseCase(activeCase.id)}
-              >
-                ⇄ 이 케이스 다시 만들기
-              </button>
-              <button type="button" className="sb-btn" onClick={() => onEditCase(activeCase.id)}>
-                전체 결과 화면 열기
-              </button>
-            </div>
+            <button type="button" className="sb-btn" onClick={() => onEditCase(activeCase.id)}>
+              전체 결과 화면 열기
+            </button>
           )}
         </div>
 
@@ -574,12 +566,29 @@ export default function EvaluationPanel({
         </div>
       </section>
 
+      {fixChooserOpen && (
+        <AiFixChooser
+          activeCaseName={activeCase?.name || '평가 케이스'}
+          activeSlot={activeSlot}
+          onPickPolish={() => { setFixChooserOpen(false); setLlmDialogOpen(true) }}
+          onPickRebuild={() => {
+            setFixChooserOpen(false)
+            if (activeCase) onReviseCase(activeCase.id)
+          }}
+          onClose={() => setFixChooserOpen(false)}
+        />
+      )}
+
       {llmDialogOpen && (
         <LlmRevisionDialog
           planCases={planCases}
           onApply={onApplyLlmRevisions}
           onClose={() => setLlmDialogOpen(false)}
           onToast={onToast}
+          onSwitchToRevise={activeCase ? () => {
+            setLlmDialogOpen(false)
+            onReviseCase(activeCase.id)
+          } : undefined}
         />
       )}
     </main>

@@ -4759,6 +4759,31 @@ button.sb-info-chip:hover { border-color: var(--sb-n-400); background: var(--sb-
 
 .sb-qa-case__actions { display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
 
+/* ── AI 수정 방식 선택 (평가 탭 단일 진입점) ── */
+.sb-fix-chooser { max-width: 620px; }
+.sb-fix-chooser__cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 14px 24px 0;
+}
+.sb-fix-chooser__cards .sb-mode-card { padding: 15px 17px; }
+.sb-fix-chooser__examples {
+  display: block;
+  padding: 7px 10px;
+  border-radius: var(--sb-r-sm);
+  background: var(--sb-surface-inset);
+  color: var(--sb-muted);
+  font-size: var(--sb-t-micro);
+  line-height: 1.5;
+}
+.sb-fix-chooser__cards .sb-mode-card small b { color: var(--sb-ink); font-weight: 750; }
+
+/* 빈 상태에 놓이는 이어가기 버튼 */
+.sb-llm-empty .sb-btn { margin-top: 12px; }
+.sb-llm-validation__ok--empty { flex-wrap: wrap; }
+.sb-llm-validation__ok--empty .sb-btn { margin-left: auto; }
+
 /* ── 케이스 재구성: 피드백 목록 · 변경 요약(diff) ── */
 .sb-crev-feedback {
   display: flex;

@@ -73,10 +73,10 @@ export default function CaseRevisionDialog({ scenario, planCase, planCases, prof
         <div className="sb-llm-dialog__head">
           <div>
             <p className="sb-panel-label">피드백 → 프롬프트 → 내 AI → 케이스 재구성</p>
-            <h2 id="sb-crev-title">이 케이스 다시 만들기</h2>
+            <h2 id="sb-crev-title">페이지 재구성</h2>
             <p>
               <b>{planCase.name}</b> 케이스의 페이지 전체를 AI가 다시 구성합니다 —
-              컴포넌트 추가·삭제·순서 변경까지. 문구 한두 곳만 고칠 거라면 "AI 수정 프롬프트"가 더 안전해요.
+              컴포넌트 추가·삭제·순서 변경까지. 문구 한두 곳만 고칠 거라면 "문구 다듬기"가 더 안전해요.
             </p>
             <AiRoundTripNote>
               결과는 <b>통째로 적용</b>됩니다(부분 선택 없음). 적용 전에 변경 요약을 보여드리고, ⌘Z로 되돌릴 수 있어요.
