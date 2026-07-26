@@ -1948,14 +1948,15 @@
 .sb-qa-rubric__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
 .sb-qa-rubric__row {
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr);
+  /* 별 5개(★×5 ≈ 65px)가 들어가는 폭 — 좁으면 별이 제목 위로 넘친다 */
+  grid-template-columns: 68px minmax(0, 1fr);
   gap: 9px;
   padding: 10px;
   border: 1px solid var(--sb-line);
   border-radius: var(--sb-r-md);
   background: var(--sb-n-50);
 }
-.sb-qa-rubric__row > strong { color: var(--sb-n-500); font-size: 12px; }
+.sb-qa-rubric__row > strong { color: var(--sb-n-500); font-size: 12px; letter-spacing: 0.5px; white-space: nowrap; }
 .sb-qa-rubric__row b { display: block; color: var(--sb-ink); font-size: 10px; }
 .sb-qa-rubric__row p { margin: 3px 0 0; color: var(--sb-n-500); font-size: 10px; line-height: 1.45; }
 .sb-qa-rubric__row--5 { border-color: rgba(8, 127, 91, 0.22); background: rgba(8, 127, 91, 0.045); }
