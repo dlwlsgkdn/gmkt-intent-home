@@ -2594,6 +2594,61 @@
 .sb-field textarea:focus,
 .sb-field select:focus { border-color: var(--sb-accent); }
 .sb-field input[type='range'] { width: 100%; accent-color: var(--sb-accent); }
+
+/* ── 설문 선택지 목록 편집기 ── */
+.sb-optlist { display: flex; flex-direction: column; gap: 8px; }
+.sb-optlist__head { display: flex; align-items: center; justify-content: space-between; }
+.sb-optlist__count { font-size: var(--sb-t-micro); color: var(--sb-muted); }
+.sb-optlist__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--sb-line);
+  border-radius: var(--sb-r-md);
+  background: var(--sb-surface-inset);
+}
+.sb-optlist__inputs { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.sb-optlist__pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
+.sb-optlist__row input[type='text'],
+.sb-optlist__row textarea {
+  padding: 7px 9px;
+  font-size: var(--sb-t-caption);
+  border-radius: var(--sb-r-sm);
+}
+.sb-optlist__row textarea { resize: none; }
+.sb-optlist__tools { display: flex; flex-direction: column; gap: 3px; }
+.sb-optlist__tools button {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--sb-line);
+  border-radius: var(--sb-r-xs);
+  background: var(--sb-n-0);
+  font-size: var(--sb-t-micro);
+  color: var(--sb-ink-2);
+  cursor: pointer;
+  transition: border-color var(--sb-dur) var(--sb-ease), color var(--sb-dur) var(--sb-ease);
+}
+.sb-optlist__tools button:hover:not(:disabled) { border-color: var(--sb-n-400); color: var(--sb-ink); }
+.sb-optlist__tools button:disabled { opacity: 0.35; cursor: default; }
+.sb-optlist__tools .sb-optlist__remove:hover:not(:disabled) { border-color: var(--sb-danger); color: var(--sb-danger); }
+.sb-optlist__add { align-self: flex-start; }
+.sb-optlist__hint {
+  margin: 2px 0 0;
+  font-size: var(--sb-t-micro);
+  color: var(--sb-muted);
+  line-height: 1.5;
+}
+.sb-optlist__hint code {
+  font-family: ui-monospace, monospace;
+  font-size: var(--sb-t-micro);
+  background: var(--sb-n-100);
+  padding: 1px 4px;
+  border-radius: var(--sb-r-xs);
+}
 /* 두 갈래 선택 세그먼트 (예: 검색창 긴 텍스트 처리) */
 .sb-seg {
   display: flex;

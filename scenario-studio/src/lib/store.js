@@ -21,6 +21,7 @@ export {
   sortByPosition,
   splitList,
   splitOptions,
+  joinOptions,
 } from './store/model.js'
 
 export {

@@ -45,7 +45,7 @@ export const SURVEY_COMPONENTS = {
     },
     fields: [
       { key: 'question', label: '질문 문구', kind: 'textarea' },
-      { key: 'options', label: '선택지 (메인|서브|상세 설명 — 쉼표 또는 줄바꿈 구분, 줄바꿈이면 상세에 쉼표 허용)', kind: 'textarea', list: true },
+      { key: 'options', label: '선택지', kind: 'options', list: true },
       { key: 'multi', label: '복수 선택 허용', kind: 'toggle' },
       {
         key: 'maxPerRow',

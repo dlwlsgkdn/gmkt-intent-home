@@ -129,3 +129,19 @@ export function splitOptions(text) {
     return { main: parts[0], sub: parts[1] || '', desc: parts.slice(2).join('|').trim() }
   })
 }
+
+/* splitOptions의 역방향 — GUI 편집기가 만든 행 목록을 저장 문자열로.
+   줄바꿈 구분으로 직렬화해 상세 설명의 쉼표를 보존한다 */
+export function joinOptions(rows) {
+  const lines = (rows || [])
+    .map((row) => ({
+      main: String(row?.main || '').trim(),
+      sub: String(row?.sub || '').trim(),
+      desc: String(row?.desc || '').trim(),
+    }))
+    .filter((row) => row.main || row.sub || row.desc)
+    .map((row) => (row.desc ? `${row.main}|${row.sub}|${row.desc}` : row.sub ? `${row.main}|${row.sub}` : row.main))
+  const text = lines.join('\n')
+  // 한 줄뿐인데 쉼표가 들어 있으면 끝에 줄바꿈을 붙여 줄 단위 파싱을 강제한다 (쉼표 분리 오파싱 방지)
+  return lines.length === 1 && text.includes(',') ? `${text}\n` : text
+}
