@@ -2,117 +2,10 @@ import React from 'react'
 import { LIBRARY } from '../../lib/registry.jsx'
 import { TEXT_COLORS, SizeMenu, FontMenu, applyOptToRaw } from '../../lib/richtext.jsx'
 import { MIN_ITEM_W } from '../../lib/layout.js'
-import { splitOptions, joinOptions } from '../../lib/store.js'
+import { ListFieldEditor, TableFieldEditor } from './ListEditors.jsx'
 
-/* ── 설문 선택지 목록 편집기 (kind: 'options') ──
-   저장 형식은 기존 "메인|서브|상세" 문자열 그대로 두고, 행 단위 GUI로 편집한다.
-   빈 행은 직렬화에서 떨어지므로 로컬 상태로 유지하고, 외부 변경(undo·AI 반영)은
-   마지막으로 내보낸 문자열과 비교해 감지되면 다시 파싱한다 */
-function OptionListEditor({ value, onChange, textFieldProps }) {
-  const text = String(value ?? '')
-  const [rows, setRows] = React.useState(() => splitOptions(text))
-  const [textMode, setTextMode] = React.useState(false)
-  const lastRef = React.useRef(text)
-
-  React.useEffect(() => {
-    if (text !== lastRef.current) {
-      lastRef.current = text
-      setRows(splitOptions(text))
-    }
-  }, [text])
-
-  const commit = (next) => {
-    setRows(next)
-    const serialized = joinOptions(next)
-    lastRef.current = serialized
-    onChange(serialized)
-  }
-  const patchRow = (i, key, v) => commit(rows.map((row, j) => (j === i ? { ...row, [key]: v } : row)))
-  const moveRow = (i, dir) => {
-    const j = i + dir
-    if (j < 0 || j >= rows.length) return
-    const next = [...rows]
-    ;[next[i], next[j]] = [next[j], next[i]]
-    commit(next)
-  }
-
-  return (
-    <div className="sb-optlist">
-      <div className="sb-optlist__head">
-        <span className="sb-optlist__count">{rows.filter((row) => row.main || row.sub || row.desc).length}개</span>
-        <button
-          type="button"
-          className="sb-btn sb-btn--ghost sb-btn--tiny"
-          onClick={() => setTextMode((m) => !m)}
-        >
-          {textMode ? '목록으로 편집' : '텍스트로 일괄 편집'}
-        </button>
-      </div>
-
-      {textMode ? (
-        <>
-          <textarea
-            rows={5}
-            value={text}
-            onChange={(e) => onChange(e.target.value)}
-            {...textFieldProps}
-          />
-          <p className="sb-optlist__hint">
-            한 줄에 하나씩 <code>메인|서브|상세 설명</code> — 줄바꿈 구분이면 상세 설명에 쉼표를 쓸 수 있어요.
-          </p>
-        </>
-      ) : (
-        <>
-          {rows.map((row, i) => (
-            <div key={i} className="sb-optlist__row">
-              <div className="sb-optlist__inputs">
-                <div className="sb-optlist__pair">
-                  <input
-                    type="text"
-                    value={row.main}
-                    placeholder="메인 문구"
-                    onChange={(e) => patchRow(i, 'main', e.target.value)}
-                  />
-                  <input
-                    type="text"
-                    value={row.sub}
-                    placeholder="서브 (선택)"
-                    onChange={(e) => patchRow(i, 'sub', e.target.value)}
-                  />
-                </div>
-                <textarea
-                  rows={row.desc ? 2 : 1}
-                  value={row.desc}
-                  placeholder="상세 설명 (선택)"
-                  onChange={(e) => patchRow(i, 'desc', e.target.value.replace(/\n+/g, ' '))}
-                />
-              </div>
-              <div className="sb-optlist__tools">
-                <button type="button" title="위로" disabled={i === 0} onClick={() => moveRow(i, -1)}>↑</button>
-                <button type="button" title="아래로" disabled={i === rows.length - 1} onClick={() => moveRow(i, 1)}>↓</button>
-                <button
-                  type="button"
-                  className="sb-optlist__remove"
-                  title="선택지 삭제"
-                  onClick={() => commit(rows.filter((_, j) => j !== i))}
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-          ))}
-          <button
-            type="button"
-            className="sb-btn sb-btn--ghost sb-btn--small sb-optlist__add"
-            onClick={() => commit([...rows, { main: '', sub: '', desc: '' }])}
-          >
-            + 선택지 추가
-          </button>
-        </>
-      )}
-    </div>
-  )
-}
+/* 목록형 필드 GUI 편집기 kind 집합 — 실제 구현은 ListEditors.jsx */
+const LIST_FIELD_KINDS = new Set(['options', 'stringList', 'cards'])
 
 /* 오른쪽 패널: 선택 컴포넌트 속성 편집 / 다중 선택 도구 */
 export default function Inspector({
@@ -260,11 +153,24 @@ export default function Inspector({
         <div key={f.key} className="sb-field sb-field--rel">
           <label>{f.label}</label>
           {selToolbar(f)}
-          {f.kind === 'options' ? (
-            <OptionListEditor
+          {LIST_FIELD_KINDS.has(f.kind) ? (
+            <ListFieldEditor
               key={selected.id}
+              kind={f.kind}
               value={fieldValue(f)}
               onChange={(v) => updateProps(selected.id, f.key, v)}
+              textFieldProps={{
+                'data-fkey': f.key,
+                onSelect: (e) => onFieldSelect(f.key, e.target, f.list),
+              }}
+            />
+          ) : f.kind === 'table' ? (
+            <TableFieldEditor
+              key={selected.id}
+              value={fieldValue(f)}
+              headers={selected.props[f.headersKey] ?? ''}
+              onChange={(v) => updateProps(selected.id, f.key, v)}
+              onChangeHeaders={(v) => updateProps(selected.id, f.headersKey, v)}
               textFieldProps={{
                 'data-fkey': f.key,
                 onSelect: (e) => onFieldSelect(f.key, e.target, f.list),

@@ -7,6 +7,7 @@ import {
   isInteractionView,
   kText,
   parseCards,
+  parseTableRows,
   scrollCls,
 } from './support.jsx'
 
@@ -32,7 +33,7 @@ export const LAYOUT_COMPONENTS = {
     },
     fields: [
       { key: 'title', label: '패널 제목 (비우면 숨김)', kind: 'text' },
-      { key: 'items', label: '카드 목록 (제목|설명|이미지URL, 쉼표 구분)', kind: 'textarea', list: true },
+      { key: 'items', label: '카드 목록 (자식 컴포넌트가 없을 때의 안전망)', kind: 'cards', list: true },
       { key: 'cardW', label: '카드 너비(px)', kind: 'text' },
       { key: 'scrollbar', label: '스크롤바 상시 표시', kind: 'toggle' },
     ],
@@ -100,7 +101,7 @@ export const LAYOUT_COMPONENTS = {
     },
     fields: [
       { key: 'title', label: '패널 제목 (비우면 숨김)', kind: 'text' },
-      { key: 'items', label: '카드 목록 (제목|설명|이미지URL, 쉼표 구분)', kind: 'textarea', list: true },
+      { key: 'items', label: '카드 목록 (자식 컴포넌트가 없을 때의 안전망)', kind: 'cards', list: true },
       { key: 'cols', label: '열 수 (1~4)', kind: 'text' },
     ],
     render: (p, ctx) => {
@@ -158,7 +159,7 @@ export const LAYOUT_COMPONENTS = {
     },
     fields: [
       { key: 'title', label: '패널 제목 (비우면 숨김)', kind: 'text' },
-      { key: 'items', label: '카드 목록 (제목|설명|이미지URL, 쉼표 구분)', kind: 'textarea', list: true },
+      { key: 'items', label: '카드 목록 (자식 컴포넌트가 없을 때의 안전망)', kind: 'cards', list: true },
       { key: 'arrows', label: '좌우 화살표 버튼', kind: 'toggle' },
       { key: 'scrollbar', label: '스크롤바 상시 표시', kind: 'toggle' },
     ],
@@ -225,17 +226,12 @@ export const LAYOUT_COMPONENTS = {
     },
     fields: [
       { key: 'title', label: '표 제목 (비우면 숨김)', kind: 'text' },
-      { key: 'headers', label: '헤더 (| 구분)', kind: 'text' },
-      { key: 'rows', label: '행 목록 (셀은 |, 행은 줄바꿈 — 줄바꿈이 없으면 쉼표)', kind: 'textarea', list: true },
+      // 표 편집기가 headersKey의 헤더 행까지 함께 편집한다 (헤더 별도 필드 없음)
+      { key: 'rows', label: '표 내용', kind: 'table', headersKey: 'headers', list: true },
     ],
     render: (p, ctx) => {
       const headers = String(p.headers || '').split('|').map((s) => s.trim()).filter(Boolean)
-      // 행 구분: 줄바꿈 우선(셀 안 쉼표 허용), 줄바꿈이 없으면 쉼표
-      const raw = String(p.rows || '')
-      const rows = (raw.includes('\n') ? raw.split('\n') : raw.split(','))
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .map((row) => row.split('|').map((s) => s.trim()))
+      const rows = parseTableRows(p.rows)
       return (
         <div className="sb-table">
           {p.title ? <p className="sb-hscroll__title">{kText(p.title, ctx, 'title')}</p> : null}
@@ -283,7 +279,7 @@ export const LAYOUT_COMPONENTS = {
     },
     fields: [
       { key: 'title', label: '패널 제목 (비우면 숨김)', kind: 'text' },
-      { key: 'items', label: '카드 목록 (제목|설명|이미지URL, 쉼표 구분)', kind: 'textarea', list: true },
+      { key: 'items', label: '카드 목록 (자식 컴포넌트가 없을 때의 안전망)', kind: 'cards', list: true },
       { key: 'panelH', label: '스크롤 영역 높이(px)', kind: 'text' },
       { key: 'scrollbar', label: '스크롤바 상시 표시', kind: 'toggle' },
     ],

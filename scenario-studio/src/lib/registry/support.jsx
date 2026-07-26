@@ -1,5 +1,5 @@
 import React from 'react'
-import { splitList } from '../store.js'
+import { splitTextList, joinTextList } from '../store.js'
 import { TOKEN_RE, richSpanPresentation, InlineEditor } from '../richtext.jsx'
 
 /*
@@ -45,12 +45,44 @@ export function Img({ src, alt }) {
   )
 }
 
-/* "제목|설명|이미지URL" 쉼표 목록 파싱 — 가로/세로 스크롤 패널 공용 */
+/* "제목|설명|이미지URL" 목록 파싱 — 가로/세로 스크롤·그리드·캐러셀 공용.
+   줄바꿈 구분이면 설명 안에 쉼표를 쓸 수 있다 */
 export function parseCards(text) {
-  return splitList(text).map((chunk) => {
+  return splitTextList(text).map((chunk) => {
     const [title, sub, imageUrl] = chunk.split('|').map((s) => s.trim())
     return { title: title || '', sub: sub || '', imageUrl: imageUrl || '' }
   })
+}
+
+/* parseCards의 역방향 — GUI 목록 편집기가 만든 행을 저장 문자열로 */
+export function joinCards(rows) {
+  return joinTextList(
+    (rows || [])
+      .map((row) => ({
+        title: String(row?.title || '').trim(),
+        sub: String(row?.sub || '').trim(),
+        imageUrl: String(row?.imageUrl || '').trim(),
+      }))
+      .filter((row) => row.title || row.sub || row.imageUrl)
+      .map((row) =>
+        row.imageUrl ? `${row.title}|${row.sub}|${row.imageUrl}` : row.sub ? `${row.title}|${row.sub}` : row.title
+      )
+  )
+}
+
+/* 테이블 행 파싱 — 행은 줄바꿈(없으면 쉼표), 셀은 "|" */
+export function parseTableRows(text) {
+  return splitTextList(text).map((row) => row.split('|').map((s) => s.trim()))
+}
+
+/* parseTableRows의 역방향 — 빈 행은 버리고, 셀 배열을 "|"로 잇는다 (쉼표 오파싱 가드는 joinTextList가) */
+export function joinTableRows(rows) {
+  return joinTextList(
+    (rows || [])
+      .map((cells) => (cells || []).map((cell) => String(cell || '').trim()))
+      .filter((cells) => cells.some(Boolean))
+      .map((cells) => cells.join('|'))
+  )
 }
 
 /* 스크롤 컨테이너의 스크롤바 표시 유틸 클래스 */

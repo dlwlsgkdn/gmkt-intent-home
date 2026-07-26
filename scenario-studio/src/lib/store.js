@@ -20,6 +20,8 @@ export {
   normalizeScenario,
   sortByPosition,
   splitList,
+  splitTextList,
+  joinTextList,
   splitOptions,
   joinOptions,
 } from './store/model.js'

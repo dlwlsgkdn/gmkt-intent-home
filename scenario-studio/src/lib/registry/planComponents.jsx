@@ -1,5 +1,5 @@
 import React from 'react'
-import { splitList } from '../store.js'
+import { splitTextList } from '../store.js'
 import { Img, kText, youtubeThumbnail } from './support.jsx'
 
 /* 계획 단계 컴포넌트 — 요약·타이틀·단계 카드·상품/미디어 카드·체크리스트·CTA */
@@ -80,7 +80,7 @@ export const PLAN_COMPONENTS = {
       { key: 'no', label: '단계 번호', kind: 'text' },
       { key: 'title', label: '단계 제목', kind: 'text' },
       { key: 'desc', label: '설명', kind: 'textarea' },
-      { key: 'points', label: '체크포인트 (쉼표 구분)', kind: 'textarea', list: true },
+      { key: 'points', label: '체크포인트', kind: 'stringList', list: true },
     ],
     render: (p, ctx) => {
       // 구버전 데이터 호환: badge('STEP 2')만 있으면 숫자를 추출
@@ -94,9 +94,9 @@ export const PLAN_COMPONENTS = {
             <h3 className="text-2xl font-bold text-slate-800 leading-snug">{kText(p.title, ctx, 'title')}</h3>
           </div>
           <p className="text-slate-500 text-sm leading-relaxed mt-3">{kText(p.desc, ctx, 'desc')}</p>
-          {splitList(p.points).length ? (
+          {splitTextList(p.points).length ? (
             <ul className="mt-4 space-y-2">
-              {splitList(p.points).map((pt, i) => (
+              {splitTextList(p.points).map((pt, i) => (
                 <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
                   <svg className="w-4 h-4 mt-0.5 text-gmarket-blue flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
                   <span>{kText(pt, ctx)}</span>
@@ -331,13 +331,13 @@ export const PLAN_COMPONENTS = {
     },
     fields: [
       { key: 'title', label: '제목', kind: 'text' },
-      { key: 'items', label: '항목 (쉼표 구분)', kind: 'textarea', list: true },
+      { key: 'items', label: '항목', kind: 'stringList', list: true },
     ],
     render: (p, ctx) => (
       <div className="rounded-[28px] border border-slate-100 bg-slate-50/80 p-6">
         <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400 mb-3">{kText(p.title, ctx, 'title')}</p>
         <ul className="space-y-2.5">
-          {splitList(p.items).map((it, i) => (
+          {splitTextList(p.items).map((it, i) => (
             <li key={i} className="flex items-start gap-2.5 text-sm text-slate-700">
               <span className="mt-0.5 w-4 h-4 rounded border-2 border-slate-300 flex-shrink-0" />
               <span>{kText(it, ctx)}</span>

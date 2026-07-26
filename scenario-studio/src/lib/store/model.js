@@ -117,31 +117,40 @@ export function splitList(text) {
     .filter(Boolean)
 }
 
-/* "메인|서브|상세" 형태 옵션 파싱.
-   줄바꿈이 있으면 줄 단위로 나눠 상세 설명 안에 쉼표를 허용하고, 없으면 기존처럼 쉼표 구분 */
-export function splitOptions(text) {
+/* 목록형 텍스트의 공통 청크 분리 — 줄바꿈이 있으면 줄 단위(항목 안 쉼표 허용), 없으면 쉼표 구분 */
+export function splitTextList(text) {
   const raw = String(text || '')
-  const chunks = raw.includes('\n')
+  return raw.includes('\n')
     ? raw.split('\n').map((part) => part.trim()).filter(Boolean)
     : splitList(raw)
-  return chunks.map((chunk) => {
+}
+
+/* 목록형 직렬화의 공통 마무리 — GUI 편집기가 만든 줄 목록을 저장 문자열로.
+   한 줄뿐인데 쉼표가 들어 있으면 끝에 줄바꿈을 붙여 줄 단위 파싱을 강제한다 (쉼표 분리 오파싱 방지) */
+export function joinTextList(items) {
+  const lines = (items || []).map((item) => String(item || '').trim()).filter(Boolean)
+  const text = lines.join('\n')
+  return lines.length === 1 && text.includes(',') ? `${text}\n` : text
+}
+
+/* "메인|서브|상세" 형태 옵션 파싱 */
+export function splitOptions(text) {
+  return splitTextList(text).map((chunk) => {
     const parts = chunk.split('|').map((part) => part.trim())
     return { main: parts[0], sub: parts[1] || '', desc: parts.slice(2).join('|').trim() }
   })
 }
 
-/* splitOptions의 역방향 — GUI 편집기가 만든 행 목록을 저장 문자열로.
-   줄바꿈 구분으로 직렬화해 상세 설명의 쉼표를 보존한다 */
+/* splitOptions의 역방향 — 줄바꿈 구분으로 직렬화해 상세 설명의 쉼표를 보존한다 */
 export function joinOptions(rows) {
-  const lines = (rows || [])
-    .map((row) => ({
-      main: String(row?.main || '').trim(),
-      sub: String(row?.sub || '').trim(),
-      desc: String(row?.desc || '').trim(),
-    }))
-    .filter((row) => row.main || row.sub || row.desc)
-    .map((row) => (row.desc ? `${row.main}|${row.sub}|${row.desc}` : row.sub ? `${row.main}|${row.sub}` : row.main))
-  const text = lines.join('\n')
-  // 한 줄뿐인데 쉼표가 들어 있으면 끝에 줄바꿈을 붙여 줄 단위 파싱을 강제한다 (쉼표 분리 오파싱 방지)
-  return lines.length === 1 && text.includes(',') ? `${text}\n` : text
+  return joinTextList(
+    (rows || [])
+      .map((row) => ({
+        main: String(row?.main || '').trim(),
+        sub: String(row?.sub || '').trim(),
+        desc: String(row?.desc || '').trim(),
+      }))
+      .filter((row) => row.main || row.sub || row.desc)
+      .map((row) => (row.desc ? `${row.main}|${row.sub}|${row.desc}` : row.sub ? `${row.main}|${row.sub}` : row.main))
+  )
 }

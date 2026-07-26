@@ -1,5 +1,5 @@
 import React from 'react'
-import { splitList } from '../store.js'
+import { splitTextList } from '../store.js'
 import { Img, kText } from './support.jsx'
 
 /* 탐색 단계 컴포넌트 — 홈 상단 인사·검색·칩·웹진 스토리 카드 */
@@ -109,10 +109,10 @@ export const EXPLORE_COMPONENTS = {
     icon: '🏷️',
     hint: '검색창 아래 해시태그 칩. 쉼표로 구분',
     defaults: { tags: '출근_10분룩, AI_페이스룩, 립스틱_전색발색, 성분_궁합체크' },
-    fields: [{ key: 'tags', label: '칩 목록 (쉼표로 구분)', kind: 'textarea', list: true }],
+    fields: [{ key: 'tags', label: '칩 목록', kind: 'stringList', list: true }],
     render: (p, ctx) => (
       <div className="clean-tag-row sb-static">
-        {splitList(p.tags).map((tag, i) => (
+        {splitTextList(p.tags).map((tag, i) => (
           <button
             key={i}
             type="button"
