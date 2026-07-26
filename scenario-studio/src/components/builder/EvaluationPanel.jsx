@@ -14,9 +14,13 @@ import LlmRevisionDialog from './LlmRevisionDialog.jsx'
 import AiFixChooser from './AiFixChooser.jsx'
 import PropagationDialog from './PropagationDialog.jsx'
 import { collectPropagationSeeds, propagationTargets } from '../../lib/prompt/propagation.js'
+import Rubric from './evaluation/Rubric.jsx'
+import Leaderboard from './evaluation/Leaderboard.jsx'
+import CommentBubble from './evaluation/CommentBubble.jsx'
+import PreviewBoundary from './evaluation/PreviewBoundary.jsx'
 
 /*
- * 평가 스튜디오 — 주석(annotation) 방식.
+ * 평가 스튜디오 오케스트레이터 — 주석(annotation) 방식.
  *
  * 왼쪽에 케이스 페이지를 실제 모습 그대로 렌더하고, 오른쪽 레일에 컴포넌트마다
  * 말풍선(별점 + 코멘트)을 띄운다. 디자인 리뷰 도구(Figma 코멘트)와 같은 문법이라
@@ -24,223 +28,9 @@ import { collectPropagationSeeds, propagationTargets } from '../../lib/prompt/pr
  *
  * 말풍선 위치는 컴포넌트의 실제 렌더 높이를 측정해 맞춘다. 컨테이너 안 자식
  * (상품 카드 등)은 컨테이너가 통째로 렌더하므로 자식 말풍선은 부모 위치에 앵커되고,
- * 겹치면 아래로 밀려 순서대로 쌓인다.
+ * 겹치면 아래로 밀려 순서대로 쌓인다. 별점/루브릭/리더보드/말풍선은
+ * ./evaluation/의 표현 컴포넌트가 담당한다.
  */
-
-const SCORE_GUIDE = [
-  { score: 5, title: '완벽 · 그대로 사용', desc: '수정하거나 추가할 의견이 전혀 없습니다.' },
-  { score: 4, title: '충분히 좋음 · 더 나은 대안 있음', desc: '오류는 없지만 추가 아이디어나 더 좋은 대안이 있습니다.' },
-  { score: 3, title: '방향은 맞음 · 일부 수정 필요', desc: '중요한 정보가 부족하거나 일부 내용을 수정해야 합니다.' },
-  { score: 2, title: '핵심 오류·누락', desc: '일부는 맞지만 상당한 수정이 필요합니다.' },
-  { score: 1, title: '거의 다시 작성', desc: '대부분 부정확하거나 적절하지 않습니다.' },
-  { score: 0, title: '사용 불가', desc: '결과가 없거나 완전히 잘못되었습니다.' },
-]
-
-/* 별점 — 데이터는 기존 0~5 그대로. 별 1~5를 누르면 점수, 같은 별을 다시 누르면
-   별을 다 끈 0점(사용 불가)이 된다. 빈 별만으로는 "0점"과 "아직 평가 안 함"이
-   구분되지 않으므로, 옆 배지가 그 상태를 말한다: 미평가(회색) / 0점(빨강).
-   배지를 누르면 언제든 미평가로 초기화된다. */
-function StarRating({ value, onChange, label }) {
-  return (
-    <div
-      className={'sb-stars' + (value == null ? ' is-unrated' : '')}
-      role="radiogroup"
-      aria-label={`${label} 별점`}
-    >
-      {[1, 2, 3, 4, 5].map((score) => (
-        <button
-          key={score}
-          type="button"
-          className={'sb-star' + (value != null && value >= score ? ' is-on' : '')}
-          aria-label={`${score}점`}
-          aria-pressed={value === score}
-          title={value === score
-            ? '다시 누르면 별을 모두 끈 0점(사용 불가)이 돼요'
-            : SCORE_GUIDE.find((guide) => guide.score === score)?.title}
-          onClick={() => onChange(value === score ? 0 : score)}
-        >
-          ★
-        </button>
-      ))}
-      <button
-        type="button"
-        className={
-          'sb-star-state'
-          + (value == null ? ' is-unrated' : '')
-          + (value === 0 ? ' is-zero' : '')
-        }
-        aria-pressed={value == null}
-        title={value == null
-          ? '아직 평가하지 않은 상태예요'
-          : '누르면 미평가로 초기화돼요'}
-        onClick={() => onChange(null)}
-      >
-        {value === 0 ? '0점' : '미평가'}
-      </button>
-    </div>
-  )
-}
-
-function Rubric({ onClose }) {
-  return (
-    <section className="sb-qa-rubric" aria-label="별점 기준">
-      <div className="sb-qa-rubric__head">
-        <h3>별점 기준</h3>
-        <button type="button" className="sb-icon-btn" onClick={onClose} aria-label="평가 기준 닫기">×</button>
-      </div>
-      <p className="sb-qa-rubric__howto">
-        별 1~5를 눌러 점수를 매기고, 같은 별을 다시 누르면 별을 모두 끈 <b>0점(사용 불가)</b>이 됩니다.
-        옆 배지는 상태 표시 — <b>미평가</b>(회색)·<b>0점</b>(빨강)이며, 누르면 미평가로 초기화돼요.
-      </p>
-      <div className="sb-qa-rubric__distinction">
-        <strong>★5와 ★4의 차이</strong>
-        <span><b>★5</b> 수정·추가 의견이 전혀 없음</span>
-        <span><b>★4</b> 틀린 것은 없지만 더 좋은 대안·추가 아이디어가 있음</span>
-      </div>
-      <div className="sb-qa-rubric__grid">
-        {SCORE_GUIDE.map((guide) => (
-          <div key={guide.score} className={`sb-qa-rubric__row sb-qa-rubric__row--${guide.score}`}>
-            <strong>{guide.score === 0 ? '0' : '★'.repeat(guide.score)}</strong>
-            <div>
-              <b>{guide.title}</b>
-              <p>{guide.desc}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  )
-}
-
-/* 케이스 리더보드 — 로테이션으로 쌓인 평가를 평균 별점 순으로 보는 상시 사이드바.
-   이 순위가 피드백 전체 반영의 씨앗 우선순위(상위 N개)로 그대로 쓰인다. */
-function Leaderboard({ board, remaining, onOpenCase }) {
-  return (
-    <aside className="sb-qa-board" aria-label="케이스 리더보드">
-      <div className="sb-qa-board__head">
-        <h3>케이스 리더보드</h3>
-      </div>
-      <p className="sb-qa-board__note">
-        평가한 케이스가 평균 별점 순으로 쌓여요. 미평가 <b>{remaining}개</b>는
-        <b> 다음 3개 선정</b>으로 이어가고, 이 순위는 <b>피드백 전체 반영</b>의 씨앗 우선순위가 됩니다.
-      </p>
-      {board.length === 0 ? (
-        <p className="sb-qa-board__empty">아직 평가한 케이스가 없어요. 말풍선에 별점·피드백을 남기면 여기에 쌓입니다.</p>
-      ) : (
-        <ol className="sb-qa-board__list">
-          {board.map((entry) => (
-            <li key={entry.caseId} className={entry.slot ? 'is-current' : ''}>
-              <span className="sb-qa-board__rank">{entry.rank}</span>
-              <div className="sb-qa-board__name">
-                <b>{entry.planCase.name || '이름 없는 케이스'}</b>
-                <small>별점 {entry.ratedCount}개 · 피드백 {entry.feedbackCount}개</small>
-              </div>
-              <div className="sb-qa-board__meta">
-                <strong className="sb-qa-board__avg">
-                  {entry.average == null ? '—' : `★ ${entry.average.toFixed(1)}`}
-                </strong>
-                {entry.slot && <em className="sb-qa-board__slot">CASE {entry.slot}</em>}
-                <button
-                  type="button"
-                  className="sb-btn sb-btn--tiny"
-                  onClick={() => onOpenCase(entry.caseId)}
-                >
-                  열기
-                </button>
-              </div>
-            </li>
-          ))}
-        </ol>
-      )}
-    </aside>
-  )
-}
-
-class EvaluationPreviewBoundary extends React.Component {
-  constructor(props) {
-    super(props)
-    this.state = { failed: false }
-  }
-
-  static getDerivedStateFromError() {
-    return { failed: true }
-  }
-
-  componentDidUpdate(previousProps) {
-    if (this.state.failed && previousProps.resetKey !== this.props.resetKey) {
-      this.setState({ failed: false })
-    }
-  }
-
-  render() {
-    if (this.state.failed) {
-      return (
-        <div className="sb-qa-live-preview__fallback">
-          이 컴포넌트의 미리보기를 표시할 수 없습니다. 평가는 계속할 수 있어요.
-        </div>
-      )
-    }
-    return this.props.children
-  }
-}
-
-/* 말풍선 하나 — 위치(top)는 부모의 레이아웃 함수가 잡아 준다 */
-function CommentBubble({
-  bubbleRef,
-  active,
-  review,
-  icon,
-  label,
-  isCase = false,
-  onActivate,
-  onScore,
-  onFeedback,
-  onEdit,
-  onResolve,
-}) {
-  const warn = review.score === 5 && review.feedback.trim()
-  return (
-    <div
-      ref={bubbleRef}
-      className={
-        'sb-bubble'
-        + (active ? ' is-active' : '')
-        + (isCase ? ' sb-bubble--case' : '')
-        + (review.resolved ? ' is-resolved' : '')
-      }
-      onClick={onActivate}
-    >
-      <div className="sb-bubble__head">
-        <span className="sb-bubble__label">{icon} {label}</span>
-        <StarRating value={review.score} label={label} onChange={onScore} />
-      </div>
-      <textarea
-        rows={2}
-        value={review.feedback}
-        placeholder={isCase
-          ? '케이스 전체 피드백 — 예: 참고 영상 붙여줘, CTA 빼줘'
-          : '피드백 — 오류·누락·더 좋은 대안'}
-        onChange={(event) => onFeedback(event.target.value)}
-        onClick={(event) => event.stopPropagation()}
-      />
-      {warn && <p className="sb-bubble__warn">★5는 수정 의견이 없는 결과예요 — 피드백을 비우거나 별점을 낮춰주세요.</p>}
-      {!isCase && (
-        <div className="sb-bubble__foot">
-          {review.resolved && <em>✓ 반영 완료</em>}
-          <button type="button" onClick={(event) => { event.stopPropagation(); onEdit() }}>수정하러 가기</button>
-          <button
-            type="button"
-            disabled={!review.feedback.trim()}
-            className={review.resolved ? 'is-on' : ''}
-            onClick={(event) => { event.stopPropagation(); onResolve() }}
-          >
-            {review.resolved ? '반영 해제' : '반영 완료'}
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
 
 export default function EvaluationPanel({
   scenario,
@@ -268,7 +58,7 @@ export default function EvaluationPanel({
   const stats = structuredComponentEvaluationStats(planCases)
   const activeSelected = selectedCases.find((planCase) => planCase.id === activeCaseId)
   const [activeSlot, setActiveSlot] = useState(
-    () => normalizeCaseEvaluation(activeSelected?.evaluation).slot || 'A'
+    () => normalizeCaseEvaluation(activeSelected?.evaluation).selection.slot || 'A'
   )
 
   const pageRef = useRef(null)
@@ -277,7 +67,7 @@ export default function EvaluationPanel({
   const bubbleRefs = useRef({}) // 말풍선 id → 엘리먼트
 
   useEffect(() => {
-    const slot = normalizeCaseEvaluation(activeSelected?.evaluation).slot
+    const slot = normalizeCaseEvaluation(activeSelected?.evaluation).selection.slot
     if (slot) setActiveSlot(slot)
   }, [activeCaseId, activeSelected])
 
@@ -519,9 +309,9 @@ export default function EvaluationPanel({
                 style={{ maxWidth: item.w || undefined }}
                 onClick={() => focusFromPage(item.id)}
               >
-                <EvaluationPreviewBoundary resetKey={`${item.id}:${item.type}`}>
+                <PreviewBoundary resetKey={`${item.id}:${item.type}`}>
                   {renderItem(item, pageCtx)}
-                </EvaluationPreviewBoundary>
+                </PreviewBoundary>
               </div>
             )
           })}
@@ -538,7 +328,7 @@ export default function EvaluationPanel({
               isCase
               icon="🗂"
               label="케이스 전체"
-              review={{ score: activeEvaluation.score, feedback: activeEvaluation.feedback, resolved: false }}
+              review={{ score: activeEvaluation.review.score, feedback: activeEvaluation.review.feedback, resolved: false }}
               onActivate={() => focusFromBubble(null)}
               onScore={(score) => onUpdateCase(activeCase.id, { score })}
               onFeedback={(feedback) => onUpdateCase(activeCase.id, { feedback })}

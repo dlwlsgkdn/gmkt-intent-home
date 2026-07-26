@@ -1,6 +1,7 @@
 import { createPlanCase, planCasesForScenario, uid } from '../../../lib/store.js'
 import {
   EVALUATION_CASE_SLOTS,
+  nextEvaluationRound,
   normalizeCaseEvaluation,
   normalizeComponentEvaluation,
   recommendRotationCaseIds,
@@ -115,7 +116,7 @@ export function usePlanCases({
         values: [...(condition.values || [])],
       })),
       items: itemsCopy,
-      evaluation: remapCaseEvaluation(activePlanCase.evaluation, idMap, { selected: false, slot: null }),
+      evaluation: remapCaseEvaluation(activePlanCase.evaluation, idMap, { resetSelection: true }),
     })
     updatePlanCases((current) => {
       const index = current.findIndex((planCase) => planCase.id === activePlanCase.id)
@@ -171,29 +172,45 @@ export function usePlanCases({
 
   /* ── 평가 ── */
 
+  /* 평가 입력은 그 시점의 로테이션 라운드(selection.round)와 시각을 함께 찍는다 */
   const updateComponentEvaluation = (caseId, itemId, patch) => {
     updatePlanCases((current) => current.map((planCase) => {
       if (planCase.id !== caseId) return planCase
       const evaluation = normalizeCaseEvaluation(planCase.evaluation)
       const review = normalizeComponentEvaluation(evaluation.components[itemId])
-      const now = new Date().toISOString()
+      const stamped = {
+        ...review,
+        ...patch,
+        round: evaluation.selection.round,
+        at: new Date().toISOString(),
+      }
       return {
         ...planCase,
         evaluation: {
           ...evaluation,
-          components: { ...evaluation.components, [itemId]: { ...review, ...patch, updatedAt: now } },
-          updatedAt: now,
+          components: { ...evaluation.components, [itemId]: stamped },
         },
       }
     }))
   }
 
-  /* 케이스 전체 평가(점수·코멘트) — 컴포넌트 단위와 별개로 케이스 헤더에 기록된다 */
+  /* 케이스 전체 평가(점수·코멘트) — 컴포넌트 단위와 별개로 review에 기록된다 */
   const updateCaseEvaluation = (caseId, patch) => {
     updatePlanCases((current) => current.map((planCase) => {
       if (planCase.id !== caseId) return planCase
       const evaluation = normalizeCaseEvaluation(planCase.evaluation)
-      return { ...planCase, evaluation: { ...evaluation, ...patch, updatedAt: new Date().toISOString() } }
+      return {
+        ...planCase,
+        evaluation: {
+          ...evaluation,
+          review: {
+            ...evaluation.review,
+            ...patch,
+            round: evaluation.selection.round,
+            at: new Date().toISOString(),
+          },
+        },
+      }
     }))
   }
 
@@ -206,13 +223,26 @@ export function usePlanCases({
     const slotById = Object.fromEntries(
       recommendation.map((caseId, index) => [caseId, EVALUATION_CASE_SLOTS[index] || null])
     )
+    const round = nextEvaluationRound(planCases)
     const now = new Date().toISOString()
     updatePlanCases((current) => current.map((planCase) => {
       const evaluation = normalizeCaseEvaluation(planCase.evaluation)
-      const selected = recommendedIds.has(planCase.id)
+      const active = recommendedIds.has(planCase.id)
       const slot = slotById[planCase.id] || null
-      if (evaluation.selected === selected && evaluation.slot === slot) return planCase
-      return { ...planCase, evaluation: { ...evaluation, selected, slot, updatedAt: now } }
+      if (evaluation.selection.active === active && evaluation.selection.slot === slot) return planCase
+      return {
+        ...planCase,
+        evaluation: {
+          ...evaluation,
+          selection: {
+            active,
+            slot,
+            // 새로 선정된 케이스만 새 라운드를 받는다 — 해제된 케이스는 평가받던 라운드를 보존
+            round: active ? round : evaluation.selection.round,
+            at: now,
+          },
+        },
+      }
     }))
     const first = planCases.find((planCase) => planCase.id === recommendation[0])
     if (first) setPlanCaseId(first.id)

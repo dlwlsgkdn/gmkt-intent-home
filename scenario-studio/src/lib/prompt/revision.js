@@ -86,10 +86,10 @@ export function buildLlmRevisionRequest(planCases = [], options = {}) {
 
     return {
       caseId: planCase.id,
-      slot: evaluation.slot,
+      slot: evaluation.selection.slot,
       caseName: planCase.name,
       // 케이스 전체 코멘트 — 문구에 반영할 맥락으로만 쓰고, 구조 요청은 이 경로에서 처리하지 않는다
-      caseNote: evaluation.feedback.trim(),
+      caseNote: evaluation.review.feedback.trim(),
       criteria,
     }
   }).filter((planCase) => planCase.criteria.length > 0 || planCase.caseNote)

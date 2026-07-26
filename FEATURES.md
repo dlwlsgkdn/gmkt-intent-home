@@ -298,7 +298,7 @@ LLM 소유: 텍스트 슬롯 문구 + 카탈로그 내 상품 선택 + 추천 �
 | 자동 저장 | 모든 변경 즉시 저장 (새로고침 안전) |
 | 시나리오 모델 | `{ id, title, chip, color, device, status, versions[], stages: { survey[], plan:[] }, planCases[] }` (`stages.plan`은 구데이터 입력 호환용) |
 | 계획 케이스 모델 | `{ id, name, conditionMode:'all'\|'any', conditions[], isFallback, items[], evaluation }` |
-| 평가 모델 | `evaluation = { selected, slot:'A'\|'B'\|'C', components:{ [itemId]:{score:null\|0..5,feedback,resolved,updatedAt} }, updatedAt }` |
+| 평가 모델 (v2) | `evaluation = { v:2, selection:{active, slot:'A'\|'B'\|'C', round, at}, review:{score:null\|0..5, feedback, round, at}, components:{ [itemId]:{score, feedback, resolved, round, at} } }` — selection(작업 상태)·review(케이스 전체)·components(컴포넌트) 분리, round=로테이션 라운드(0=구버전), 선정 시각과 평가 시각 분리. v1 평면 스키마는 normalize 관문에서 자동 마이그레이션(criteria 폐기). 판정·리더보드 집계는 실제 아이템과 교차 검증해 삭제된 컴포넌트의 고아 레코드를 세지 않음 |
 | 계획 조건 모델 | `{ id, questionId, operator, values[] }` — 설문 질문 ID와 선택지 값을 참조 |
 | 컴포넌트 모델 | `{ id, type, x, y, w, h(null=자동), locked, hidden, props }` |
 | 쓰레드 모델 | `{ id, scenarioId, title, chip, color, stage, stageLabel, planCaseId/name, answers, excludedProfile, cart[], status, startedAt, updatedAt }` |

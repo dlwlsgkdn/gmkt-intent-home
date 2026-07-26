@@ -35,7 +35,7 @@ export default function CaseRevisionDialog({ scenario, planCase, planCases, prof
   /* 케이스 헤더(평가 탭)에 기록된 전체 코멘트 — 요청에 자동 포함되고 여기서도 보여준다 */
   const caseNote = useMemo(() => {
     const evaluation = normalizeCaseEvaluation(planCase?.evaluation)
-    return { score: evaluation.score, feedback: evaluation.feedback.trim() }
+    return { score: evaluation.review.score, feedback: evaluation.review.feedback.trim() }
   }, [planCase])
   const catalog = useMemo(() => catalogFromScenario(planCases || []), [planCases])
   const persona = useMemo(() => personaFromProfile(profile), [profile])

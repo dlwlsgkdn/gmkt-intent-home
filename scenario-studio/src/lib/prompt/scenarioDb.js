@@ -216,7 +216,9 @@ export function parseScenarioDbJson(raw) {
       item.id,
       String(item.props?.options || '').split(',').map((option) => option.trim()).filter(Boolean),
     ]))
-    /* 평가 A/B/C 지정 — 슬롯이 어긋나면 평가 탭에서 케이스가 비어 보인다 */
+    /* 평가 A/B/C 지정 — 슬롯이 어긋나면 평가 탭에서 케이스가 비어 보인다.
+       AI 출력 계약은 v1 평면({selected, slot})을 유지한다 — 가져오기 시
+       normalizeCaseEvaluation이 v2(selection.active/slot)로 변환하므로 여기서는 원문을 본다 */
     const slots = planCases
       .filter((planCase) => planCase?.evaluation?.selected)
       .map((planCase) => planCase.evaluation.slot)

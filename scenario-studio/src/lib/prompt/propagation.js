@@ -63,12 +63,12 @@ export function collectPropagationSeeds(planCases = [], { caseLimit = null } = {
   seedBoard.forEach((entry) => {
     const planCase = entry.planCase
     const evaluation = normalizeCaseEvaluation(planCase.evaluation)
-    if (evaluation.feedback.trim()) {
+    if (evaluation.review.feedback.trim()) {
       caseNotes.push({
         slot: entry.slot,
         rank: entry.rank,
         caseName: planCase.name,
-        feedback: evaluation.feedback.trim(),
+        feedback: evaluation.review.feedback.trim(),
       })
     }
     componentEvaluationStructureForCase(planCase).forEach((section) => {

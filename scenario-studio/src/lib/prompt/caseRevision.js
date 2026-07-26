@@ -112,7 +112,7 @@ export function buildCaseRevisionRequest({ scenario, planCase, persona, notes, c
       // 케이스 헤더에 기록된 전체 평가 — 재구성의 최우선 지시가 된다
       note: (() => {
         const evaluation = normalizeCaseEvaluation(planCase.evaluation)
-        return { score: evaluation.score, feedback: evaluation.feedback.trim() }
+        return { score: evaluation.review.score, feedback: evaluation.review.feedback.trim() }
       })(),
     },
     feedback: collectCaseFeedback(planCase),

@@ -1,17 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { STAGES, DEVICE_PRESETS, createItem, planCasesForScenario, visibleProfileItems } from '../lib/store.js'
+import { STAGES, DEVICE_PRESETS, planCasesForScenario, visibleProfileItems } from '../lib/store.js'
 import { LIBRARY } from '../lib/registry.jsx'
-import { PAD, GAP, MIN_ITEM_W, layoutCompactUp } from '../lib/layout.js'
+import { PAD, MIN_ITEM_W, layoutCompactUp } from '../lib/layout.js'
 import { buildShareUrl } from '../lib/share.js'
 import {
   containerAt as containerAtPoint,
   insertHintAt,
   itemHeight,
   slotIndexAt,
-  stackBottom,
 } from '../lib/builder/geometry.js'
 import { createLayoutOps } from '../lib/builder/layoutOps.js'
-import { cloneGroup, fromClipboardEntries, toClipboardEntries } from '../lib/builder/itemClipboard.js'
 import {
   VERSION_LIMIT,
   publishSnapshot,
@@ -43,6 +41,7 @@ import { usePlanCases } from './builder/hooks/usePlanCases.js'
 import { useCanvasDrag } from './builder/hooks/useCanvasDrag.js'
 import { useContainerNesting } from './builder/hooks/useContainerNesting.js'
 import { useBuilderShortcuts } from './builder/hooks/useBuilderShortcuts.js'
+import { useItemOps } from './builder/hooks/useItemOps.js'
 
 /*
  * 빌더 오케스트레이터.
@@ -190,87 +189,24 @@ export default function Builder({ api, scenario }) {
     drag, setDropTargetId, setInsertHint, setDraggingChildId, setChildDragGhost,
   })
 
-  /* ── 아이템 추가 · 편집 · 삭제 ── */
-  const addItem = (type) => {
-    const def = LIBRARY[type]
-    const anchor = selectedIds.length === 1 ? items.find((item) => item.id === selectedIds[0]) : null
-    // Webflow/Elementor식 클릭 추가: 컨테이너를 선택하면 그 안에, 자식을 선택하면 바로 뒤에
-    if (!def.container && anchor) {
-      if (LIBRARY[anchor.type]?.container) return nesting.addChild(type, anchor.id, { index: Infinity })
-      if (anchor.parentId) return nesting.addChild(type, anchor.parentId, { index: anchor.slot || Infinity })
-    }
-    const item = createItem(type, def.defaults)
-    const w = Math.min(def.defaultW || itemW, itemW)
-    setItems((prev) => layout.compact([...prev, { ...item, x: PAD, y: stackBottom(prev, heightOf, PAD - GAP) + GAP, w }]))
-    setSelectedIds([item.id])
-    return undefined
-  }
-
-  /* 팔레트에서 캔버스로 드래그해 원하는 위치에 바로 배치 */
-  const addItemAt = (type, x, y) => {
-    const def = LIBRARY[type]
-    if (!def) return
-    const item = createItem(type, def.defaults)
-    const w = Math.min(def.defaultW || itemW, itemW)
-    const nx = Math.max(0, Math.min(canvasW - w, Math.round(x - w / 2)))
-    const ny = Math.max(0, Math.round(y - 16))
-    setItems((prev) => layout.settle([...prev, { ...item, x: nx, y: ny, w }], [item.id]))
-    setSelectedIds([item.id])
-  }
-
-  const updateItem = (id, patch) => setItems((prev) => prev.map((item) => (item.id === id ? { ...item, ...patch } : item)))
-  const updateProps = (id, key, value) =>
-    setItems((prev) => prev.map((item) => (item.id === id ? { ...item, props: { ...item.props, [key]: value } } : item)))
-
-  /* 삭제 — 컨테이너를 지우면 안의 자식도 함께 */
-  const removeItem = (id) => {
-    setItems((prev) => layout.compact(prev.filter((item) => item.id !== id && item.parentId !== id)))
-    setSelectedIds((prev) => prev.filter((x) => x !== id))
-  }
-  const removeSelected = () => {
-    const ids = new Set(selectedIds)
-    setItems((prev) => layout.compact(prev.filter((item) => !ids.has(item.id) && !ids.has(item.parentId))))
-    setSelectedIds([])
-  }
-
-  const duplicateItem = (id) => {
-    const source = items.find((item) => item.id === id)
-    if (!source) return
-    const group = cloneGroup(source, items, { gap: GAP, heightOf })
-    setItems((prev) => layout.settle([...prev, ...group], [group[0].id]))
-    setSelectedIds([group[0].id])
-  }
-
-  const duplicateSelected = () => {
-    const sources = items.filter((item) => selectedIds.includes(item.id))
-    if (sources.length === 0) return
-    const groups = sources.map((source) => cloneGroup(source, items, { gap: GAP, heightOf }))
-    setItems((prev) => layout.settle([...prev, ...groups.flat()], groups.map((group) => group[0].id)))
-    setSelectedIds(groups.map((group) => group[0].id))
-  }
-
-  /* ── 클립보드 (단계를 건너 붙여넣을 수 있다) ── */
-  const copySelected = () => {
-    const entries = toClipboardEntries(items, selectedIds)
-    if (!entries) return false
-    clipboardRef.current = entries
-    api.showToast(`${entries.length}개 컴포넌트를 복사했어요. ⌘V로 붙여넣어요.`)
-    return true
-  }
-
-  /* at을 주면 그 지점(캔버스 좌표)에, 없으면 스택 맨 아래에 붙여넣는다 */
-  const pasteClipboard = (at) => {
-    const clip = clipboardRef.current
-    if (!clip || clip.length === 0) return
-    const groups = fromClipboardEntries(clip, {
-      baseX: at ? at.x : PAD,
-      baseY: at ? at.y : stackBottom(items, heightOf, PAD - GAP) + GAP,
-      canvasW,
-      itemW,
-    })
-    setItems((prev) => layout.settle([...prev, ...groups.flat()], groups.map((group) => group[0].id)))
-    setSelectedIds(groups.map((group) => group[0].id))
-  }
+  /* ── 아이템 추가 · 편집 · 삭제 · 클립보드 (규칙은 useItemOps에) ── */
+  const {
+    addItem,
+    addItemAt,
+    updateItem,
+    updateProps,
+    removeItem,
+    removeSelected,
+    duplicateItem,
+    duplicateSelected,
+    copySelected,
+    pasteClipboard,
+    hasClipboard,
+  } = useItemOps({
+    items, itemW, canvasW, layout, heightOf, setItems,
+    selectedIds, setSelectedIds, nesting, clipboardRef,
+    showToast: api.showToast,
+  })
 
   /* ── 캔버스 상호작용 ── */
   const zoomBy = (direction) => {
@@ -506,7 +442,7 @@ export default function Builder({ api, scenario }) {
   useEffect(() => {
     if (!isEvaluation) return
     const selectedCases = evaluationCasesFor(planCases)
-    const slots = new Set(selectedCases.map((planCase) => normalizeCaseEvaluation(planCase.evaluation).slot))
+    const slots = new Set(selectedCases.map((planCase) => normalizeCaseEvaluation(planCase.evaluation).selection.slot))
     if (selectedCases.length === 3 && EVALUATION_CASE_SLOTS.every((slot) => slots.has(slot))) return
     cases.recommendPlanCases()
   }, [isEvaluation, planCases.length])
@@ -588,7 +524,7 @@ export default function Builder({ api, scenario }) {
       duplicate: duplicateSelected,
       copy: copySelected,
       paste: () => pasteClipboard(),
-      canPaste: () => !!(clipboardRef.current && clipboardRef.current.length > 0),
+      canPaste: hasClipboard,
       remove: removeSelected,
       clearSelection: () => setSelectedIds([]),
       closeContextMenu: () => {
@@ -683,7 +619,7 @@ export default function Builder({ api, scenario }) {
         isExplore={isExplore}
         isEvaluation={isEvaluation}
         exploreItemCount={(api.explore.items || []).length}
-        evaluatedCaseCount={planCases.filter((planCase) => normalizeCaseEvaluation(planCase.evaluation).selected).length}
+        evaluatedCaseCount={planCases.filter((planCase) => normalizeCaseEvaluation(planCase.evaluation).selection.active).length}
         chipColor={scenario.color || '#5f7465'}
         device={device}
         compactType={compactType}
@@ -906,7 +842,7 @@ export default function Builder({ api, scenario }) {
             <ContextMenu
               menu={ctxMenu}
               items={items}
-              hasClipboard={!!(clipboardRef.current && clipboardRef.current.length > 0)}
+              hasClipboard={hasClipboard()}
               onClose={() => setCtxMenu(null)}
               onDuplicate={duplicateSelected}
               onCopy={copySelected}
