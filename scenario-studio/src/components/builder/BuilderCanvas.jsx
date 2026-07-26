@@ -19,6 +19,7 @@ export default function BuilderCanvas({
   dragPos,
   sizeDraft,
   guides,
+  gateCharging,
   insertHint,
   marquee,
   heightsRef,
@@ -95,6 +96,7 @@ export default function BuilderCanvas({
                 editable={!previewMode}
                 zoom={zoom}
                 dropTarget={dropTargetId === item.id}
+                gateChargeMs={gateCharging?.[item.id] || 0}
                 selected={selectedIds.includes(item.id)}
                 dragPos={dragPos && dragPos.positions[item.id] ? dragPos.positions[item.id] : null}
                 sizeDraft={sizeDraft && sizeDraft.id === item.id ? sizeDraft : null}

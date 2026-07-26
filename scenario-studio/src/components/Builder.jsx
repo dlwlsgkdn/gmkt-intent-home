@@ -832,6 +832,7 @@ export default function Builder({ api, scenario }) {
             dragPos={drag.dragPos}
             sizeDraft={drag.sizeDraft}
             guides={drag.guides}
+            gateCharging={drag.gateCharging}
             insertHint={insertHint}
             marquee={marquee}
             heightsRef={heightsRef}

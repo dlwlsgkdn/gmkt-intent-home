@@ -401,6 +401,18 @@ export function useCanvasDrag({
     ))
   }
 
+  /* 게이트가 차오르는 중인 아이템 → 남은 지속시간 전체(ms). 캔버스가 이 시간과 같은
+     길이의 링 애니메이션을 그려 "곧 비켜난다"를 미리 보여준다. 조건이 깨져 게이트가
+     리셋되면 여기서도 빠지고, ready가 되면 밀림(이동)으로 넘어가므로 역시 빠진다. */
+  const gateCharging = {}
+  if (dragPos) {
+    Object.keys(pushGateRef.current).forEach((itemId) => {
+      if (pushReadyRef.current.has(itemId)) return
+      const target = items.find((candidate) => candidate.id === itemId)
+      gateCharging[itemId] = LIBRARY[target?.type]?.container ? CONTAINER_PUSH_DELAY_MS : DRAG_PUSH_DELAY_MS
+    })
+  }
+
   /* 드래그 중 화면에 그릴 아이템 목록 — 게이트를 통과한 아이템만 밀림에 참여한다.
      이 결과를 previewLayoutRef에 남겨 두면 드롭 커밋이 그대로 재사용한다(WYSIWYG). */
   const decorateForDrag = (list) => {
@@ -445,6 +457,7 @@ export function useCanvasDrag({
     dragPos,
     sizeDraft,
     guides,
+    gateCharging,
     isDragging,
     onGroupDragStart,
     clearDragStart,

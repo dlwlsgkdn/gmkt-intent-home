@@ -7,6 +7,7 @@ export default function CanvasItem({
   editable = true,
   zoom = 1,
   dropTarget = false,
+  gateChargeMs = 0,
   selected,
   dragPos,
   sizeDraft,
@@ -124,10 +125,15 @@ export default function CanvasItem({
         (resizing ? ' sb-canvas-item--resizing' : '') +
         (locked ? ' sb-canvas-item--locked' : '') +
         (item.hidden ? ' sb-canvas-item--hidden' : '') +
-        (dropTarget ? ' sb-canvas-item--drop-target' : '')
+        (dropTarget ? ' sb-canvas-item--drop-target' : '') +
+        (gateChargeMs > 0 ? ' sb-canvas-item--gate-charging' : '')
       }
       data-canvas-item-id={item.id}
-      style={{ left: x, top: y, width: w, height: h || 'auto' }}
+      style={{
+        left: x, top: y, width: w, height: h || 'auto',
+        // 링 애니메이션 길이 = 밀림 게이트 지속시간 — 링이 다 차는 순간 실제로 비켜난다
+        ...(gateChargeMs > 0 ? { '--sb-gate-ms': `${gateChargeMs}ms` } : null),
+      }}
       onPointerDown={onPointerDown}
       onDoubleClick={editable ? () => onInspect(item.id) : undefined}
       onContextMenu={editable && onContextMenu ? (e) => onContextMenu(e, item.id) : undefined}
