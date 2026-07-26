@@ -40,7 +40,15 @@ cd scenario-studio && npm run build   # vite build && cp -R ../legacy ../docs/le
 - `lib/layout.js` — **레이아웃 엔진** (순수 함수): resolveCollision(겹침 해소, 다중 이동+잠금 지원), previewResolve(드래그 미리보기), compactItems(COMPACT_TYPES: vertical/horizontal/none — 핀·잠금 제외 스택), layoutStack/TwoColumns/CompactUp, alignItems(다중 정렬), PAD/GAP 상수
 - `lib/builder/` — 빌더가 쓰는 순수 로직: `geometry.js`(좌표·슬롯·컨테이너 판정 — 필요한 값을 전부 인자로 받는다), `layoutOps.js`(겹침 해소·컴팩트 **커밋 관문 settle**), `itemClipboard.js`(사본 만들기), `publishing.js`(발행 점검·칩 라벨·버전 스냅샷·기기 폭 환산)
 - `lib/share.js` — 공유 링크: 시나리오를 `#s=<base64url JSON>` 해시로 인코딩/디코딩 (서버 불필요)
-- `lib/registry.jsx` — **컴포넌트 레지스트리** (팔레트의 모든 컴포넌트). `{ label, stage, icon, defaults, fields[], render(props, ctx), canvasInteractive?, defaultW? }`. ctx.mode='canvas'|'player', ctx.player(실행 API), ctx.profile, ctx.updateProps(캔버스 내 편집), ctx.summaryPreview. kText() 텍스트 렌더러(키워드+부분 서식+인라인 편집 진입)
+- `lib/evaluation.js` — 평가 계층 **배럴**. 실제 구현은 `lib/evaluation/` 네 모듈:
+  - `evaluation/model.js` 평가 레코드 **v2 스키마**(selection/review/components)와 정규화·v1 마이그레이션 관문, remapCaseEvaluation(id 재발급), liveComponentEntries(고아 레코드 필터), plainEvaluationText
+  - `evaluation/recommend.js` 대표 케이스 추천 — 자동 점수(rankSignificantCases) + MMR 다양화 + 미평가 로테이션(recommendRotationCaseIds)
+  - `evaluation/structure.js` 케이스 → 평가 단위(컴포넌트 인스턴스) 변환. 여기서 만드는 editableFields가 AI 왕복 허용 목록의 원천 (NON_LLM_EDITABLE_FIELDS)
+  - `evaluation/stats.js` 선정 CASE A/B/C 진행률 집계 + 케이스 리더보드(evaluationLeaderboard)
+- `lib/registry.jsx` — **컴포넌트 레지스트리 배럴 + 조립**. `{ label, stage, icon, defaults, fields[], render(props, ctx), canvasInteractive?, defaultW? }`. ctx.mode='canvas'|'player', ctx.player(실행 API), ctx.profile, ctx.updateProps(캔버스 내 편집), ctx.summaryPreview. 개별 정의는 `lib/registry/` 카테고리 모듈에 있다:
+  - `registry/support.jsx` 공용 렌더 도구 — kText() 텍스트 렌더러(키워드+부분 서식+인라인 편집 진입), ScrollTrack(드래그 스크롤), Img/parseCards/isEditView 등
+  - `registry/exploreComponents.jsx` · `surveyComponents.jsx` · `planComponents.jsx` · `commonComponents.jsx` · `layoutComponents.jsx` 단계·카테고리별 컴포넌트 정의
+  - LIBRARY를 알아야 하는 renderItem/ChildShell/childrenOf/libraryForStage는 배럴(registry.jsx)에 남는다 — 순환 참조 방지
 - `lib/richtext.jsx` — 인라인 리치텍스트 엔진: `{{옵션|텍스트}}`/`[[키워드]]` 마크업 ↔ contentEditable 변환, 서식 적용/병합, InlineEditor, FONT_OPTIONS/TEXT_COLORS
 - `lib/templates.js` — 새 시나리오 템플릿 (빈/뷰티 브리프/선물 추천)
 - `lib/prompt/` — **AI 왕복 계층**. 스튜디오는 LLM API를 호출하지 않는다: 모든 AI 기능이 "프롬프트 복사 → 쓰던 AI에 붙여넣기 → 결과 가져오기" 한 가지 왕복이다
@@ -53,7 +61,8 @@ cd scenario-studio && npm run build   # vite build && cp -R ../legacy ../docs/le
   - `revision.js` 평가 피드백 → 필드 단위 수정안. 허용 목록(caseId·itemId·fieldKey) 밖은 전부 차단
   - `caseRevision.js` 케이스 **통째 재생성** (컴포넌트 추가·삭제·순서까지). 안전 모델이 다르다: 유지 컴포넌트는 id 보존(평가 기록이 id에 묶임)+원본 props에서 시작해 편집 가능 키만 덮음(사실 필드·팩 메타데이터 보존), 새 상품은 카탈로그 대조, 조건은 불변, 부분 적용 없음(전부/전무 + ⌘Z)
 - `components/Builder.jsx` — **편집기 오케스트레이터**. 편집 상태만 갖고 규칙은 전부 아래로 위임한다
-- `components/builder/hooks/` — `useStageItems`(아이템을 어디서 읽고 어디에 저장할지: 탐색/설문/계획), `useBuilderHistory`(Undo 스택), `usePlanCases`(케이스 CRUD·평가), `useCanvasDrag`(밀림 게이트·히스테리시스·삽입 존 보호·WYSIWYG 커밋), `useContainerNesting`(컨테이너 자식 넣기/꺼내기/슬롯), `useBuilderShortcuts`(키 매핑)
+- `components/builder/hooks/` — `useStageItems`(아이템을 어디서 읽고 어디에 저장할지: 탐색/설문/계획), `useItemOps`(추가·수정·삭제·복제·클립보드 — 배치 커밋은 전부 layout.settle/compact 경유), `useBuilderHistory`(Undo 스택), `usePlanCases`(케이스 CRUD·평가), `useCanvasDrag`(밀림 게이트·히스테리시스·삽입 존 보호·WYSIWYG 커밋), `useContainerNesting`(컨테이너 자식 넣기/꺼내기/슬롯), `useBuilderShortcuts`(키 매핑)
+- `components/builder/EvaluationPanel.jsx` — 평가 스튜디오 오케스트레이터 (말풍선 배치·케이스 탭·AI 진입점). 표현 컴포넌트는 `components/builder/evaluation/`: StarRating(+SCORE_GUIDE)/Rubric/Leaderboard/CommentBubble/PreviewBoundary
 - `components/builder/BuilderTopBar.jsx` / `PlanCaseBar.jsx` / `BuilderCanvas.jsx` — 상태 없는 표현 컴포넌트
 - `components/builder/PromptExchange.jsx` — "프롬프트 복사 → 결과 붙여넣기" UI 한 벌. 세 AI 다이얼로그가 공유
 - `components/builder/CanvasItem.jsx` — 캔버스 아이템 (드래그/리사이즈/잠금/숨김, zoom 좌표 보정, 우클릭)
