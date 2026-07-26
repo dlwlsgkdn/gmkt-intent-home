@@ -115,17 +115,14 @@ function Rubric({ onClose }) {
   )
 }
 
-/* 케이스 리더보드 — 로테이션으로 쌓인 평가를 평균 별점 순으로 본다.
+/* 케이스 리더보드 — 로테이션으로 쌓인 평가를 평균 별점 순으로 보는 상시 사이드바.
    이 순위가 피드백 전체 반영의 씨앗 우선순위(상위 N개)로 그대로 쓰인다. */
-function Leaderboard({ board, remaining, onOpenCase, onClose }) {
+function Leaderboard({ board, remaining, onOpenCase }) {
   return (
-    <section className="sb-qa-board" aria-label="케이스 리더보드">
+    <aside className="sb-qa-board" aria-label="케이스 리더보드">
       <div className="sb-qa-board__head">
-        <div>
-          <span>CASE LEADERBOARD</span>
-          <h3>케이스 리더보드</h3>
-        </div>
-        <button type="button" className="sb-icon-btn" onClick={onClose} aria-label="리더보드 닫기">×</button>
+        <span>CASE LEADERBOARD</span>
+        <h3>케이스 리더보드</h3>
       </div>
       <p className="sb-qa-board__note">
         평가한 케이스가 평균 별점 순으로 쌓여요. 미평가 <b>{remaining}개</b>는
@@ -142,22 +139,24 @@ function Leaderboard({ board, remaining, onOpenCase, onClose }) {
                 <b>{entry.planCase.name || '이름 없는 케이스'}</b>
                 <small>별점 {entry.ratedCount}개 · 피드백 {entry.feedbackCount}개</small>
               </div>
-              {entry.slot && <em className="sb-qa-board__slot">CASE {entry.slot}</em>}
-              <strong className="sb-qa-board__avg">
-                {entry.average == null ? '—' : `★ ${entry.average.toFixed(1)}`}
-              </strong>
-              <button
-                type="button"
-                className="sb-btn sb-btn--tiny"
-                onClick={() => onOpenCase(entry.caseId)}
-              >
-                열기
-              </button>
+              <div className="sb-qa-board__meta">
+                <strong className="sb-qa-board__avg">
+                  {entry.average == null ? '—' : `★ ${entry.average.toFixed(1)}`}
+                </strong>
+                {entry.slot && <em className="sb-qa-board__slot">CASE {entry.slot}</em>}
+                <button
+                  type="button"
+                  className="sb-btn sb-btn--tiny"
+                  onClick={() => onOpenCase(entry.caseId)}
+                >
+                  열기
+                </button>
+              </div>
             </li>
           ))}
         </ol>
       )}
-    </section>
+    </aside>
   )
 }
 
@@ -265,7 +264,6 @@ export default function EvaluationPanel({
   deviceW = 430,
 }) {
   const [rubricOpen, setRubricOpen] = useState(false)
-  const [boardOpen, setBoardOpen] = useState(false)
   const [llmDialogOpen, setLlmDialogOpen] = useState(false)
   const [fixChooserOpen, setFixChooserOpen] = useState(false) // 문구 다듬기 / 페이지 재구성 / 전체 반영 선택
   const [propagationOpen, setPropagationOpen] = useState(false)
@@ -475,15 +473,8 @@ export default function EvaluationPanel({
           </button>
           <button
             type="button"
-            className={'sb-btn' + (boardOpen ? ' sb-btn--open' : '')}
-            onClick={() => { setBoardOpen((open) => !open); setRubricOpen(false) }}
-          >
-            리더보드{board.length > 0 ? ` ${board.length}` : ''}
-          </button>
-          <button
-            type="button"
             className={'sb-btn' + (rubricOpen ? ' sb-btn--open' : '')}
-            onClick={() => { setRubricOpen((open) => !open); setBoardOpen(false) }}
+            onClick={() => setRubricOpen((open) => !open)}
           >
             별점 기준
           </button>
@@ -491,14 +482,6 @@ export default function EvaluationPanel({
       </section>
 
       {rubricOpen && <Rubric onClose={() => setRubricOpen(false)} />}
-      {boardOpen && (
-        <Leaderboard
-          board={board}
-          remaining={remainingCount}
-          onOpenCase={onEditCase}
-          onClose={() => setBoardOpen(false)}
-        />
-      )}
 
       <section className="sb-qa-case-tabs" role="tablist" aria-label="평가 케이스">
         {stats.caseStats.map((caseStat) => (
@@ -590,6 +573,8 @@ export default function EvaluationPanel({
             )
           })}
         </div>
+
+        <Leaderboard board={board} remaining={remainingCount} onOpenCase={onEditCase} />
       </section>
 
       {fixChooserOpen && (() => {
