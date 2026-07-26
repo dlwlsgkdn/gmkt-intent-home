@@ -117,10 +117,15 @@ export function splitList(text) {
     .filter(Boolean)
 }
 
-/* "메인|서브" 형태 옵션 파싱 */
+/* "메인|서브|상세" 형태 옵션 파싱.
+   줄바꿈이 있으면 줄 단위로 나눠 상세 설명 안에 쉼표를 허용하고, 없으면 기존처럼 쉼표 구분 */
 export function splitOptions(text) {
-  return splitList(text).map((chunk) => {
-    const [main, sub] = chunk.split('|').map((part) => part.trim())
-    return { main, sub: sub || '' }
+  const raw = String(text || '')
+  const chunks = raw.includes('\n')
+    ? raw.split('\n').map((part) => part.trim()).filter(Boolean)
+    : splitList(raw)
+  return chunks.map((chunk) => {
+    const parts = chunk.split('|').map((part) => part.trim())
+    return { main: parts[0], sub: parts[1] || '', desc: parts.slice(2).join('|').trim() }
   })
 }

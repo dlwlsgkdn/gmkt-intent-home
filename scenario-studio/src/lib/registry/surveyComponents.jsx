@@ -45,7 +45,7 @@ export const SURVEY_COMPONENTS = {
     },
     fields: [
       { key: 'question', label: '질문 문구', kind: 'textarea' },
-      { key: 'options', label: '선택지 (메인|서브, 쉼표 구분)', kind: 'textarea', list: true },
+      { key: 'options', label: '선택지 (메인|서브|상세 설명 — 쉼표 또는 줄바꿈 구분, 줄바꿈이면 상세에 쉼표 허용)', kind: 'textarea', list: true },
       { key: 'multi', label: '복수 선택 허용', kind: 'toggle' },
       {
         key: 'maxPerRow',
@@ -120,6 +120,7 @@ export const SURVEY_COMPONENTS = {
                   >
                     <span className="text-sm font-semibold text-slate-800 whitespace-nowrap">{kText(opt.main, ctx)}</span>
                     {opt.sub ? <span className="text-[11px] font-normal text-slate-400 whitespace-nowrap">{kText(opt.sub, ctx)}</span> : null}
+                    {opt.desc ? <span className="sb-survey-option__desc">{kText(opt.desc, ctx)}</span> : null}
                   </button>
                 )
               })}

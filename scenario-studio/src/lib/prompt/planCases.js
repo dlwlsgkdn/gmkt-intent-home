@@ -1,4 +1,4 @@
-import { createPlanCase, uid } from '../store.js'
+import { createPlanCase, splitOptions, uid } from '../store.js'
 import { plainEvaluationText } from '../evaluation.js'
 import { parseJsonAnswer } from './jsonAnswer.js'
 
@@ -36,10 +36,8 @@ export function generationAxes(surveyItems = []) {
     .map((item) => ({
       questionId: item.id,
       question: plainEvaluationText(item.props?.question) || '설문',
-      options: String(item.props?.options || '')
-        .split(',')
-        .map((option) => option.trim())
-        .filter(Boolean),
+      // 조건 값은 플레이어 답변과 같은 main만 — "메인|서브|상세" 원문이 새면 조건이 영영 안 맞는다
+      options: splitOptions(item.props?.options).map((option) => option.main).filter(Boolean),
     }))
     .filter((axis) => axis.options.length > 0)
 }

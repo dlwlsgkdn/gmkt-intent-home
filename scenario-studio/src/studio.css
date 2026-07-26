@@ -3305,22 +3305,37 @@
   scroll-snap-align: start;
   word-break: keep-all;
 }
-.sb-survey-option--card { border-radius: var(--sb-r-xl); }
-.sb-survey-option--pill {
+/* 도형별 재정의 — 원본 .clean-home-page .info-card 가 radius·정렬·패딩을 !important 로
+   고정하므로, 특이도를 한 단계 높여(.info-card 병기) 도형 규칙이 이기게 한다.
+   카드형은 원본 6px 라운드 그대로 두는 것이 기본 룩. */
+.clean-home-page .info-card.sb-survey-option--pill {
   min-height: 46px;
-  border-radius: 999px;
-  padding-block: 9px;
+  border-radius: 999px !important;
+  padding: 9px 18px !important;
+  align-items: center !important;
+  text-align: center !important;
 }
-.sb-survey-option--square {
+.clean-home-page .info-card.sb-survey-option--square {
   aspect-ratio: 1;
   min-height: 0;
-  border-radius: var(--sb-r-xl);
+  border-radius: var(--sb-r-xl) !important;
 }
-.sb-survey-option--circle {
+.clean-home-page .info-card.sb-survey-option--circle {
   aspect-ratio: 1;
   min-height: 0;
-  border-radius: 50%;
-  padding: 10px;
+  border-radius: 50% !important;
+  padding: 12px !important;
+  align-items: center !important;
+  text-align: center !important;
+}
+/* 선택지 상세 설명 — 원본 span:last-child 12px 규칙보다 특이도를 높여 잡는다 */
+.clean-home-page .info-card.sb-survey-option span.sb-survey-option__desc {
+  font-size: 11px !important;
+  font-weight: 300 !important;
+  color: var(--beauty-muted, #7b8490) !important;
+  line-height: 1.5;
+  white-space: normal !important;
+  word-break: keep-all;
 }
 
 /* ── 컴포넌트 텍스트 스타일 강제 상속 ──
