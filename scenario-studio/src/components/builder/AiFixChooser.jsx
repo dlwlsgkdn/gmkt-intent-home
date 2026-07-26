@@ -65,19 +65,19 @@ export default function AiFixChooser({
             type="button"
             className="sb-mode-card"
             disabled={seedCount === 0}
-            title={seedCount === 0 ? '대표 케이스에 피드백을 먼저 남겨주세요' : undefined}
+            title={seedCount === 0 ? '평가한 케이스에 피드백을 먼저 남겨주세요' : undefined}
             onClick={onPickPropagate}
           >
             <span className="sb-mode-card__head">
               <strong>피드백 전체 반영</strong>
-              <em>나머지 {targetCount}개 케이스 · 필드 단위</em>
+              <em>미평가 {targetCount}개 케이스 · 필드 단위</em>
             </span>
             <small>
-              대표 3개에 남긴 피드백 {seedCount}개를 패턴 삼아, <b>평가하지 않은 나머지 케이스</b>의
-              같은 자리에서 같은 문제를 찾아 고칩니다. 대표만 보고 전체에 영향을 주는 단계예요.
+              평가한 케이스들에 남긴 피드백 {seedCount}개를 패턴 삼아, <b>아직 평가하지 않은 케이스</b>의
+              같은 자리에서 같은 문제를 찾아 고칩니다. 로테이션으로 평가가 쌓일수록 씨앗도 늘어나요.
             </small>
             <span className="sb-fix-chooser__examples">
-              흐름: 대표 평가·수정 → 전체 반영 (수정안은 하나씩 골라 적용)
+              흐름: 평가·수정 → (다음 3개 선정으로 반복) → 전체 반영 (수정안은 하나씩 골라 적용)
             </span>
           </button>
         </div>

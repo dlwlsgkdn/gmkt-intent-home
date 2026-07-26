@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   PROPAGATION_BATCH_SIZE,
   buildPropagationPrompt,
@@ -14,16 +14,30 @@ import PromptExchange from './PromptExchange.jsx'
 import AiRoundTripNote from './AiRoundTripNote.jsx'
 
 /*
- * 대표 피드백 전체 반영 다이얼로그.
+ * 평가 피드백 전체 반영 다이얼로그.
  *
- * 대표 케이스(CASE A/B/C)에 남긴 피드백을 씨앗으로, 나머지 케이스들의 같은 자리를
- * 배치로 나눠 고친다. 수정안은 필드 단위(허용 목록 + before 대조)라 개별 선택
- * 적용이 가능하고, 적용은 문구 다듬기와 같은 경로(applyRevisions)를 탄다.
+ * 평가한 케이스들(로테이션으로 누적)에 남긴 피드백을 씨앗으로, 미평가 케이스들의
+ * 같은 자리를 배치로 나눠 고친다. 씨앗은 리더보드(평균 별점) 순이며 상위 N개
+ * 케이스로 제한할 수 있다. 수정안은 필드 단위(허용 목록 + before 대조)라 개별
+ * 선택 적용이 가능하고, 적용은 문구 다듬기와 같은 경로(applyRevisions)를 탄다.
  */
+const SEED_LIMIT_OPTIONS = [3, 5, 10]
+
 export default function PropagationDialog({ scenario, planCases, onApply, onClose, onToast }) {
-  const allSeeds = useMemo(() => collectPropagationSeeds(planCases), [planCases])
+  const [seedCaseLimit, setSeedCaseLimit] = useState(null) // null = 리더보드 전체
+  const allSeeds = useMemo(
+    () => collectPropagationSeeds(planCases, { caseLimit: seedCaseLimit }),
+    [planCases, seedCaseLimit]
+  )
   const [pickedSeedIds, setPickedSeedIds] = useState(() => new Set(allSeeds.componentSeeds.map((seed) => seed.id)))
   const [includeCaseNotes, setIncludeCaseNotes] = useState(true)
+  const evaluatedCount = allSeeds.leaderboard.length
+  const seedCaseCount = seedCaseLimit ? Math.min(seedCaseLimit, evaluatedCount) : evaluatedCount
+
+  /* 씨앗 케이스 범위가 바뀌면 개별 선택은 새 범위 전체로 초기화한다 */
+  useEffect(() => {
+    setPickedSeedIds(new Set(allSeeds.componentSeeds.map((seed) => seed.id)))
+  }, [seedCaseLimit]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [phase, setPhase] = useState('setup') // setup | exchange | review
   const [batches, setBatches] = useState([])
@@ -37,7 +51,7 @@ export default function PropagationDialog({ scenario, planCases, onApply, onClos
   const seeds = useMemo(() => ({
     componentSeeds: allSeeds.componentSeeds.filter((seed) => pickedSeedIds.has(seed.id)),
     caseNotes: includeCaseNotes ? allSeeds.caseNotes : [],
-    representativeIds: allSeeds.representativeIds,
+    evaluatedCaseIds: allSeeds.evaluatedCaseIds,
   }), [allSeeds, pickedSeedIds, includeCaseNotes])
 
   const targets = useMemo(() => propagationTargets(planCases, seeds), [planCases, seeds])
@@ -123,11 +137,11 @@ export default function PropagationDialog({ scenario, planCases, onApply, onClos
       <section className="sb-llm-dialog sb-gen-dialog" role="dialog" aria-modal="true" aria-labelledby="sb-prop-title">
         <div className="sb-llm-dialog__head">
           <div>
-            <p className="sb-panel-label">대표 피드백 → 프롬프트 → 내 AI → 전체 케이스</p>
+            <p className="sb-panel-label">평가 피드백 → 프롬프트 → 내 AI → 전체 케이스</p>
             <h2 id="sb-prop-title">피드백 전체 반영</h2>
             <p>
-              대표 CASE A/B/C에 남긴 피드백을 패턴 삼아, 나머지 <b>{targets.length}개 케이스</b>의
-              같은 자리에서 같은 문제를 찾아 고칩니다.
+              평가한 케이스 <b>{evaluatedCount}개</b>에 남긴 피드백을 패턴 삼아,
+              아직 평가하지 않은 <b>{targets.length}개 케이스</b>의 같은 자리에서 같은 문제를 찾아 고칩니다.
             </p>
             <AiRoundTripNote>
               대상이 많아 <b>{Math.max(1, chunkTargets(targets).length)}개 배치</b>로 나눠 왕복해요.
@@ -151,10 +165,27 @@ export default function PropagationDialog({ scenario, planCases, onApply, onClos
               <div className="sb-llm-section__head">
                 <div>
                   <span>패턴이 될 피드백</span>
-                  <strong>대표 케이스 피드백 {allSeeds.componentSeeds.length + allSeeds.caseNotes.length}개</strong>
+                  <strong>씨앗 케이스 {seedCaseCount}개 · 피드백 {allSeeds.componentSeeds.length + allSeeds.caseNotes.length}개</strong>
                 </div>
                 <span>{seedCount}개 선택됨</span>
               </div>
+              {evaluatedCount > SEED_LIMIT_OPTIONS[0] && (
+                <label className="sb-prop-seedlimit">
+                  씨앗 범위
+                  <select
+                    value={seedCaseLimit ?? 'all'}
+                    onChange={(event) => setSeedCaseLimit(
+                      event.target.value === 'all' ? null : Number(event.target.value)
+                    )}
+                  >
+                    {SEED_LIMIT_OPTIONS.filter((limit) => limit < evaluatedCount).map((limit) => (
+                      <option key={limit} value={limit}>리더보드 상위 {limit}개 케이스</option>
+                    ))}
+                    <option value="all">평가한 케이스 전체 ({evaluatedCount}개)</option>
+                  </select>
+                  <small>평균 별점이 높은 케이스의 피드백부터 씨앗이 돼요.</small>
+                </label>
+              )}
               <ul className="sb-crev-feedback">
                 {allSeeds.caseNotes.length > 0 && (
                   <li className="sb-crev-feedback__case">
@@ -174,22 +205,26 @@ export default function PropagationDialog({ scenario, planCases, onApply, onClos
                       checked={pickedSeedIds.has(seed.id)}
                       onChange={() => toggleSeed(seed.id)}
                     />
-                    <b>CASE {seed.slot} · {LIBRARY[seed.type]?.label || seed.type}</b>
+                    <b>
+                      {seed.slot ? `CASE ${seed.slot}` : `${seed.rank}위 ${seed.caseName}`}
+                      {' · '}{LIBRARY[seed.type]?.label || seed.type}
+                    </b>
                     <span>{seed.feedback}</span>
                     {seed.score != null && <em>{seed.score}점</em>}
                   </li>
                 ))}
               </ul>
               {allSeeds.componentSeeds.length === 0 && allSeeds.caseNotes.length === 0 && (
-                <p className="sb-llm-help">대표 케이스에 피드백이 없어요. 평가 탭에서 말풍선에 피드백을 먼저 남겨주세요.</p>
+                <p className="sb-llm-help">평가한 케이스에 피드백이 없어요. 평가 탭에서 말풍선에 피드백을 먼저 남겨주세요.</p>
               )}
               <p className="sb-llm-help">
-                대표 케이스의 현재 문구가 <b>모범 예시</b>로 함께 전달돼요 — 대표를 먼저 고쳐 두면 전파 품질이 좋아집니다.
+                씨앗 케이스의 현재 문구가 <b>모범 예시</b>로 함께 전달돼요 — 말풍선에서 <b>반영 완료(✓)</b>로
+                표시해 두면 검증된 예시로, 아니면 참고용으로 구분돼 전달됩니다.
               </p>
             </section>
 
             <div className="sb-llm-dialog__foot">
-              <p>대상: 대표를 제외한 {targets.length}개 케이스 · 씨앗과 같은 타입의 컴포넌트 필드만.</p>
+              <p>대상: 평가한 케이스를 제외한 {targets.length}개 · 씨앗과 같은 타입의 컴포넌트 필드만.</p>
               <div>
                 <button type="button" className="sb-btn sb-btn--ghost" onClick={onClose}>취소</button>
                 <button

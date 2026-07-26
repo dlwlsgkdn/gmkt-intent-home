@@ -1975,6 +1975,91 @@
 .sb-qa-rubric__row p { margin: 3px 0 0; color: var(--sb-n-500); font-size: 10px; line-height: 1.45; }
 .sb-qa-rubric__row--5 { border-color: rgba(8, 127, 91, 0.22); background: rgba(8, 127, 91, 0.045); }
 .sb-qa-rubric__row--4 { border-color: rgba(183, 121, 31, 0.22); background: #fffbeb; }
+
+/* 케이스 리더보드 — 별점 기준과 같은 떠 있는 패널 문법 */
+.sb-qa-board {
+  position: fixed;
+  top: 154px;
+  right: 24px;
+  z-index: 110;
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 178px);
+  padding: 19px;
+  overflow-y: auto;
+  border: 1px solid rgba(54, 95, 127, 0.24);
+  border-radius: var(--sb-r-xl);
+  background: #fff;
+  box-shadow: 0 30px 80px -32px rgba(15, 23, 42, 0.58);
+  animation: sb-menu-in 0.15s ease;
+}
+.sb-qa-board__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.sb-qa-board__head span { color: var(--sb-info); font-size: var(--sb-t-micro); font-weight: 500; letter-spacing: 0.12em; }
+.sb-qa-board__head h3 { margin: 3px 0 0; color: var(--sb-ink); font-size: 20px; }
+.sb-qa-board__head .sb-icon-btn { font-size: 22px; }
+.sb-qa-board__note {
+  margin: 0 0 12px;
+  padding: 9px 12px;
+  border: 1px solid var(--sb-line);
+  border-radius: var(--sb-r-sm);
+  background: var(--sb-surface-sunken);
+  color: var(--sb-muted);
+  font-size: var(--sb-t-caption);
+  line-height: 1.6;
+}
+.sb-qa-board__note b { color: var(--sb-ink); }
+.sb-qa-board__empty { margin: 0; color: var(--sb-muted); font-size: var(--sb-t-caption); }
+.sb-qa-board__list {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sb-qa-board__list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  border: 1px solid var(--sb-line);
+  border-radius: var(--sb-r-md);
+  background: var(--sb-n-50);
+}
+.sb-qa-board__list li.is-current { border-color: rgba(54, 95, 127, 0.3); background: #fff; }
+.sb-qa-board__rank {
+  flex: none;
+  width: 22px;
+  color: var(--sb-subtle);
+  font-size: var(--sb-t-caption);
+  font-weight: 500;
+  text-align: center;
+}
+.sb-qa-board__name { flex: 1; min-width: 0; }
+.sb-qa-board__name b {
+  display: block;
+  overflow: hidden;
+  color: var(--sb-ink);
+  font-size: var(--sb-t-caption);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sb-qa-board__name small { color: var(--sb-subtle); font-size: var(--sb-t-micro); }
+.sb-qa-board__slot {
+  flex: none;
+  padding: 2px 7px;
+  border-radius: var(--sb-r-pill);
+  background: rgba(54, 95, 127, 0.1);
+  color: var(--sb-info);
+  font-size: var(--sb-t-micro);
+  font-style: normal;
+  font-weight: 500;
+}
+.sb-qa-board__avg { flex: none; min-width: 44px; color: var(--sb-star); font-size: var(--sb-t-body); text-align: right; }
 .sb-qa-case-tabs {
   display: flex;
   align-items: stretch;
@@ -5139,6 +5224,25 @@ button.sb-info-chip:hover { border-color: var(--sb-n-400); background: var(--sb-
 }
 
 /* 전파 검토 — 케이스별 묶음 */
+/* 전파 씨앗 범위(리더보드 상위 N개) 선택 */
+.sb-prop-seedlimit {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 10px;
+  color: var(--sb-muted);
+  font-size: var(--sb-t-caption);
+}
+.sb-prop-seedlimit select {
+  padding: 5px 8px;
+  border: 1px solid var(--sb-line);
+  border-radius: var(--sb-r-sm);
+  background: #fff;
+  color: var(--sb-ink);
+  font: inherit;
+}
+.sb-prop-seedlimit small { color: var(--sb-subtle); font-size: var(--sb-t-micro); }
+
 .sb-prop-group { margin-bottom: 6px; }
 .sb-prop-group__name {
   margin: 10px 0 6px;

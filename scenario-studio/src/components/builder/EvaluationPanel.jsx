@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  caseHasEvaluationInput,
   componentEvaluationStructureForCase,
   evaluationCasesFor,
+  evaluationLeaderboard,
   normalizeCaseEvaluation,
   normalizeComponentEvaluation,
   structuredComponentEvaluationStats,
@@ -113,6 +115,52 @@ function Rubric({ onClose }) {
   )
 }
 
+/* 케이스 리더보드 — 로테이션으로 쌓인 평가를 평균 별점 순으로 본다.
+   이 순위가 피드백 전체 반영의 씨앗 우선순위(상위 N개)로 그대로 쓰인다. */
+function Leaderboard({ board, remaining, onOpenCase, onClose }) {
+  return (
+    <section className="sb-qa-board" aria-label="케이스 리더보드">
+      <div className="sb-qa-board__head">
+        <div>
+          <span>CASE LEADERBOARD</span>
+          <h3>케이스 리더보드</h3>
+        </div>
+        <button type="button" className="sb-icon-btn" onClick={onClose} aria-label="리더보드 닫기">×</button>
+      </div>
+      <p className="sb-qa-board__note">
+        평가한 케이스가 평균 별점 순으로 쌓여요. 미평가 <b>{remaining}개</b>는
+        <b> 다음 3개 선정</b>으로 이어가고, 이 순위는 <b>피드백 전체 반영</b>의 씨앗 우선순위가 됩니다.
+      </p>
+      {board.length === 0 ? (
+        <p className="sb-qa-board__empty">아직 평가한 케이스가 없어요. 말풍선에 별점·피드백을 남기면 여기에 쌓입니다.</p>
+      ) : (
+        <ol className="sb-qa-board__list">
+          {board.map((entry) => (
+            <li key={entry.caseId} className={entry.slot ? 'is-current' : ''}>
+              <span className="sb-qa-board__rank">{entry.rank}</span>
+              <div className="sb-qa-board__name">
+                <b>{entry.planCase.name || '이름 없는 케이스'}</b>
+                <small>별점 {entry.ratedCount}개 · 피드백 {entry.feedbackCount}개</small>
+              </div>
+              {entry.slot && <em className="sb-qa-board__slot">CASE {entry.slot}</em>}
+              <strong className="sb-qa-board__avg">
+                {entry.average == null ? '—' : `★ ${entry.average.toFixed(1)}`}
+              </strong>
+              <button
+                type="button"
+                className="sb-btn sb-btn--tiny"
+                onClick={() => onOpenCase(entry.caseId)}
+              >
+                열기
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  )
+}
+
 class EvaluationPreviewBoundary extends React.Component {
   constructor(props) {
     super(props)
@@ -217,6 +265,7 @@ export default function EvaluationPanel({
   deviceW = 430,
 }) {
   const [rubricOpen, setRubricOpen] = useState(false)
+  const [boardOpen, setBoardOpen] = useState(false)
   const [llmDialogOpen, setLlmDialogOpen] = useState(false)
   const [fixChooserOpen, setFixChooserOpen] = useState(false) // 문구 다듬기 / 페이지 재구성 / 전체 반영 선택
   const [propagationOpen, setPropagationOpen] = useState(false)
@@ -357,10 +406,13 @@ export default function EvaluationPanel({
     if (caseStat.planCase) onSelectCase(caseStat.planCase.id)
   }
 
+  const board = useMemo(() => evaluationLeaderboard(planCases), [planCases])
+  const remainingCount = planCases.length - board.length
+
   const rerunRecommendation = () => {
-    if (stats.completed > 0) {
+    if (selectedCases.some(caseHasEvaluationInput)) {
       const ok = window.confirm(
-        '평가할 CASE A/B/C를 다시 선정할까요?\n현재 케이스에 작성한 평가는 보존되지만 새 선정 화면에서는 빠질 수 있어요.'
+        '평가하지 않은 케이스에서 다음 CASE A/B/C를 선정할까요?\n지금까지의 평가는 리더보드에 남고, 피드백 전체 반영의 씨앗으로 계속 쓰여요.'
       )
       if (!ok) return
     }
@@ -411,11 +463,27 @@ export default function EvaluationPanel({
           >
             ⇄ AI에게 수정 요청
           </button>
-          <button type="button" className="sb-btn" onClick={rerunRecommendation}>다시 선정</button>
+          <button
+            type="button"
+            className="sb-btn"
+            title={remainingCount > 0
+              ? `평가 흔적이 있는 케이스는 빼고 미평가 ${remainingCount}개에서 다음 3개를 뽑아요.`
+              : '모든 케이스를 평가했어요 — 추천 점수 순으로 다시 뽑아요.'}
+            onClick={rerunRecommendation}
+          >
+            다음 3개 선정
+          </button>
+          <button
+            type="button"
+            className={'sb-btn' + (boardOpen ? ' sb-btn--open' : '')}
+            onClick={() => { setBoardOpen((open) => !open); setRubricOpen(false) }}
+          >
+            리더보드{board.length > 0 ? ` ${board.length}` : ''}
+          </button>
           <button
             type="button"
             className={'sb-btn' + (rubricOpen ? ' sb-btn--open' : '')}
-            onClick={() => setRubricOpen((open) => !open)}
+            onClick={() => { setRubricOpen((open) => !open); setBoardOpen(false) }}
           >
             별점 기준
           </button>
@@ -423,6 +491,14 @@ export default function EvaluationPanel({
       </section>
 
       {rubricOpen && <Rubric onClose={() => setRubricOpen(false)} />}
+      {boardOpen && (
+        <Leaderboard
+          board={board}
+          remaining={remainingCount}
+          onOpenCase={onEditCase}
+          onClose={() => setBoardOpen(false)}
+        />
+      )}
 
       <section className="sb-qa-case-tabs" role="tablist" aria-label="평가 케이스">
         {stats.caseStats.map((caseStat) => (

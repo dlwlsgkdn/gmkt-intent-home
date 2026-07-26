@@ -3,7 +3,7 @@ import {
   EVALUATION_CASE_SLOTS,
   normalizeCaseEvaluation,
   normalizeComponentEvaluation,
-  recommendSignificantCaseIds,
+  recommendRotationCaseIds,
   remapCaseEvaluation,
 } from '../../../lib/evaluation.js'
 import { applyLlmRevisionsToPlanCases } from '../../../lib/prompt/revision.js'
@@ -197,25 +197,32 @@ export function usePlanCases({
     }))
   }
 
-  /* 평가 스튜디오는 언제나 정확히 3개 CASE(A/B/C) — 답변 조합이 가장 다른 케이스를 고른다 */
+  /* 평가 스튜디오는 언제나 정확히 3개 CASE(A/B/C) — 로테이션: 평가 흔적이 있는
+     케이스는 후보에서 빼고 미평가에서 다음 3개를 뽑는다(모자라면 평가된 케이스로 채움).
+     기존 평가는 지우지 않으며 리더보드와 전파 씨앗으로 계속 쓰인다. */
   const recommendPlanCases = () => {
-    const recommendation = recommendSignificantCaseIds(planCases, 3)
+    const { ids: recommendation, freshCount } = recommendRotationCaseIds(planCases, 3)
     const recommendedIds = new Set(recommendation)
     const slotById = Object.fromEntries(
       recommendation.map((caseId, index) => [caseId, EVALUATION_CASE_SLOTS[index] || null])
     )
-    updatePlanCases((current) => current.map((planCase) => ({
-      ...planCase,
-      evaluation: {
-        ...normalizeCaseEvaluation(planCase.evaluation),
-        selected: recommendedIds.has(planCase.id),
-        slot: slotById[planCase.id] || null,
-        updatedAt: new Date().toISOString(),
-      },
-    })))
+    const now = new Date().toISOString()
+    updatePlanCases((current) => current.map((planCase) => {
+      const evaluation = normalizeCaseEvaluation(planCase.evaluation)
+      const selected = recommendedIds.has(planCase.id)
+      const slot = slotById[planCase.id] || null
+      if (evaluation.selected === selected && evaluation.slot === slot) return planCase
+      return { ...planCase, evaluation: { ...evaluation, selected, slot, updatedAt: now } }
+    }))
     const first = planCases.find((planCase) => planCase.id === recommendation[0])
     if (first) setPlanCaseId(first.id)
-    api.showToast(`평가할 CASE A/B/C ${recommendedIds.size}개를 추천했어요.`)
+    api.showToast(
+      freshCount >= recommendedIds.size
+        ? `미평가 케이스에서 CASE A/B/C ${recommendedIds.size}개를 선정했어요.`
+        : freshCount > 0
+          ? `미평가 ${freshCount}개에 평가했던 케이스 ${recommendedIds.size - freshCount}개를 더해 선정했어요.`
+          : '모든 케이스를 평가했어요 — 추천 점수 순으로 다시 선정했어요.'
+    )
   }
 
   /* AI가 돌려준 수정안 적용 — 검증은 lib/prompt/revision.js가 이미 끝냈고,

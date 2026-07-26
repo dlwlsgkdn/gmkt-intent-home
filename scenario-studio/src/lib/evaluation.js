@@ -223,6 +223,73 @@ export function recommendSignificantCaseIds(planCases, count) {
   return selected.map((entry) => entry.caseId)
 }
 
+/* 케이스에 사람 평가 흔적(별점·피드백)이 있는가 —
+   로테이션 제외 기준이자 전파의 씨앗/대상 경계("본 케이스는 씨앗, 안 본 케이스만 대상") */
+export function caseHasEvaluationInput(planCase) {
+  const evaluation = normalizeCaseEvaluation(planCase?.evaluation)
+  if (evaluation.score != null || evaluation.feedback.trim()) return true
+  return Object.values(evaluation.components).some(
+    (review) => review.score != null || review.feedback.trim()
+  )
+}
+
+/*
+ * 케이스 리더보드 — 평가된 케이스를 평균 별점 내림차순으로 순위 매긴다.
+ * 로테이션으로 라운드가 쌓여도 평가 자산이 흩어지지 않는 자리이며,
+ * 이 순위가 피드백 전체 반영의 씨앗 우선순위(상위 N개)로 그대로 쓰인다.
+ */
+export function evaluationLeaderboard(planCases = []) {
+  return planCases
+    .map((planCase, index) => ({ planCase, index }))
+    .filter(({ planCase }) => caseHasEvaluationInput(planCase))
+    .map(({ planCase, index }) => {
+      const evaluation = normalizeCaseEvaluation(planCase.evaluation)
+      const reviews = Object.values(evaluation.components)
+      const ratings = reviews
+        .filter((review) => review.score != null)
+        .map((review) => review.score)
+      if (evaluation.score != null) ratings.push(evaluation.score)
+      const feedbackCount = reviews.filter((review) => review.feedback.trim()).length
+        + (evaluation.feedback.trim() ? 1 : 0)
+      return {
+        caseId: planCase.id,
+        planCase,
+        index,
+        slot: evaluation.selected ? evaluation.slot : null,
+        average: ratings.length > 0
+          ? Math.round((ratings.reduce((sum, score) => sum + score, 0) / ratings.length) * 10) / 10
+          : null,
+        ratedCount: ratings.length,
+        feedbackCount,
+      }
+    })
+    .sort((left, right) =>
+      ((right.average ?? -1) - (left.average ?? -1))
+      || (right.feedbackCount - left.feedbackCount)
+      || (left.index - right.index)
+    )
+    .map((entry, order) => ({ ...entry, rank: order + 1 }))
+}
+
+/*
+ * 미평가 케이스 로테이션: 재선정은 평가 흔적이 있는 케이스를 후보에서 빼고 뽑는다 —
+ * 이미 본 케이스를 다시 뽑으면 평가의 정보 이득이 없기 때문. 미평가가 모자라면
+ * 평가된 케이스로 채워 A/B/C 3개 구성은 항상 유지한다.
+ */
+export function recommendRotationCaseIds(planCases, count) {
+  const fresh = planCases.filter((planCase) => !caseHasEvaluationInput(planCase))
+  const ids = fresh.length > 0
+    ? recommendSignificantCaseIds(fresh, Math.min(count, fresh.length))
+    : []
+  const freshCount = ids.length
+  if (ids.length < count) {
+    const picked = new Set(ids)
+    const rest = planCases.filter((planCase) => !picked.has(planCase.id))
+    if (rest.length > 0) ids.push(...recommendSignificantCaseIds(rest, count - ids.length))
+  }
+  return { ids: ids.slice(0, count), freshCount }
+}
+
 export function evaluationStats(planCases = []) {
   const selectedCases = planCases.filter((planCase) => normalizeCaseEvaluation(planCase.evaluation).selected)
   const reviews = selectedCases.flatMap((planCase) =>
