@@ -85,7 +85,7 @@ cd scenario-studio && npm run build   # vite build && cp -R ../legacy ../docs/le
 `:root`의 토큰이 스튜디오 UI의 유일한 값 출처다. 규칙 안에 색·반경·그림자를 직접 쓰지 말 것.
 
 - **폰트**: 스튜디오 크롬은 메인(clean-home)과 동일한 스택(`--sb-font-sans`)을 직접 선언한다. **본문 웹폰트는 절대 로드하지 말 것** — 스택 1순위가 Pretendard지만 원본 프로토타입부터 로드 없이 시스템 폴백(맥 Apple SD Gothic Neo **Light 300**)으로 렌더돼 왔고, 그 얇은 시스템 폰트 룩이 DDAK 메인의 인상이다. Pretendard CDN을 추가하면 메인 페이지가 통째로 다르게 보인다(실제 사고 이력 있음). 리치텍스트 인라인 서식 폰트는 별개 토큰 `--sb-font`(FONT_OPTIONS 7종, Google Fonts 로드). 프롬프트·JSON 영역만 ui-monospace 예외
-- **굵기**: 메인과 같은 3단계만 쓴다 — 본문 **300**(루트 상속) / 강조 **500** / 강한 강조 **600**. 700 이상 금지(메인의 가벼운 톤과 이질감이 곧 "다른 폰트" 인상을 만든다). strong/b/h1~h4의 브라우저 기본 700은 스튜디오 루트에서 500으로 끌어내려 둠. 예외는 리치텍스트 사용자 볼드(`.sb-rich-b`/`.sb-style-bold`, 700 유지)뿐
+- **굵기**: 메인 밴드(본문 300 · 카드 제목 340~360 · 칩 500)에 맞춘 3단계만 — 본문 **300** / 강조 **400** / 강한 강조 **500**. 600 이상 금지. **함정**: 원본 CSS의 `.clean-home-page *`가 weight 300을 모든 요소에 *직격*하므로(상속 아님) 버튼에 준 굵기가 안쪽 span에서 300으로 풀린다 → 스튜디오 루트들 아래 `* { font-weight: inherit }`로 상속을 재정립해 두었다(제거 금지). strong/b/h1~h4 기본은 400. 예외는 리치텍스트 사용자 볼드(`.sb-rich-b`/`.sb-style-bold`, 700 유지)뿐
 - **색**: 중립 11단계(`--sb-n-0`~`--sb-n-900`) + 텍스트 4단계(`--sb-ink`/`--sb-ink-2`/`--sb-muted`/`--sb-subtle`) + 면 3단계 + 역할색(`--sb-accent` 브랜드, `--sb-info` 평가·AI 왕복, `--sb-success`/`--sb-warn`/`--sb-danger`, `--sb-ai` AI 트리거)
 - **--sb-qa-\*** 는 구 이름의 별칭일 뿐이다. 새 코드는 `--sb-info` 등을 쓸 것
 - **라운드** `--sb-r-xs`~`--sb-r-2xl`/`--sb-r-pill`, **그림자** `--sb-shadow-sm`~`xl`, **타이포** `--sb-t-micro`(10px)~`--sb-t-title`(16px) 5단계 — 10px 미만 리터럴 금지, **모션** `--sb-dur`/`--sb-ease`. 다이얼로그 본문 블록의 세로 리듬은 `margin: 12px 24px` 기준
