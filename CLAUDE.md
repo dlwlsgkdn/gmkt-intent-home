@@ -88,7 +88,7 @@ cd scenario-studio && npm run build   # vite build && cp -R ../legacy ../docs/le
 - **굵기**: 메인 밴드(본문 300 · 카드 제목 340~360 · 칩 500)에 맞춘 3단계만 — 본문 **300** / 강조 **400** / 강한 강조 **500**. 600 이상 금지. **함정**: 원본 CSS의 `.clean-home-page *`가 weight 300을 모든 요소에 *직격*하므로(상속 아님) 버튼에 준 굵기가 안쪽 span에서 300으로 풀린다 → 스튜디오 루트들 아래 `* { font-weight: inherit }`로 상속을 재정립해 두었다(제거 금지). strong/b/h1~h4 기본은 400. 예외는 리치텍스트 사용자 볼드(`.sb-rich-b`/`.sb-style-bold`, 700 유지)뿐
 - **색**: 중립 11단계(`--sb-n-0`~`--sb-n-900`) + 텍스트 4단계(`--sb-ink`/`--sb-ink-2`/`--sb-muted`/`--sb-subtle`) + 면 3단계 + 역할색(`--sb-accent` 브랜드, `--sb-info` 평가·AI 왕복, `--sb-success`/`--sb-warn`/`--sb-danger`, `--sb-ai` AI 트리거)
 - **--sb-qa-\*** 는 구 이름의 별칭일 뿐이다. 새 코드는 `--sb-info` 등을 쓸 것
-- **라운드** `--sb-r-xs`~`--sb-r-2xl`/`--sb-r-pill`, **그림자** `--sb-shadow-sm`~`xl`, **타이포** `--sb-t-micro`(10px)~`--sb-t-title`(16px) 5단계 — 10px 미만 리터럴 금지, **모션** `--sb-dur`/`--sb-ease`. 다이얼로그 본문 블록의 세로 리듬은 `margin: 12px 24px` 기준
+- **라운드** `--sb-r-xs`~`--sb-r-2xl`/`--sb-r-pill`, **그림자** `--sb-shadow-sm`~`xl`, **타이포** `--sb-t-micro`(11px)~`--sb-t-title`(16px) 5단계 — 크롬 폰트 크기는 리터럴 대신 `--sb-t-*` 토큰만 사용(캔버스 콘텐츠 컴포넌트의 목업 크기만 리터럴 허용), **모션** `--sb-dur`/`--sb-ease`. 다이얼로그 본문 블록의 세로 리듬은 `margin: 12px 24px` 기준
 - **라벨 언어**: 스튜디오 크롬에 영문 아이브로우("영어 타이틀 + 한글 서브타이틀" 스택 — 예: 옛 `SCORING RUBRIC`/`STEP 1`) 금지. 패널·섹션 제목은 한글만, 왕복 단계 번호는 "n단계 · 스튜디오에서" 형식. 예외: `CASE A/B/C` 같은 식별자와 원본 프로토타입 CSS 영역(`keyword-detail-card` 등)
 - **포커스**: 개별 규칙에 `outline: none`을 쓰지 말 것. 전역 `[class^='sb-']:focus-visible` 규칙이 키보드 포커스 링을 담당한다
 - **버튼**: `.sb-btn` + 성격(`--primary`/`--ghost`/`--danger`/`--ai`/`--open`) + 크기(`--small`/`--tiny`). hover·active·disabled는 기본 정의에만 있다. AI를 부르는 버튼은 전부 `--ai`
