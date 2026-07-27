@@ -1,5 +1,5 @@
 import { LIBRARY } from '../registry.jsx'
-import { CHIP_COLORS, DEVICE_PRESETS } from '../store.js'
+import { CHIP_COLORS, DEVICE_PRESETS, splitOptions } from '../store.js'
 import { parseJsonAnswer } from './jsonAnswer.js'
 
 /*
@@ -36,7 +36,8 @@ export function componentReference() {
     .join('\n\n')
 }
 
-/* 조합 폭발을 사용자가 미리 가늠할 수 있게 — 질문 수^선택지 수 */
+/* 조합 폭발을 사용자가 미리 가늠할 수 있게 — 최대 선택지 수^질문 수.
+   선택지 개수는 AI가 질문에 맞게 정하므로 이 값은 상한이다. */
 export function combinationCount(questionCount, optionCount) {
   return Math.pow(Number(optionCount) || 0, Number(questionCount) || 0)
 }
@@ -92,7 +93,7 @@ const LAYOUT_RULES = `배치 규칙:
 
 조건 규칙:
 - conditions[].questionId는 stages.survey에 넣은 surveyQuestion 아이템의 id와 정확히 일치해야 합니다.
-- values는 그 질문 props.options에 실제로 있는 선택지 문자열이어야 합니다(options는 쉼표로 구분된 하나의 문자열).
+- values는 그 질문 props.options에 실제로 있는 선택지의 **메인 텍스트**여야 합니다. options는 쉼표로 구분된 하나의 문자열이고, 각 선택지는 "메인|서브|상세" 형태를 쓸 수 있는데 조건 값에는 첫 "|" 앞의 메인 텍스트만 씁니다.
 - 케이스 배열의 마지막 하나는 isFallback: true로 두고 conditions는 빈 배열로 둡니다.
 
 계획 구성 규칙 (가장 중요):
@@ -126,17 +127,22 @@ export function buildScenarioDbPrompt({
     `- 검색 의도: ${query}`,
     persona ? `- 대상 페르소나: ${persona}` : null,
     notes ? `- 추가 조건: ${notes}` : null,
-    `- 설문 질문 ${questionCount}개. **질문마다 선택지를 정확히 ${optionCount}개**씩 만듭니다.`,
+    `- 설문 질문 ${questionCount}개. 질문마다 선택지는 **최대 ${optionCount}개**까지 — 선택지의 내용과 적절한 개수(2~${optionCount}개)는 질문 성격에 맞게 스스로 판단합니다.`,
     `- 계획 단계 ${stepCount}개`,
     `- **설문 선택지의 모든 조합에 대해 계획 케이스를 하나씩 빠짐없이** 만듭니다.`,
-    `  ${questionCount}개 질문 × 선택지 ${optionCount}개 = **총 ${total.toLocaleString()}개 케이스** + 기본(폴백) 케이스 1개 = ${(total + 1).toLocaleString()}개.`,
-    '  조합을 하나라도 빠뜨리거나 중복해서는 안 됩니다. 첫 번째 질문의 선택지를 바깥 루프로 두고 순서대로 전개하세요.',
+    `  케이스 수 = 각 질문의 실제 선택지 수를 모두 곱한 값 + 기본(폴백) 케이스 1개. (질문 ${questionCount}개 모두 선택지를 ${optionCount}개로 만들면 최대 ${total.toLocaleString()}개 + 1개)`,
+    '  먼저 각 질문의 선택지 수를 확정하고, 그 곱만큼 케이스를 만드세요. 조합을 하나라도 빠뜨리거나 중복해서는 안 됩니다. 첫 번째 질문의 선택지를 바깥 루프로 두고 순서대로 전개하세요.',
     '  다만 계획 내용은 조합마다 스스로 판단해 설계합니다(아래 "계획 구성 규칙" 참고).',
     '  케이스마다 그 조합에 맞게 제목·설명·체크포인트·추천 상품·참고 콘텐츠가 실제로 달라야 합니다. 문장을 그대로 복사하지 마세요.',
     '',
     catalog
       ? `## 사용할 상품 (이 목록에서만 고르고, 가격·브랜드를 바꾸지 마세요)\n형식: 브랜드 | 상품명 | 가격 | 정가 | 특징\n${catalog}`
       : '## 상품\n대한민국에서 실제로 판매되는 상품을 조사해 사용하세요. 웹 검색을 쓸 수 있으면 한국어로 검색하고, 확인되지 않은 가격은 비워 두세요.',
+    '',
+    '상품 판매처 표기 (productCard의 external·mall):',
+    '- "external": false는 지마켓에서 파는 상품이라는 뜻입니다 — 카드에 지마켓 태그가 붙고 "담기"가 가능해요.',
+    '- 올리브영·무신사·쿠팡 같은 다른 몰의 상품은 반드시 **"external": true**로 두고 **"mall"에 몰 이름**을 넣습니다(예: "mall": "올리브영"). external을 빼먹으면 전부 지마켓 상품으로 표시됩니다.',
+    '- 판매처를 지마켓 한쪽으로 몰지 마세요. 그 상품을 실제로 파는 대표 판매처 기준으로 지마켓과 외부몰을 골고루 섞습니다(예: 뷰티는 올리브영, 패션은 무신사).',
     '',
     '## 웹 검색과 외부 콘텐츠',
     '- **검색은 대한민국 기준으로 합니다.** 한국어로 검색하고, 국내 사용자가 실제로 보고 살 수 있는 것만 고릅니다.',
@@ -168,7 +174,7 @@ export function buildScenarioDbPrompt({
     '- 케이스가 많아 내용이 기므로 대화창에 JSON을 길게 붙여넣지 말고, 반드시 다운로드할 수 있는 파일로 만들어 주세요.',
     '- 답변 본문에는 만든 케이스 수와 평가용으로 고른 A/B/C 케이스만 짧게 적어 주세요.',
     '',
-    `다시 강조합니다: 조합 ${total.toLocaleString()}개를 하나도 빠뜨리지 말되 계획 내용은 조합마다 스스로 판단해 설계하고, 결과는 \`ddak-scenario.json\` 파일로 만들어 주세요.`,
+    '다시 강조합니다: 선택지 개수는 질문에 맞게 스스로 정하되(질문당 최대 ' + optionCount + '개), 확정한 선택지의 모든 조합에 케이스를 하나도 빠뜨리지 말고, 계획 내용은 조합마다 스스로 판단해 설계해서 결과를 `ddak-scenario.json` 파일로 만들어 주세요.',
     '(이 파일을 스튜디오의 "결과 가져오기"에서 그대로 업로드합니다.)',
   ].filter((line) => line !== null).join('\n') // null만 제거 — ''는 단락 구분용 빈 줄
 }
@@ -212,9 +218,10 @@ export function parseScenarioDbJson(raw) {
     /* 조건이 실제 설문 질문·선택지를 가리키는지 — 어긋나면 플레이어에서 조용히 안 맞는다 */
     const questions = (Array.isArray(entry.stages.survey) ? entry.stages.survey : [])
       .filter((item) => item?.type === 'surveyQuestion')
+    /* 조건 값은 플레이어가 저장하는 값과 같은 "메인 텍스트"(첫 | 앞)로 비교한다 */
     const optionsById = Object.fromEntries(questions.map((item) => [
       item.id,
-      String(item.props?.options || '').split(',').map((option) => option.trim()).filter(Boolean),
+      splitOptions(item.props?.options).map((option) => option.main).filter(Boolean),
     ]))
     /* 평가 A/B/C 지정 — 슬롯이 어긋나면 평가 탭에서 케이스가 비어 보인다.
        AI 출력 계약은 v1 평면({selected, slot})을 유지한다 — 가져오기 시

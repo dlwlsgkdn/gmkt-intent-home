@@ -312,7 +312,7 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onImport, 
                   </select>
                 </label>
                 <label className="sb-gen-field">
-                  <span>질문당 선택지 수</span>
+                  <span>질문당 최대 선택지 수</span>
                   <select value={optionCount} onChange={(event) => setOptionCount(Number(event.target.value))}>
                     {[2, 3, 4, 5].map((count) => (
                       <option key={count} value={count}>{count}개</option>
@@ -356,11 +356,11 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onImport, 
               </div>
               {mode === 'full' && (
                 <p className={'sb-gen-total' + (totalCases > 60 ? ' sb-gen-total--warn' : '')}>
-                  질문 {questionCount}개 × 선택지 {optionCount}개 = <b>{totalCases.toLocaleString()}개</b> 케이스 + 기본 1개
+                  질문 {questionCount}개 × 선택지 최대 {optionCount}개 = 최대 <b>{totalCases.toLocaleString()}개</b> 케이스 + 기본 1개
                   <small>
                     {totalCases > 60
-                      ? ' — 조합이 많아 AI가 한 번에 다 만들지 못할 수 있어요. 질문 수나 선택지 수를 줄이는 편이 안전합니다.'
-                      : ' — 설문에서 고를 수 있는 모든 조합에 케이스가 하나씩 생깁니다.'}
+                      ? ' — 조합이 많아 AI가 한 번에 다 만들지 못할 수 있어요. 질문 수나 최대 선택지 수를 줄이는 편이 안전합니다.'
+                      : ' — 선택지 개수는 AI가 질문에 맞게 정하고, 그 모든 조합에 케이스가 하나씩 생깁니다.'}
                   </small>
                 </p>
               )}
