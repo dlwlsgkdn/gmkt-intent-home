@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { STAGES, DEVICE_PRESETS, planCasesForScenario, visibleProfileItems } from '../lib/store.js'
+import { STAGES, DEVICE_PRESETS, normalizeScenario, planCasesForScenario, visibleProfileItems } from '../lib/store.js'
 import { LIBRARY } from '../lib/registry.jsx'
 import { PAD, MIN_ITEM_W, layoutCompactUp } from '../lib/layout.js'
 import { buildShareUrl } from '../lib/share.js'
@@ -372,6 +372,7 @@ export default function Builder({ api, scenario }) {
       ...current,
       status: 'published',
       chip,
+      versionAt: snapshot.at,
       versions: [...(current.versions || []), snapshot].slice(-VERSION_LIMIT),
     }))
     api.showToast(`"#${chip}" 칩이 홈 탐색창 밑에 발행됐어요!`)
@@ -388,6 +389,51 @@ export default function Builder({ api, scenario }) {
     setSelectedIds([])
     patchScenario(scenarioFromSnapshot(snapshot))
     api.showToast('발행 시점 버전으로 복원했어요.')
+  }
+
+  /* 현재 시나리오 JSON 입출력 — 홈 드로어의 목록 단위 입출력과 달리 이 시나리오 하나만 다룬다 */
+  const exportScenarioJson = () => {
+    closeMenu()
+    const blob = new Blob([JSON.stringify(scenario, null, 2)], { type: 'application/json' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `ddak-scenario-${(scenario.chip || scenario.title || '시나리오').replace(/\s+/g, '_')}.json`
+    a.click()
+    URL.revokeObjectURL(a.href)
+    api.showToast('현재 시나리오를 JSON 파일로 내보냈어요.')
+  }
+
+  const importScenarioJson = (file) => {
+    closeMenu()
+    if (!file || previewMode) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result)
+        // 홈 드로어에서 내보낸 목록(배열) 파일이면 첫 시나리오를 쓴다
+        const source = Array.isArray(parsed) ? parsed[0] : parsed
+        if (!source || typeof source !== 'object' || !source.stages) throw new Error('시나리오 형식 아님')
+        if (!window.confirm(`"${source.title || '제목 없음'}" 파일 내용으로 현재 시나리오를 교체할까요?\n(현재 상태는 ⌘Z로 복구할 수 있어요)`)) return
+        const next = normalizeScenario(source)
+        history.pushHistory()
+        setSelectedIds([])
+        // 내용 필드만 교체 — id·발행 상태·버전 이력은 현재 시나리오 것을 유지한다
+        patchScenario({
+          title: next.title,
+          chip: next.chip,
+          query: next.query,
+          device: next.device,
+          color: next.color,
+          compact: next.compact,
+          stages: next.stages,
+          planCases: next.planCases,
+        })
+        api.showToast('JSON 파일 내용으로 시나리오를 교체했어요.')
+      } catch {
+        api.showToast('가져오기 실패: 시나리오 JSON 형식을 확인해주세요.')
+      }
+    }
+    reader.readAsText(file)
   }
 
   /* 공유 링크: URL 해시에 시나리오 전체가 담겨 어디서든 바로 실행된다 */
@@ -646,6 +692,8 @@ export default function Builder({ api, scenario }) {
           api.showToast('발행을 취소했어요.')
         }}
         onRestoreVersion={restoreVersion}
+        onExportJson={exportScenarioJson}
+        onImportJsonFile={importScenarioJson}
         onCopyShareLink={copyShareLink}
       >
         {stageKey === 'plan' && activePlanCase && (

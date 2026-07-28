@@ -2550,6 +2550,7 @@
 .sb-menu__item:hover { background: var(--sb-accent-soft); }
 .sb-menu__item--active { background: var(--sb-accent-soft); }
 .sb-menu__item--active strong { color: var(--sb-accent); }
+.sb-menu__item--disabled { opacity: 0.45; pointer-events: none; }
 .sb-menu__item strong { font-size: 13px; font-weight: 400; color: var(--sb-ink); }
 .sb-menu__item small { font-size: var(--sb-t-caption); color: var(--sb-n-400); }
 

@@ -57,10 +57,15 @@ export default function BuilderTopBar({
   onPublish,
   onUnpublish,
   onRestoreVersion,
+  onExportJson,
+  onImportJsonFile,
   onCopyShareLink,
   children,
 }) {
   const versions = scenario.versions || []
+  /* 현재 편집본의 기준 버전(마지막 발행·복원). versionAt 기록이 없는 구버전 데이터는 최신 발행본으로 간주 */
+  const versionAtIndex = versions.findIndex((version) => version.at === scenario.versionAt)
+  const currentVersionNo = versionAtIndex >= 0 ? versionAtIndex + 1 : versions.length
 
   return (
     <div className="sb-topbar">
@@ -123,22 +128,59 @@ export default function BuilderTopBar({
         <div className="sb-topbar__actions">
           <button type="button" className="sb-btn" onClick={onPlay}>시험해보기</button>
 
+          <Dropdown
+            open={openMenu === 'json'}
+            onClose={closeMenu}
+            button={
+              <button type="button" className={'sb-btn' + (openMenu === 'json' ? ' sb-btn--open' : '')} onClick={() => toggleMenu('json')} title="현재 시나리오 JSON 파일 내보내기/가져오기">
+                JSON
+                {chevron}
+              </button>
+            }
+          >
+            <button type="button" className="sb-menu__item" onClick={onExportJson}>
+              <strong>파일로 내보내기</strong>
+              <small>현재 시나리오 전체를 JSON 파일로 저장</small>
+            </button>
+            <label className={'sb-menu__item' + (previewMode ? ' sb-menu__item--disabled' : '')} style={{ cursor: previewMode ? 'not-allowed' : 'pointer' }}>
+              <strong>파일에서 가져오기</strong>
+              <small>JSON 파일 내용으로 현재 시나리오 교체 · ⌘Z 복구 가능</small>
+              <input
+                type="file"
+                accept="application/json,.json"
+                hidden
+                disabled={previewMode}
+                onChange={(event) => {
+                  onImportJsonFile(event.target.files && event.target.files[0])
+                  event.target.value = ''
+                }}
+              />
+            </label>
+          </Dropdown>
+
           {versions.length > 0 && (
             <Dropdown
               open={openMenu === 'version'}
               onClose={closeMenu}
               button={
-                <button type="button" disabled={previewMode} className={'sb-btn' + (openMenu === 'version' ? ' sb-btn--open' : '')} onClick={() => toggleMenu('version')} title="발행 시점 버전 복원">
-                  버전 {versions.length}
+                <button type="button" disabled={previewMode} className={'sb-btn' + (openMenu === 'version' ? ' sb-btn--open' : '')} onClick={() => toggleMenu('version')} title={`발행 시점 버전 복원 — 현재 편집본은 v${currentVersionNo} 기준`}>
+                  버전 v{currentVersionNo}/{versions.length}
                 </button>
               }
             >
               {[...versions].reverse().map((version, index, list) => {
+                const versionNo = list.length - index
+                const isCurrent = versionNo === currentVersionNo
                 const versionCases = version.planCases || planCasesForScenario({ stages: version.stages })
                 const itemCount = versionCases.reduce((sum, planCase) => sum + (planCase.items || []).length, 0)
                 return (
-                  <button key={version.at} type="button" className="sb-menu__item" onClick={() => onRestoreVersion(version)}>
-                    <strong>발행 v{list.length - index}</strong>
+                  <button
+                    key={version.at}
+                    type="button"
+                    className={'sb-menu__item' + (isCurrent ? ' sb-menu__item--active' : '')}
+                    onClick={() => onRestoreVersion(version)}
+                  >
+                    <strong>발행 v{versionNo}{index === 0 ? ' · 최신' : ''}{isCurrent ? ' · 현재 사용 중' : ''}</strong>
                     <small>
                       {new Date(version.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       {' · '}설문 {(version.stages.survey || []).length} · 계획 {versionCases.length}케이스/{itemCount}개

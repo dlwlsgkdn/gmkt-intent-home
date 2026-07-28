@@ -22,7 +22,7 @@ const asFreshCopy = (patch) => ({
 })
 
 /* 내 스튜디오에서 새로 시작하는 사본 — 발행 이력을 끊고 작성 중으로 되돌린다 */
-const asUnpublished = { status: 'draft', versions: [] }
+const asUnpublished = { status: 'draft', versions: [], versionAt: undefined }
 
 export function duplicateScenario(source) {
   const idMap = {}

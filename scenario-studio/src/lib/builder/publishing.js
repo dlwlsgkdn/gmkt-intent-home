@@ -52,9 +52,11 @@ export function publishSnapshot(scenario, planCases, chip) {
 
 export const VERSION_LIMIT = 10
 
-/* 스냅샷 → 시나리오 패치. 깊은 복사해야 복원본과 스냅샷이 편집을 공유하지 않는다 */
+/* 스냅샷 → 시나리오 패치. 깊은 복사해야 복원본과 스냅샷이 편집을 공유하지 않는다.
+   versionAt은 "현재 편집본이 어느 발행 버전에서 왔는지" 표시 — 발행·복원 때만 갱신된다 */
 export function scenarioFromSnapshot(snapshot) {
   return {
+    versionAt: snapshot.at,
     title: snapshot.title,
     chip: snapshot.chip,
     device: snapshot.device,
