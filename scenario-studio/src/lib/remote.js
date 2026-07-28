@@ -26,7 +26,7 @@ const SAME_ORIGIN =
     location.hostname === 'localhost' ||
     location.hostname === '127.0.0.1')
 const API = (SAME_ORIGIN ? '' : 'https://ddak-scenario-studio.vercel.app') + '/api/state'
-const DEBOUNCE_MS = 300
+const DEBOUNCE_MS = 800
 
 export async function fetchRemoteState() {
   const res = await fetch(API, { headers: { accept: 'application/json' } })
@@ -48,7 +48,7 @@ function send(key, data, { keepalive = false } = {}) {
   })
 }
 
-/* 편집 즉시 미러링 — 타이핑 같은 연속 변경만 짧게(300ms) 모아 마지막 것을 전송 */
+/* 타이핑·드래그 같은 연속 변경을 모아 마지막 것을 전송 — 유실 방지는 flushRemoteState가 담당 */
 export function saveRemoteState(key, data) {
   if (!REMOTE_ENABLED) return
   pending[key] = data
