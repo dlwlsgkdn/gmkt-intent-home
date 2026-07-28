@@ -26,7 +26,7 @@ const SAME_ORIGIN =
     location.hostname === 'localhost' ||
     location.hostname === '127.0.0.1')
 const API = (SAME_ORIGIN ? '' : 'https://ddak-scenario-studio.vercel.app') + '/api/state'
-const DEBOUNCE_MS = 1200
+const DEBOUNCE_MS = 300
 
 export async function fetchRemoteState() {
   const res = await fetch(API, { headers: { accept: 'application/json' } })
@@ -35,22 +35,51 @@ export async function fetchRemoteState() {
 }
 
 const timers = {}
+const pending = {} // key → 아직 전송 안 된 최신 값 (flush 대상)
 
-/* 같은 키의 연속 변경(드래그 등)은 마지막 것만 전송 */
+function send(key, data, { keepalive = false } = {}) {
+  return fetch(API, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ key, data }),
+    keepalive,
+  }).then((res) => {
+    if (!res.ok) throw new Error(`PUT ${API} → ${res.status}`)
+  })
+}
+
+/* 편집 즉시 미러링 — 타이핑 같은 연속 변경만 짧게(300ms) 모아 마지막 것을 전송 */
 export function saveRemoteState(key, data) {
   if (!REMOTE_ENABLED) return
+  pending[key] = data
   clearTimeout(timers[key])
   timers[key] = setTimeout(() => {
-    fetch(API, {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ key, data }),
+    delete pending[key]
+    send(key, data).catch((e) => {
+      console.warn('[remote] 서버 저장 실패 (localStorage에는 저장됨):', e)
     })
-      .then((res) => {
-        if (!res.ok) throw new Error(`PUT ${API} → ${res.status}`)
-      })
-      .catch((e) => {
-        console.warn('[remote] 서버 저장 실패 (localStorage에는 저장됨):', e)
-      })
   }, DEBOUNCE_MS)
+}
+
+/* 디바운스 대기 중인 변경을 지금 즉시 전송 — 탭 이탈/숨김 시 유실 방지 */
+export function flushRemoteState() {
+  if (!REMOTE_ENABLED) return
+  for (const key of Object.keys(pending)) {
+    clearTimeout(timers[key])
+    const data = pending[key]
+    delete pending[key]
+    // keepalive: 페이지가 닫혀도 전송 유지 (본문 64KB 초과 등으로 거부되면 일반 전송 재시도)
+    send(key, data, { keepalive: true }).catch(() => {
+      send(key, data).catch((e) => {
+        console.warn('[remote] 이탈 직전 저장 실패 (localStorage에는 저장됨):', e)
+      })
+    })
+  }
+}
+
+if (REMOTE_ENABLED && typeof window !== 'undefined') {
+  window.addEventListener('pagehide', flushRemoteState)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushRemoteState()
+  })
 }

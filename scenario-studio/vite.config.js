@@ -7,7 +7,8 @@ export default defineConfig({
   server: {
     // 개발 중 /api는 Vercel 배포(서버 함수 + Neon DB)로 프록시
     proxy: {
-      '/api': { target: 'https://ddak-scenario-studio.vercel.app', changeOrigin: true },
+      // secure: false — 사내망 TLS 검사(자체 서명 인증서 체인)에서 node가 핸드셰이크를 거부하는 문제 회피
+      '/api': { target: 'https://ddak-scenario-studio.vercel.app', changeOrigin: true, secure: false },
     },
   },
   build: {
