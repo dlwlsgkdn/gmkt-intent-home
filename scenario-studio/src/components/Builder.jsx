@@ -658,6 +658,7 @@ export default function Builder({ api, scenario }) {
     }>
       <BuilderTopBar
         scenario={scenario}
+        remoteSync={api.remoteSync}
         planCases={planCases}
         stageKey={stageKey}
         setStageKey={setStageKey}

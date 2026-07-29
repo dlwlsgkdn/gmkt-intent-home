@@ -1,6 +1,7 @@
 /* 서버 영속화 클라이언트 — /api/state (Vercel Functions + Neon Postgres).
-   localStorage는 즉시 캐시로 그대로 두고, 변경분을 디바운스로 서버에 미러링한다.
-   충돌 정책: 문서(키) 단위 last-write-wins.
+   localStorage는 즉시 캐시(자동), 서버는 **수동 저장** — 업로드는 useWorkspace의
+   pushToServer("서버에 저장" 버튼)만 수행한다. 충돌 정책: 문서(키) 단위 last-write-wins
+   + 저장 직전 행 목록(updatedAt) 비교로 다른 창의 선행 변경을 확인받는다.
 
    키 체계는 계정 단위다: 'account:<id>' 행 + 'accounts-meta'(순서·활성 id) + 'keywords'.
    통짜 'accounts' 블롭은 Vercel 함수 본문 한도(4.5MB)에 닿아 프로필 추가 같은 큰 저장이
@@ -30,7 +31,6 @@ const SAME_ORIGIN =
     location.hostname === 'localhost' ||
     location.hostname === '127.0.0.1')
 const API = (SAME_ORIGIN ? '' : 'https://ddak-scenario-studio.vercel.app') + '/api/state'
-const DEBOUNCE_MS = 800
 
 async function getJson(url) {
   const res = await fetch(url, { headers: { accept: 'application/json' } })
@@ -54,61 +54,14 @@ export async function fetchRemoteKey(key) {
   return out[key] || null
 }
 
-const timers = {}
-const pending = {} // key → 아직 전송 안 된 최신 값 (flush 대상)
-
-function send(key, data, { keepalive = false } = {}) {
+/* 즉시 전송 upsert. data: null 은 삭제 요청이다 (계정 삭제 → 행 삭제) */
+export function saveRemoteStateNow(key, data) {
+  if (!REMOTE_ENABLED) return Promise.resolve()
   return fetch(API, {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ key, data }),
-    keepalive,
   }).then((res) => {
     if (!res.ok) throw new Error(`PUT ${API} → ${res.status}`)
-  })
-}
-
-/* 타이핑·드래그 같은 연속 변경을 모아 마지막 것을 전송 — 유실 방지는 flushRemoteState가 담당.
-   data: null 은 삭제 요청이다 (계정 삭제 → 행 삭제) */
-export function saveRemoteState(key, data) {
-  if (!REMOTE_ENABLED) return
-  pending[key] = data
-  clearTimeout(timers[key])
-  timers[key] = setTimeout(() => {
-    delete pending[key]
-    send(key, data).catch((e) => {
-      console.warn('[remote] 서버 저장 실패 (localStorage에는 저장됨):', e)
-    })
-  }, DEBOUNCE_MS)
-}
-
-/* 디바운스 없이 즉시 전송 — 순서가 중요한 마이그레이션(계정 행 → 메타 → 구 블롭 삭제)용 */
-export function saveRemoteStateNow(key, data) {
-  if (!REMOTE_ENABLED) return Promise.resolve()
-  clearTimeout(timers[key])
-  delete pending[key]
-  return send(key, data)
-}
-
-/* 디바운스 대기 중인 변경을 지금 즉시 전송 — 탭 이탈/숨김 시 유실 방지 */
-export function flushRemoteState() {
-  if (!REMOTE_ENABLED) return
-  for (const key of Object.keys(pending)) {
-    clearTimeout(timers[key])
-    const data = pending[key]
-    delete pending[key]
-    // keepalive: 페이지가 닫혀도 전송 유지 (본문 64KB 초과 등으로 거부되면 일반 전송 재시도)
-    send(key, data, { keepalive: true }).catch(() => {
-      send(key, data).catch((e) => {
-        console.warn('[remote] 이탈 직전 저장 실패 (localStorage에는 저장됨):', e)
-      })
-    })
-  }
-}
-
-if (REMOTE_ENABLED && typeof window !== 'undefined') {
-  window.addEventListener('pagehide', flushRemoteState)
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') flushRemoteState()
   })
 }

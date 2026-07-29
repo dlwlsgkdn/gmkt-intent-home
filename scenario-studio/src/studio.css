@@ -572,6 +572,19 @@
   background: var(--sb-accent-soft);
   color: var(--sb-accent);
 }
+
+/* 서버 수동 저장 버튼 — 상태 점: 주황=미저장, 초록=서버와 동일, 빨강=연결 실패 */
+.sb-sync-btn { display: inline-flex; align-items: center; gap: 6px; }
+.sb-sync-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: var(--sb-r-pill);
+  background: var(--sb-n-300);
+}
+.sb-sync-dot.is-dirty { background: var(--sb-warn); }
+.sb-sync-dot.is-ok { background: var(--sb-success); }
+.sb-sync-dot.is-fail { background: var(--sb-danger); }
 .sb-drawer__list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
 .sb-drawer__empty {
   padding: 28px 18px;

@@ -2,6 +2,7 @@ import React from 'react'
 import { CHIP_COLORS, DEVICE_PRESETS, STAGES, planCasesForScenario } from '../../lib/store.js'
 import { COMPACT_TYPES, LAYOUT_MODES } from '../../lib/layout.js'
 import Dropdown from '../ui/Dropdown.jsx'
+import SyncButton from '../SyncButton.jsx'
 
 /*
  * 빌더 상단 바 — 표시와 이벤트 위임만 한다. 상태와 판단은 전부 Builder가 갖고 있다.
@@ -26,6 +27,7 @@ const chevron = (
 
 export default function BuilderTopBar({
   scenario,
+  remoteSync,
   planCases,
   stageKey,
   setStageKey,
@@ -124,6 +126,8 @@ export default function BuilderTopBar({
         <span className="sb-autosave" title={scenario.updatedAt}>
           자동 저장됨 · {new Date(scenario.updatedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
         </span>
+        <SyncButton sync={remoteSync} small />
+
 
         <div className="sb-topbar__actions">
           <button type="button" className="sb-btn" onClick={onPlay}>시험해보기</button>

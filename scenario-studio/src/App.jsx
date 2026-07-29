@@ -38,10 +38,20 @@ export default function App() {
   }, [toast])
 
   /* ── 시나리오 ── */
+  /* 업데이터가 같은 참조를 돌려주면 updatedAt 도장도 찍지 않는다 — 빌더 진입 시
+     재측정 커밋 같은 무변경 쓰기가 "서버 미저장" 상태를 만들지 않게 */
   const updateScenario = (id, updater) => {
-    setScenarios((prev) => prev.map((scenario) => (
-      scenario.id === id ? { ...updater(scenario), updatedAt: new Date().toISOString() } : scenario
-    )))
+    setScenarios((prev) => {
+      let changed = false
+      const next = prev.map((scenario) => {
+        if (scenario.id !== id) return scenario
+        const out = updater(scenario)
+        if (out === scenario) return scenario
+        changed = true
+        return { ...out, updatedAt: new Date().toISOString() }
+      })
+      return changed ? next : prev
+    })
   }
 
   const removeScenario = (id) => {
@@ -132,6 +142,7 @@ export default function App() {
     isDefaultScenario,
     exportDataBackup: workspace.exportDataBackup,
     importDataBackup: workspace.importDataBackup,
+    remoteSync: workspace.remoteSync,
     goHome,
     openBuilder: (id) => setRoute({ name: 'builder', id }),
     /* resume = { threadId, stage } — 기존 쓰레드를 이어서 해당 단계부터 */

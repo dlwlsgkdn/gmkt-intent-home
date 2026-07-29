@@ -16,26 +16,39 @@ export function useStageItems({ api, scenario, stageKey, planCaseId, previewMode
   const isExplore = stageKey === 'explore'
   const isPlan = stageKey === 'plan'
 
+  /* 업데이터가 같은 참조를 돌려주면 바깥 객체도 그대로 둔다 — updateScenario/patchActive의
+     동일 참조 스킵과 한 몸이다. 이 사슬이 끊기면 무변경 쓰기가 updatedAt을 다시 찍고
+     서버 미저장 배지를 켠다 */
   const write = (updater) => {
     if (isExplore) {
-      api.updateExplore((prev) => ({ ...prev, items: updater(prev.items || []) }))
+      api.updateExplore((prev) => {
+        const items = prev.items || []
+        const next = updater(items)
+        return next === items ? prev : { ...prev, items: next }
+      })
       return
     }
     if (isPlan) {
-      api.updateScenario(scenario.id, (s) => ({
-        ...s,
-        planCases: (s.planCases || planCasesForScenario(s)).map((planCase) =>
-          planCase.id === planCaseId
-            ? { ...planCase, items: updater(planCase.items || []) }
-            : planCase
-        ),
-      }))
+      api.updateScenario(scenario.id, (s) => {
+        const base = s.planCases || planCasesForScenario(s)
+        let changed = false
+        const planCases = base.map((planCase) => {
+          if (planCase.id !== planCaseId) return planCase
+          const items = planCase.items || []
+          const next = updater(items)
+          if (next === items) return planCase
+          changed = true
+          return { ...planCase, items: next }
+        })
+        return changed || base !== s.planCases ? { ...s, planCases } : s
+      })
       return
     }
-    api.updateScenario(scenario.id, (s) => ({
-      ...s,
-      stages: { ...s.stages, [stageKey]: updater(s.stages[stageKey] || []) },
-    }))
+    api.updateScenario(scenario.id, (s) => {
+      const items = s.stages[stageKey] || []
+      const next = updater(items)
+      return next === items ? s : { ...s, stages: { ...s.stages, [stageKey]: next } }
+    })
   }
 
   const setItems = (updater) => {
@@ -44,9 +57,26 @@ export function useStageItems({ api, scenario, stageKey, planCaseId, previewMode
     write(updater)
   }
 
+  /* 재측정 보정이 실제로 아무 좌표도 안 바꿨으면 원본 배열을 돌려줘 쓰기 자체를 없앤다 */
+  const sameGeometry = (prev, next) =>
+    prev === next || (
+      Array.isArray(next) && prev.length === next.length
+      && prev.every((item, index) => {
+        const other = next[index]
+        return item === other || (
+          item.id === other.id && item.x === other.x && item.y === other.y
+          && item.w === other.w && item.h === other.h
+          && item.parentId === other.parentId && item.slot === other.slot
+        )
+      })
+    )
+
   const setItemsFromMeasure = (updater) => {
     if (previewMode) return
-    write(updater)
+    write((items) => {
+      const next = updater(items)
+      return sameGeometry(items, next) ? items : next
+    })
   }
 
   return { setItems, setItemsFromMeasure }

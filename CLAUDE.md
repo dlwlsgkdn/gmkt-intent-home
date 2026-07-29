@@ -27,7 +27,7 @@ cd scenario-studio && npm run build   # vite build && cp -R ../legacy ../docs/le
 
 **데이터 프로필** (`lib/remote.js`): 개발 서버 = `local`(localStorage 전용, 서버 동기화 없음), 빌드 산출물 = `prod`(localStorage + Neon DB 미러링). 로컬에서 운영 DB에 붙으려면 `VITE_DATA_PROFILE=prod npm run dev`. 콘솔 `[remote] 데이터 프로필:` 로그로 확인. 서버 미러링을 운영 DB 없이 검증하려면 목 API(+`VITE_API_PROXY`)를 쓰는 `scenario-studio-mockdb`(포트 5174) 참고.
 
-**서버 미러링은 계정 행 단위** (`api/state.js` + `hooks/useWorkspace.js`): 키는 `account:<id>`·`accounts-meta`(순서·활성 id)·`keywords`. 통짜 `accounts` 블롭은 Vercel 함수 본문 한도(4.5MB)에 닿아 프로필 추가 같은 큰 저장이 조용히 413으로 거부됐던 구 형식 — 하이드레이션이 최초 1회 행으로 마이그레이션(행→메타→블롭 삭제 순서, 중간에 끊겨도 재시도)한다. 저장은 참조 비교로 바뀐 계정 행만 전송하고, 삭제는 `data: null` PUT. 발행 버전 스냅샷은 시나리오 전체 사본이라 이 한도의 주범 — `VERSION_LIMIT`(5)을 늘리지 말 것.
+**서버 동기화는 자동 다운로드 + 수동 업로드** (`api/state.js` + `hooks/useWorkspace.js` + `components/SyncButton.jsx`): 접속 시 서버로 하이드레이션하고, 업로드는 "서버에 저장" 버튼(홈 드로어·빌더 상단바)만 수행한다 — 자동 미러링은 여러 창이 서로를 덮고 실패가 조용해서 제거했다. 저장 직전 `?index=1`(행 목록·updatedAt)로 다른 창의 선행 변경을 감지해 덮어쓰기 확인을 받는다. 키는 계정 행 단위 `account:<id>`·`accounts-meta`(순서·활성 id)·`keywords` — 통짜 `accounts` 블롭은 Vercel 함수 본문 한도(4.5MB)에 닿아 프로필 추가 같은 큰 저장이 조용히 413으로 거부됐던 구 형식으로, 하이드레이션이 최초 1회 행으로 마이그레이션(행→메타→블롭 삭제 순서, 중간에 끊겨도 재시도)한다. 저장은 참조 비교로 바뀐 계정 행만 전송, 삭제는 `data: null` PUT. **계정 객체 참조가 곧 미저장 신호**다: `patchActive`·`updateScenario`·`useStageItems.write`가 무변경 업데이터(같은 참조 반환)를 스킵하는 사슬을 유지할 것 — 끊기면 빌더만 열어도 미저장 배지가 켜진다. 발행 버전 스냅샷은 시나리오 전체 사본이라 페이로드 한도의 주범 — `VERSION_LIMIT`(5)을 늘리지 말 것.
 
 ## 아키텍처 (scenario-studio/src)
 

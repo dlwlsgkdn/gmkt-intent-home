@@ -6,6 +6,7 @@ import { TEMPLATES } from '../lib/templates.js'
 import { hexToRgba, DEVICE_PRESETS, sortByPosition } from '../lib/store.js'
 import { renderItem } from '../lib/registry.jsx'
 import ScenarioGenerationDialog from './builder/ScenarioGenerationDialog.jsx'
+import SyncButton from './SyncButton.jsx'
 
 export default function HomeView({ api }) {
   const [query, setQuery] = useState('')
@@ -291,6 +292,18 @@ export default function HomeView({ api }) {
               </button>
               <input ref={importInputRef} type="file" accept=".json,application/json" className="hidden" onChange={handleImportFile} />
             </div>
+
+            {api.remoteSync?.enabled && (
+              <>
+                <p className="sb-panel-label">서버 저장</p>
+                <p className="sb-drawer__backup-hint">
+                  작업은 이 브라우저에 자동 저장돼요. 서버에 올려야 다른 기기·브라우저에서도 보입니다.
+                </p>
+                <div className="sb-drawer__tools sb-drawer__tools--sync">
+                  <SyncButton sync={api.remoteSync} />
+                </div>
+              </>
+            )}
 
             <p className="sb-panel-label">전체 데이터 백업</p>
             <p className="sb-drawer__backup-hint">모든 프로필·탐색 화면·시나리오·쓰레드·키워드·기기 설정을 포함합니다.</p>
