@@ -297,7 +297,8 @@ export default function HomeView({ api }) {
               <>
                 <p className="sb-panel-label">서버 저장</p>
                 <p className="sb-drawer__backup-hint">
-                  작업은 이 브라우저에 자동 저장돼요. 서버에 올려야 다른 기기·브라우저에서도 보입니다.
+                  프로필·시나리오 만들기, 쓰레드, 가져오기 같은 홈에서의 변경은 서버에 자동 저장돼요.
+                  빌더 편집은 이 버튼으로 올려야 다른 기기·브라우저에서도 보입니다.
                 </p>
                 <div className="sb-drawer__tools sb-drawer__tools--sync">
                   <SyncButton sync={api.remoteSync} />

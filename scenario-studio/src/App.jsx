@@ -23,7 +23,7 @@ export default function App() {
   const goHome = () => setRoute({ name: 'home' })
 
   const workspace = useWorkspace({ showToast, onReset: goHome })
-  const { scenarios, setScenarios } = workspace
+  const { scenarios, setScenarios, requestAutoSync } = workspace
 
   /* 공유 링크(#s=...)로 들어온 경우: 저장하지 않고 바로 체험 */
   const [shared, setShared] = useState(() => {
@@ -54,6 +54,8 @@ export default function App() {
     })
   }
 
+  /* 홈·드로어의 시나리오/쓰레드 CRUD는 단발 트랜잭션이라 requestAutoSync로 서버에도 바로
+     싱크한다 — 빌더 안 연속 편집(updateScenario)만 수동 "서버에 저장"이 담당 */
   const removeScenario = (id) => {
     if (isDefaultScenario(scenarios.find((scenario) => scenario.id === id))) {
       showToast('기본 시나리오는 삭제할 수 없어요.')
@@ -61,11 +63,13 @@ export default function App() {
     }
     setScenarios((prev) => prev.filter((scenario) => scenario.id !== id))
     if (route.id === id) goHome()
+    requestAutoSync()
   }
 
   const registerScenario = (scenario) => {
     setScenarios((prev) => [...prev, scenario])
     setRoute({ name: 'builder', id: scenario.id })
+    requestAutoSync()
     return scenario
   }
 
@@ -91,6 +95,7 @@ export default function App() {
       next.splice(to, 0, moved)
       return next
     })
+    requestAutoSync() // 드래그 중 연속 호출은 디바운스가 한 번으로 모은다
   }
 
   const copyScenario = (id) => {
@@ -98,6 +103,7 @@ export default function App() {
     if (!source) return
     const copy = duplicateScenario(source)
     setScenarios((prev) => [...prev, copy])
+    requestAutoSync()
     showToast(`"${copy.title}" 을(를) 만들었어요. (작성 중 상태)`)
   }
 
@@ -112,6 +118,7 @@ export default function App() {
       return
     }
     setScenarios((prev) => [...prev, ...cleaned])
+    requestAutoSync()
     showToast(`시나리오 ${cleaned.length}개를 가져왔어요.`)
   }
 
@@ -127,6 +134,7 @@ export default function App() {
       const existing = prev.find((thread) => thread.id === entry.id)
       return [{ ...existing, ...entry, updatedAt: new Date().toISOString() }, ...rest].slice(0, 30)
     })
+    requestAutoSync() // 체험 중 단계 이동마다 불리지만 디바운스가 한 번으로 모은다
   }
 
   const api = {
@@ -164,8 +172,14 @@ export default function App() {
     removeAccount: workspace.removeAccount,
     threads: workspace.threads,
     recordThread,
-    removeThread: (id) => workspace.setThreads((prev) => prev.filter((thread) => thread.id !== id)),
-    clearThreads: () => workspace.setThreads([]),
+    removeThread: (id) => {
+      workspace.setThreads((prev) => prev.filter((thread) => thread.id !== id))
+      requestAutoSync()
+    },
+    clearThreads: () => {
+      workspace.setThreads([])
+      requestAutoSync()
+    },
     showToast,
   }
 
@@ -180,6 +194,7 @@ export default function App() {
       setScenarios((prev) => [...prev, scenario])
       exitShared()
       setRoute({ name: 'builder', id: scenario.id })
+      requestAutoSync()
       showToast('공유받은 시나리오를 내 스튜디오로 가져왔어요.')
     }
     return (

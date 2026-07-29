@@ -1,7 +1,9 @@
 /* 서버 영속화 클라이언트 — /api/state (Vercel Functions + Neon Postgres).
-   localStorage는 즉시 캐시(자동), 서버는 **수동 저장** — 업로드는 useWorkspace의
-   pushToServer("서버에 저장" 버튼)만 수행한다. 충돌 정책: 문서(키) 단위 last-write-wins
-   + 저장 직전 행 목록(updatedAt) 비교로 다른 창의 선행 변경을 확인받는다.
+   localStorage는 즉시 캐시(자동). 서버 업로드는 useWorkspace가 두 경로로 수행한다:
+   수동("서버에 저장" 버튼 — 빌더의 연속 편집)과 자동 트랜잭션 싱크(스튜디오 밖 단발
+   작업 — 프로필·시나리오 생성, 쓰레드 기록, 가져오기 등). 충돌 정책: 문서(키) 단위
+   last-write-wins + 저장 직전 행 목록(updatedAt) 비교로 다른 창의 선행 변경을
+   확인받는다(수동은 confirm, 자동은 덮지 않고 멈춰 수동 저장으로 유도).
 
    키 체계는 계정 단위다: 'account:<id>' 행 + 'accounts-meta'(순서·활성 id) + 'keywords'.
    통짜 'accounts' 블롭은 Vercel 함수 본문 한도(4.5MB)에 닿아 프로필 추가 같은 큰 저장이
