@@ -85,7 +85,7 @@ export function normalizeScenario(input = {}) {
     device: 'desktop',
     color: '#5f7465',
     compact: 'vertical', // 'vertical'(위로 스택) | 'horizontal'(왼쪽) | 'none'
-    versions: [], // 발행 시점 스냅샷 (최근 10개)
+    versions: [], // 발행 시점 스냅샷 (최근 5개 — publishing.js VERSION_LIMIT)
     status: 'draft',
     createdAt: now,
     updatedAt: now,

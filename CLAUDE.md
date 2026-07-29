@@ -25,12 +25,14 @@ cd scenario-studio && npm run build   # vite build && cp -R ../legacy ../docs/le
 ```
 개발 서버: `.claude/launch.json`의 `scenario-studio` (포트 5173), 정적 검증용 `pages-static` (포트 8899, 저장소 루트 서빙).
 
-**데이터 프로필** (`lib/remote.js`): 개발 서버 = `local`(localStorage 전용, 서버 동기화 없음), 빌드 산출물 = `prod`(localStorage + Neon DB 미러링). 로컬에서 운영 DB에 붙으려면 `VITE_DATA_PROFILE=prod npm run dev`. 콘솔 `[remote] 데이터 프로필:` 로그로 확인.
+**데이터 프로필** (`lib/remote.js`): 개발 서버 = `local`(localStorage 전용, 서버 동기화 없음), 빌드 산출물 = `prod`(localStorage + Neon DB 미러링). 로컬에서 운영 DB에 붙으려면 `VITE_DATA_PROFILE=prod npm run dev`. 콘솔 `[remote] 데이터 프로필:` 로그로 확인. 서버 미러링을 운영 DB 없이 검증하려면 목 API(+`VITE_API_PROXY`)를 쓰는 `scenario-studio-mockdb`(포트 5174) 참고.
+
+**서버 미러링은 계정 행 단위** (`api/state.js` + `hooks/useWorkspace.js`): 키는 `account:<id>`·`accounts-meta`(순서·활성 id)·`keywords`. 통짜 `accounts` 블롭은 Vercel 함수 본문 한도(4.5MB)에 닿아 프로필 추가 같은 큰 저장이 조용히 413으로 거부됐던 구 형식 — 하이드레이션이 최초 1회 행으로 마이그레이션(행→메타→블롭 삭제 순서, 중간에 끊겨도 재시도)한다. 저장은 참조 비교로 바뀐 계정 행만 전송하고, 삭제는 `data: null` PUT. 발행 버전 스냅샷은 시나리오 전체 사본이라 이 한도의 주범 — `VERSION_LIMIT`(5)을 늘리지 말 것.
 
 ## 아키텍처 (scenario-studio/src)
 
 - `App.jsx` — **앱 셸**: 라우팅(home/builder/player/explore-editor + 공유 링크 모드)과 토스트, 그리고 화면들이 쓰는 `api` 객체 조립. 시나리오 CRUD는 여기, 그 밖은 아래로 위임
-- `hooks/useWorkspace.js` — **계정(프로필별 워크스페이스) 상태와 저장**: localStorage + 서버 미러링. 서버 하이드레이션 가드 2개(가져오기 실패 시 미러링 중단 / 기본값 시드가 사용자 데이터를 덮지 않게)가 여기 있다
+- `hooks/useWorkspace.js` — **계정(프로필별 워크스페이스) 상태와 저장**: localStorage + 서버 미러링(계정 행 단위 — 위 "서버 미러링" 항목). 서버 하이드레이션 가드 2개(가져오기 실패 시 미러링 중단 / 기본값 시드가 사용자 데이터를 덮지 않게)와 구 통짜 블롭 마이그레이션이 여기 있다
 - `lib/scenarioOps.js` — 시나리오 통째 복사(복제·가져오기·공유 채택)의 **id 재발급 규칙**. 아이템 id는 parentId·계획 조건 questionId·평가 기록 키 세 곳에서 참조되므로 한 곳에서 다시 매단다
 - `lib/store.js` — 데이터 계층 **배럴**. 실제 구현은 `lib/store/` 네 모듈:
   - `store/model.js` 시나리오·아이템의 형태와 정규화, STAGES/DEVICE_PRESETS/CHIP_COLORS

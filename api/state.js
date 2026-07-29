@@ -1,9 +1,16 @@
 /* DDAK Scenario Studio 서버 영속화 API — Neon Postgres(jsonb 문서 저장).
-   GET  /api/state            → { accounts?: {data, updatedAt}, keywords?: {data, updatedAt} }
-   PUT  /api/state {key,data} → 해당 키 문서를 통째로 upsert (last-write-wins) */
+   GET  /api/state                → 전체 덤프 { <key>: {data, updatedAt}, ... } (구버전 클라이언트 호환)
+   GET  /api/state?index=1        → [{ key, updatedAt }] 목록만 (본문 없이 어떤 행이 있는지)
+   GET  /api/state?key=<k>        → 해당 키 하나만 { <key>: {data, updatedAt} }
+   PUT  /api/state {key, data}    → 해당 키 문서를 통째로 upsert (문서 단위 last-write-wins)
+   PUT  /api/state {key, data: null} → 해당 키 삭제
+
+   키 체계: 'accounts'(구 통짜 블롭 — 마이그레이션 후 삭제됨) · 'accounts-meta'(계정 순서·활성 id)
+   · 'account:<id>'(계정 하나) · 'keywords'. 계정 단위로 쪼갠 이유: Vercel 함수의 요청/응답
+   본문 한도(4.5MB)를 통짜 블롭이 넘어서면서 프로필 추가 같은 저장이 조용히 거부됐다. */
 import { neon } from '@neondatabase/serverless'
 
-const VALID_KEYS = new Set(['accounts', 'keywords'])
+const KEY_PATTERN = /^(accounts|keywords|accounts-meta|account:[A-Za-z0-9_-]{1,64})$/
 
 let readyPromise
 function getSql() {
@@ -40,6 +47,23 @@ export default async function handler(req, res) {
     await ensureTable(sql)
 
     if (req.method === 'GET') {
+      const { key, index } = req.query || {}
+      if (index) {
+        const rows = await sql`SELECT key, updated_at FROM app_state`
+        res.status(200).json(rows.map((r) => ({ key: r.key, updatedAt: r.updated_at })))
+        return
+      }
+      if (key) {
+        if (!KEY_PATTERN.test(key)) {
+          res.status(400).json({ error: '알 수 없는 key 형식이에요.' })
+          return
+        }
+        const rows = await sql`SELECT key, data, updated_at FROM app_state WHERE key = ${key}`
+        const out = {}
+        for (const r of rows) out[r.key] = { data: r.data, updatedAt: r.updated_at }
+        res.status(200).json(out)
+        return
+      }
       const rows = await sql`SELECT key, data, updated_at FROM app_state`
       const out = {}
       for (const r of rows) out[r.key] = { data: r.data, updatedAt: r.updated_at }
@@ -49,8 +73,13 @@ export default async function handler(req, res) {
 
     if (req.method === 'PUT' || req.method === 'POST') {
       const { key, data } = req.body || {}
-      if (!VALID_KEYS.has(key) || data === undefined) {
-        res.status(400).json({ error: 'key(accounts|keywords)와 data가 필요해요.' })
+      if (!KEY_PATTERN.test(String(key || '')) || data === undefined) {
+        res.status(400).json({ error: 'key와 data가 필요해요. (삭제는 data: null)' })
+        return
+      }
+      if (data === null) {
+        await sql`DELETE FROM app_state WHERE key = ${key}`
+        res.status(200).json({ ok: true, deleted: true })
         return
       }
       await sql`INSERT INTO app_state (key, data, updated_at)

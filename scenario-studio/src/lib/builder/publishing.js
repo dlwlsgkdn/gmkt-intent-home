@@ -38,7 +38,9 @@ export function resolveChipLabel(scenario) {
   return cleaned || fallback
 }
 
-/* 발행 시점 스냅샷 — 최근 10개만 보관한다 */
+/* 발행 시점 스냅샷 — 최근 5개만 보관한다. 스냅샷은 시나리오 전체 사본이라(케이스 73개면
+   개당 ~0.6MB) 개수가 곧 저장 페이로드 크기다 — 서버 미러링이 계정 행 단위(Vercel 본문
+   한도 4.5MB)라 한도를 넉넉히 잡으면 발행 몇 번에 계정 행이 한도를 넘는다 */
 export function publishSnapshot(scenario, planCases, chip) {
   return {
     at: new Date().toISOString(),
@@ -50,7 +52,7 @@ export function publishSnapshot(scenario, planCases, chip) {
   }
 }
 
-export const VERSION_LIMIT = 10
+export const VERSION_LIMIT = 5
 
 /* 스냅샷 → 시나리오 패치. 깊은 복사해야 복원본과 스냅샷이 편집을 공유하지 않는다.
    versionAt은 "현재 편집본이 어느 발행 버전에서 왔는지" 표시 — 발행·복원 때만 갱신된다 */
