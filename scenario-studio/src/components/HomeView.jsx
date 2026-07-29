@@ -3,7 +3,8 @@ import { BgBlobs, FloatingBar, StudioFab, ViewerDeviceControl, ProfileControl } 
 import ExploreFrame from './ExploreFrame.jsx'
 import ThreadPanel from './ThreadPanel.jsx'
 import { TEMPLATES } from '../lib/templates.js'
-import { hexToRgba, DEVICE_PRESETS, sortByPosition } from '../lib/store.js'
+import { classifyImportPayload, createScenariosExport, hexToRgba, DEVICE_PRESETS, sortByPosition } from '../lib/store.js'
+import { scenariosFromImport } from '../lib/scenarioOps.js'
 import { renderItem } from '../lib/registry.jsx'
 import ScenarioGenerationDialog from './builder/ScenarioGenerationDialog.jsx'
 
@@ -15,7 +16,8 @@ export default function HomeView({ api }) {
   const [draggingChipId, setDraggingChipId] = useState(null)
   const [scenarioFilter, setScenarioFilter] = useState('')
   const importInputRef = useRef(null)
-  const backupImportInputRef = useRef(null)
+  // JSON 통합 입출력 다이얼로그: null | {mode:'export'} | {mode:'add', list, count, fileName} | {mode:'restore', payload, fileName, accountCount}
+  const [jsonDialog, setJsonDialog] = useState(null)
   const chipDragRef = useRef(null) // { id, startX, startY, moved }
   const published = api.scenarios.filter((s) => s.status === 'published')
   const filteredScenarios = api.scenarios.filter((scenario) => {
@@ -55,36 +57,11 @@ export default function HomeView({ api }) {
     window.addEventListener('pointerup', up)
   }
 
-  const exportScenarios = () => {
-    if (api.scenarios.length === 0) {
-      api.showToast('내보낼 시나리오가 없어요.')
-      return
-    }
-    const blob = new Blob([JSON.stringify(api.scenarios, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'ddak-scenarios.json'
-    a.click()
-    URL.revokeObjectURL(url)
-    api.showToast(`시나리오 ${api.scenarios.length}개를 JSON으로 내보냈어요.`)
-  }
-
-  const handleImportFile = (e) => {
-    const file = e.target.files && e.target.files[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => {
-      try {
-        api.importScenarios(JSON.parse(reader.result))
-      } catch (err) {
-        api.showToast('가져오기 실패: JSON 형식을 확인해주세요.')
-      }
-    }
-    reader.readAsText(file)
-    e.target.value = ''
-  }
-
+  /* ── 드로어 JSON 통합 입출력 ──
+     내보내기: 범위(시나리오 목록/전체 백업)를 다이얼로그에서 고른 뒤 공통 봉투로 저장.
+     가져오기: 파일 형식을 자동 감지(classifyImportPayload)해 동작별 확인 다이얼로그
+     (목록 추가 / 전체 교체)로 갈라진다 — 파일이 어느 버튼용인지 기억할 필요가 없다.
+     빌더의 현재 시나리오 입출력은 별도 유지(현재 열린 시나리오에 덮는 컨텍스트 동작). */
   const downloadJson = (data, filename) => {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -95,28 +72,64 @@ export default function HomeView({ api }) {
     URL.revokeObjectURL(url)
   }
 
-  const exportDataBackup = () => {
-    const date = new Date().toISOString().slice(0, 10)
-    downloadJson(api.exportDataBackup(), `ddak-studio-backup-${date}.json`)
+  const today = () => new Date().toISOString().slice(0, 10)
+
+  const exportScenarioList = () => {
+    if (api.scenarios.length === 0) {
+      api.showToast('내보낼 시나리오가 없어요.')
+      return
+    }
+    downloadJson(createScenariosExport(api.scenarios), `ddak-scenarios-${today()}.json`)
+    setJsonDialog(null)
+    api.showToast(`시나리오 ${api.scenarios.length}개를 JSON으로 내보냈어요.`)
+  }
+
+  const exportWorkspaceBackup = () => {
+    downloadJson(api.exportDataBackup(), `ddak-studio-backup-${today()}.json`)
+    setJsonDialog(null)
     api.showToast(`전체 데이터를 백업했어요. (프로필 ${api.accounts.length}개)`)
   }
 
-  const handleBackupImportFile = (e) => {
+  const handleJsonFile = (e) => {
     const file = e.target.files && e.target.files[0]
     if (!file) return
     const reader = new FileReader()
     reader.onload = () => {
       try {
-        const payload = JSON.parse(reader.result)
-        if (!window.confirm('현재 브라우저의 모든 프로필·탐색·시나리오·쓰레드와 공통 설정을 백업 파일로 교체할까요?')) return
-        if (api.importDataBackup(payload)) setDrawerOpen(false)
+        const detected = classifyImportPayload(JSON.parse(reader.result))
+        if (detected.kind === 'workspace') {
+          const metaParts = []
+          if (Array.isArray(detected.payload?.data?.accounts)) metaParts.push(`프로필 ${detected.payload.data.accounts.length}개`)
+          if (detected.payload?.exportedAt) metaParts.push(`${String(detected.payload.exportedAt).slice(0, 10)} 내보냄`)
+          setJsonDialog({ mode: 'restore', payload: detected.payload, fileName: file.name, meta: metaParts.join(' · ') })
+        } else if (detected.kind === 'scenarios') {
+          const cleaned = scenariosFromImport(detected.scenarios)
+          if (!cleaned || cleaned.length === 0) {
+            api.showToast('가져올 수 있는 시나리오가 없어요.')
+            return
+          }
+          setJsonDialog({ mode: 'add', list: detected.scenarios, count: cleaned.length, fileName: file.name })
+        } else {
+          api.showToast('알아볼 수 없는 JSON이에요. DDAK에서 내보낸 파일인지 확인해주세요.')
+        }
       } catch (err) {
-        api.showToast('전체 복원 실패: JSON 형식을 확인해주세요.')
+        api.showToast('가져오기 실패: JSON 형식을 확인해주세요.')
       }
     }
-    reader.onerror = () => api.showToast('전체 복원 실패: 파일을 읽을 수 없어요.')
+    reader.onerror = () => api.showToast('가져오기 실패: 파일을 읽을 수 없어요.')
     reader.readAsText(file)
     e.target.value = ''
+  }
+
+  const confirmAddScenarios = () => {
+    api.importScenarios(jsonDialog.list)
+    setJsonDialog(null)
+  }
+
+  const confirmRestore = () => {
+    const ok = api.importDataBackup(jsonDialog.payload)
+    setJsonDialog(null)
+    if (ok) setDrawerOpen(false)
   }
 
   /* 발행 칩 목록 — 탐색 아이템의 "발행 칩 목록" 컴포넌트 자리에 렌더된다 */
@@ -281,29 +294,15 @@ export default function HomeView({ api }) {
               />
             )}
             <div className="sb-drawer__tools">
-              <button type="button" onClick={exportScenarios}>
+              <button type="button" onClick={() => setJsonDialog({ mode: 'export' })}>
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16" /></svg>
-                내보내기
+                JSON 내보내기
               </button>
               <button type="button" onClick={() => importInputRef.current && importInputRef.current.click()}>
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M12 16V4m0 0L8 8m4-4l4 4M4 20h16" /></svg>
-                가져오기
+                JSON 가져오기
               </button>
-              <input ref={importInputRef} type="file" accept=".json,application/json" className="hidden" onChange={handleImportFile} />
-            </div>
-
-            <p className="sb-panel-label">전체 데이터 백업</p>
-            <p className="sb-drawer__backup-hint">모든 프로필·탐색 화면·시나리오·쓰레드·키워드·기기 설정을 포함합니다.</p>
-            <div className="sb-drawer__tools sb-drawer__tools--backup">
-              <button type="button" onClick={exportDataBackup}>
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16" /></svg>
-                전체 백업
-              </button>
-              <button type="button" onClick={() => backupImportInputRef.current && backupImportInputRef.current.click()}>
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M12 16V4m0 0L8 8m4-4l4 4M4 20h16" /></svg>
-                전체 복원
-              </button>
-              <input ref={backupImportInputRef} type="file" accept=".json,application/json" className="hidden" onChange={handleBackupImportFile} />
+              <input ref={importInputRef} type="file" accept=".json,application/json" className="hidden" onChange={handleJsonFile} />
             </div>
 
             <div className="sb-drawer__list">
@@ -364,6 +363,78 @@ export default function HomeView({ api }) {
           onClose={() => setScenarioGenOpen(false)}
           onToast={api.showToast}
         />
+      )}
+
+      {/* JSON 통합 입출력 — 내보내기는 범위 선택, 가져오기는 자동 감지 결과별 확인 */}
+      {jsonDialog && (
+        <div
+          className="sb-llm-modal"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setJsonDialog(null)
+          }}
+        >
+          <section className="sb-llm-dialog sb-json-dialog" role="dialog" aria-modal="true" aria-labelledby="sb-json-title">
+            <div className="sb-json-dialog__body">
+              <div className="sb-json-dialog__head">
+                <h2 id="sb-json-title" className="sb-json-dialog__title">
+                  {jsonDialog.mode === 'export' ? 'JSON 내보내기' : jsonDialog.mode === 'add' ? '시나리오 가져오기' : '전체 복원'}
+                </h2>
+                <button type="button" className="sb-icon-btn" onClick={() => setJsonDialog(null)} aria-label="닫기">×</button>
+              </div>
+
+              {jsonDialog.mode === 'export' && (
+                <div className="sb-json-dialog__options">
+                  <button type="button" className="sb-json-option" onClick={exportScenarioList}>
+                    <strong>시나리오 목록</strong>
+                    <small>
+                      현재 프로필의 시나리오 {api.scenarios.length}개.
+                      다른 프로필·브라우저에서 "JSON 가져오기"로 추가할 수 있어요.
+                    </small>
+                  </button>
+                  <button type="button" className="sb-json-option" onClick={exportWorkspaceBackup}>
+                    <strong>전체 백업</strong>
+                    <small>
+                      프로필 {api.accounts.length}개 전체 + 탐색 화면·쓰레드·키워드·기기 설정.
+                      복원하면 기존 데이터를 통째로 교체해요.
+                    </small>
+                  </button>
+                </div>
+              )}
+
+              {jsonDialog.mode === 'add' && (
+                <>
+                  <p className="sb-json-dialog__note">
+                    「{jsonDialog.fileName}」에서 시나리오 {jsonDialog.count}개를 찾았어요.
+                    "{(api.profile && api.profile.name) || '사용자'}" 프로필에 추가할까요? 기존 시나리오는 그대로 둡니다.
+                  </p>
+                  <div className="sb-json-dialog__actions">
+                    <button type="button" className="sb-btn sb-btn--ghost" onClick={() => setJsonDialog(null)}>취소</button>
+                    <button type="button" className="sb-btn sb-btn--primary" onClick={confirmAddScenarios}>
+                      {jsonDialog.count}개 추가
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {jsonDialog.mode === 'restore' && (
+                <>
+                  <p className="sb-json-dialog__note">
+                    「{jsonDialog.fileName}」은 전체 백업 파일이에요{jsonDialog.meta ? ` (${jsonDialog.meta})` : ''}.
+                  </p>
+                  <p className="sb-json-dialog__note sb-json-dialog__note--danger">
+                    복원하면 현재 브라우저의 모든 프로필·탐색·시나리오·쓰레드·키워드·기기 설정이
+                    이 파일 내용으로 교체돼요. 되돌릴 수 없어요.
+                  </p>
+                  <div className="sb-json-dialog__actions">
+                    <button type="button" className="sb-btn sb-btn--ghost" onClick={() => setJsonDialog(null)}>취소</button>
+                    <button type="button" className="sb-btn sb-btn--danger" onClick={confirmRestore}>전체 교체</button>
+                  </div>
+                </>
+              )}
+            </div>
+          </section>
+        </div>
       )}
     </>
   )

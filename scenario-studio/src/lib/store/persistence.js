@@ -137,25 +137,62 @@ export function saveAccounts(accounts, activeId) {
   writeJson(ACCOUNTS_KEY, { accounts, activeId })
 }
 
-/* ── 전체 로컬 데이터 JSON 백업 ── */
+/* ── JSON 파일 입출력 (드로어 통합 입출력의 형식 계층) ──
+   내보내기는 공통 봉투 { format: 'ddak-export', version, scope, exportedAt, data } 하나로
+   통일하고 scope('scenarios' | 'workspace')로 범위를 구분한다. 가져오기는 봉투 없이
+   내보냈던 구형 파일(맨 시나리오 배열·빌더의 시나리오 객체·구 백업 봉투)도 계속 인식한다. */
+export const EXPORT_FORMAT = 'ddak-export'
+export const EXPORT_VERSION = 1
+
+const isObject = (value) => !!value && typeof value === 'object' && !Array.isArray(value)
+
+export function createScenariosExport(scenarios) {
+  return {
+    format: EXPORT_FORMAT,
+    version: EXPORT_VERSION,
+    scope: 'scenarios',
+    exportedAt: new Date().toISOString(),
+    data: scenarios,
+  }
+}
+
 export function createDataBackup({ accounts, activeAccountId, keywords, viewerDevice }) {
   return {
-    format: BACKUP_FORMAT,
-    version: BACKUP_VERSION,
+    format: EXPORT_FORMAT,
+    version: EXPORT_VERSION,
+    scope: 'workspace',
     exportedAt: new Date().toISOString(),
     data: { accounts, activeAccountId, keywords, viewerDevice },
   }
 }
 
-const isObject = (value) => !!value && typeof value === 'object' && !Array.isArray(value)
+/* 가져온 JSON이 무엇인지 판별 — 드로어의 단일 가져오기 입구가 확인 다이얼로그를 고르는 근거.
+   시나리오 판별 기준(stages 객체)은 빌더 가져오기와 같다. 반환: kind='workspace'(전체 복원,
+   payload는 parseDataBackup에 그대로 전달) | 'scenarios'(목록 추가) | 'unknown' */
+export function classifyImportPayload(payload) {
+  if (Array.isArray(payload)) return { kind: 'scenarios', scenarios: payload } // 구형 목록 내보내기
+  if (!isObject(payload)) return { kind: 'unknown' }
+  if (payload.format === EXPORT_FORMAT) {
+    if (payload.scope === 'workspace') return { kind: 'workspace', payload }
+    if (payload.scope === 'scenarios' && Array.isArray(payload.data)) return { kind: 'scenarios', scenarios: payload.data }
+    if (payload.scope === 'scenario' && isObject(payload.data)) return { kind: 'scenarios', scenarios: [payload.data] }
+    return { kind: 'unknown' }
+  }
+  if (payload.format === BACKUP_FORMAT) return { kind: 'workspace', payload } // 구형 전체 백업
+  if (isObject(payload.stages)) return { kind: 'scenarios', scenarios: [payload] } // 빌더의 시나리오 한 개 파일
+  return { kind: 'unknown' }
+}
 
 /* 외부 JSON을 앱 상태에 넣기 전 구조를 검증하고 현재 데이터 모델로 보정한다.
-   복원은 기존 데이터를 통째로 갈아끼우므로, 통과 조건을 느슨하게 두지 않는다. */
+   복원은 기존 데이터를 통째로 갈아끼우므로, 통과 조건을 느슨하게 두지 않는다.
+   신 봉투(ddak-export/workspace)와 구 봉투(BACKUP_FORMAT) 둘 다 받는다. */
 export function parseDataBackup(payload) {
-  if (!isObject(payload) || payload.format !== BACKUP_FORMAT) {
+  const isNew = isObject(payload) && payload.format === EXPORT_FORMAT && payload.scope === 'workspace'
+  const isLegacy = isObject(payload) && payload.format === BACKUP_FORMAT
+  if (!isNew && !isLegacy) {
     throw new Error('DDAK 전체 백업 파일이 아니에요.')
   }
-  if (payload.version !== BACKUP_VERSION) {
+  if (payload.version !== (isNew ? EXPORT_VERSION : BACKUP_VERSION)) {
     throw new Error(`지원하지 않는 백업 버전이에요. (버전 ${payload.version || '없음'})`)
   }
 

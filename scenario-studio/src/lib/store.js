@@ -47,6 +47,8 @@ export {
 export {
   BACKUP_FORMAT,
   BACKUP_VERSION,
+  EXPORT_FORMAT,
+  EXPORT_VERSION,
   createAccount,
   normalizeAccountsState,
   loadAccounts,
@@ -56,5 +58,7 @@ export {
   loadViewerDevice,
   saveViewerDevice,
   createDataBackup,
+  createScenariosExport,
+  classifyImportPayload,
   parseDataBackup,
 } from './store/persistence.js'

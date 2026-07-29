@@ -561,17 +561,44 @@
   transition: color var(--sb-dur) var(--sb-ease), background-color var(--sb-dur) var(--sb-ease), border-color var(--sb-dur) var(--sb-ease), box-shadow var(--sb-dur) var(--sb-ease);
 }
 .sb-drawer__tools button:hover { border-color: var(--sb-n-400); background: var(--sb-n-50); }
-.sb-drawer__backup-hint {
-  margin: -6px 0 9px;
-  color: #7d8a80;
-  font-size: var(--sb-t-micro);
-  line-height: 1.5;
+/* JSON 통합 입출력 다이얼로그 — 내보내기 범위 선택 / 가져오기 자동 감지 결과별 확인 */
+.sb-json-dialog { width: min(440px, 100%); background: #fff; }
+.sb-json-dialog__body { padding: 18px 24px 20px; }
+.sb-json-dialog__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
 }
-.sb-drawer__tools--backup button {
-  border-color: rgba(95, 116, 101, 0.32);
-  background: var(--sb-accent-soft);
-  color: var(--sb-accent);
+.sb-json-dialog__title {
+  margin: 0;
+  color: var(--sb-ink);
+  font-size: var(--sb-t-title);
+  letter-spacing: -0.02em;
 }
+.sb-json-dialog__options { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+.sb-json-option {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 13px 15px;
+  border: 1px solid var(--sb-line);
+  border-radius: var(--sb-r-lg);
+  background: #fff;
+  text-align: left;
+  transition: border-color var(--sb-dur) var(--sb-ease), background-color var(--sb-dur) var(--sb-ease);
+}
+.sb-json-option:hover { border-color: var(--sb-n-400); background: var(--sb-n-50); }
+.sb-json-option strong { color: var(--sb-ink); font-size: var(--sb-t-small); }
+.sb-json-option small { color: var(--sb-muted); font-size: var(--sb-t-micro); line-height: 1.5; }
+.sb-json-dialog__note {
+  margin: 14px 0 0;
+  color: var(--sb-ink-2);
+  font-size: var(--sb-t-caption);
+  line-height: 1.55;
+}
+.sb-json-dialog__note--danger { color: var(--sb-danger); }
+.sb-json-dialog__actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 
 /* 서버 수동 저장 버튼 — 상태 점: 주황=미저장, 초록=서버와 동일, 빨강=연결 실패 */
 .sb-sync-btn { display: inline-flex; align-items: center; gap: 6px; }

@@ -39,7 +39,7 @@ cd scenario-studio && npm run build   # vite build && cp -R ../legacy ../docs/le
   - `store/model.js` 시나리오·아이템의 형태와 정규화, STAGES/DEVICE_PRESETS/CHIP_COLORS
   - `store/planCases.js` 조건 형태와 평가 규칙. **폴백은 언제나 하나·목록의 끝**이라는 불변식을 강제
   - `store/defaults.js` 첫 실행 기본값(탐색 페이지·프로필·키워드)과 exploreItemsFrom/visibleProfileItems
-  - `store/persistence.js` **localStorage를 아는 유일한 곳** + 계정(구 키 마이그레이션)·전체 백업
+  - `store/persistence.js` **localStorage를 아는 유일한 곳** + 계정(구 키 마이그레이션)·전체 백업·JSON 입출력 봉투(`ddak-export` + `classifyImportPayload` — 구형 파일 3종도 계속 인식)
 - `lib/layout.js` — **레이아웃 엔진** (순수 함수): resolveCollision(겹침 해소, 다중 이동+잠금 지원), previewResolve(드래그 미리보기), compactItems(COMPACT_TYPES: vertical/horizontal/none — 핀·잠금 제외 스택), layoutStack/TwoColumns/CompactUp, alignItems(다중 정렬), PAD/GAP 상수
 - `lib/builder/` — 빌더가 쓰는 순수 로직: `geometry.js`(좌표·슬롯·컨테이너 판정 — 필요한 값을 전부 인자로 받는다), `layoutOps.js`(겹침 해소·컴팩트 **커밋 관문 settle**), `itemClipboard.js`(사본 만들기), `publishing.js`(발행 점검·칩 라벨·버전 스냅샷·기기 폭 환산)
 - `lib/share.js` — 공유 링크: 시나리오를 `#s=<base64url JSON>` 해시로 인코딩/디코딩 (서버 불필요)
@@ -76,7 +76,7 @@ cd scenario-studio && npm run build   # vite build && cp -R ../legacy ../docs/le
 - `components/Frame.jsx` — 공통 프레임 조각: BgBlobs, FloatingBar(하단, 햄버거=쓰레드 패널, 버튼 위치→패널 방향), ViewerDeviceControl(기기 폭), ProfileControl(프로필 전환/추가/삭제), StudioFab
 - `components/ThreadPanel.jsx` — 쇼핑 쓰레드 히스토리 패널 (원본 history-sidebar 룩, 좌/우/중앙 등장, 아코디언 카드, 이어보기/삭제)
 - `components/Player.jsx` — 시나리오 실행(설문→계획 스테퍼). 기기 폭 반영, hidden 아이템 제외, 다시 시작, 응답/프로필 제외 상태를 ctx.player로 공급, **쓰레드 자동 기록**(체험 1회 = 쓰레드 1개)
-- `components/HomeView.jsx` — 홈. 발행 칩(색상/드래그 순서변경/클릭 실행), 좌상단 기기+프로필 컨트롤, 시나리오 드로어(템플릿·복제·JSON 입출력·전체 백업), 쓰레드 패널
+- `components/HomeView.jsx` — 홈. 발행 칩(색상/드래그 순서변경/클릭 실행), 좌상단 기기+프로필 컨트롤, 시나리오 드로어(템플릿·복제·**JSON 통합 입출력** — 내보내기는 범위 선택(시나리오 목록/전체 백업), 가져오기는 `classifyImportPayload` 자동 감지 후 동작별 확인 다이얼로그(추가/전체 교체). 빌더의 현재 시나리오 입출력은 별도), 쓰레드 패널
 - `components/ExploreFrame.jsx` — 구버전 설정 기반 탐색 렌더러 (explore.items가 없을 때의 안전망 전용)
 - `components/ExploreEditor.jsx` — 사용자 프로필 + 키워드 사전 편집기 (탐색 콘텐츠 편집은 빌더 "탐색" 탭으로 이동)
 - `studio.css` — 스튜디오 전용 스타일 (`sb-` 접두사) + 원본 CSS 클래스의 절대배치 무력화 오버라이드

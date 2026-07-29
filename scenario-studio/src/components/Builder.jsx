@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { STAGES, DEVICE_PRESETS, normalizeScenario, planCasesForScenario, visibleProfileItems } from '../lib/store.js'
+import { STAGES, DEVICE_PRESETS, classifyImportPayload, normalizeScenario, planCasesForScenario, visibleProfileItems } from '../lib/store.js'
 import { LIBRARY } from '../lib/registry.jsx'
 import { PAD, MIN_ITEM_W, layoutCompactUp } from '../lib/layout.js'
 import { buildShareUrl } from '../lib/share.js'
@@ -409,9 +409,13 @@ export default function Builder({ api, scenario }) {
     const reader = new FileReader()
     reader.onload = () => {
       try {
-        const parsed = JSON.parse(reader.result)
-        // 홈 드로어에서 내보낸 목록(배열) 파일이면 첫 시나리오를 쓴다
-        const source = Array.isArray(parsed) ? parsed[0] : parsed
+        // 드로어와 같은 감지기를 공유 — 봉투(ddak-export)·목록(배열)이면 첫 시나리오를 쓴다
+        const detected = classifyImportPayload(JSON.parse(reader.result))
+        if (detected.kind === 'workspace') {
+          api.showToast('전체 백업 파일이에요. 홈 드로어의 "JSON 가져오기"에서 복원해주세요.')
+          return
+        }
+        const source = detected.kind === 'scenarios' ? detected.scenarios[0] : null
         if (!source || typeof source !== 'object' || !source.stages) throw new Error('시나리오 형식 아님')
         if (!window.confirm(`"${source.title || '제목 없음'}" 파일 내용으로 현재 시나리오를 교체할까요?\n(현재 상태는 ⌘Z로 복구할 수 있어요)`)) return
         const next = normalizeScenario(source)
