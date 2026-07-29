@@ -13,8 +13,9 @@ docs/              ← 빌드 산출물 = 배포 사이트 (빌드 시 legacy/�
 index.html         ← ./docs/ 리다이렉트
 ```
 
-- **배포**: GitHub Pages가 main 브랜치를 서빙. `https://dlwlsgkdn.github.io/gmkt-intent-home/docs/` (Settings→Pages를 main+/docs로 바꾸면 루트가 됨)
-- **빌드/배포 절차**: `npm run build` (docs/ 갱신) → `git add -A && git commit` → 사용자가 `git push origin main` (Claude는 키체인 접근 불가로 푸시 못 함)
+- **배포 (주)**: Vercel `ddak-scenario-studio`가 GitHub main 푸시마다 **원격 빌드·배포**. `https://ddak-scenario-studio.vercel.app` — vercel.json이 루트(API 의존성)+scenario-studio를 설치하고 scenario-studio를 빌드해 outputDirectory `docs`를 서빙한다. API(`api/state.js`)도 같은 프로젝트라, **로컬 Node 없이 소스 푸시만으로 배포된다**
+- **배포 (레거시)**: GitHub Pages가 커밋된 docs/를 서빙. `https://dlwlsgkdn.github.io/gmkt-intent-home/docs/` — 로컬 빌드로 docs/를 커밋할 때만 갱신된다 (자동 아님)
+- **빌드/배포 절차**: 소스 커밋 → 사용자가 `git push origin main` (Claude는 푸시 못 함) → Vercel 자동 빌드. GitHub Pages까지 최신으로 맞추려면 로컬 `npm run build`(docs/ 갱신) 후 커밋
 
 ## 명령어 (중요: Node 경로)
 

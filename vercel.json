@@ -1,4 +1,5 @@
 {
-  "buildCommand": null,
+  "installCommand": "npm install && cd scenario-studio && npm install",
+  "buildCommand": "cd scenario-studio && npm run build",
   "outputDirectory": "docs"
 }
