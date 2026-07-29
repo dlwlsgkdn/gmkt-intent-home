@@ -3744,7 +3744,7 @@
   flex-shrink: 0;
 }
 .sb-profile-ctl__menu { min-width: 230px; }
-/* 서버 하이드레이션 배지 — 프로필 버튼 안, 이름 옆 구분선 뒤 */
+/* 서버 동기화 배지 — 프로필 버튼 안, 이름 옆 구분선 뒤 (동기화 중 텍스트·미저장 점·연결 안 됨) */
 .sb-profile-ctl__sync {
   display: inline-flex;
   align-items: center;
@@ -3755,11 +3755,40 @@
   color: var(--sb-muted);
 }
 .sb-profile-ctl__sync--fail { color: var(--sb-danger); }
-.sb-profile-ctl__hint {
+/* 프로필 드롭다운 상단의 서버 저장 상태 행 — 홈의 유일한 서버 저장 표시/트리거.
+   자세한 안내는 느낌표(.sb-sync-info)를 눌렀을 때만 아래로 펼친다 */
+.sb-profile-ctl__syncrow {
+  margin-bottom: 4px;
   padding: 9px 12px;
   border-bottom: 1px solid var(--sb-line);
   background: var(--sb-n-50);
+  border-radius: var(--sb-r-md) var(--sb-r-md) 0 0;
+  font-size: var(--sb-t-caption);
+  color: var(--sb-ink-2);
+}
+.sb-profile-ctl__syncline { display: flex; align-items: center; gap: 7px; }
+.sb-profile-ctl__syncline .sb-sync-dot { flex: none; }
+.sb-profile-ctl__synclabel { flex: 1; min-width: 0; }
+.sb-sync-info {
+  flex: none;
+  width: 17px;
+  height: 17px;
+  border-radius: var(--sb-r-pill);
+  border: 1px solid var(--sb-line);
+  background: #fff;
+  color: var(--sb-muted);
   font-size: var(--sb-t-micro);
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color var(--sb-dur) var(--sb-ease), border-color var(--sb-dur) var(--sb-ease);
+}
+.sb-sync-info:hover { color: var(--sb-ink); border-color: var(--sb-n-400); }
+.sb-sync-tip {
+  margin: 8px 0 2px;
+  font-size: var(--sb-t-micro);
+  line-height: 1.55;
   color: var(--sb-muted);
 }
 .sb-profile-ctl__row { display: flex; align-items: center; gap: 2px; }

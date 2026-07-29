@@ -31,7 +31,8 @@ const AUTO_SYNC_DELAY_MS = 1200
  *
  * 서버 동기화는 "자동 다운로드 + 두 갈래 업로드"다. 접속 시 서버 상태로 하이드레이션하고,
  * 업로드는 두 경로로 일어난다:
- *   · 수동 — "서버에 저장" 버튼(홈 드로어·빌더 상단바). 빌더의 연속 편집이 대상.
+ *   · 수동 — "서버에 저장" 버튼(빌더 상단바 SyncButton, 홈은 프로필 드롭다운의 상태 행).
+ *     빌더의 연속 편집이 대상.
  *   · 자동(트랜잭션 싱크) — 스튜디오 밖의 단발 쓰기 트랜잭션(프로필 생성·삭제, 시나리오
  *     생성·복제·가져오기·삭제·칩 순서, 쓰레드 기록·삭제, 전체 복원)은 requestAutoSync()로
  *     짧은 디바운스 뒤 바로 올린다. 프로필 전환은 쓰기가 아니라서 제외.
@@ -441,7 +442,7 @@ export function useWorkspace({ showToast, onReset }) {
     importDataBackup,
     /* 스튜디오 밖 단발 트랜잭션의 즉시 서버 싱크 요청 — App.jsx의 시나리오·쓰레드 CRUD가 부른다 */
     requestAutoSync,
-    /* 서버 수동 저장 — 버튼(홈 드로어·빌더 상단바)이 읽는 상태 한 벌 */
+    /* 서버 수동 저장 — 빌더 상단바 SyncButton과 홈 프로필 드롭다운 상태 행이 읽는 상태 한 벌 */
     remoteSync: {
       enabled: REMOTE_ENABLED,
       ready: remoteReady,

@@ -95,23 +95,36 @@ export function ViewerDeviceControl({ deviceKey, onChange }) {
 
 /* 좌상단 사용자 프로필 전환 컨트롤 — 기기(화면 폭) 컨트롤 옆에 나란히 (홈 전용).
    프로필마다 탐색(DDAK) 페이지·시나리오·쓰레드가 따로 관리된다.
-   접속 직후에는 서버 하이드레이션 상태를 함께 표시한다 — 지금 보이는 프로필이
-   서버 상태로 곧 바뀔 수 있음을 알리는 자리 (완료되면 배지가 사라진다) */
+   홈의 서버 저장 상태는 여기가 유일한 표시 자리다: 버튼에는 주의가 필요한 상태만
+   배지로(동기화 중 펄스·미저장 점·연결 안 됨), 드롭다운 상단 행에 상태+저장 버튼,
+   자세한 설명은 느낌표 아이콘을 눌렀을 때만 펼친다 */
 export function ProfileControl({ api }) {
   const [open, setOpen] = useState(false)
+  const [syncInfoOpen, setSyncInfoOpen] = useState(false) // 느낌표 아이콘 → 서버 저장 안내 펼침
   const name = (api.profile && api.profile.name) || '사용자'
   const sync = api.remoteSync
+  const close = () => { setOpen(false); setSyncInfoOpen(false) }
+  const syncLabel = !sync ? '' : sync.busy
+    ? '서버 저장 중…'
+    : sync.hydrating
+      ? '서버에서 불러오는 중…'
+      : sync.failed
+        ? '서버 연결 안 됨'
+        : sync.dirty
+          ? `미저장 변경 ${sync.dirtyCount}개`
+          : '서버에 저장됨'
+  const syncDot = !sync ? '' : sync.hydrating ? ' is-hydrating' : sync.failed ? ' is-fail' : sync.dirty ? ' is-dirty' : ' is-ok'
   return (
     <div className="sb-viewer-ctl sb-profile-ctl">
       <Dropdown
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={close}
         menuClass="sb-viewer-ctl__menu sb-profile-ctl__menu"
         button={
           <button
             type="button"
             className="sb-viewer-ctl__btn"
-            onClick={() => setOpen((v) => !v)}
+            onClick={() => (open ? close() : setOpen(true))}
             title={sync?.hydrating ? '서버에서 프로필·시나리오를 불러오는 중이에요' : '사용자 프로필 전환'}
           >
             <span className="sb-profile-ctl__avatar">{name.slice(0, 1)}</span>
@@ -131,12 +144,43 @@ export function ProfileControl({ api }) {
                 연결 안 됨
               </span>
             )}
+            {sync?.enabled && sync.ready && sync.dirty && (
+              <span className="sb-profile-ctl__sync" title="서버에 저장 안 된 변경이 있어요 — 눌러서 저장할 수 있어요">
+                <span className="sb-sync-dot is-dirty" aria-hidden="true" />
+              </span>
+            )}
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" /></svg>
           </button>
         }
       >
-        {sync?.hydrating && (
-          <div className="sb-profile-ctl__hint">서버에서 프로필을 불러오는 중 — 목록이 곧 갱신될 수 있어요</div>
+        {sync?.enabled && (
+          <div className="sb-profile-ctl__syncrow">
+            <div className="sb-profile-ctl__syncline">
+              <span className={'sb-sync-dot' + syncDot} aria-hidden="true" />
+              <span className="sb-profile-ctl__synclabel">{syncLabel}</span>
+              {sync.ready && sync.dirty && (
+                <button type="button" className="sb-btn sb-btn--tiny" disabled={sync.busy} onClick={sync.push}>
+                  서버에 저장
+                </button>
+              )}
+              <button
+                type="button"
+                className="sb-sync-info"
+                aria-label="서버 저장 안내"
+                aria-expanded={syncInfoOpen}
+                onClick={() => setSyncInfoOpen((v) => !v)}
+              >
+                !
+              </button>
+            </div>
+            {syncInfoOpen && (
+              <p className="sb-sync-tip">
+                {sync.failed
+                  ? '서버 상태를 불러오지 못해 이번 세션은 이 브라우저의 저장본만 보여요. 새로고침으로 다시 연결해 보세요.'
+                  : '홈에서의 변경(프로필·시나리오 만들기, 쓰레드, 가져오기)은 서버에 자동 저장돼요. 빌더에서 편집한 내용은 "서버에 저장"을 눌러야 다른 기기·브라우저에서도 보여요.'}
+              </p>
+            )}
+          </div>
         )}
         {api.accounts.map((a) => {
               const isActive = a.id === api.activeAccountId
