@@ -585,6 +585,15 @@
 .sb-sync-dot.is-dirty { background: var(--sb-warn); }
 .sb-sync-dot.is-ok { background: var(--sb-success); }
 .sb-sync-dot.is-fail { background: var(--sb-danger); }
+/* 접속 직후 서버 하이드레이션 중 — 파랑 펄스 (완료되면 상태 점이 다른 색으로 바뀐다) */
+.sb-sync-dot.is-hydrating {
+  background: var(--sb-info);
+  animation: sb-sync-pulse 1.1s var(--sb-ease) infinite;
+}
+@keyframes sb-sync-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.72); }
+}
 .sb-drawer__list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
 .sb-drawer__empty {
   padding: 28px 18px;
@@ -3735,6 +3744,24 @@
   flex-shrink: 0;
 }
 .sb-profile-ctl__menu { min-width: 230px; }
+/* 서버 하이드레이션 배지 — 프로필 버튼 안, 이름 옆 구분선 뒤 */
+.sb-profile-ctl__sync {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding-left: 8px;
+  border-left: 1px solid var(--sb-line);
+  font-size: var(--sb-t-micro);
+  color: var(--sb-muted);
+}
+.sb-profile-ctl__sync--fail { color: var(--sb-danger); }
+.sb-profile-ctl__hint {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--sb-line);
+  background: var(--sb-n-50);
+  font-size: var(--sb-t-micro);
+  color: var(--sb-muted);
+}
 .sb-profile-ctl__row { display: flex; align-items: center; gap: 2px; }
 .sb-profile-ctl__row .sb-menu__item { flex: 1; min-width: 0; }
 .sb-profile-ctl__remove {

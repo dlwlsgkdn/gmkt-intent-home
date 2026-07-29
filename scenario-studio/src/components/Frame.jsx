@@ -94,10 +94,13 @@ export function ViewerDeviceControl({ deviceKey, onChange }) {
 }
 
 /* 좌상단 사용자 프로필 전환 컨트롤 — 기기(화면 폭) 컨트롤 옆에 나란히 (홈 전용).
-   프로필마다 탐색(DDAK) 페이지·시나리오·쓰레드가 따로 관리된다. */
+   프로필마다 탐색(DDAK) 페이지·시나리오·쓰레드가 따로 관리된다.
+   접속 직후에는 서버 하이드레이션 상태를 함께 표시한다 — 지금 보이는 프로필이
+   서버 상태로 곧 바뀔 수 있음을 알리는 자리 (완료되면 배지가 사라진다) */
 export function ProfileControl({ api }) {
   const [open, setOpen] = useState(false)
   const name = (api.profile && api.profile.name) || '사용자'
+  const sync = api.remoteSync
   return (
     <div className="sb-viewer-ctl sb-profile-ctl">
       <Dropdown
@@ -105,13 +108,36 @@ export function ProfileControl({ api }) {
         onClose={() => setOpen(false)}
         menuClass="sb-viewer-ctl__menu sb-profile-ctl__menu"
         button={
-          <button type="button" className="sb-viewer-ctl__btn" onClick={() => setOpen((v) => !v)} title="사용자 프로필 전환">
+          <button
+            type="button"
+            className="sb-viewer-ctl__btn"
+            onClick={() => setOpen((v) => !v)}
+            title={sync?.hydrating ? '서버에서 프로필·시나리오를 불러오는 중이에요' : '사용자 프로필 전환'}
+          >
             <span className="sb-profile-ctl__avatar">{name.slice(0, 1)}</span>
             {name}
+            {sync?.hydrating && (
+              <span className="sb-profile-ctl__sync">
+                <span className="sb-sync-dot is-hydrating" aria-hidden="true" />
+                동기화 중
+              </span>
+            )}
+            {sync?.enabled && sync.failed && (
+              <span
+                className="sb-profile-ctl__sync sb-profile-ctl__sync--fail"
+                title="서버 상태를 불러오지 못했어요 — 이번 세션은 이 브라우저의 저장본만 보여요"
+              >
+                <span className="sb-sync-dot is-fail" aria-hidden="true" />
+                연결 안 됨
+              </span>
+            )}
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" /></svg>
           </button>
         }
       >
+        {sync?.hydrating && (
+          <div className="sb-profile-ctl__hint">서버에서 프로필을 불러오는 중 — 목록이 곧 갱신될 수 있어요</div>
+        )}
         {api.accounts.map((a) => {
               const isActive = a.id === api.activeAccountId
               return (

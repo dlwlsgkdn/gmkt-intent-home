@@ -446,6 +446,8 @@ export function useWorkspace({ showToast, onReset }) {
       enabled: REMOTE_ENABLED,
       ready: remoteReady,
       failed: remoteFailed,
+      /* 접속 직후 서버 상태(프로필·시나리오)를 불러오는 중 — 홈 프로필 컨트롤·SyncButton이 표시 */
+      hydrating: REMOTE_ENABLED && !remoteReady && !remoteFailed,
       busy: pushBusy,
       dirty: remoteDirty,
       dirtyCount: changedAccountIds.length + removedAccountIds.length + (keywordsDirty ? 1 : 0),

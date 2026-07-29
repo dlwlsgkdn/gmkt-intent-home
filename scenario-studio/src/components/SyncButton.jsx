@@ -27,7 +27,7 @@ export default function SyncButton({ sync, small }) {
       : time
         ? `이번 세션 마지막 저장 ${time}`
         : '서버와 같은 상태예요'
-  const dotState = sync.failed ? ' is-fail' : sync.dirty ? ' is-dirty' : sync.ready ? ' is-ok' : ''
+  const dotState = sync.failed ? ' is-fail' : !sync.ready ? ' is-hydrating' : sync.dirty ? ' is-dirty' : ' is-ok'
   return (
     <button
       type="button"
