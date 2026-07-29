@@ -88,17 +88,35 @@ export function normalizeCaseEvaluation(raw = {}) {
 
   /* v2: selection/review 구조가 있으면 그대로 정규화 */
   if (value.v === EVALUATION_SCHEMA_VERSION || isRecord(value.selection) || isRecord(value.review)) {
+    const selection = normalizeSelection(value.selection)
+    let review = normalizeReview(value.review)
+    /* v1→v2 마이그레이션이 남긴 유령 0점 청소: v1은 케이스 점수를 clampRating으로
+       정규화해 미평가 케이스 전부에 score 0을 기본값으로 저장했고, 초기 마이그레이션이
+       그 0을 진짜 평가로 승계했다(선정 시각과 동일한 at, round 0, 피드백 없음이 그 서명).
+       이 유령 흔적은 caseHasEvaluationInput을 전 케이스 true로 만들어 로테이션·전파
+       대상을 0개로 비운다 — 미평가(null)로 되돌린다 */
+    if (
+      review.score === 0 && review.round === 0 && !review.feedback.trim()
+      && review.at && review.at === selection.at
+    ) {
+      review = { ...review, score: null, at: null }
+    }
     return {
       v: EVALUATION_SCHEMA_VERSION,
-      selection: normalizeSelection(value.selection),
-      review: normalizeReview(value.review),
+      selection,
+      review,
       components: normalizeComponents(value.components),
     }
   }
 
   /* v1 마이그레이션: 평면 필드를 세 덩어리로 나눈다. updatedAt은 선정/평가를 구분할 수
-     없던 시절의 값이라 — 평가 입력이 실재할 때만 review.at으로 승계하고, criteria는 버린다 */
-  const hasReviewInput = nullableRating(value.score) != null || String(value.feedback || '').trim()
+     없던 시절의 값이라 — 평가 입력이 실재할 때만 review.at으로 승계하고, criteria는 버린다.
+     v1의 score 0은 clampRating 기본값이라 "0점 평가"가 아니다 — 피드백이 함께 있을 때만
+     기록으로 취급하고, 홀로 있는 0은 미평가(null)로 승계한다 */
+  const hasFeedback = String(value.feedback || '').trim()
+  const v1Score = nullableRating(value.score)
+  const migratedScore = v1Score === 0 && !hasFeedback ? null : v1Score
+  const hasReviewInput = migratedScore != null || hasFeedback
   return {
     v: EVALUATION_SCHEMA_VERSION,
     selection: normalizeSelection({
@@ -108,7 +126,7 @@ export function normalizeCaseEvaluation(raw = {}) {
       at: value.updatedAt,
     }),
     review: normalizeReview({
-      score: value.score,
+      score: migratedScore,
       feedback: value.feedback,
       round: 0,
       at: hasReviewInput ? value.updatedAt : null,

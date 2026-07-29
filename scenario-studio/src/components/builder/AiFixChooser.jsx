@@ -64,8 +64,12 @@ export default function AiFixChooser({
           <button
             type="button"
             className="sb-mode-card"
-            disabled={seedCount === 0}
-            title={seedCount === 0 ? '평가한 케이스에 피드백을 먼저 남겨주세요' : undefined}
+            disabled={seedCount === 0 || targetCount === 0}
+            title={
+              seedCount === 0 ? '평가한 케이스에 피드백을 먼저 남겨주세요'
+                : targetCount === 0 ? '모든 케이스를 이미 평가했어요 — 반영할 미평가 케이스가 없어요'
+                  : undefined
+            }
             onClick={onPickPropagate}
           >
             <span className="sb-mode-card__head">
