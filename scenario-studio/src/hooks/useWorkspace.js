@@ -476,6 +476,9 @@ export function useWorkspace({ showToast, onReset }) {
         }
 
         serverIndexRef.current = new Map(index.map((row) => [row.key, row.updatedAt]))
+        /* 순서 기준선은 부트의 메타로 — 안 잡으면 세션 첫 저장마다 meta를 무조건 다시 쓴다 */
+        const metaOrder = bootRows['accounts-meta']?.data?.order
+        if (Array.isArray(metaOrder)) metaBaselineRef.current = JSON.stringify(metaOrder)
         let bootAccount = null
         if (keepLocal) {
           localAuthorityRef.current = true
@@ -534,7 +537,10 @@ export function useWorkspace({ showToast, onReset }) {
       setBootReady(true)
       bootDeferredRef.current.resolve()
       setHomeSynced(true)
-      /* 로드 중에 쌓인 미저장(쓰레드 기록 등)이 있으면 바로 반영 */
+      /* 로드 중에 쌓인 미저장(쓰레드 기록 등)이 있으면 바로 반영 — 채택 setState가 커밋된
+         다음 판정한다 (바로 읽으면 지난 렌더의 상태와 새 기준선이 어긋나 헛트리거된다) */
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      if (cancelled) return
       if (stateRef.current.accounts.some(accountDirty)) requestAutoSync()
     }
 
