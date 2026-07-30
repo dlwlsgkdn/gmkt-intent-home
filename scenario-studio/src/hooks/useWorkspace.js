@@ -574,7 +574,7 @@ export function useWorkspace({ showToast, onReset }) {
     if (conflicted) {
       if (auto) {
         conflictHoldRef.current = true
-        showToast('다른 창이나 기기에서 서버가 먼저 바뀌어 자동 저장을 멈췄어요. "서버에 저장" 버튼으로 확인 후 저장해주세요.')
+        showToast('다른 창이나 기기에서 서버가 먼저 바뀌어 자동 저장을 멈췄어요. 새로고침으로 서버 상태를 확인하거나, 스튜디오의 "서버에 저장"으로 이 화면 내용을 올릴 수 있어요.')
         return null
       }
       if (!window.confirm(
@@ -751,7 +751,7 @@ export function useWorkspace({ showToast, onReset }) {
       console.warn('[remote] 자동 서버 저장 실패 — 변경은 미저장으로 남아 있어요:', error)
       if (!failNotifiedRef.current) {
         failNotifiedRef.current = true
-        showToast('서버 자동 저장에 실패했어요. 변경 내용은 "서버에 저장" 버튼으로 다시 올릴 수 있어요.')
+        showToast('서버 자동 저장에 실패했어요. 네트워크 확인 후 다음 작업 때 자동으로 다시 저장돼요. (스튜디오의 "서버에 저장"으로 바로 올릴 수도 있어요)')
       }
     } finally {
       busyRef.current = false
