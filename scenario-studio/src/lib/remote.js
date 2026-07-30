@@ -5,11 +5,11 @@
    last-write-wins + 저장 직전 행 목록(updatedAt) 비교로 다른 창의 선행 변경을
    확인받는다(수동은 confirm, 자동은 덮지 않고 멈춰 수동 저장으로 유도).
 
-   키 체계는 계정 행 단위다 (분해·조립 규칙은 lib/accountRows.js):
-   'account:<id>'(본문 — 버전·쓰레드 제외) + 'account:<id>:threads' + 'account:<id>:versions:<sid>'
-   + 'accounts-meta'(계정 순서 — 활성 id는 기기별 상태라 동기화하지 않는다) + 'keywords'.
-   통짜 'accounts' 블롭·통짜 계정 행은 구버전 형식 — useWorkspace가 최초 1회 분리 행으로
-   마이그레이션한다 (통짜는 Vercel 본문 한도 4.5MB에 닿아 큰 저장이 조용히 거부됐다). */
+   키 체계는 화면 필요 단위의 행이다 (분해·조립 규칙은 lib/accountRows.js):
+   'account:<id>'(셸 본문 — 홈 첫 화면용) + 'account:<id>:scenario:<sid>'(콘텐츠) +
+   'account:<id>:versions:<sid>'(빌더 전용) + 'account:<id>:threads' +
+   'accounts-meta'(계정 순서 — 활성 id는 기기별 상태라 동기화하지 않는다) + 'keywords'.
+   통짜 'accounts' 블롭·구형 계정 행은 useWorkspace가 최초 1회 새 행 체계로 이관한다. */
 
 /* 실행 환경 데이터 프로필:
    - 'local' → localStorage만 사용 (서버 하이드레이션·미러링 전부 끔)
@@ -58,12 +58,18 @@ export async function fetchRemoteKey(key) {
   return out[key] || null
 }
 
-/* 여러 키를 한 번에 → { <key>: {data, updatedAt} } — 하이드레이션 1단계(메타+키워드+활성 계정)를
-   함수 호출 한 번으로 줄인다. 무거운 행을 여럿 묶으면 응답이 본문 한도에 닿을 수 있으니
-   가벼운 조합에만 쓸 것 (백그라운드 2단계는 fetchRemoteKey 병렬이 담당) */
+/* 여러 키를 한 번에 → { <key>: {data, updatedAt} }. 무거운 행을 여럿 묶으면 응답이
+   본문 한도에 닿을 수 있으니 가벼운 조합에만 쓸 것 (백그라운드는 fetchRemoteKey 병렬) */
 export async function fetchRemoteKeys(keys) {
   if (!keys || keys.length === 0) return {}
   return getJson(`${API}?keys=${keys.map(encodeURIComponent).join(',')}`)
+}
+
+/* 부트 한 방 → { index, rows } — 행 목록 + 메타 + 키워드 + 계정 셸 본문 하나(요청 id가
+   서버에 있으면 그 계정, 없으면 서버가 메타 순서의 첫 계정을 골라 담는다).
+   홈 첫 페인트가 이 한 왕복으로 끝난다 */
+export function fetchRemoteBoot(accountId) {
+  return getJson(`${API}?boot=${accountId ? encodeURIComponent(accountId) : ''}`)
 }
 
 /* 즉시 전송 upsert. data: null 은 삭제 요청이다 (계정 삭제 → 행 삭제) */

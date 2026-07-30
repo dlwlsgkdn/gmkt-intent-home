@@ -74,20 +74,33 @@ export default function HomeView({ api }) {
 
   const today = () => new Date().toISOString().slice(0, 10)
 
-  const exportScenarioList = () => {
+  /* 내보내기는 지연 로드된 행을 서버와 마저 맞춘 뒤 만든다 — 부분 데이터 저장 방지.
+     ensure 후에는 렌더 클로저(api.scenarios)가 낡을 수 있어 fresh 게터로 읽는다 */
+  const exportScenarioList = async () => {
     if (api.scenarios.length === 0) {
       api.showToast('내보낼 시나리오가 없어요.')
       return
     }
-    downloadJson(createScenariosExport(api.scenarios), `ddak-scenarios-${today()}.json`)
+    try {
+      await api.ensureActiveSynced()
+    } catch {
+      api.showToast('서버에서 최신 내용을 불러오지 못해 이 기기에 저장된 내용으로 내보내요.')
+    }
+    const list = api.getFreshActiveScenarios()
+    downloadJson(createScenariosExport(list), `ddak-scenarios-${today()}.json`)
     setJsonDialog(null)
-    api.showToast(`시나리오 ${api.scenarios.length}개를 JSON으로 내보냈어요.`)
+    api.showToast(`시나리오 ${list.length}개를 JSON으로 내보냈어요.`)
   }
 
-  const exportWorkspaceBackup = () => {
-    downloadJson(api.exportDataBackup(), `ddak-studio-backup-${today()}.json`)
-    setJsonDialog(null)
-    api.showToast(`전체 데이터를 백업했어요. (프로필 ${api.accounts.length}개)`)
+  const exportWorkspaceBackup = async () => {
+    try {
+      const backup = await api.exportDataBackup()
+      downloadJson(backup, `ddak-studio-backup-${today()}.json`)
+      setJsonDialog(null)
+      api.showToast(`전체 데이터를 백업했어요. (프로필 ${api.accounts.length}개)`)
+    } catch {
+      api.showToast('서버에서 전체 데이터를 불러오지 못해 백업을 만들지 못했어요. 잠시 후 다시 시도해주세요.')
+    }
   }
 
   const handleJsonFile = (e) => {

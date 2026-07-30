@@ -25,6 +25,22 @@ export default function App() {
   const workspace = useWorkspace({ showToast, onReset: goHome })
   const { scenarios, setScenarios, requestAutoSync } = workspace
 
+  /* 지연 로드 게이트: 시나리오 콘텐츠(칩 클릭)·버전(빌더)은 필요 시점에 서버와 맞추고 연다.
+     보통 홈 백그라운드 로드가 이미 끝나 즉시 통과한다 — 오래 걸릴 때만 안내 토스트 */
+  const openSynced = (ensurePromise, go) => {
+    let done = false
+    const slowTimer = setTimeout(() => {
+      if (!done) showToast('서버에서 최신 내용을 불러오는 중이에요…')
+    }, 300)
+    ensurePromise
+      .catch(() => showToast('서버에서 불러오지 못해 이 기기에 저장된 내용으로 열어요.'))
+      .finally(() => {
+        done = true
+        clearTimeout(slowTimer)
+        go()
+      })
+  }
+
   /* 공유 링크(#s=...)로 들어온 경우: 저장하지 않고 바로 체험 */
   const [shared, setShared] = useState(() => {
     const value = readShareFromHash()
@@ -99,12 +115,16 @@ export default function App() {
   }
 
   const copyScenario = (id) => {
-    const source = scenarios.find((scenario) => scenario.id === id)
-    if (!source) return
-    const copy = duplicateScenario(source)
-    setScenarios((prev) => [...prev, copy])
-    requestAutoSync()
-    showToast(`"${copy.title}" 을(를) 만들었어요. (작성 중 상태)`)
+    if (!scenarios.some((scenario) => scenario.id === id)) return
+    /* 복제는 콘텐츠(stages·planCases)를 통째로 복사하므로 서버 최신을 먼저 맞춘다 */
+    workspace.ensureScenarioSynced(id).catch(() => {}).then(() => {
+      const source = workspace.getFreshActiveScenarios().find((scenario) => scenario.id === id)
+      if (!source) return
+      const copy = duplicateScenario(source)
+      setScenarios((prev) => [...prev, copy])
+      requestAutoSync()
+      showToast(`"${copy.title}" 을(를) 만들었어요. (작성 중 상태)`)
+    })
   }
 
   const importScenarios = (list) => {
@@ -148,13 +168,17 @@ export default function App() {
     reorderScenario,
     importScenarios,
     isDefaultScenario,
-    exportDataBackup: workspace.exportDataBackup,
+    exportDataBackup: workspace.exportDataBackup, // async — 서버 전체 행을 맞춘 뒤 만든다
     importDataBackup: workspace.importDataBackup,
+    ensureActiveSynced: workspace.ensureActiveSynced,
+    getFreshActiveScenarios: workspace.getFreshActiveScenarios,
     remoteSync: workspace.remoteSync,
     goHome,
-    openBuilder: (id) => setRoute({ name: 'builder', id }),
-    /* resume = { threadId, stage } — 기존 쓰레드를 이어서 해당 단계부터 */
-    playScenario: (id, resume) => setRoute({ name: 'player', id, resume }),
+    /* 빌더는 콘텐츠+버전 스냅샷을 맞춘 뒤 연다 — 버전은 스튜디오 진입 시에만 로드 */
+    openBuilder: (id) => openSynced(workspace.ensureStudioSynced(id), () => setRoute({ name: 'builder', id })),
+    /* resume = { threadId, stage } — 기존 쓰레드를 이어서 해당 단계부터.
+       칩 클릭 체험은 시나리오 콘텐츠(stages·planCases)를 맞춘 뒤 시작한다 */
+    playScenario: (id, resume) => openSynced(workspace.ensureScenarioSynced(id), () => setRoute({ name: 'player', id, resume })),
     openExploreEditor: () => setRoute((prev) => ({ name: 'explore-editor', back: prev })),
     closeExploreEditor: () => setRoute((prev) => prev.back || { name: 'home' }),
     explore: workspace.explore,

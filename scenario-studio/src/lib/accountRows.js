@@ -1,76 +1,95 @@
-/* 서버 행(row) 분해·조립 — 계정 하나를 세 종류 행으로 나눠 저장한다.
- *   account:<id>                 본문 (프로필·탐색·시나리오 — 버전 스냅샷 제외)
- *   account:<id>:threads         쓰레드 (체험 기록 — 계속 자라는 로그)
- *   account:<id>:versions:<sid>  시나리오 하나의 발행 버전 스냅샷 (스냅샷 = 시나리오 전체 사본이라 페이로드 주범)
+/* 서버 행(row) 분해·조립 — 계정 하나를 "화면이 필요로 하는 단위"의 행으로 나눠 저장한다.
+ *   account:<id>                 셸 본문: 프로필·탐색·시나리오 칩 메타 — 홈 첫 화면에 필요한 전부 (수십 KB)
+ *   account:<id>:scenario:<sid>  시나리오 콘텐츠 { stages, planCases } — 칩 클릭 체험·빌더에서 필요
+ *   account:<id>:versions:<sid>  발행 버전 스냅샷 — 빌더(버전 복원) 전용, 스튜디오 진입 시에만 로드
+ *   account:<id>:threads         쓰레드 (체험 기록 로그) — 쓰레드 패널·이어보기용
  *
- * 나눈 이유: 첫 접속 하이드레이션이 홈 첫 화면에 필요 없는 무거운 데이터(버전 스냅샷·쓰레드)까지
- * 내려받느라 오래 걸렸다. 본문 행만으로 홈을 먼저 그리고 나머지는 백그라운드로 받는다.
- * 업로드도 바뀐 행만 보내면 된다 — 쓰레드 기록이 시나리오 본문을, 발행이 쓰레드를 다시 실어 나르지 않는다.
+ * 나눈 이유: 첫 접속 하이드레이션이 홈에 필요 없는 무거운 데이터(케이스 72개·버전 스냅샷·쓰레드)까지
+ * 기다리게 했다. 셸 본문만으로 홈을 그리고, 콘텐츠는 백그라운드, 버전은 스튜디오 진입 시 로드한다.
  *
- * 구(통짜) 계정 행은 threads 키 포함 여부로 식별한다(isFatAccountRow) — 본문 행은
- * threads·scenarios[].versions 키를 아예 갖지 않는다. useWorkspace의 하이드레이션이
- * 통짜 행을 만나면 분리 행으로 이관한다(부속 행 먼저, 본문 행 마지막 — 본문이 이관 완료 표식). */
+ * 구형 판별 (하이드레이션이 만나면 새 행 체계로 이관):
+ *   1차(통짜 계정 행): threads 키 포함 → isFatAccountRow. 버전·쓰레드·콘텐츠 전부 인라인.
+ *   2차(콘텐츠 본문): scenarios[]에 stages/planCases 키 포함 → isContentBodyRow. 버전·쓰레드만 분리된 형식.
+ *   새 셸 본문은 threads도, scenarios[].stages/planCases/versions도 아예 갖지 않는다. */
 
 export const accountKey = (id) => `account:${id}`
 export const threadsKey = (id) => `account:${id}:threads`
 export const versionsKey = (id, scenarioId) => `account:${id}:versions:${scenarioId}`
+export const scenarioKey = (id, scenarioId) => `account:${id}:scenario:${scenarioId}`
 
-/* 'account:...' 키 해석 → { kind: 'slim'|'threads'|'versions', accountId, scenarioId? } | null
+/* 'account:...' 키 해석 → { kind: 'slim'|'scenario'|'versions'|'threads', accountId, scenarioId? } | null
    ('accounts'·'accounts-meta'·'keywords' 등 다른 키는 null) */
 export function parseAccountKey(key) {
   if (typeof key !== 'string' || !key.startsWith('account:')) return null
   const parts = key.slice('account:'.length).split(':')
   if (parts.length === 1 && parts[0]) return { kind: 'slim', accountId: parts[0] }
   if (parts.length === 2 && parts[0] && parts[1] === 'threads') return { kind: 'threads', accountId: parts[0] }
-  if (parts.length === 3 && parts[0] && parts[1] === 'versions' && parts[2]) {
-    return { kind: 'versions', accountId: parts[0], scenarioId: parts[2] }
+  if (parts.length === 3 && parts[0] && parts[2]) {
+    if (parts[1] === 'versions') return { kind: 'versions', accountId: parts[0], scenarioId: parts[2] }
+    if (parts[1] === 'scenario') return { kind: 'scenario', accountId: parts[0], scenarioId: parts[2] }
   }
   return null
 }
 
-/* 행 분리 이전의 통짜 계정 행인가 — 본문 행은 threads 키를 아예 갖지 않는다 */
+/* 1차 구형: 버전·쓰레드 인라인 통짜 행 */
 export const isFatAccountRow = (data) => !!data && typeof data === 'object' && 'threads' in data
 
-/* 계정 → 서버 행 3종. versionsBySid에는 스냅샷이 실제로 있는 시나리오만 담는다 */
+/* 2차 구형: 시나리오 콘텐츠(stages/planCases)가 본문에 인라인 */
+export const isContentBodyRow = (data) =>
+  !!data && typeof data === 'object' && Array.isArray(data.scenarios)
+  && data.scenarios.some((s) => !!s && typeof s === 'object' && ('stages' in s || 'planCases' in s))
+
+/* 시나리오 → 셸(칩 메타 — 홈 렌더·검색 매칭이 읽는 전부)과 콘텐츠 */
+export function scenarioShell(scenario) {
+  const shell = { ...scenario }
+  delete shell.stages
+  delete shell.planCases
+  delete shell.versions
+  return shell
+}
+
+export const scenarioContent = (scenario) => ({
+  stages: scenario.stages && typeof scenario.stages === 'object' ? scenario.stages : {},
+  planCases: Array.isArray(scenario.planCases) ? scenario.planCases : [],
+})
+
+/* 계정 → 서버 행들. contentBySid는 모든 시나리오, versionsBySid는 스냅샷이 있는 시나리오만 */
 export function splitAccount(account) {
-  const slim = { ...account }
-  delete slim.threads
-  slim.scenarios = (account.scenarios || []).map((scenario) => {
-    const copy = { ...scenario }
-    delete copy.versions
-    return copy
-  })
+  const shellBody = { ...account }
+  delete shellBody.threads
+  shellBody.scenarios = (account.scenarios || []).map(scenarioShell)
+  const contentBySid = {}
   const versionsBySid = {}
   for (const scenario of account.scenarios || []) {
+    contentBySid[scenario.id] = scenarioContent(scenario)
     if (Array.isArray(scenario.versions) && scenario.versions.length > 0) {
       versionsBySid[scenario.id] = scenario.versions
     }
   }
-  return { slim, threads: Array.isArray(account.threads) ? account.threads : [], versionsBySid }
+  return { shellBody, contentBySid, threads: Array.isArray(account.threads) ? account.threads : [], versionsBySid }
 }
 
-/* 서버 행 3종 → 계정 하나 (normalizeAccountsState 전 단계의 원시 형태).
-   slim이 통짜 행이어도 동작한다 — threads는 인자가 덮고 인라인 versions는 그대로 남는다 */
-export function assembleAccount(slim, threads, versionsBySid) {
+/* 본문 행 + 콘텐츠 소스 → 계정 하나 (normalize 전 원시 형태).
+   구형 본문(콘텐츠·버전 인라인)은 인라인 값이 우선이고, 새 셸 본문은 서버 콘텐츠 행 →
+   같은 id의 로컬 계정 → 빈 값 순서로 채운다 (로컬 대체분은 해당 행이 로드될 때 서버 값으로 확정) */
+export function assembleAccount(body, { contentBySid = {}, threads, versionsBySid = {}, localAccount = null } = {}) {
+  const localScenarios = new Map((localAccount?.scenarios || []).map((s) => [s.id, s]))
   return {
-    ...slim,
-    threads: Array.isArray(threads) ? threads : (isFatAccountRow(slim) ? slim.threads : []),
-    scenarios: (slim.scenarios || []).map((scenario) => {
-      const versions = versionsBySid && versionsBySid[scenario.id]
-      return Array.isArray(versions) && versions.length > 0 ? { ...scenario, versions } : scenario
+    ...body,
+    threads: Array.isArray(threads) ? threads
+      : isFatAccountRow(body) ? body.threads
+        : Array.isArray(localAccount?.threads) ? localAccount.threads : [],
+    scenarios: (body.scenarios || []).map((shell) => {
+      const local = localScenarios.get(shell.id)
+      const content = contentBySid[shell.id]
+        || (('stages' in shell || 'planCases' in shell) ? scenarioContent(shell) : null)
+        || (local ? scenarioContent(local) : null)
+        || { stages: {}, planCases: [] }
+      const versions = versionsBySid[shell.id]
+        || (Array.isArray(shell.versions) ? shell.versions : null)
+        || (Array.isArray(local?.versions) ? local.versions : null)
+        || []
+      return { ...shell, stages: content.stages, planCases: content.planCases, versions }
     }),
   }
-}
-
-/* 본문이 바뀌었는가 — threads를 뺀 나머지 필드의 얕은 참조 비교.
-   patchActive·updateScenario가 무변경 시 같은 참조를 유지하는 사슬 위에서만 성립한다.
-   versions 변경(발행)은 scenarios 배열 참조를 함께 바꾸므로 본문 전송에 포함된다(과전송 허용) */
-export function accountSlimChanged(account, baseline) {
-  if (!baseline) return true
-  const fields = new Set([...Object.keys(account), ...Object.keys(baseline)])
-  fields.delete('threads')
-  for (const field of fields) {
-    if (account[field] !== baseline[field]) return true
-  }
-  return false
 }
