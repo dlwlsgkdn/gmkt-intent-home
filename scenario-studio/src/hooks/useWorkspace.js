@@ -75,6 +75,7 @@ export function useWorkspace({ showToast, onReset }) {
   const [viewerDevice, setViewerDevice] = useState(loadViewerDevice)
   const [bootReady, setBootReady] = useState(false)   // 부트(셸 채택+충돌 기준선) 완료 — 업로드 허용 시점
   const [homeSynced, setHomeSynced] = useState(false) // 홈 필요분(전 계정 셸+활성 콘텐츠·쓰레드)까지 완료 — 배지 기준
+  const [syncingAccountIds, setSyncingAccountIds] = useState(() => new Set()) // 콘텐츠 받는 중인 계정 — 프로필 전환 직후 배지
   const [remoteFailed, setRemoteFailed] = useState(false)
   const [pushBusy, setPushBusy] = useState(false)
   const [lastSyncAt, setLastSyncAt] = useState(null)
@@ -289,15 +290,30 @@ export function useWorkspace({ showToast, onReset }) {
     ])
   }
 
-  /* 프로필 전환·목록 내보내기 전: 계정 하나의 셸+콘텐츠+쓰레드 (버전 제외) */
+  /* 프로필 전환·목록 내보내기 전: 계정 하나의 셸+콘텐츠+쓰레드 (버전 제외).
+     받을 행이 실제로 있을 때만 syncingAccountIds에 올린다 — 그 계정이 활성인 동안
+     "동기화 중" 배지(remoteSync.hydrating)가 켜지고, 이미 다 받은 계정은 배지 없이 즉시 통과 */
+  const accountContentKeys = (id) => [...serverIndexRef.current.keys()].filter((key) => {
+    const parsed = parseAccountKey(key)
+    return parsed && parsed.accountId === id && (parsed.kind === 'scenario' || parsed.kind === 'threads')
+  })
   const ensureAccountSynced = async (id) => {
     await bootDeferredRef.current.promise
-    await syncRow(accountKey(id))
-    const keys = [...serverIndexRef.current.keys()].filter((key) => {
-      const parsed = parseAccountKey(key)
-      return parsed && parsed.accountId === id && (parsed.kind === 'scenario' || parsed.kind === 'threads')
-    })
-    await Promise.all(keys.map(syncRow))
+    const needsFetch = (key) => !localAuthorityRef.current
+      && serverIndexRef.current.has(key)
+      && !rowsRef.current.get(key)?.loaded
+    if (![accountKey(id), ...accountContentKeys(id)].some(needsFetch)) return
+    setSyncingAccountIds((prev) => new Set(prev).add(id))
+    try {
+      await syncRow(accountKey(id))
+      await Promise.all(accountContentKeys(id).map(syncRow))
+    } finally {
+      setSyncingAccountIds((prev) => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
+    }
   }
 
   const ensureActiveSynced = async () => {
@@ -906,8 +922,10 @@ export function useWorkspace({ showToast, onReset }) {
       enabled: REMOTE_ENABLED,
       ready: bootReady,
       failed: remoteFailed,
-      /* 홈 필요분(셸+활성 콘텐츠·쓰레드)을 불러오는 중 — 홈 프로필 컨트롤·SyncButton이 표시 */
-      hydrating: REMOTE_ENABLED && !homeSynced && !remoteFailed,
+      /* 활성 프로필의 홈 필요분(셸+콘텐츠·쓰레드)을 불러오는 중 — 홈 프로필 컨트롤이 표시.
+         첫 하이드레이션(homeSynced 전)과 프로필 전환 직후(그 계정 콘텐츠 로드 중) 둘 다 켜진다 */
+      hydrating: REMOTE_ENABLED && !remoteFailed
+        && (!homeSynced || (active ? syncingAccountIds.has(active.id) : false)),
       busy: pushBusy,
       dirty: remoteDirty,
       dirtyCount: changedAccountIds.length + removedAccountIds.length + (keywordsDirty ? 1 : 0),
