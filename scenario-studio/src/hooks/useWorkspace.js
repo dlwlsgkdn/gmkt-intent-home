@@ -269,8 +269,15 @@ export function useWorkspace({ showToast, onReset }) {
     return run
   }
 
-  const findOwner = (scenarioId) =>
-    stateRef.current.accounts.find((account) => (account.scenarios || []).some((s) => s.id === scenarioId))
+  /* 시나리오의 소유 계정 — 활성 계정 우선. 기본 시나리오는 번들 팩의 고정 id라 여러
+     프로필이 같은 시나리오 id를 공유한다 — 목록 순서로 찾으면 다른 계정을 짚어서,
+     활성 계정의 행은 로드돼 있는데도 남의 행을 받으러 가는 헛로드가 생긴다 */
+  const findOwner = (scenarioId) => {
+    const { accounts, activeAccountId } = stateRef.current
+    const activeAccount = accounts.find((account) => account.id === activeAccountId) || accounts[0]
+    if (activeAccount && (activeAccount.scenarios || []).some((s) => s.id === scenarioId)) return activeAccount
+    return accounts.find((account) => (account.scenarios || []).some((s) => s.id === scenarioId))
+  }
 
   /* 칩 클릭(플레이) 전: 시나리오 콘텐츠를 서버와 맞춘다 */
   const ensureScenarioSynced = async (scenarioId) => {
