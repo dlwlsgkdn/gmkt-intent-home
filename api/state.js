@@ -2,15 +2,18 @@
    GET  /api/state                → 전체 덤프 { <key>: {data, updatedAt}, ... } (구버전 클라이언트 호환)
    GET  /api/state?index=1        → [{ key, updatedAt }] 목록만 (본문 없이 어떤 행이 있는지)
    GET  /api/state?key=<k>        → 해당 키 하나만 { <key>: {data, updatedAt} }
+   GET  /api/state?keys=<k1,k2>   → 여러 키 배치 조회 (최대 32개 — 하이드레이션 1단계용)
    PUT  /api/state {key, data}    → 해당 키 문서를 통째로 upsert (문서 단위 last-write-wins)
    PUT  /api/state {key, data: null} → 해당 키 삭제
 
-   키 체계: 'accounts'(구 통짜 블롭 — 마이그레이션 후 삭제됨) · 'accounts-meta'(계정 순서·활성 id)
-   · 'account:<id>'(계정 하나) · 'keywords'. 계정 단위로 쪼갠 이유: Vercel 함수의 요청/응답
-   본문 한도(4.5MB)를 통짜 블롭이 넘어서면서 프로필 추가 같은 저장이 조용히 거부됐다. */
+   키 체계: 'accounts-meta'(계정 순서) · 'account:<id>'(계정 본문 — 버전·쓰레드 제외)
+   · 'account:<id>:threads'(쓰레드) · 'account:<id>:versions:<sid>'(시나리오 하나의 발행 버전
+   스냅샷) · 'keywords'. 'accounts'는 구 통짜 블롭(마이그레이션 후 삭제됨). 행을 잘게 쪼갠
+   이유 둘: 통짜 블롭이 Vercel 함수 본문 한도(4.5MB)에 닿아 저장이 조용히 거부됐고, 첫 접속
+   하이드레이션이 홈에 필요 없는 무거운 데이터(버전 스냅샷·쓰레드)까지 기다리게 했다. */
 import { neon } from '@neondatabase/serverless'
 
-const KEY_PATTERN = /^(accounts|keywords|accounts-meta|account:[A-Za-z0-9_-]{1,64})$/
+const KEY_PATTERN = /^(accounts|keywords|accounts-meta|account:[A-Za-z0-9_-]{1,64}(?::threads|:versions:[A-Za-z0-9_-]{1,64})?)$/
 
 let readyPromise
 function getSql() {
@@ -47,10 +50,22 @@ export default async function handler(req, res) {
     await ensureTable(sql)
 
     if (req.method === 'GET') {
-      const { key, index } = req.query || {}
+      const { key, keys, index } = req.query || {}
       if (index) {
         const rows = await sql`SELECT key, updated_at FROM app_state`
         res.status(200).json(rows.map((r) => ({ key: r.key, updatedAt: r.updated_at })))
+        return
+      }
+      if (keys) {
+        const list = String(keys).split(',').map((k) => k.trim()).filter(Boolean)
+        if (list.length === 0 || list.length > 32 || list.some((k) => !KEY_PATTERN.test(k))) {
+          res.status(400).json({ error: '알 수 없는 keys 형식이에요. (쉼표 구분, 최대 32개)' })
+          return
+        }
+        const rows = await sql`SELECT key, data, updated_at FROM app_state WHERE key = ANY(${list})`
+        const out = {}
+        for (const r of rows) out[r.key] = { data: r.data, updatedAt: r.updated_at }
+        res.status(200).json(out)
         return
       }
       if (key) {
