@@ -17,23 +17,23 @@ index.html         ← ./docs/ 리다이렉트
 - **배포 (레거시)**: GitHub Pages가 커밋된 docs/를 서빙. `https://dlwlsgkdn.github.io/gmkt-intent-home/docs/` — 로컬 빌드로 docs/를 커밋할 때만 갱신된다 (자동 아님)
 - **빌드/배포 절차**: 소스 커밋 → 사용자가 `git push origin main` (Claude는 푸시 못 함) → Vercel 자동 빌드. GitHub Pages까지 최신으로 맞추려면 로컬 `npm run build`(docs/ 갱신) 후 커밋
 
-## 명령어 (중요: Node 경로)
+## 명령어
 
-기본 node는 v12라 빌드 불가. **반드시 nvm의 v24 사용**:
+이 머신은 기본 node(homebrew, v23+)로 빌드된다 (옛 안내의 `/Users/jinhalee/.nvm/...` v24 경로는 이전 머신 것 — 존재하면 그쪽을 써도 무방):
 ```bash
-export PATH=/Users/jinhalee/.nvm/versions/node/v24.5.0/bin:$PATH
 cd scenario-studio && npm run build   # vite build && cp -R ../legacy ../docs/legacy
 ```
 개발 서버: `.claude/launch.json`의 `scenario-studio` (포트 5173), 정적 검증용 `pages-static` (포트 8899, 저장소 루트 서빙).
 
 **데이터 프로필** (`lib/remote.js`): 개발 서버 = `local`(localStorage 전용, 서버 동기화 없음), 빌드 산출물 = `prod`(localStorage + Neon DB 미러링). 로컬에서 운영 DB에 붙으려면 `VITE_DATA_PROFILE=prod npm run dev`. 콘솔 `[remote] 데이터 프로필:` 로그로 확인. 서버 미러링을 운영 DB 없이 검증하려면 목 API(+`VITE_API_PROXY`)를 쓰는 `scenario-studio-mockdb`(포트 5174) 참고.
 
-**서버 동기화는 자동 다운로드 + 수동 업로드(빌더) + 트랜잭션 자동 싱크(스튜디오 밖)** (`api/state.js` + `hooks/useWorkspace.js` + `components/SyncButton.jsx`): 접속 시 서버로 하이드레이션하고, 빌더의 연속 편집은 "서버에 저장"으로 올린다 — 저장 상태·수동 저장 UI는 **빌더 상단바 SyncButton 전용**이다. 홈은 쓰기가 전부 자동 싱크라 저장 UI가 없고, 프로필 버튼 배지로 다운로드 상태만 보여준다(동기화 중 펄스·연결 안 됨). 스튜디오 밖 단발 쓰기 트랜잭션(프로필 생성·삭제, 시나리오 생성·복제·가져오기·삭제·칩 순서, 쓰레드 기록·삭제, 전체 복원, 공유 링크 가져오기 — 프로필 전환은 쓰기가 아니라 제외)은 `requestAutoSync()`가 1.2s 디바운스 뒤 자동 업로드한다 — 전체 자동 미러링은 여러 창이 서로를 덮고 실패가 조용해서 제거했고, 자동 트랜잭션 싱크는 충돌(다른 창의 선행 변경) 시 덮지 않고 멈춰 수동 저장으로 유도하며 실패를 토스트로 알린다. "동기화 중" 펄스(`remoteSync.hydrating`)는 **활성 프로필의 홈 필요분을 받는 동안** 켜진다 — 첫 하이드레이션(homeSynced 전)과 프로필 전환 직후(그 계정 콘텐츠 로드 중, `syncingAccountIds`) 둘 다. 실패 시 "연결 안 됨"을 표시한다(미저장 표시는 빌더 SyncButton만). 저장 직전 `?index=1`(행 목록·updatedAt)로 다른 창의 선행 변경을 감지해 덮어쓰기 확인을 받는다. 키는 **화면 필요 단위의 행**이다 (분해·조립은 `lib/accountRows.js`): `account:<id>`(셸 본문 — 프로필·탐색·시나리오 칩 메타, 홈 첫 화면에 필요한 전부)·`account:<id>:scenario:<sid>`(콘텐츠: stages·planCases — 칩 클릭 체험·빌더용)·`account:<id>:versions:<sid>`(발행 버전 스냅샷 — 빌더 전용)·`account:<id>:threads`·`accounts-meta`(순서만 — **활성 프로필 id는 기기별 상태라 동기화하지 않는다**)·`keywords`. **하이드레이션은 부트 1왕복 + 필요 시점 로드**: `?boot=<계정id>` 한 왕복(행 목록+메타+키워드+활성 계정 셸)으로 홈을 그리고(bootReady — 업로드 허용 시점), 나머지 계정 셸과 활성 계정 콘텐츠·쓰레드는 백그라운드(homeSynced — "동기화 중" 배지 기준), **버전 스냅샷은 빌더 진입 시**(`ensureStudioSynced`), 다른 계정 콘텐츠는 프로필 전환 시(`ensureAccountSynced`)만 받는다. 칩 클릭·복제는 `ensureScenarioSynced`, 내보내기·전체 백업은 `ensureActiveSynced`/`ensureAllSynced`가 선행한다(App.jsx `openSynced` 게이트). 하이드레이션 사이에 손댄 데이터는 서버 값으로 덮지 않는다(쓰레드만 id 합집합 병합 — 추가형 로그라서). **업로드는 행 단위 게이트**: 이 세션에서 서버와 맞춘 행(loaded)과 서버에 없는 새 행만 전송하고(`rowsRef` 기준선 — 안 받은 행을 낡은 로컬로 덮지 않는다), 삭제는 명시적(이 세션에서 지운 계정 + 셸을 맞춘 계정의 사라진 시나리오 행)이다. 예외는 시딩 가드·전체 복원 세션(`localAuthorityRef` — 로컬이 전체 의도라 전 행 전송+서버 잔여 정리). 구 형식(통짜 `accounts` 블롭 → 1차 통짜 행(`threads` 인라인) → 2차 콘텐츠 본문(scenarios에 stages 인라인))은 하이드레이션이 만나는 대로 새 행 체계로 이관한다(부속 행 먼저 → 본문 행 마지막이 완료 표식, 끊겨도 재시도). **객체 참조가 곧 미저장 신호**다: `patchActive`·`updateScenario`·`useStageItems.write`가 무변경 업데이터(같은 참조 반환)를 스킵하는 사슬을 유지할 것 — 끊기면 빌더만 열어도 미저장 배지가 켜진다. 발행 버전 스냅샷은 시나리오 전체 사본 — `VERSION_LIMIT`(5)을 늘리지 말 것. **주의: 구 클라이언트(커밋된 docs/ = GitHub Pages 레거시 빌드)로 "서버에 저장"을 누르면 구형 행을 재저장해 새 행 체계와 어긋난다** — 레거시 배포에서는 편집·저장하지 말 것.
+**서버 동기화는 자동 다운로드 + 수동 업로드(빌더) + 트랜잭션 자동 싱크(스튜디오 밖)** (`api/state.js` + `hooks/remote/`(useWorkspace가 배선) + `components/SyncButton.jsx`): 접속 시 서버로 하이드레이션하고, 빌더의 연속 편집은 "서버에 저장"으로 올린다 — 저장 상태·수동 저장 UI는 **빌더 상단바 SyncButton 전용**이다. 홈은 쓰기가 전부 자동 싱크라 저장 UI가 없고, 프로필 버튼 배지로 다운로드 상태만 보여준다(동기화 중 펄스·연결 안 됨). 스튜디오 밖 단발 쓰기 트랜잭션(프로필 생성·삭제, 시나리오 생성·복제·가져오기·삭제·칩 순서, 쓰레드 기록·삭제, 전체 복원, 공유 링크 가져오기 — 프로필 전환은 쓰기가 아니라 제외)은 `requestAutoSync()`가 1.2s 디바운스 뒤 자동 업로드한다 — 전체 자동 미러링은 여러 창이 서로를 덮고 실패가 조용해서 제거했고, 자동 트랜잭션 싱크는 충돌(다른 창의 선행 변경) 시 덮지 않고 멈춰 수동 저장으로 유도하며 실패를 토스트로 알린다. "동기화 중" 펄스(`remoteSync.hydrating`)는 **활성 프로필의 홈 필요분을 받는 동안** 켜진다 — 첫 하이드레이션(homeSynced 전)과 프로필 전환 직후(그 계정 콘텐츠 로드 중, `syncingAccountIds`) 둘 다. 실패 시 "연결 안 됨"을 표시한다(미저장 표시는 빌더 SyncButton만). 저장 직전 `?index=1`(행 목록·updatedAt)로 다른 창의 선행 변경을 감지해 덮어쓰기 확인을 받는다. 키는 **화면 필요 단위의 행**이다 (분해·조립은 `lib/accountRows.js`): `account:<id>`(셸 본문 — 프로필·탐색·시나리오 칩 메타, 홈 첫 화면에 필요한 전부)·`account:<id>:scenario:<sid>`(콘텐츠: stages·planCases — 칩 클릭 체험·빌더용)·`account:<id>:versions:<sid>`(발행 버전 스냅샷 — 빌더 전용)·`account:<id>:threads`·`accounts-meta`(순서만 — **활성 프로필 id는 기기별 상태라 동기화하지 않는다**)·`keywords`. **하이드레이션은 부트 1왕복 + 필요 시점 로드**: `?boot=<계정id>` 한 왕복(행 목록+메타+키워드+활성 계정 셸)으로 홈을 그리고(bootReady — 업로드 허용 시점), 나머지 계정 셸과 활성 계정 콘텐츠·쓰레드는 백그라운드(homeSynced — "동기화 중" 배지 기준), **버전 스냅샷은 빌더 진입 시**(`ensureStudioSynced`), 다른 계정 콘텐츠는 프로필 전환 시(`ensureAccountSynced`)만 받는다. 칩 클릭·복제는 `ensureScenarioSynced`, 내보내기·전체 백업은 `ensureActiveSynced`/`ensureAllSynced`가 선행한다(App.jsx `openSynced` 게이트). 하이드레이션 사이에 손댄 데이터는 서버 값으로 덮지 않는다(쓰레드만 id 합집합 병합 — 추가형 로그라서). **업로드는 행 단위 게이트**: 이 세션에서 서버와 맞춘 행(loaded)과 서버에 없는 새 행만 전송하고(`rowsRef` 기준선 — 안 받은 행을 낡은 로컬로 덮지 않는다), 삭제는 명시적(이 세션에서 지운 계정 + 셸을 맞춘 계정의 사라진 시나리오 행)이다. 예외는 시딩 가드·전체 복원 세션(`localAuthorityRef` — 로컬이 전체 의도라 전 행 전송+서버 잔여 정리). 구 형식(통짜 `accounts` 블롭 → 1차 통짜 행(`threads` 인라인) → 2차 콘텐츠 본문(scenarios에 stages 인라인))은 하이드레이션이 만나는 대로 새 행 체계로 이관한다(부속 행 먼저 → 본문 행 마지막이 완료 표식, 끊겨도 재시도). **객체 참조가 곧 미저장 신호**다: `patchActive`·`updateScenario`·`useStageItems.write`가 무변경 업데이터(같은 참조 반환)를 스킵하는 사슬을 유지할 것 — 끊기면 빌더만 열어도 미저장 배지가 켜진다. 발행 버전 스냅샷은 시나리오 전체 사본 — `VERSION_LIMIT`(5)을 늘리지 말 것. **주의: 구 클라이언트(커밋된 docs/ = GitHub Pages 레거시 빌드)로 "서버에 저장"을 누르면 구형 행을 재저장해 새 행 체계와 어긋난다** — 레거시 배포에서는 편집·저장하지 말 것.
 
 ## 아키텍처 (scenario-studio/src)
 
 - `App.jsx` — **앱 셸**: 라우팅(home/builder/player/explore-editor + 공유 링크 모드)과 토스트, 그리고 화면들이 쓰는 `api` 객체 조립. 시나리오 CRUD는 여기, 그 밖은 아래로 위임
-- `hooks/useWorkspace.js` — **계정(프로필별 워크스페이스) 상태와 저장**: localStorage + 서버 미러링(계정 행 단위 — 위 "서버 미러링" 항목). 서버 하이드레이션 가드 2개(가져오기 실패 시 미러링 중단 / 기본값 시드가 사용자 데이터를 덮지 않게)와 구 통짜 블롭 마이그레이션이 여기 있다
+- `hooks/useWorkspace.js` — **계정(프로필별 워크스페이스) 상태의 원본**: 로컬 상태·patchActive(무변경 참조 스킵)·localStorage 자동 저장·프로필 관리·전체 백업. 서버 쪽에는 stateRef·세터만 내어 준다
+- `hooks/remote/` — **서버 미러링 한 벌** (위 "서버 동기화" 항목의 구현): `useRemoteSync.js`(공유 ref·동기화 상태·업로드 흐름 배선 — 반환하는 `remoteSync` 한 벌을 useWorkspace가 그대로 노출), `rowAdoption.js`(서버 행 채택 — 행→메모리 병합+기준선), `onDemandSync.js`(필요 시점 로드 syncRow·ensure*), `hydration.js`(부트 1왕복+백그라운드+구형 이관 — 시딩 가드 포함), `push.js`(미저장 감지 accountDirty + 업로드 코어 pushCore — 행 단위 게이트·명시적 삭제·충돌 처리)
 - `lib/scenarioOps.js` — 시나리오 통째 복사(복제·가져오기·공유 채택)의 **id 재발급 규칙**. 아이템 id는 parentId·계획 조건 questionId·평가 기록 키 세 곳에서 참조되므로 한 곳에서 다시 매단다
 - `lib/store.js` — 데이터 계층 **배럴**. 실제 구현은 `lib/store/` 네 모듈:
   - `store/model.js` 시나리오·아이템의 형태와 정규화, STAGES/DEVICE_PRESETS/CHIP_COLORS
@@ -64,7 +64,7 @@ cd scenario-studio && npm run build   # vite build && cp -R ../legacy ../docs/le
   - `revision.js` 평가 피드백 → 필드 단위 수정안. 허용 목록(caseId·itemId·fieldKey) 밖은 전부 차단
   - `caseRevision.js` 케이스 **통째 재생성** (컴포넌트 추가·삭제·순서까지). 안전 모델이 다르다: 유지 컴포넌트는 id 보존(평가 기록이 id에 묶임)+원본 props에서 시작해 편집 가능 키만 덮음(사실 필드·팩 메타데이터 보존), 새 상품은 카탈로그 대조, 조건은 불변, 부분 적용 없음(전부/전무 + ⌘Z)
 - `components/Builder.jsx` — **편집기 오케스트레이터**. 편집 상태만 갖고 규칙은 전부 아래로 위임한다
-- `components/builder/hooks/` — `useStageItems`(아이템을 어디서 읽고 어디에 저장할지: 탐색/설문/계획), `useItemOps`(추가·수정·삭제·복제·클립보드 — 배치 커밋은 전부 layout.settle/compact 경유), `useBuilderHistory`(Undo 스택), `usePlanCases`(케이스 CRUD·평가), `useCanvasDrag`(밀림 게이트·히스테리시스·삽입 존 보호·WYSIWYG 커밋), `useContainerNesting`(컨테이너 자식 넣기/꺼내기/슬롯), `useBuilderShortcuts`(키 매핑)
+- `components/builder/hooks/` — `useStageItems`(아이템을 어디서 읽고 어디에 저장할지: 탐색/설문/계획), `useItemOps`(추가·수정·삭제·복제·클립보드 — 배치 커밋은 전부 layout.settle/compact 경유), `useBuilderHistory`(Undo 스택), `usePlanCases`(케이스 CRUD·평가), `useCanvasDrag`(밀림 게이트·히스테리시스·삽입 존 보호·WYSIWYG 커밋), `useContainerNesting`(컨테이너 자식 넣기/꺼내기/슬롯), `useBuilderShortcuts`(키 매핑), `useTopBarActions`(시나리오 명령 — 기기·컴팩트·자동 정렬·발행·버전 복원·JSON 입출력·공유 링크), `useCanvasInteractions`(캔버스 표면 이벤트 — 마퀴·우클릭·팔레트 DnD·줌·재측정 재컴팩트), `useEvaluationBridge`(평가↔편집 이동 — feedbackTarget·인스펙터 포커스 신호, 상단 문맥 바는 `FeedbackFocusBar.jsx`)
 - `components/builder/EvaluationPanel.jsx` — 평가 스튜디오 오케스트레이터 (말풍선 배치·케이스 탭·AI 진입점). 표현 컴포넌트는 `components/builder/evaluation/`: StarRating(+SCORE_GUIDE)/Rubric/Leaderboard/CommentBubble/PreviewBoundary
 - `components/builder/BuilderTopBar.jsx` / `PlanCaseBar.jsx` / `BuilderCanvas.jsx` — 상태 없는 표현 컴포넌트
 - `components/builder/PromptExchange.jsx` — "프롬프트 복사 → 결과 붙여넣기" UI 한 벌. 세 AI 다이얼로그가 공유
@@ -79,7 +79,7 @@ cd scenario-studio && npm run build   # vite build && cp -R ../legacy ../docs/le
 - `components/HomeView.jsx` — 홈. 발행 칩(색상/드래그 순서변경/클릭 실행), 좌상단 기기+프로필 컨트롤, 시나리오 드로어(템플릿·복제·**JSON 통합 입출력** — 내보내기는 범위 선택(시나리오 목록/전체 백업), 가져오기는 `classifyImportPayload` 자동 감지 후 동작별 확인 다이얼로그(추가/전체 교체). 빌더의 현재 시나리오 입출력은 별도), 쓰레드 패널
 - `components/ExploreFrame.jsx` — 구버전 설정 기반 탐색 렌더러 (explore.items가 없을 때의 안전망 전용)
 - `components/ExploreEditor.jsx` — 사용자 프로필 + 키워드 사전 편집기 (탐색 콘텐츠 편집은 빌더 "탐색" 탭으로 이동)
-- `studio.css` — 스튜디오 전용 스타일 (`sb-` 접두사) + 원본 CSS 클래스의 절대배치 무력화 오버라이드
+- `studio.css` — 스튜디오 전용 스타일 (`sb-` 접두사) + 원본 CSS 클래스의 절대배치 무력화 오버라이드. 실제 규칙은 `styles/` 11개 섹션 파일에 있고 studio.css는 @import 배럴 — **@import 순서가 곧 캐스케이드**라 파일 간 이동·순서 변경 금지, 새 규칙은 맞는 섹션 파일 끝에 추가
 
 ## 기능 현황 (2026-07 기준 — 상세는 FEATURES.md)
 
