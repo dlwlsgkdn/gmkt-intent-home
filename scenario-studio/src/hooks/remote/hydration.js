@@ -29,10 +29,10 @@ import { installDateMakeupPack, isDefaultScenario } from '../../lib/dateMakeupPa
  *   · 빈 브라우저가 기본 데이터로 서버를 시드해 둔 경우, 사용자 데이터를 가진 로컬을 지킨다.
  */
 
-const hasUserData = (list) => list.length > 1 || list.some((account) =>
+const accountHasWork = (account) =>
   (account.scenarios || []).some((scenario) => !isDefaultScenario(scenario))
   || (account.threads || []).length > 0
-)
+const hasUserData = (list) => list.length > 1 || list.some(accountHasWork)
 
 /* ── 구형 → 새 행 체계 이관 ──
    순서가 안전장치: 부속 행 전부 → 본문(셸) 행 마지막(본문이 곧 이관 완료 표식).
@@ -62,7 +62,7 @@ const migrateLegacyBody = async ({ account, fat }, serverKeys) => {
 /* signal.cancelled: 효과 클린업이 세운다 — 언마운트 후 setState·서버 쓰기를 멈춘다 */
 export async function runHydration({ ctx, adoption, syncRow, accountDirty, requestAutoSync, signal }) {
   const {
-    init, stateRef, setActiveAccountId,
+    init, stateRef, setAccounts, setActiveAccountId,
     rowsRef, metaBaselineRef, serverIndexRef, localAuthorityRef,
     initialByIdRef, legacyQueueRef, bootDeferredRef,
     setBootReady, setHomeSynced,
@@ -144,6 +144,16 @@ export async function runHydration({ ctx, adoption, syncRow, accountDirty, reque
           const current = stateRef.current.accounts.find((account) => account.id === prev)
           if (current && current !== initialByIdRef.current.get(prev)) return prev // 하이드레이션 중 만든 계정
           return bootAccount.id
+        })
+        /* 한 번도 동기화된 적 없는 로컬 기본 계정 정리 — 빈 브라우저가 접속하며 시드한
+           기본 계정이 서버 계정 목록에 얹혀 같은 이름의 프로필로 중복 업로드되는 것을
+           막는다(구 통짜 경로의 adoptFullAccounts와 같은 규칙). 손댔거나 실제 작업이
+           있는 계정은 서버에 없어도 남긴다 — 미저장으로 남아 업로드된다 */
+        setAccounts((prev) => {
+          const next = prev.filter((account) => slimIds.includes(account.id)
+            || account !== initialByIdRef.current.get(account.id)
+            || accountHasWork(account))
+          return next.length === prev.length || next.length === 0 ? prev : next
         })
       }
     }
