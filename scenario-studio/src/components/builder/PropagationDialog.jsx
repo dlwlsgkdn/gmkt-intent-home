@@ -169,23 +169,28 @@ export default function PropagationDialog({ scenario, planCases, onApply, onClos
                 </div>
                 <span>{seedCount}개 선택됨</span>
               </div>
-              {evaluatedCount > SEED_LIMIT_OPTIONS[0] && (
-                <label className="sb-prop-seedlimit">
-                  씨앗 범위
-                  <select
-                    value={seedCaseLimit ?? 'all'}
-                    onChange={(event) => setSeedCaseLimit(
-                      event.target.value === 'all' ? null : Number(event.target.value)
-                    )}
-                  >
-                    {SEED_LIMIT_OPTIONS.filter((limit) => limit < evaluatedCount).map((limit) => (
-                      <option key={limit} value={limit}>리더보드 상위 {limit}개 케이스</option>
-                    ))}
-                    <option value="all">평가한 케이스 전체 ({evaluatedCount}개)</option>
-                  </select>
-                  <small>평균 별점이 높은 케이스의 피드백부터 씨앗이 돼요.</small>
-                </label>
-              )}
+              <label className="sb-prop-seedlimit">
+                씨앗 범위
+                <select
+                  value={seedCaseLimit ?? 'all'}
+                  onChange={(event) => setSeedCaseLimit(
+                    event.target.value === 'all' ? null : Number(event.target.value)
+                  )}
+                >
+                  {/* 평가 수보다 큰 제한은 전체와 같으므로 비활성 — 숨기면 기능이 없어진 걸로 오해된다 */}
+                  {SEED_LIMIT_OPTIONS.map((limit) => (
+                    <option key={limit} value={limit} disabled={limit >= evaluatedCount}>
+                      리더보드 상위 {limit}개 케이스
+                    </option>
+                  ))}
+                  <option value="all">평가한 케이스 전체 ({evaluatedCount}개)</option>
+                </select>
+                <small>
+                  {evaluatedCount > SEED_LIMIT_OPTIONS[0]
+                    ? '평균 별점이 높은 케이스의 피드백부터 씨앗이 돼요.'
+                    : `평가한 케이스가 ${SEED_LIMIT_OPTIONS[0] + 1}개 이상 쌓이면 상위 N개로 제한할 수 있어요.`}
+                </small>
+              </label>
               <ul className="sb-crev-feedback">
                 {allSeeds.caseNotes.length > 0 && (
                   <li className="sb-crev-feedback__case">
