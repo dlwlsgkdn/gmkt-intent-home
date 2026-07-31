@@ -8,7 +8,6 @@ import {
   threadsKey,
   versionsKey,
 } from '../../lib/accountRows.js'
-import { installDateMakeupPack } from '../../lib/dateMakeupPack.js'
 
 /*
  * 서버 행 채택 — 받은 행을 메모리에 병합하고 행 기준선(rowsRef)을 잡는다.
@@ -53,7 +52,7 @@ export function createRowAdoption(ctx) {
     const assembled = assembleAccount(data, { localAccount: local })
     const normalized = normalizeAccountsState({ accounts: [assembled], activeId: id })
     if (!normalized) return null
-    const adopted = installDateMakeupPack(normalized).accounts[0]
+    const adopted = normalized.accounts[0]
 
     setAccounts((prev) => {
       const current = prev.find((account) => account.id === id)

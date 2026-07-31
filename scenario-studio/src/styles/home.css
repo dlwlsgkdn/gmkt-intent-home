@@ -396,11 +396,4 @@
 .sb-scenario-row__actions button:hover { border-color: var(--sb-n-400); background: var(--sb-n-50); }
 .sb-scenario-row__actions .sb-danger { color: var(--sb-danger); }
 .sb-scenario-row__actions .sb-danger:hover { background: var(--sb-danger-soft); border-color: rgba(220, 38, 38, 0.4); }
-.sb-scenario-row__actions .sb-default-lock:disabled {
-  cursor: not-allowed;
-  border-color: var(--sb-n-200);
-  background: var(--sb-n-50);
-  color: var(--sb-n-400);
-  opacity: 1;
-}
 

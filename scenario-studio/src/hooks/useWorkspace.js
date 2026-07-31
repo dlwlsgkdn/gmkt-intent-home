@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   createAccount,
   createDataBackup,
+  isStarterScenario,
   loadAccounts,
   loadKeywords,
   loadViewerDevice,
@@ -10,7 +11,7 @@ import {
   saveKeywords,
   saveViewerDevice,
 } from '../lib/store.js'
-import { installDateMakeupPack, installDateMakeupScenario } from '../lib/dateMakeupPack.js'
+import { installStarterCopy } from '../lib/scenarioOps.js'
 import { useRemoteSync } from './remote/useRemoteSync.js'
 
 /*
@@ -22,7 +23,7 @@ import { useRemoteSync } from './remote/useRemoteSync.js'
  * 수단(stateRef·세터)만 내어 준다.
  */
 export function useWorkspace({ showToast, onReset }) {
-  const [init] = useState(() => installDateMakeupPack(loadAccounts()))
+  const [init] = useState(loadAccounts)
   const [accounts, setAccounts] = useState(init.accounts)
   const [activeAccountId, setActiveAccountId] = useState(init.activeId)
   const [keywords, setKeywords] = useState(loadKeywords)
@@ -73,17 +74,49 @@ export function useWorkspace({ showToast, onReset }) {
     showToast(`"${account.profile.name}" 프로필로 전환했어요.`)
   }
 
-  const addAccount = (name) => {
+  /* 기본(starter) 표식이 있는 시나리오 수집 — 새 프로필 생성 시 복사 설치 대상.
+     활성 계정 우선이고 같은 id는 한 번만 센다 (구 팩 시나리오는 여러 계정이 같은 id를 공유) */
+  const collectStarterScenarios = () => {
+    const { accounts, activeAccountId } = stateRef.current
+    const active = accounts.find((account) => account.id === activeAccountId)
+    const ordered = active ? [active, ...accounts.filter((account) => account !== active)] : accounts
+    const seen = new Set()
+    const found = []
+    for (const account of ordered) {
+      for (const scenario of account.scenarios || []) {
+        if (!isStarterScenario(scenario) || seen.has(scenario.id)) continue
+        seen.add(scenario.id)
+        found.push({ accountId: account.id, scenarioId: scenario.id })
+      }
+    }
+    return found
+  }
+
+  const addAccount = async (name) => {
     const label = String(name || '').trim() || `사용자 ${accounts.length + 1}`
-    let account = createAccount()
+    const account = createAccount()
     account.profile = { ...account.profile, name: label }
     account.explore = { ...account.explore, greeting: `${label}님, 오늘은 어떤 쇼핑을 도와드릴까요?` }
-    account = installDateMakeupScenario(account)
+    /* 기본 시나리오 설치 — 콘텐츠(stages·planCases)가 지연 로드라 원본 행을 먼저 맞춘 뒤 복사한다 */
+    const starters = collectStarterScenarios()
+    if (starters.length > 0) {
+      await Promise.allSettled(starters.map(({ accountId, scenarioId }) =>
+        sync.ensureScenarioRowSynced(accountId, scenarioId)))
+      await new Promise((resolve) => setTimeout(resolve, 0)) // 채택 setState 커밋 대기
+      const { accounts: fresh } = stateRef.current
+      account.scenarios = starters
+        .map(({ accountId, scenarioId }) => fresh.find((candidate) => candidate.id === accountId)
+          ?.scenarios.find((scenario) => scenario.id === scenarioId))
+        .filter(Boolean)
+        .map(installStarterCopy)
+    }
     setAccounts((prev) => [...prev, account])
     setActiveAccountId(account.id)
     onReset()
     sync.requestAutoSync()
-    showToast(`"${label}" 프로필을 만들었어요. 탐색 페이지와 시나리오가 새로 시작돼요.`)
+    showToast(account.scenarios.length > 0
+      ? `"${label}" 프로필을 만들었어요. 기본 시나리오 ${account.scenarios.length}개를 설치했어요.`
+      : `"${label}" 프로필을 만들었어요. 탐색 페이지와 시나리오가 새로 시작돼요.`)
   }
 
   const removeAccount = (id) => {
@@ -113,9 +146,8 @@ export function useWorkspace({ showToast, onReset }) {
   const importDataBackup = (payload) => {
     try {
       const restored = parseDataBackup(payload)
-      const installed = installDateMakeupPack({ accounts: restored.accounts, activeId: restored.activeId })
-      setAccounts(installed.accounts)
-      setActiveAccountId(installed.activeId)
+      setAccounts(restored.accounts)
+      setActiveAccountId(restored.activeId)
       setKeywords(restored.keywords)
       setViewerDevice(restored.viewerDevice)
       onReset()

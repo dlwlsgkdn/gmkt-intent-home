@@ -212,6 +212,7 @@ export function useRemoteSync({
   return {
     /* 필요 시점 로드 — App.jsx가 플레이(칩 클릭)·빌더 진입·복제·내보내기 전에 부른다 */
     ensureScenarioSynced: onDemand.ensureScenarioSynced,
+    ensureScenarioRowSynced: onDemand.ensureScenarioRowSynced,
     ensureStudioSynced: onDemand.ensureStudioSynced,
     ensureAccountSynced: onDemand.ensureAccountSynced,
     ensureActiveSynced: onDemand.ensureActiveSynced,

@@ -11,12 +11,14 @@ import { remapCaseEvaluation } from './evaluation.js'
  * 한 군데라도 옛 id를 남기면 사본이 원본과 얽히거나 조건이 조용히 안 맞는다.
  */
 
-/* 사본을 "내 것"으로 만드는 공통 표시 — 새 id를 받고 기본 팩 소속을 뗀다.
-   (발행 상태·버전 이력을 지울지는 경로마다 다르므로 여기서 정하지 않는다) */
+/* 사본을 "내 것"으로 만드는 공통 표시 — 새 id를 받고 기본 팩 소속·기본 시나리오 표식을 뗀다.
+   (starter를 떼야 기본 시나리오 목록이 새 프로필마다 사본으로 불어나지 않는다.
+   발행 상태·버전 이력을 지울지는 경로마다 다르므로 여기서 정하지 않는다) */
 const asFreshCopy = (patch) => ({
   id: uid(),
   sourcePackId: undefined,
   isDefaultScenario: false,
+  starter: undefined,
   updatedAt: new Date().toISOString(),
   ...patch,
 })
@@ -24,7 +26,8 @@ const asFreshCopy = (patch) => ({
 /* 내 스튜디오에서 새로 시작하는 사본 — 발행 이력을 끊고 작성 중으로 되돌린다 */
 const asUnpublished = { status: 'draft', versions: [], versionAt: undefined }
 
-export function duplicateScenario(source) {
+/* id 재발급 사본의 공통 코어 — 문서 상단의 세 참조처(parentId·questionId·평가 키)를 함께 다시 매단다 */
+function cloneScenarioWith(source, patch) {
   const idMap = {}
   const allItems = [
     source.stages.survey || [],
@@ -42,12 +45,7 @@ export function duplicateScenario(source) {
 
   return normalizeScenario({
     ...source,
-    ...asFreshCopy({
-      ...asUnpublished,
-      title: `${source.title} 복사본`,
-      chip: source.chip ? `${source.chip}_복사` : '복사본',
-      createdAt: new Date().toISOString(),
-    }),
+    ...asFreshCopy(patch),
     stages: { ...source.stages, survey: cloneItems(source.stages.survey || []), plan: [] },
     planCases: (source.planCases || []).map((planCase) => ({
       ...planCase,
@@ -61,6 +59,25 @@ export function duplicateScenario(source) {
       items: cloneItems(planCase.items || []),
       evaluation: remapCaseEvaluation(planCase.evaluation, idMap),
     })),
+  })
+}
+
+export function duplicateScenario(source) {
+  return cloneScenarioWith(source, {
+    ...asUnpublished,
+    title: `${source.title} 복사본`,
+    chip: source.chip ? `${source.chip}_복사` : '복사본',
+    createdAt: new Date().toISOString(),
+  })
+}
+
+/* 기본(starter) 시나리오를 새 프로필에 설치하는 사본 — 이름·칩·발행 상태를 그대로 두어
+   설치 직후 홈에 칩이 뜬다. 버전 이력만 끊는다(스냅샷은 원본 계정의 것이므로) */
+export function installStarterCopy(source) {
+  return cloneScenarioWith(source, {
+    versions: [],
+    versionAt: undefined,
+    createdAt: new Date().toISOString(),
   })
 }
 

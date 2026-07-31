@@ -17,6 +17,8 @@ export {
   STAGES,
   createItem,
   createScenario,
+  isDefaultScenario,
+  isStarterScenario,
   normalizeScenario,
   sortByPosition,
   splitList,

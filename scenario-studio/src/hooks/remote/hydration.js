@@ -14,8 +14,7 @@ import {
   versionsKey,
   isFatAccountRow,
 } from '../../lib/accountRows.js'
-import { normalizeAccountsState } from '../../lib/store.js'
-import { installDateMakeupPack, isDefaultScenario } from '../../lib/dateMakeupPack.js'
+import { isDefaultScenario, normalizeAccountsState } from '../../lib/store.js'
 
 /*
  * 서버 하이드레이션 (접속 최초 1회) — 부트 1왕복 + 백그라운드.
@@ -90,12 +89,11 @@ export async function runHydration({ ctx, adoption, syncRow, accountDirty, reque
       localAuthorityRef.current = true // 시딩 가드 — 수동 저장이 전체 업로드로 해소
     }
     if (remote) {
-      const adopted = installDateMakeupPack(remote)
-      adoptFullAccounts(adopted)
+      adoptFullAccounts(remote)
       wroteServer = true
       try {
-        await Promise.all(adopted.accounts.map((account) => migrateLegacyBody({ account, fat: true }, keys)))
-        await saveRemoteStateNow('accounts-meta', { order: adopted.accounts.map((account) => account.id) })
+        await Promise.all(remote.accounts.map((account) => migrateLegacyBody({ account, fat: true }, keys)))
+        await saveRemoteStateNow('accounts-meta', { order: remote.accounts.map((account) => account.id) })
         if (keys.has('accounts')) await saveRemoteStateNow('accounts', null)
       } catch (error) {
         console.warn('[remote] 행 체계 이관 실패 — 다음 접속에서 다시 시도해요:', error)

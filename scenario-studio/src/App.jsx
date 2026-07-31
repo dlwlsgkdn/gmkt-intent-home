@@ -1,8 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { createScenario, normalizeScenario } from './lib/store.js'
+import { createScenario, isStarterScenario, normalizeScenario } from './lib/store.js'
 import { readShareFromHash, clearShareHash } from './lib/share.js'
 import { adoptSharedScenario, duplicateScenario, scenariosFromImport } from './lib/scenarioOps.js'
-import { isDefaultScenario } from './lib/dateMakeupPack.js'
 import { useWorkspace } from './hooks/useWorkspace.js'
 import HomeView from './components/HomeView.jsx'
 import Builder from './components/Builder.jsx'
@@ -73,13 +72,24 @@ export default function App() {
   /* 홈·드로어의 시나리오/쓰레드 CRUD는 단발 트랜잭션이라 requestAutoSync로 서버에도 바로
      싱크한다 — 빌더 안 연속 편집(updateScenario)만 수동 "서버에 저장"이 담당 */
   const removeScenario = (id) => {
-    if (isDefaultScenario(scenarios.find((scenario) => scenario.id === id))) {
-      showToast('기본 시나리오는 삭제할 수 없어요.')
-      return
-    }
     setScenarios((prev) => prev.filter((scenario) => scenario.id !== id))
     if (route.id === id) goHome()
     requestAutoSync()
+  }
+
+  /* 기본 시나리오 표식 토글 — 표식이 붙은 시나리오는 새 프로필 생성 시 복사 설치된다.
+     표식 해제는 starter를 undefined로 되돌려 셸 JSON에 흔적을 남기지 않는다 */
+  const toggleStarterScenario = (id) => {
+    const target = scenarios.find((scenario) => scenario.id === id)
+    if (!target) return
+    const next = !isStarterScenario(target)
+    setScenarios((prev) => prev.map((scenario) => (scenario.id === id
+      ? { ...scenario, starter: next || undefined, updatedAt: new Date().toISOString() }
+      : scenario)))
+    requestAutoSync()
+    showToast(next
+      ? `"${target.title}"를 기본 시나리오로 지정했어요. 새 프로필을 만들 때 자동으로 설치돼요.`
+      : `"${target.title}"의 기본 시나리오 지정을 해제했어요.`)
   }
 
   const registerScenario = (scenario) => {
@@ -167,7 +177,8 @@ export default function App() {
     copyScenario,
     reorderScenario,
     importScenarios,
-    isDefaultScenario,
+    isStarterScenario,
+    toggleStarterScenario,
     exportDataBackup: workspace.exportDataBackup, // async — 서버 전체 행을 맞춘 뒤 만든다
     importDataBackup: workspace.importDataBackup,
     ensureActiveSynced: workspace.ensureActiveSynced,
