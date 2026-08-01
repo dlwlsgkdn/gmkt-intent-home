@@ -22,21 +22,19 @@ export const ThreadSource = z.object({
 export type ThreadSource = z.infer<typeof ThreadSource>
 
 /** LLM 호출 메타 — 비용·품질 대시보드의 원천. core는 내용을 해석하지 않는다(jsonb 저장만) */
-export const LlmMeta = z
-  .object({
-    model: z.string().optional(),
-    promptVersion: z.string().optional(),
-    usage: z
-      .object({
-        inputTokens: z.number().optional(),
-        outputTokens: z.number().optional(),
-        cacheReadTokens: z.number().optional(),
-      })
-      .optional(),
-    latencyMs: z.number().optional(),
-    fallback: z.boolean().optional(),
-  })
-  .passthrough()
+export const LlmMeta = z.looseObject({
+  model: z.string().optional(),
+  promptVersion: z.string().optional(),
+  usage: z
+    .object({
+      inputTokens: z.number().optional(),
+      outputTokens: z.number().optional(),
+      cacheReadTokens: z.number().optional(),
+    })
+    .optional(),
+  latencyMs: z.number().optional(),
+  fallback: z.boolean().optional(),
+})
 export type LlmMeta = z.infer<typeof LlmMeta>
 
 /* ── internal API 요청 본문 ───────────────────────────────────────────── */
@@ -60,7 +58,7 @@ export type UpdateThreadBody = z.infer<typeof UpdateThreadBody>
 
 export const UpsertStepBody = z.object({
   stage: StepStage,
-  payload: z.record(z.unknown()),
+  payload: z.record(z.string(), z.unknown()),
   llmMeta: LlmMeta.optional(),
 })
 export type UpsertStepBody = z.infer<typeof UpsertStepBody>
@@ -83,7 +81,7 @@ export const ThreadStep = z.object({
   threadId: z.string().uuid(),
   seq: z.number().int(),
   stage: StepStage,
-  payload: z.record(z.unknown()),
+  payload: z.record(z.string(), z.unknown()),
   llmMeta: LlmMeta.nullable(),
   createdAt: z.string(),
 })

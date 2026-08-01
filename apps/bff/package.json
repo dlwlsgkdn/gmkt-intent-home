@@ -1,23 +1,19 @@
 {
-  "name": "ddak-core",
+  "name": "ddak-bff",
   "version": "0.1.0",
   "private": true,
-  "description": "DDAK backend core — 쓰레드 저장·조회 (NestJS + Drizzle + Neon)",
+  "description": "DDAK BFF — journeys API(SSE) + Claude 오케스트레이션 + core 기록",
   "scripts": {
     "build": "nest build",
     "start": "node dist/main.js",
-    "start:dev": "nest start --watch",
-    "db:generate": "drizzle-kit generate",
-    "db:push": "drizzle-kit push"
+    "start:dev": "nest start --watch"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
     "@ddak/schema": "*",
-    "@neondatabase/serverless": "^0.10.4",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
-    "@nestjs/swagger": "^11.0.0",
-    "drizzle-orm": "^0.45.2",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "zod": "^4.4.0"
@@ -26,7 +22,6 @@
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
     "@types/node": "^22.10.0",
-    "drizzle-kit": "^0.31.0",
     "typescript": "^5.7.2"
   }
 }
