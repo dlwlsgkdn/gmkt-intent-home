@@ -64,3 +64,37 @@ export const UpsertStepBody = z.object({
   llmMeta: LlmMeta.optional(),
 })
 export type UpsertStepBody = z.infer<typeof UpsertStepBody>
+
+/* ── internal API 응답 (와이어 형식 — 날짜는 ISO 문자열) ─────────────── */
+
+export const Thread = z.object({
+  id: z.string().uuid(),
+  userId: z.string(),
+  title: z.string().nullable(),
+  source: ThreadSource.nullable(),
+  status: ThreadStatus,
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+export type Thread = z.infer<typeof Thread>
+
+export const ThreadStep = z.object({
+  id: z.string().uuid(),
+  threadId: z.string().uuid(),
+  seq: z.number().int(),
+  stage: StepStage,
+  payload: z.record(z.unknown()),
+  llmMeta: LlmMeta.nullable(),
+  createdAt: z.string(),
+})
+export type ThreadStep = z.infer<typeof ThreadStep>
+
+export const ThreadWithSteps = Thread.extend({ steps: z.array(ThreadStep) })
+export type ThreadWithSteps = z.infer<typeof ThreadWithSteps>
+
+export const ThreadListPage = z.object({
+  items: z.array(Thread),
+  /** 다음 페이지 커서 (마지막 항목의 updatedAt ISO) — 더 없으면 null */
+  nextCursor: z.string().nullable(),
+})
+export type ThreadListPage = z.infer<typeof ThreadListPage>
