@@ -409,14 +409,6 @@
 }
 
 /* ── AI 시나리오 생성 ── */
-.sb-template-card--ai {
-  width: 100%;
-  margin-bottom: 8px;
-  border-color: rgba(124, 58, 237, 0.35);
-  background: linear-gradient(135deg, rgba(124, 58, 237, 0.07), rgba(37, 99, 235, 0.05));
-}
-.sb-template-card--ai:hover { border-color: rgba(124, 58, 237, 0.6); }
-.sb-template-card--ai .sb-template-card__icon { color: var(--sb-ai); }
 .sb-sgen-preview {
   display: grid;
   grid-template-columns: 1fr 1fr;

@@ -142,27 +142,6 @@
   margin-bottom: 18px;
 }
 .sb-drawer__head h3 { margin: 4px 0 0; font-size: 20px; font-weight: 400; color: var(--sb-ink); }
-/* 탐색 페이지 편집 진입 버튼 */
-.sb-explore-btn {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 12px 14px;
-  margin-bottom: 16px;
-  border-radius: var(--sb-r-xl);
-  border: 1px solid var(--sb-line);
-  background: linear-gradient(135deg, var(--sb-n-50), #eef2f6);
-  text-align: left;
-  color: var(--sb-n-500);
-  transition: color var(--sb-dur) var(--sb-ease), background-color var(--sb-dur) var(--sb-ease), border-color var(--sb-dur) var(--sb-ease), box-shadow var(--sb-dur) var(--sb-ease);
-}
-.sb-explore-btn:hover { border-color: var(--sb-accent); background: var(--sb-accent-soft); }
-.sb-explore-btn__icon { font-size: 18px; flex-shrink: 0; }
-.sb-explore-btn__text { flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.sb-explore-btn__text strong { font-size: 13px; font-weight: 400; color: var(--sb-ink); }
-.sb-explore-btn__text small { font-size: var(--sb-t-caption); color: var(--sb-n-400); }
-
 /* 탐색 페이지 편집기 */
 .sb-title-static { font-size: 16px; font-weight: 400; color: var(--sb-ink); white-space: nowrap; }
 .sb-explore-workspace {
@@ -181,29 +160,39 @@
 }
 .sb-chip-scenario--sample { opacity: 0.55; border-style: dashed !important; }
 
-/* 템플릿 갤러리 */
-.sb-template-grid {
+/* 새로 만들기 — 컴팩트 2×2 칩 (설명은 title 툴팁). 목록이 주인공이 되도록 낮게 유지 */
+.sb-create-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
   margin-bottom: 14px;
 }
-.sb-template-card {
+.sb-create-chip {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 3px;
-  padding: 12px 11px;
-  border-radius: var(--sb-r-xl);
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: var(--sb-r-md);
   border: 1px dashed rgba(95, 116, 101, 0.45);
   background: var(--sb-accent-soft);
   text-align: left;
-  transition: color var(--sb-dur) var(--sb-ease), background-color var(--sb-dur) var(--sb-ease), border-color var(--sb-dur) var(--sb-ease), box-shadow var(--sb-dur) var(--sb-ease);
+  font-size: var(--sb-t-small);
+  font-weight: 400;
+  color: var(--sb-accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color var(--sb-dur) var(--sb-ease), background-color var(--sb-dur) var(--sb-ease), border-color var(--sb-dur) var(--sb-ease);
 }
-.sb-template-card:hover { background: rgba(95, 116, 101, 0.2); border-style: solid; }
-.sb-template-card__icon { font-size: 18px; }
-.sb-template-card strong { font-size: var(--sb-t-small); font-weight: 400; color: var(--sb-accent); }
-.sb-template-card small { font-size: var(--sb-t-micro); line-height: 1.45; color: #7d8a80; word-break: keep-all; }
+.sb-create-chip:hover { background: rgba(95, 116, 101, 0.2); border-style: solid; }
+.sb-create-chip__icon { flex-shrink: 0; font-size: var(--sb-t-body); }
+.sb-create-chip--ai {
+  border-color: rgba(124, 58, 237, 0.4);
+  background: rgba(124, 58, 237, 0.07);
+  color: var(--sb-ai);
+}
+.sb-create-chip--ai:hover { background: rgba(124, 58, 237, 0.14); border-style: solid; border-color: rgba(124, 58, 237, 0.6); }
 
 .sb-panel-label--count {
   display: flex;
@@ -229,13 +218,16 @@
   box-shadow: 0 0 0 3px var(--sb-accent-soft);
 }
 
-/* 내보내기/가져오기 */
-.sb-drawer__tools {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
+/* 워크스페이스 도구 — 목록 아래 2×2 (프로필·키워드 사전 / 기본 시나리오 / JSON 입출력) */
+.sb-drawer__utils {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--sb-line);
 }
-.sb-drawer__tools button {
+.sb-drawer__utils button {
   flex: 1;
   display: inline-flex;
   align-items: center;
@@ -250,7 +242,7 @@
   color: var(--sb-n-600);
   transition: color var(--sb-dur) var(--sb-ease), background-color var(--sb-dur) var(--sb-ease), border-color var(--sb-dur) var(--sb-ease), box-shadow var(--sb-dur) var(--sb-ease);
 }
-.sb-drawer__tools button:hover { border-color: var(--sb-n-400); background: var(--sb-n-50); }
+.sb-drawer__utils button:hover { border-color: var(--sb-n-400); background: var(--sb-n-50); }
 /* JSON 통합 입출력 다이얼로그 — 내보내기 범위 선택 / 가져오기 자동 감지 결과별 확인 */
 .sb-json-dialog { width: min(440px, 100%); background: #fff; }
 .sb-json-dialog__body { padding: 18px 24px 20px; }
@@ -311,7 +303,7 @@
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.35; transform: scale(0.72); }
 }
-.sb-drawer__list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.sb-drawer__list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
 .sb-drawer__empty {
   padding: 28px 18px;
   border-radius: var(--sb-r-xl);
@@ -375,14 +367,14 @@
   to { transform: translate(-50%, 0); opacity: 1; }
 }
 .sb-scenario-row {
-  padding: 14px 16px;
+  padding: 12px 14px;
   border-radius: var(--sb-r-xl);
   border: 1px solid var(--sb-line);
   background: #fff;
 }
-.sb-scenario-row__title { margin: 6px 0 0; font-size: 15px; font-weight: 400; color: var(--sb-ink); }
+.sb-scenario-row__title { margin: 4px 0 0; font-size: 15px; font-weight: 400; color: var(--sb-ink); }
 .sb-scenario-row__chip { margin: 2px 0 0; font-size: var(--sb-t-small); color: var(--sb-accent); }
-.sb-scenario-row__actions { display: flex; gap: 6px; margin-top: 10px; }
+.sb-scenario-row__actions { display: flex; gap: 5px; margin-top: 8px; }
 .sb-scenario-row__actions button {
   padding: 6px 12px;
   border-radius: var(--sb-r-sm);
@@ -398,10 +390,9 @@
 .sb-scenario-row__actions .sb-danger:hover { background: var(--sb-danger-soft); border-color: rgba(220, 38, 38, 0.4); }
 
 
-/* 기본 시나리오 패널 — 전역 라이브러리 전용 다이얼로그 (진입은 드로어의 ⭐ 카드).
+/* 기본 시나리오 패널 — 전역 라이브러리 전용 다이얼로그 (진입은 드로어 하단 도구 행).
    폭은 .sb-llm-dialog 기본(920px)보다 특이도를 올려야 이긴다 — evaluation-tools.css가
    home.css보다 늦게 로드된다 */
-.sb-explore-btn--starter { margin-top: -8px; }
 .sb-llm-dialog.sb-starter-panel { width: min(460px, 100%); background: #fff; }
 .sb-starter-panel__body { padding: 18px 24px 20px; }
 .sb-starter-panel__head {

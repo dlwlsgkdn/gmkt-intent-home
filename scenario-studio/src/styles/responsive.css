@@ -108,7 +108,6 @@
   .sb-player { padding: 116px 12px 60px; }
   .sb-phone { border-inline: 0; padding: 0 12px 32px; }
   .sb-drawer { width: 100vw; max-width: 100vw; }
-  .sb-template-grid { grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); }
   .sb-evaluation { padding: 14px 12px 32px; }
   .sb-evaluation__hero,
   .sb-evaluation__review { padding: 17px; border-radius: var(--sb-r-xl); }

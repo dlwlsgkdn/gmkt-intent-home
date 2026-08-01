@@ -266,40 +266,20 @@ export default function HomeView({ api }) {
               </button>
             </div>
 
-            <button type="button" className="sb-explore-btn" onClick={api.openExploreEditor}>
-              <span className="sb-explore-btn__icon">🪪</span>
-              <span className="sb-explore-btn__text">
-                <strong>프로필 · 키워드 사전</strong>
-                <small>고정 설문 정보와 밑줄 키워드 설명 (탐색 페이지는 빌더의 "탐색" 탭)</small>
-              </span>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M9 5l7 7-7 7" /></svg>
-            </button>
-
-            <button type="button" className="sb-explore-btn sb-explore-btn--starter" onClick={() => setStarterPanelOpen(true)}>
-              <span className="sb-explore-btn__icon">⭐</span>
-              <span className="sb-explore-btn__text">
-                <strong>기본 시나리오{api.starterEntries.length > 0 ? ` ${api.starterEntries.length}개` : ''}</strong>
-                <small>새 프로필을 만들 때 가져오는 목록 (모든 프로필 공통)</small>
-              </span>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M9 5l7 7-7 7" /></svg>
-            </button>
-
+            {/* 새로 만들기 — 컴팩트 2×2 칩. 설명은 title로 옮겨 목록에 세로 공간을 양보한다 */}
             <p className="sb-panel-label">새로 만들기</p>
-            <button
-              type="button"
-              className="sb-template-card sb-template-card--ai"
-              onClick={() => setScenarioGenOpen(true)}
-            >
-              <span className="sb-template-card__icon">⇄</span>
-              <strong>AI로 시나리오 만들기</strong>
-              <small>검색어·페르소나만 주면 <b>프롬프트</b>를 만들어 드려요 · 쓰던 AI에 붙여넣고 결과만 가져오면 완성</small>
-            </button>
-            <div className="sb-template-grid">
+            <div className="sb-create-grid">
+              <button
+                type="button"
+                className="sb-create-chip sb-create-chip--ai"
+                title="검색어·페르소나만 주면 프롬프트를 만들어 드려요. 쓰던 AI에 붙여넣고 결과만 가져오면 완성."
+                onClick={() => setScenarioGenOpen(true)}
+              >
+                <span className="sb-create-chip__icon">⇄</span>AI로 만들기 (프롬프트)
+              </button>
               {TEMPLATES.map((t) => (
-                <button key={t.key} type="button" className="sb-template-card" onClick={() => api.newScenario(t)}>
-                  <span className="sb-template-card__icon">{t.icon}</span>
-                  <strong>{t.name}</strong>
-                  <small>{t.desc}</small>
+                <button key={t.key} type="button" className="sb-create-chip" title={t.desc} onClick={() => api.newScenario(t)}>
+                  <span className="sb-create-chip__icon">{t.icon}</span>{t.name}
                 </button>
               ))}
             </div>
@@ -317,17 +297,6 @@ export default function HomeView({ api }) {
                 onChange={(event) => setScenarioFilter(event.target.value)}
               />
             )}
-            <div className="sb-drawer__tools">
-              <button type="button" onClick={() => setJsonDialog({ mode: 'export' })}>
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16" /></svg>
-                JSON 내보내기
-              </button>
-              <button type="button" onClick={() => importInputRef.current && importInputRef.current.click()}>
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M12 16V4m0 0L8 8m4-4l4 4M4 20h16" /></svg>
-                JSON 가져오기
-              </button>
-              <input ref={importInputRef} type="file" accept=".json,application/json" className="hidden" onChange={handleJsonFile} />
-            </div>
 
             <div className="sb-drawer__list">
               {api.scenarios.length === 0 && (
@@ -377,6 +346,25 @@ export default function HomeView({ api }) {
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* 워크스페이스 도구 — 목록에 자리를 양보하고 하단으로 (2×2) */}
+            <div className="sb-drawer__utils">
+              <button type="button" title='고정 설문 정보와 밑줄 키워드 설명 (탐색 페이지는 빌더의 "탐색" 탭)' onClick={api.openExploreEditor}>
+                🪪 프로필 · 키워드 사전
+              </button>
+              <button type="button" title="새 프로필을 만들 때 가져오는 목록 (모든 프로필 공통)" onClick={() => setStarterPanelOpen(true)}>
+                ⭐ 기본 시나리오{api.starterEntries.length > 0 ? ` ${api.starterEntries.length}개` : ''}
+              </button>
+              <button type="button" onClick={() => setJsonDialog({ mode: 'export' })}>
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16" /></svg>
+                JSON 내보내기
+              </button>
+              <button type="button" onClick={() => importInputRef.current && importInputRef.current.click()}>
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M12 16V4m0 0L8 8m4-4l4 4M4 20h16" /></svg>
+                JSON 가져오기
+              </button>
+              <input ref={importInputRef} type="file" accept=".json,application/json" className="hidden" onChange={handleJsonFile} />
             </div>
           </aside>
         </>
