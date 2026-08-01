@@ -1,0 +1,229 @@
+import { sortByPosition } from './store.js'
+
+/* 캔버스 레이아웃 엔진 — 순수 함수 모음 */
+
+export const PAD = 24
+export const GAP = 14
+export const MIN_ITEM_W = 160
+
+/* 공용: box가 placed 중 하나와 겹치면 그 아이템을 반환.
+   soft = { ids, ratio, ratioOf? }를 주면 ids에 속한 박스(드래그 중인 아이템)와는
+   겹침 면적이 작은 쪽 면적의 ratio 이상일 때만 충돌로 판정한다 —
+   드래그 미리보기에서 스치기만 해도 밀려나는 과민 반응을 둔화시키는 용도.
+   ratioOf(box)로 밀리는 대상별 임계값을 다르게 줄 수 있다 (예: 컨테이너는 더 둔감) */
+const hitOf = (placed, box, h, soft) =>
+  placed.find((p) => {
+    const ox = Math.min(box.x + box.w, p.x + p.w) - Math.max(box.x, p.x)
+    const oy = Math.min(box.y + h(box), p.y + h(p)) - Math.max(box.y, p.y)
+    if (ox <= 0 || oy <= 0) return false
+    if (soft && soft.ids.has(p.id)) {
+      const ratio = soft.ratioOf ? soft.ratioOf(box) : (soft.ratio || 0.35)
+      const minArea = Math.min(box.w * h(box), p.w * h(p))
+      return ox * oy >= ratio * minArea
+    }
+    return true
+  })
+
+/* 겹침 해소: 이동한 아이템(들)과 잠긴 아이템은 제자리를 지키고,
+   겹치는 나머지 아이템들이 아래로 밀린다.
+   soft(hitOf 참고)는 드래그 미리보기 전용 — 커밋 경로에서는 넘기지 말 것 */
+export function resolveCollision(items, movedIds, heights, soft) {
+  const h = (it) => it.h || heights[it.id] || 80
+  const movedSet = new Set(Array.isArray(movedIds) ? movedIds : [movedIds])
+  const moved = items.filter((it) => movedSet.has(it.id))
+  if (moved.length === 0) return items
+  const lockedFixed = items.filter((it) => !movedSet.has(it.id) && it.locked)
+  const others = items
+    .filter((it) => !movedSet.has(it.id) && !it.locked)
+    .sort((a, b) => (a.y - b.y) || (a.x - b.x))
+  const placed = [...moved, ...lockedFixed]
+  for (const it of others) {
+    const cur = { ...it }
+    for (let guard = 0; guard < 100; guard++) {
+      const hit = hitOf(placed, cur, h, soft)
+      if (!hit) break
+      cur.y = hit.y + h(hit) + GAP
+    }
+    placed.push(cur)
+  }
+  return items.map((it) => placed.find((p) => p.id === it.id) || it)
+}
+
+/* 드래그 미리보기 전용 겹침 해소 — 지속시간 게이트를 통과한 아이템(readyIds)만
+   드래그 박스에서 밀려나고, 밀린 아이템이 덮친 아이템은 연쇄로 함께 밀려 자리를 만든다.
+   잠긴 아이템은 밀 수 없으므로, 잠긴 아이템을 넘어가야만 자리가 나는 아이템은
+   밀지 않고 제자리에 둔 채 blockedIds로 보고한다 (드롭 시 원위치 복귀 판단용) */
+export function previewResolve(items, draggedIds, readyIds, heights) {
+  const h = (it) => it.h || heights[it.id] || 80
+  const draggedSet = new Set(draggedIds)
+  const ready = readyIds instanceof Set ? readyIds : new Set(readyIds)
+  const dragged = items.filter((it) => draggedSet.has(it.id))
+  if (dragged.length === 0) return { items, displacedIds: new Set(), blockedIds: new Set() }
+  const lockedFixed = items.filter((it) => !draggedSet.has(it.id) && it.locked)
+  const movable = items
+    .filter((it) => !draggedSet.has(it.id) && !it.locked)
+    .sort((a, b) => (a.y - b.y) || (a.x - b.x))
+  const isOver = (a, b) =>
+    a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + h(b) && a.y + h(a) > b.y
+  const placed = [...dragged, ...lockedFixed]
+  const displacedIds = new Set()
+  const blockedIds = new Set()
+  const result = {}
+  for (const it of movable) {
+    const cur = { ...it }
+    let moved = false
+    let stuck = false
+    for (let guard = 0; guard < 100; guard++) {
+      const hit = placed.find((p) => {
+        if (!isOver(cur, p)) return false
+        // 드래그 박스가 직접 밀 수 있는 건 게이트 통과 아이템뿐 (연쇄로 이미 밀린 것 포함)
+        if (draggedSet.has(p.id)) return ready.has(cur.id) || moved
+        return true
+      })
+      if (!hit) break
+      if (hit.locked && !draggedSet.has(hit.id)) {
+        stuck = true
+        break
+      }
+      cur.y = hit.y + h(hit) + GAP
+      moved = true
+    }
+    if (stuck) {
+      blockedIds.add(it.id)
+      result[it.id] = it // 밀 자리가 없으면 제자리 유지
+      placed.push({ ...it })
+    } else {
+      if (cur.y !== it.y) displacedIds.add(it.id)
+      result[it.id] = cur
+      placed.push(cur)
+    }
+  }
+  return { items: items.map((it) => result[it.id] || it), displacedIds, blockedIds }
+}
+
+/* 1단 세로 스택: y→x 순으로 전체 너비로 쌓기 */
+export function layoutStack(items, heights, ctx) {
+  const sorted = sortByPosition(items)
+  let cursor = PAD
+  const positioned = {}
+  sorted.forEach((it) => {
+    positioned[it.id] = { x: PAD, y: cursor, w: ctx.itemW }
+    cursor += (it.h || heights[it.id] || 80) + GAP
+  })
+  return items.map((it) => ({ ...it, ...positioned[it.id] }))
+}
+
+/* 2단 그리드: 반폭으로 나눠 항상 짧은 열에 채우기 (마소너리) */
+export function layoutTwoColumns(items, heights, ctx) {
+  const colW = Math.floor((ctx.canvasW - PAD * 2 - GAP) / 2)
+  const sorted = sortByPosition(items)
+  const cols = [PAD, PAD] // 각 열의 다음 y 커서
+  const positioned = {}
+  sorted.forEach((it) => {
+    const col = cols[0] <= cols[1] ? 0 : 1
+    positioned[it.id] = {
+      x: PAD + col * (colW + GAP),
+      y: cols[col],
+      w: colW,
+    }
+    cols[col] += (it.h || heights[it.id] || 80) + GAP
+  })
+  return items.map((it) => ({ ...it, ...positioned[it.id] }))
+}
+
+/* 위로 컴팩트: compactItems(vertical)의 별칭 — 자동 정렬/레이어 순서 변경에서 사용 */
+export function layoutCompactUp(items, heights) {
+  return compactItems(items, heights, { direction: 'vertical' })
+}
+
+/* 컴팩트(compact) — react-grid-layout의 compactType 컨벤션.
+   direction: 'vertical'(위로 스택) | 'horizontal'(왼쪽으로 스택) | 'none'
+   핀(드래그 중)·잠금 아이템은 제자리에 두고 나머지를 스택시킨다 (겹침도 함께 해소) */
+export const COMPACT_TYPES = [
+  { key: 'vertical', label: '세로 컴팩트', desc: '컴포넌트가 위로 차곡차곡 붙어요 (기본)' },
+  { key: 'horizontal', label: '가로 컴팩트', desc: '같은 줄에서 왼쪽으로 붙어요' },
+  { key: 'none', label: '컴팩트 끄기', desc: '빈 공간을 두고 자유롭게 배치해요' },
+]
+
+export function compactItems(items, heights, { direction = 'vertical', pinnedIds = [], canvasW = Infinity, soft = null } = {}) {
+  if (direction === 'none') return items
+  const h = (it) => it.h || heights[it.id] || 80
+  const overlaps = (placed, box) => hitOf(placed, box, h, soft)
+  const pinned = new Set(pinnedIds)
+  const fixed = items.filter((it) => pinned.has(it.id) || it.locked)
+  const movableSrc = items.filter((it) => !pinned.has(it.id) && !it.locked)
+  const movable =
+    direction === 'horizontal'
+      ? [...movableSrc].sort((a, b) => (a.x - b.x) || (a.y - b.y))
+      : sortByPosition(movableSrc)
+  const placed = [...fixed]
+
+  for (const it of movable) {
+    if (direction === 'horizontal') {
+      // 같은 세로 구간(줄)에서 왼쪽으로 당긴다. 줄이 꽉 차면 x는 유지하고 세로 겹침만 해소
+      let x = PAD
+      let overflow = false
+      for (let guard = 0; guard < 200; guard++) {
+        const hit = overlaps(placed, { ...it, x })
+        if (!hit) break
+        x = hit.x + hit.w + GAP
+        if (x + it.w > canvasW - PAD) {
+          overflow = true
+          break
+        }
+      }
+      if (!overflow) {
+        placed.push({ ...it, x })
+      } else {
+        let y = it.y
+        for (let guard = 0; guard < 200; guard++) {
+          const hit = overlaps(placed, { ...it, y })
+          if (!hit) break
+          y = hit.y + h(hit) + GAP
+        }
+        placed.push({ ...it, y })
+      }
+    } else {
+      let y = PAD
+      for (let guard = 0; guard < 200; guard++) {
+        const hit = overlaps(placed, { ...it, y })
+        if (!hit) break
+        y = hit.y + h(hit) + GAP
+      }
+      placed.push({ ...it, y })
+    }
+  }
+  return items.map((it) => placed.find((p) => p.id === it.id) || it)
+}
+
+export const LAYOUT_MODES = [
+  { key: 'stack', label: '1단 세로 정렬', desc: '전체 너비로 위에서부터 차곡차곡', fn: layoutStack },
+  { key: 'twocol', label: '2단 그리드 정렬', desc: '반폭 2열 마소너리 배치', fn: layoutTwoColumns },
+  { key: 'compact', label: '위로 컴팩트 정렬', desc: '크기·가로 위치 유지, 빈 공간만 제거', fn: (items, heights) => layoutCompactUp(items, heights) },
+]
+
+/* 다중 선택 정렬 도구 */
+export function alignItems(items, selectedIds, mode, ctx, heights) {
+  const sel = new Set(selectedIds)
+  let updated = items
+  if (mode === 'left') {
+    const x = Math.min(...items.filter((it) => sel.has(it.id)).map((it) => it.x))
+    updated = items.map((it) => (sel.has(it.id) ? { ...it, x } : it))
+  } else if (mode === 'center') {
+    updated = items.map((it) => (sel.has(it.id) ? { ...it, x: Math.round((ctx.canvasW - it.w) / 2) } : it))
+  } else if (mode === 'right') {
+    const right = Math.max(...items.filter((it) => sel.has(it.id)).map((it) => it.x + it.w))
+    updated = items.map((it) => (sel.has(it.id) ? { ...it, x: right - it.w } : it))
+  } else if (mode === 'vspace') {
+    // 세로 간격 균등: 선택 순서(y)대로 표준 간격(GAP)으로 재배열
+    const chosen = sortByPosition(items.filter((it) => sel.has(it.id)))
+    let cursor = chosen.length ? chosen[0].y : PAD
+    const pos = {}
+    chosen.forEach((it) => {
+      pos[it.id] = cursor
+      cursor += (it.h || heights[it.id] || 80) + GAP
+    })
+    updated = items.map((it) => (sel.has(it.id) ? { ...it, y: pos[it.id] } : it))
+  }
+  return resolveCollision(updated, [...sel], heights)
+}
