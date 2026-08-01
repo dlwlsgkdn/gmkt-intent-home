@@ -397,3 +397,30 @@
 .sb-scenario-row__actions .sb-danger { color: var(--sb-danger); }
 .sb-scenario-row__actions .sb-danger:hover { background: var(--sb-danger-soft); border-color: rgba(220, 38, 38, 0.4); }
 
+
+/* 드로어의 기본 시나리오 라이브러리 목록 — 시나리오 행보다 한 단계 가벼운 밀도 */
+.sb-starter-label { margin-top: 10px; }
+.sb-starter-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--sb-r-lg);
+  border: 1px solid var(--sb-line);
+  background: var(--sb-n-50);
+}
+.sb-starter-row__title { margin: 0; font-size: var(--sb-t-body); font-weight: 400; color: var(--sb-ink); }
+.sb-starter-row__meta { margin: 2px 0 0; font-size: var(--sb-t-small); color: var(--sb-muted); }
+.sb-starter-row > .sb-danger {
+  flex: none;
+  padding: 6px 12px;
+  border-radius: var(--sb-r-sm);
+  border: 1px solid var(--sb-line);
+  background: #fff;
+  font-size: var(--sb-t-small);
+  font-weight: 400;
+  color: var(--sb-danger);
+  transition: background-color var(--sb-dur) var(--sb-ease), border-color var(--sb-dur) var(--sb-ease);
+}
+.sb-starter-row > .sb-danger:hover { background: var(--sb-danger-soft); border-color: rgba(220, 38, 38, 0.4); }

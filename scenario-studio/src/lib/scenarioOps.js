@@ -11,14 +11,12 @@ import { remapCaseEvaluation } from './evaluation.js'
  * 한 군데라도 옛 id를 남기면 사본이 원본과 얽히거나 조건이 조용히 안 맞는다.
  */
 
-/* 사본을 "내 것"으로 만드는 공통 표시 — 새 id를 받고 기본 팩 소속·기본 시나리오 표식을 뗀다.
-   (starter를 떼야 기본 시나리오 목록이 새 프로필마다 사본으로 불어나지 않는다.
-   발행 상태·버전 이력을 지울지는 경로마다 다르므로 여기서 정하지 않는다) */
+/* 사본을 "내 것"으로 만드는 공통 표시 — 새 id를 받고 구 기본 팩 소속을 뗀다.
+   (발행 상태·버전 이력을 지울지는 경로마다 다르므로 여기서 정하지 않는다) */
 const asFreshCopy = (patch) => ({
   id: uid(),
   sourcePackId: undefined,
   isDefaultScenario: false,
-  starter: undefined,
   updatedAt: new Date().toISOString(),
   ...patch,
 })
@@ -71,8 +69,20 @@ export function duplicateScenario(source) {
   })
 }
 
-/* 기본(starter) 시나리오를 새 프로필에 설치하는 사본 — 이름·칩·발행 상태를 그대로 두어
-   설치 직후 홈에 칩이 뜬다. 버전 이력만 끊는다(스냅샷은 원본 계정의 것이므로) */
+/* 기본 시나리오 라이브러리에 올리는 스냅샷 — 지정 시점 모습의 불변 사본. 라이브러리
+   항목 id를 시나리오 id로 고정해(같은 원본 재지정 = 같은 행 덮어쓰기) 서버 행 정리를
+   단순하게 유지한다. 원본과의 동기화는 없다 — 이후 원본 편집은 반영되지 않는다 */
+export function starterSnapshot(source, id) {
+  return cloneScenarioWith(source, {
+    id,
+    versions: [],
+    versionAt: undefined,
+    createdAt: new Date().toISOString(),
+  })
+}
+
+/* 기본 시나리오 스냅샷을 새 프로필에 설치하는 사본 — 이름·칩·발행 상태를 그대로 두어
+   설치 직후 홈에 칩이 뜬다. id는 다시 재발급된다(프로필마다 독립 사본) */
 export function installStarterCopy(source) {
   return cloneScenarioWith(source, {
     versions: [],

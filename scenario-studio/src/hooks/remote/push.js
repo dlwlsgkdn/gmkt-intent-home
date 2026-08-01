@@ -48,12 +48,15 @@ export function createPushOps(ctx) {
      확인받고, 자동은 덮지 않고 멈춘다(미저장으로 남아 수동 저장이 해소). null = 전송 안 함 */
   const pushCore = async (auto) => {
     const { accounts, keywords } = stateRef.current
-    /* 충돌 확인: 하이드레이션 이후 다른 창/기기가 서버를 먼저 바꿨는가 */
+    /* 충돌 확인: 하이드레이션 이후 다른 창/기기가 서버를 먼저 바꿨는가.
+       기본 시나리오 행(starter*)은 비교에서 뺀다 — 지정·해제가 기준선 기계 밖에서
+       즉시 쓰는 last-write-wins 행이라, 계정 저장의 충돌로 잡히면 안 된다 */
+    const isStarterRow = (key) => key === 'starters-meta' || key.startsWith('starter:')
     const index = await fetchRemoteIndex()
     const now = new Map(index.map((row) => [row.key, row.updatedAt]))
     const baseline = serverIndexRef.current
     const conflicted = [...new Set([...now.keys(), ...baseline.keys()])]
-      .some((key) => now.get(key) !== baseline.get(key))
+      .some((key) => !isStarterRow(key) && now.get(key) !== baseline.get(key))
     if (conflicted) {
       if (auto) {
         conflictHoldRef.current = true

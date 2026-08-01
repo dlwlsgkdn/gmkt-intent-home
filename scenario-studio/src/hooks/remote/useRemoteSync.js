@@ -4,6 +4,7 @@ import { accountKey, splitAccount } from '../../lib/accountRows.js'
 import { createRowAdoption } from './rowAdoption.js'
 import { createOnDemandSync } from './onDemandSync.js'
 import { createPushOps } from './push.js'
+import { createStarterSync } from './starterSync.js'
 import { runHydration } from './hydration.js'
 
 /* 자동 트랜잭션 싱크의 디바운스 — 연속 요청(플레이 중 쓰레드 갱신, 칩 드래그)을 한 번으로 모은다 */
@@ -23,7 +24,7 @@ const AUTO_SYNC_DELAY_MS = 1200
  */
 export function useRemoteSync({
   init, accounts, activeAccount, keywords,
-  stateRef, setAccounts, setActiveAccountId, setKeywords, showToast,
+  stateRef, setAccounts, setActiveAccountId, setKeywords, setStarters, showToast,
 }) {
   const [bootReady, setBootReady] = useState(false)   // 부트(셸 채택+충돌 기준선) 완료 — 업로드 허용 시점
   const [homeSynced, setHomeSynced] = useState(false) // 홈 필요분(전 계정 셸+활성 콘텐츠·쓰레드)까지 완료 — 배지 기준
@@ -78,7 +79,7 @@ export function useRemoteSync({
   /* 하위 모듈이 공유하는 문맥 — ref·세터는 렌더 간 안정적이라 그대로 넘긴다 */
   const ctx = {
     init, stateRef, showToast, shellJson,
-    setAccounts, setActiveAccountId, setKeywords,
+    setAccounts, setActiveAccountId, setKeywords, setStarters,
     rowsRef, metaBaselineRef, keywordsBaselineRef, serverIndexRef,
     localAuthorityRef, removedAccountsRef, initialByIdRef, adoptionRef,
     legacyQueueRef, inFlightRef, homeSyncedRef, bootDeferredRef,
@@ -88,6 +89,7 @@ export function useRemoteSync({
   const adoption = createRowAdoption(ctx)
   const onDemand = createOnDemandSync(ctx, adoption)
   const { accountDirty, pushCore } = createPushOps(ctx)
+  const starterSync = createStarterSync(ctx)
 
   /* ── 미저장 변경 감지 (렌더마다 — 행 단위) ── */
   const changedAccountIds = accounts.filter(accountDirty).map((account) => account.id)
@@ -108,7 +110,7 @@ export function useRemoteSync({
       return undefined // local 프로필: localStorage만 사용
     }
     const signal = { cancelled: false }
-    runHydration({ ctx, adoption, syncRow: onDemand.syncRow, accountDirty, requestAutoSync, signal })
+    runHydration({ ctx, adoption, starterSync, syncRow: onDemand.syncRow, accountDirty, requestAutoSync, signal })
       .catch((error) => {
         if (!signal.cancelled) {
           setRemoteFailed(true)
@@ -210,9 +212,10 @@ export function useRemoteSync({
   }, [])
 
   return {
+    /* 기본 시나리오 라이브러리 미러링 — 지정·해제 즉시 쓰기와 설치 직전 스냅샷 로드 */
+    starterSync,
     /* 필요 시점 로드 — App.jsx가 플레이(칩 클릭)·빌더 진입·복제·내보내기 전에 부른다 */
     ensureScenarioSynced: onDemand.ensureScenarioSynced,
-    ensureScenarioRowSynced: onDemand.ensureScenarioRowSynced,
     ensureStudioSynced: onDemand.ensureStudioSynced,
     ensureAccountSynced: onDemand.ensureAccountSynced,
     ensureActiveSynced: onDemand.ensureActiveSynced,

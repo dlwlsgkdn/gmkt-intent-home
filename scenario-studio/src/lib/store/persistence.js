@@ -59,6 +59,29 @@ export function saveViewerDevice(key) {
   }
 }
 
+/* ── 기본 시나리오 라이브러리 ──
+   워크스페이스 전역(계정 소속 아님). entries = 목록 메타(제목·원천 정보 — 드로어 목록·
+   프로필 생성 확인이 읽는 전부), contents = id → 스냅샷 시나리오 캐시(설치 때만 필요 —
+   서버에서 못 받아 온 항목은 비어 있을 수 있고 설치 직전 ensure가 채운다) */
+const STARTERS_KEY = 'ddak-starters-v1'
+
+export function loadStarters() {
+  const parsed = readJson(STARTERS_KEY, null)
+  const entries = Array.isArray(parsed?.entries)
+    ? parsed.entries.filter((entry) => entry && typeof entry === 'object' && entry.id)
+    : []
+  const rawContents = parsed?.contents && typeof parsed.contents === 'object' ? parsed.contents : {}
+  const contents = {}
+  for (const entry of entries) {
+    if (rawContents[entry.id]) contents[entry.id] = normalizeScenario(rawContents[entry.id])
+  }
+  return { entries, contents }
+}
+
+export function saveStarters(value) {
+  writeJson(STARTERS_KEY, value)
+}
+
 /* ── 키워드 사전 ── */
 export function loadKeywords() {
   const parsed = readJson(KEYWORDS_KEY, null)

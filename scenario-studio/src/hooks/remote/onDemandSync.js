@@ -60,14 +60,6 @@ export function createOnDemandSync(ctx, adoption) {
     if (owner) await syncRow(scenarioKey(owner.id, scenarioId))
   }
 
-  /* 소유 계정을 아는 쪽이 부르는 콘텐츠 로드 — 새 프로필 생성이 기본(starter) 시나리오를
-     복사하기 전에 쓴다. 구 팩 시나리오는 여러 계정이 같은 id를 공유하므로 findOwner 대신
-     정확한 계정 행을 짚는다 */
-  const ensureScenarioRowSynced = async (accountId, scenarioId) => {
-    await bootDeferredRef.current.promise
-    await syncRow(scenarioKey(accountId, scenarioId))
-  }
-
   /* 스튜디오(빌더) 진입 전: 콘텐츠 + 버전 스냅샷 — 버전은 여기서만 로드한다 */
   const ensureStudioSynced = async (scenarioId) => {
     await bootDeferredRef.current.promise
@@ -126,7 +118,6 @@ export function createOnDemandSync(ctx, adoption) {
   return {
     syncRow,
     ensureScenarioSynced,
-    ensureScenarioRowSynced,
     ensureStudioSynced,
     ensureAccountSynced,
     ensureActiveSynced,

@@ -337,7 +337,7 @@ export default function HomeView({ api }) {
                     <span className={'sb-status ' + (s.status === 'published' ? 'sb-status--live' : '')}>
                       {s.status === 'published' ? '발행됨' : '작성 중'}
                     </span>
-                    {api.isStarterScenario(s) && <span className="sb-status sb-status--default">기본</span>}
+                    {api.isStarterSource(s) && <span className="sb-status sb-status--default" title="이 시나리오로 기본 시나리오를 만들었어요.">기본 원천</span>}
                     <p className="sb-scenario-row__title">{s.title}</p>
                     <p className="sb-scenario-row__chip" style={{ color: s.color || '#5f7465' }}>#{s.chip}</p>
                   </div>
@@ -347,12 +347,12 @@ export default function HomeView({ api }) {
                     <button type="button" onClick={() => api.copyScenario(s.id)}>복제</button>
                     <button
                       type="button"
-                      title={api.isStarterScenario(s)
-                        ? '기본 시나리오 지정을 해제해요.'
-                        : '새 프로필을 만들 때 이 시나리오를 복사해 설치해요.'}
-                      onClick={() => api.toggleStarterScenario(s.id)}
+                      title={api.isStarterSource(s)
+                        ? '지금 내용으로 기본 시나리오를 다시 만들어요. (지정 후의 편집은 자동 반영되지 않아요)'
+                        : '지금 내용을 복사해 기본 시나리오에 올려요. 새 프로필을 만들 때 가져올 수 있어요.'}
+                      onClick={() => api.markStarterScenario(s.id)}
                     >
-                      {api.isStarterScenario(s) ? '기본 해제' : '기본 지정'}
+                      {api.isStarterSource(s) ? '기본 갱신' : '기본 지정'}
                     </button>
                     <button
                       type="button"
@@ -366,6 +366,38 @@ export default function HomeView({ api }) {
                   </div>
                 </div>
               ))}
+
+              {/* 기본 시나리오 라이브러리 — 워크스페이스 전역(모든 프로필 공통). 지정 시점
+                  스냅샷이라 원본을 지워도 남고, 새 프로필 생성 때 확인 후 복사 설치된다 */}
+              {api.starterEntries.length > 0 && (
+                <>
+                  <p className="sb-panel-label sb-panel-label--count sb-starter-label">
+                    <span>기본 시나리오 (모든 프로필 공통)</span>
+                    <b>{api.starterEntries.length}개</b>
+                  </p>
+                  {api.starterEntries.map((entry) => (
+                    <div key={entry.id} className="sb-starter-row">
+                      <div className="sb-starter-row__info">
+                        <p className="sb-starter-row__title">{entry.title}</p>
+                        <p className="sb-starter-row__meta">
+                          <span style={{ color: entry.color || '#5f7465' }}>#{entry.chip}</span>
+                          {' · '}{entry.sourceAccountName} 프로필에서 지정
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className="sb-danger"
+                        title="기본 시나리오 목록에서 내려요. 이미 만든 프로필에는 영향이 없어요."
+                        onClick={() => {
+                          if (window.confirm(`"${entry.title}"을(를) 기본 시나리오에서 내릴까요?`)) api.removeStarterEntry(entry.id)
+                        }}
+                      >
+                        내리기
+                      </button>
+                    </div>
+                  ))}
+                </>
+              )}
             </div>
           </aside>
         </>

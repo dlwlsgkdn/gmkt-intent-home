@@ -75,12 +75,8 @@ export function normalizeItems(list) {
 
 /* 구 번들 팩(강제 설치 시절)이 심어 둔 시드 표식 — 기존 계정 데이터에 플래그가 남아 있어
    동기화 가드(hydration의 "작업 없는 계정" 판정)가 계속 읽는다. 새 의미를 얹지 말 것 —
-   사용자가 지정하는 기본 시나리오는 별도 필드 starter다 */
+   사용자가 지정하는 기본 시나리오는 별도 라이브러리(persistence의 starters)로 관리한다 */
 export const isDefaultScenario = (scenario) => scenario?.isDefaultScenario === true
-
-/* 사용자가 지정하는 기본 시나리오 — 새 프로필 생성 시 이 표식이 있는 시나리오를 복사해 설치한다.
-   사본에는 표식이 붙지 않아(scenarioOps.asFreshCopy) 목록이 계정 수만큼 불어나지 않는다 */
-export const isStarterScenario = (scenario) => scenario?.starter === true
 
 /* 어떤 경로로 들어온 시나리오든(생성·가져오기·복원·서버 동기화) 이 함수를 통과한다 */
 export function normalizeScenario(input = {}) {

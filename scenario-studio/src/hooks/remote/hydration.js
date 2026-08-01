@@ -59,7 +59,7 @@ const migrateLegacyBody = async ({ account, fat }, serverKeys) => {
 }
 
 /* signal.cancelled: 효과 클린업이 세운다 — 언마운트 후 setState·서버 쓰기를 멈춘다 */
-export async function runHydration({ ctx, adoption, syncRow, accountDirty, requestAutoSync, signal }) {
+export async function runHydration({ ctx, adoption, starterSync, syncRow, accountDirty, requestAutoSync, signal }) {
   const {
     init, stateRef, setAccounts, setActiveAccountId,
     rowsRef, metaBaselineRef, serverIndexRef, localAuthorityRef,
@@ -75,6 +75,10 @@ export async function runHydration({ ctx, adoption, syncRow, accountDirty, reque
   const bootRows = boot.rows || {}
   const split = keys.has('accounts-meta')
   let wroteServer = false
+
+  /* 기본 시나리오 목록 메타 — 부트에 실려 오는 가벼운 행. 스냅샷 본문은 여기서 받지
+     않는다(새 프로필 생성 직전 ensureStarterContents의 몫) */
+  starterSync.adoptStartersMeta(bootRows['starters-meta'] ? bootRows['starters-meta'].data : null)
 
   if (!split) {
     /* ── 구 통짜 블롭 경로 (최초 1회) — 전체 덤프 후 새 행 체계로 이관 ── */

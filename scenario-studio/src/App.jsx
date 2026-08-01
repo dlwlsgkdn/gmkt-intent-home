@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { createScenario, isStarterScenario, normalizeScenario } from './lib/store.js'
+import { createScenario, normalizeScenario } from './lib/store.js'
 import { readShareFromHash, clearShareHash } from './lib/share.js'
 import { adoptSharedScenario, duplicateScenario, scenariosFromImport } from './lib/scenarioOps.js'
 import { useWorkspace } from './hooks/useWorkspace.js'
@@ -77,20 +77,10 @@ export default function App() {
     requestAutoSync()
   }
 
-  /* 기본 시나리오 표식 토글 — 표식이 붙은 시나리오는 새 프로필 생성 시 복사 설치된다.
-     표식 해제는 starter를 undefined로 되돌려 셸 JSON에 흔적을 남기지 않는다 */
-  const toggleStarterScenario = (id) => {
-    const target = scenarios.find((scenario) => scenario.id === id)
-    if (!target) return
-    const next = !isStarterScenario(target)
-    setScenarios((prev) => prev.map((scenario) => (scenario.id === id
-      ? { ...scenario, starter: next || undefined, updatedAt: new Date().toISOString() }
-      : scenario)))
-    requestAutoSync()
-    showToast(next
-      ? `"${target.title}"를 기본 시나리오로 지정했어요. 새 프로필을 만들 때 자동으로 설치돼요.`
-      : `"${target.title}"의 기본 시나리오 지정을 해제했어요.`)
-  }
+  /* 이 시나리오가 기본 시나리오의 원천인가 — 저장 필드 없이 라이브러리 메타에서 파생.
+     라이브러리에서 항목을 내리면 배지도 자연히 사라진다 */
+  const isStarterSource = (scenario) => workspace.starterEntries.some((entry) =>
+    entry.sourceAccountId === workspace.activeAccountId && entry.sourceScenarioId === scenario.id)
 
   const registerScenario = (scenario) => {
     setScenarios((prev) => [...prev, scenario])
@@ -177,8 +167,11 @@ export default function App() {
     copyScenario,
     reorderScenario,
     importScenarios,
-    isStarterScenario,
-    toggleStarterScenario,
+    /* 기본 시나리오 라이브러리 — 지정은 시나리오 행에서, 목록·해제는 드로어의 전역 섹션에서 */
+    starterEntries: workspace.starterEntries,
+    isStarterSource,
+    markStarterScenario: workspace.markStarterScenario,
+    removeStarterEntry: workspace.removeStarterEntry,
     exportDataBackup: workspace.exportDataBackup, // async — 서버 전체 행을 맞춘 뒤 만든다
     importDataBackup: workspace.importDataBackup,
     ensureActiveSynced: workspace.ensureActiveSynced,
