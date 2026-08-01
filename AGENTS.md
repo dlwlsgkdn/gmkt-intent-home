@@ -8,9 +8,9 @@
 
 ```
 apps/studio/       ← 스튜디오 소스 (React 18 + Vite 5). 빌드 산출물은 apps/studio/dist (커밋 안 함)
-apps/core/         ← (예정) NestJS backend core — 쓰레드 저장·조회. DESIGN-LLM-SERVICE.md 참고
-apps/bff/          ← (예정) BFF — LLM·core 오케스트레이션
-packages/          ← (예정) schema(zod 계약) 등 공유 패키지
+apps/core/         ← NestJS backend core — 쓰레드 저장·조회 (Drizzle+Neon). 실행·배포는 apps/core/README.md
+apps/bff/          ← (예정) BFF — LLM·core 오케스트레이션. DESIGN-LLM-SERVICE.md §4 참고
+packages/schema/   ← @ddak/schema — 쓰레드 도메인·internal API zod 계약 (install 시 prepare로 dist 빌드)
 api/               ← 스튜디오 동기화 서버리스 (Vercel 함수, 루트 고정)
 legacy/            ← 옛 HTML 프로토타입 원본 (빌드 시 apps/studio/dist/legacy 로 복사됨)
 ```
@@ -26,9 +26,14 @@ legacy/            ← 옛 HTML 프로토타입 원본 (빌드 시 apps/studio/d
 
 이 머신은 기본 node(homebrew, v23+)로 빌드된다 (옛 안내의 `/Users/jinhalee/.nvm/...` v24 경로는 이전 머신 것 — 존재하면 그쪽을 써도 무방):
 ```bash
-npm run build --workspace=apps/studio   # 리포 루트에서. vite build && cp -R ../../legacy dist/legacy
+npm run build --workspace=apps/studio       # 스튜디오 빌드. vite build && cp -R ../../legacy dist/legacy
+npm run build --workspace=apps/core         # core(NestJS) 빌드
+npm run start:dev --workspace=apps/core     # core 로컬 실행 (환경변수: apps/core/.env.example — 없어도 부팅, DB 라우트만 503)
+npm run db:generate --workspace=apps/core   # core 스키마 → drizzle/ 마이그레이션 SQL (오프라인)
 ```
 개발 서버: `.claude/launch.json`의 `scenario-studio` (포트 5173), 정적 검증용 `pages-static` (포트 8899, apps/studio/dist 서빙 — 빌드 후 사용).
+
+워크스페이스 주의: `@ddak/schema`를 수정하면 소비자가 dist를 보므로 `npm run build --workspace=@ddak/schema`로 재빌드할 것(설치 시엔 prepare가 자동 빌드). **루트 devDependencies의 drizzle-orm은 지우지 말 것** — npm이 orm을 apps/core 아래로 중첩 배치해 루트에 호이스팅된 drizzle-kit가 못 찾는 문제를, 루트 선언으로 호이스팅을 강제해 해결한 것이다(core와 버전 범위를 항상 맞출 것).
 
 **데이터 프로필** (`lib/remote.js`): 개발 서버 = `local`(localStorage 전용, 서버 동기화 없음), 빌드 산출물 = `prod`(localStorage + Neon DB 미러링). 로컬에서 운영 DB에 붙으려면 `VITE_DATA_PROFILE=prod npm run dev`. 콘솔 `[remote] 데이터 프로필:` 로그로 확인. 서버 미러링을 운영 DB 없이 검증하려면 목 API(+`VITE_API_PROXY`)를 쓰는 `scenario-studio-mockdb`(포트 5174) 참고.
 
