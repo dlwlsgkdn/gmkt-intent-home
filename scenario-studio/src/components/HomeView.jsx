@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react'
 import { BgBlobs, FloatingBar, StudioFab, ViewerDeviceControl, ProfileControl } from './Frame.jsx'
 import ExploreFrame from './ExploreFrame.jsx'
 import ThreadPanel from './ThreadPanel.jsx'
+import StarterPanel from './StarterPanel.jsx'
 import { TEMPLATES } from '../lib/templates.js'
 import { classifyImportPayload, createScenariosExport, hexToRgba, DEVICE_PRESETS, sortByPosition } from '../lib/store.js'
 import { scenariosFromImport } from '../lib/scenarioOps.js'
@@ -11,6 +12,7 @@ import ScenarioGenerationDialog from './builder/ScenarioGenerationDialog.jsx'
 export default function HomeView({ api }) {
   const [query, setQuery] = useState('')
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [starterPanelOpen, setStarterPanelOpen] = useState(false)
   const [scenarioGenOpen, setScenarioGenOpen] = useState(false)
   const [threadOrigin, setThreadOrigin] = useState(null) // null=닫힘 | 'left'|'center'|'right'
   const [draggingChipId, setDraggingChipId] = useState(null)
@@ -273,6 +275,15 @@ export default function HomeView({ api }) {
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M9 5l7 7-7 7" /></svg>
             </button>
 
+            <button type="button" className="sb-explore-btn sb-explore-btn--starter" onClick={() => setStarterPanelOpen(true)}>
+              <span className="sb-explore-btn__icon">⭐</span>
+              <span className="sb-explore-btn__text">
+                <strong>기본 시나리오{api.starterEntries.length > 0 ? ` ${api.starterEntries.length}개` : ''}</strong>
+                <small>새 프로필을 만들 때 가져오는 목록 (모든 프로필 공통)</small>
+              </span>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M9 5l7 7-7 7" /></svg>
+            </button>
+
             <p className="sb-panel-label">새로 만들기</p>
             <button
               type="button"
@@ -366,41 +377,18 @@ export default function HomeView({ api }) {
                   </div>
                 </div>
               ))}
-
-              {/* 기본 시나리오 라이브러리 — 워크스페이스 전역(모든 프로필 공통). 지정 시점
-                  스냅샷이라 원본을 지워도 남고, 새 프로필 생성 때 확인 후 복사 설치된다 */}
-              {api.starterEntries.length > 0 && (
-                <>
-                  <p className="sb-panel-label sb-panel-label--count sb-starter-label">
-                    <span>기본 시나리오 (모든 프로필 공통)</span>
-                    <b>{api.starterEntries.length}개</b>
-                  </p>
-                  {api.starterEntries.map((entry) => (
-                    <div key={entry.id} className="sb-starter-row">
-                      <div className="sb-starter-row__info">
-                        <p className="sb-starter-row__title">{entry.title}</p>
-                        <p className="sb-starter-row__meta">
-                          <span style={{ color: entry.color || '#5f7465' }}>#{entry.chip}</span>
-                          {' · '}{entry.sourceAccountName} 프로필에서 지정
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        className="sb-danger"
-                        title="기본 시나리오 목록에서 내려요. 이미 만든 프로필에는 영향이 없어요."
-                        onClick={() => {
-                          if (window.confirm(`"${entry.title}"을(를) 기본 시나리오에서 내릴까요?`)) api.removeStarterEntry(entry.id)
-                        }}
-                      >
-                        내리기
-                      </button>
-                    </div>
-                  ))}
-                </>
-              )}
             </div>
           </aside>
         </>
+      )}
+
+      {/* 기본 시나리오 패널 — 전역 라이브러리 목록·해제. 지정은 드로어의 시나리오 행에서 */}
+      {starterPanelOpen && (
+        <StarterPanel
+          entries={api.starterEntries}
+          onRemove={api.removeStarterEntry}
+          onClose={() => setStarterPanelOpen(false)}
+        />
       )}
 
       {scenarioGenOpen && (

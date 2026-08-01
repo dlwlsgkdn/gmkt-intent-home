@@ -398,8 +398,45 @@
 .sb-scenario-row__actions .sb-danger:hover { background: var(--sb-danger-soft); border-color: rgba(220, 38, 38, 0.4); }
 
 
-/* 드로어의 기본 시나리오 라이브러리 목록 — 시나리오 행보다 한 단계 가벼운 밀도 */
-.sb-starter-label { margin-top: 10px; }
+/* 기본 시나리오 패널 — 전역 라이브러리 전용 다이얼로그 (진입은 드로어의 ⭐ 카드).
+   폭은 .sb-llm-dialog 기본(920px)보다 특이도를 올려야 이긴다 — evaluation-tools.css가
+   home.css보다 늦게 로드된다 */
+.sb-explore-btn--starter { margin-top: -8px; }
+.sb-llm-dialog.sb-starter-panel { width: min(460px, 100%); background: #fff; }
+.sb-starter-panel__body { padding: 18px 24px 20px; }
+.sb-starter-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.sb-starter-panel__title {
+  margin: 0;
+  color: var(--sb-ink);
+  font-size: var(--sb-t-title);
+  letter-spacing: -0.02em;
+}
+.sb-starter-panel__note {
+  margin: 10px 0 14px;
+  color: var(--sb-muted);
+  font-size: var(--sb-t-caption);
+  line-height: 1.55;
+}
+.sb-starter-panel__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: min(52vh, 420px);
+  overflow-y: auto;
+}
+.sb-starter-panel__empty {
+  padding: 26px 0 14px;
+  text-align: center;
+  color: var(--sb-ink-2);
+  font-size: var(--sb-t-small);
+  line-height: 1.7;
+}
+.sb-starter-panel__empty span { color: var(--sb-subtle); font-size: var(--sb-t-caption); }
 .sb-starter-row {
   display: flex;
   align-items: center;
