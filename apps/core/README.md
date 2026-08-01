@@ -43,7 +43,7 @@ npm run db:push --workspace=apps/core       # 개발 DB에 스키마 반영 (DAT
 2. **Root Directory: `apps/core`**, Framework Preset: Other (Build Command는 자동으로 `npm run build`)
 3. 환경변수: `DATABASE_URL`, `CORE_SERVICE_TOKEN`, **`NODEJS_HELPERS=0`** (Vercel의 body 헬퍼가
    Express 파서와 이중 파싱하는 문제 방지)
-4. Settings → Git → **Ignored Build Step**: `git diff --quiet HEAD^ HEAD -- apps/core packages package-lock.json`
+4. Ignored Build Step은 apps/core/vercel.json의 ignoreCommand로 설정됨 — 대시보드 설정 불필요
 5. 배포 후 `https://<프로젝트>.vercel.app/healthz` 확인
 
 동작 방식: `npm run build`(nest build → dist/) 후 `api/index.js`가 dist의 Nest 앱을

@@ -20,7 +20,7 @@ legacy/            ← 옛 HTML 프로토타입 원본 (빌드 시 apps/studio/d
 - **배포 (주)**: Vercel `ddak-scenario-studio`가 GitHub main 푸시마다 **원격 빌드·배포**. `https://ddak-scenario-studio.vercel.app` — vercel.json이 루트에서 워크스페이스 전체를 설치하고 apps/studio를 빌드해 outputDirectory `apps/studio/dist`를 서빙한다. API(`api/state.js`)도 같은 프로젝트라, **로컬 Node 없이 소스 푸시만으로 배포된다**
 - **배포 (GitHub Pages)**: `.github/workflows/pages.yml`이 main 푸시마다 빌드해 아티팩트로 배포. `https://dlwlsgkdn.github.io/gmkt-intent-home/` (구 `…/docs/` 주소는 아티팩트 안 리다이렉트 스텁이 받는다). 커밋된 빌드 산출물은 더 이상 없다 — 두 배포 모두 push만 하면 각자 최신으로 빌드된다
 - **빌드/배포 절차**: 소스 커밋 → 사용자가 `git push origin main` (Claude는 푸시 못 함) → Vercel·Pages가 각각 자동 빌드
-- **배포 확장 규칙**: 새 앱(core·bff)은 같은 리포를 연결한 **별도 Vercel 프로젝트**(Root Directory=`apps/<앱>`)로 배포한다. Ignored Build Step에 `git diff --quiet HEAD^ HEAD -- apps/<앱> packages`를 걸어 무관 커밋은 스킵
+- **배포 확장 규칙**: 새 앱(core·bff)은 같은 리포를 연결한 **별도 Vercel 프로젝트**(Root Directory=`apps/<앱>`)로 배포한다. 무관 커밋 스킵은 대시보드가 아니라 `apps/<앱>/vercel.json`의 `ignoreCommand`(`git diff --quiet HEAD^ HEAD -- ':(top)apps/<앱>' ':(top)packages' ':(top)package-lock.json'`)로 리포에 커밋한다 — Root Directory만 대시보드 설정
 
 ## 명령어
 
