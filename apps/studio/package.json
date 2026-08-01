@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && cp -R ../legacy ../docs/legacy",
+    "build": "vite build && cp -R ../../legacy dist/legacy",
     "preview": "vite preview"
   },
   "dependencies": {

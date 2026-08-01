@@ -16,10 +16,7 @@ export default defineConfig({
       },
     },
   },
-  build: {
-    // 표준 GitHub Pages 컨벤션: 빌드 산출물은 저장소 루트의 docs/ 로 내보낸다.
-    // (package.json build 스크립트가 legacy/ 도 docs/legacy 로 복사한다)
-    outDir: '../docs',
-    emptyOutDir: true,
-  },
+  // 빌드 산출물은 기본값 dist/ — 커밋하지 않는다. Vercel은 apps/studio/dist를 서빙하고,
+  // GitHub Pages는 .github/workflows/pages.yml이 push마다 빌드해 배포한다.
+  // (package.json build 스크립트가 legacy/ 를 dist/legacy 로 복사한다)
 })

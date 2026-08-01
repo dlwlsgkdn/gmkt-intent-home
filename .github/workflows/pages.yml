@@ -1,0 +1,54 @@
+# GitHub Pages 배포 — push마다 스튜디오를 빌드해 아티팩트로 배포한다.
+# (커밋된 빌드 산출물 없음. Settings→Pages의 Source가 "GitHub Actions"여야 동작한다)
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build --workspace=apps/studio
+      # 옛 주소(…/gmkt-intent-home/docs/) 북마크용 리다이렉트 스텁
+      - name: Add /docs/ redirect stub
+        run: |
+          mkdir -p apps/studio/dist/docs
+          cat > apps/studio/dist/docs/index.html <<'HTML'
+          <!doctype html>
+          <meta charset="utf-8">
+          <meta http-equiv="refresh" content="0; url=../">
+          <link rel="canonical" href="../">
+          <title>페이지 이동됨</title>
+          <p>페이지가 이동했어요. <a href="../">새 주소로 이동</a></p>
+          HTML
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/studio/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -5,8 +5,8 @@
       "name": "scenario-studio",
       "runtimeExecutable": "/opt/homebrew/bin/node",
       "runtimeArgs": [
-        "/Users/dlwlsgkdn/IdeaProjects/gmkt-intent-home/scenario-studio/node_modules/vite/bin/vite.js",
-        "/Users/dlwlsgkdn/IdeaProjects/gmkt-intent-home/scenario-studio"
+        "/Users/dlwlsgkdn/IdeaProjects/gmkt-intent-home/node_modules/vite/bin/vite.js",
+        "/Users/dlwlsgkdn/IdeaProjects/gmkt-intent-home/apps/studio"
       ],
       "port": 5173,
       "autoPort": true
@@ -16,14 +16,14 @@
       "runtimeExecutable": "/bin/sh",
       "runtimeArgs": [
         "-c",
-        "VITE_DATA_PROFILE=prod VITE_API_PROXY=http://localhost:8123 /opt/homebrew/bin/node /Users/dlwlsgkdn/IdeaProjects/gmkt-intent-home/scenario-studio/node_modules/vite/bin/vite.js /Users/dlwlsgkdn/IdeaProjects/gmkt-intent-home/scenario-studio --port 5174 --strictPort"
+        "VITE_DATA_PROFILE=prod VITE_API_PROXY=http://localhost:8123 /opt/homebrew/bin/node /Users/dlwlsgkdn/IdeaProjects/gmkt-intent-home/node_modules/vite/bin/vite.js /Users/dlwlsgkdn/IdeaProjects/gmkt-intent-home/apps/studio --port 5174 --strictPort"
       ],
       "port": 5174
     },
     {
       "name": "pages-static",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8899", "--directory", "/Users/dlwlsgkdn/IdeaProjects/gmkt-intent-home"],
+      "runtimeArgs": ["-m", "http.server", "8899", "--directory", "/Users/dlwlsgkdn/IdeaProjects/gmkt-intent-home/apps/studio/dist"],
       "port": 8899
     }
   ]

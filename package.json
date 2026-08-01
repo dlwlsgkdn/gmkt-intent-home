@@ -2,6 +2,10 @@
   "name": "gmkt-intent-home",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4"
   }
