@@ -14,25 +14,11 @@ import {
   templateFromCase,
   validateGenerationResponse,
 } from '../../lib/prompt/planCases.js'
-import { wrapForChatApp } from '../../lib/prompt/chatPrompt.js'
+import { chunkList, personaFromProfile, wrapForChatApp } from '../../lib/prompt/chatPrompt.js'
 import { plainEvaluationText } from '../../lib/evaluation.js'
 import { uid } from '../../lib/store.js'
 import PromptExchange from './PromptExchange.jsx'
-import AiRoundTripNote from './AiRoundTripNote.jsx'
-
-const personaFromProfile = (profile) => {
-  const name = profile?.name ? `${profile.name}.` : ''
-  const traits = (profile?.items || [])
-    .map((item) => `${item.label}: ${item.value}`)
-    .join(', ')
-  return [name, traits].filter(Boolean).join(' ')
-}
-
-const chunk = (list, size) => {
-  const out = []
-  for (let index = 0; index < list.length; index += size) out.push(list.slice(index, index + size))
-  return out
-}
+import LlmDialogShell, { BatchBar, DialogSteps } from './LlmDialogShell.jsx'
 
 export default function CaseGenerationDialog({
   scenario,
@@ -150,7 +136,7 @@ export default function CaseGenerationDialog({
     setSelectedKeys(new Set())
     setRunErrors([])
     setRunWarnings([])
-    setBatches(chunk(combos, GENERATION_BATCH_SIZE))
+    setBatches(chunkList(combos, GENERATION_BATCH_SIZE))
     setBatchIndex(0)
     setAnswerText('')
     setProgress({ done: 0, total: combos.length })
@@ -226,270 +212,254 @@ export default function CaseGenerationDialog({
   }
 
   return (
-    <div className="sb-llm-modal" role="presentation" onMouseDown={(event) => {
-      if (event.target === event.currentTarget) onClose()
-    }}>
-      <section className="sb-llm-dialog sb-gen-dialog" role="dialog" aria-modal="true" aria-labelledby="sb-gen-title">
-        <div className="sb-llm-dialog__head">
-          <div>
-            <p className="sb-panel-label">골든 케이스 + 카탈로그 → 프롬프트 → 내 AI → 조합별 케이스</p>
-            <h2 id="sb-gen-title">조합 케이스 만들기</h2>
-            <p>골든 케이스의 레이아웃과 상품 카탈로그는 고정하고, AI는 조합별 문구와 상품 선택만 채웁니다.</p>
-            <AiRoundTripNote>
-              조합이 많으면 <b>여러 배치로 나눠</b> 왕복해요.
-            </AiRoundTripNote>
-          </div>
-          <button type="button" className="sb-icon-btn" onClick={onClose} aria-label="닫기">×</button>
-        </div>
+    <LlmDialogShell
+      titleId="sb-gen-title"
+      className="sb-gen-dialog"
+      label="골든 케이스 + 카탈로그 → 프롬프트 → 내 AI → 조합별 케이스"
+      title="조합 케이스 만들기"
+      description="골든 케이스의 레이아웃과 상품 카탈로그는 고정하고, AI는 조합별 문구와 상품 선택만 채웁니다."
+      note={<>조합이 많으면 <b>여러 배치로 나눠</b> 왕복해요.</>}
+      onClose={onClose}
+    >
+      <DialogSteps steps={[
+        { label: '구조 · 조합', state: phase === 'setup' ? 'active' : 'done' },
+        { label: '프롬프트 왕복', state: phase === 'exchange' ? 'active' : phase === 'review' ? 'done' : null },
+        { label: '검토 · 추가', state: phase === 'review' ? 'active' : null },
+      ]} />
 
-        <ol className="sb-steps" aria-label="진행 단계">
-          <li className={'sb-steps__item' + (phase === 'setup' ? ' is-active' : ' is-done')}>구조 · 조합</li>
-          <li className="sb-steps__sep" aria-hidden="true">›</li>
-          <li className={'sb-steps__item'
-            + (phase === 'exchange' ? ' is-active' : (phase === 'review' ? ' is-done' : ''))}>
-            프롬프트 왕복
-          </li>
-          <li className="sb-steps__sep" aria-hidden="true">›</li>
-          <li className={'sb-steps__item' + (phase === 'review' ? ' is-active' : '')}>검토 · 추가</li>
-        </ol>
-
-        {phase === 'setup' && (
-          <>
-            <section className="sb-llm-section">
-              <div className="sb-llm-section__head">
-                <div>
-                  <strong>구조 · 조합</strong>
-                </div>
-                <span>{combos.length}개 조합 생성 예정</span>
+      {phase === 'setup' && (
+        <>
+          <section className="sb-llm-section">
+            <div className="sb-llm-section__head">
+              <div>
+                <strong>구조 · 조합</strong>
               </div>
-              <div className="sb-gen-grid">
-                <label className="sb-gen-field">
-                  <span>골든 케이스 (레이아웃·문체 기준)</span>
-                  <select value={goldenCaseId || ''} onChange={(event) => setGoldenCaseId(event.target.value)}>
-                    {candidateCases.map((planCase) => (
-                      <option key={planCase.id} value={planCase.id}>
-                        {planCase.name} · 컴포넌트 {(planCase.items || []).length}개
-                      </option>
-                    ))}
-                  </select>
-                  {template && (
-                    <small>텍스트 슬롯 {template.textSlots.length}개 · 상품 슬롯 {template.productSlots.length}개 추출됨</small>
-                  )}
-                </label>
-                <div className="sb-gen-field">
-                  <span>설문 축 (조합 = 선택지의 곱)</span>
-                  <div className="sb-gen-axes">
-                    {axes.map((axis) => (
-                      <label key={axis.questionId}>
-                        <input
-                          type="checkbox"
-                          checked={selectedAxisIds.has(axis.questionId)}
-                          onChange={() => toggleAxis(axis.questionId)}
-                        />
-                        <b>{axis.question}</b>
-                        <em>{axis.options.length}개 선택지</em>
-                      </label>
-                    ))}
-                    {axes.length === 0 && <p className="sb-llm-help">설문 단계에 선택지가 있는 질문이 없습니다.</p>}
-                  </div>
-                  <label className="sb-gen-skip">
-                    <input
-                      type="checkbox"
-                      checked={skipExisting}
-                      onChange={(event) => {
-                        setSkipExisting(event.target.checked)
-                        if (event.target.checked) setReplaceExisting(false)
-                      }}
-                    />
-                    이미 케이스가 있는 조합은 제외
-                  </label>
-                  {!skipExisting && (
-                    <label className="sb-gen-skip" title="페이지 재구성으로 고친 골든 케이스를 전체 조합에 전파할 때 사용해요">
+              <span>{combos.length}개 조합 생성 예정</span>
+            </div>
+            <div className="sb-gen-grid">
+              <label className="sb-gen-field">
+                <span>골든 케이스 (레이아웃·문체 기준)</span>
+                <select value={goldenCaseId || ''} onChange={(event) => setGoldenCaseId(event.target.value)}>
+                  {candidateCases.map((planCase) => (
+                    <option key={planCase.id} value={planCase.id}>
+                      {planCase.name} · 컴포넌트 {(planCase.items || []).length}개
+                    </option>
+                  ))}
+                </select>
+                {template && (
+                  <small>텍스트 슬롯 {template.textSlots.length}개 · 상품 슬롯 {template.productSlots.length}개 추출됨</small>
+                )}
+              </label>
+              <div className="sb-gen-field">
+                <span>설문 축 (조합 = 선택지의 곱)</span>
+                <div className="sb-gen-axes">
+                  {axes.map((axis) => (
+                    <label key={axis.questionId}>
                       <input
                         type="checkbox"
-                        checked={replaceExisting}
-                        onChange={(event) => setReplaceExisting(event.target.checked)}
+                        checked={selectedAxisIds.has(axis.questionId)}
+                        onChange={() => toggleAxis(axis.questionId)}
                       />
-                      같은 조합의 기존 케이스를 새로 만든 것으로 교체
+                      <b>{axis.question}</b>
+                      <em>{axis.options.length}개 선택지</em>
                     </label>
-                  )}
+                  ))}
+                  {axes.length === 0 && <p className="sb-llm-help">설문 단계에 선택지가 있는 질문이 없습니다.</p>}
                 </div>
-              </div>
-            </section>
-
-            <section className="sb-llm-section">
-              <div className="sb-llm-section__head">
-                <div>
-                  <strong>페르소나 · 상품 카탈로그</strong>
-                </div>
-              </div>
-              <div className="sb-gen-grid">
-                <label className="sb-gen-field">
-                  <span>페르소나</span>
-                  <textarea
-                    rows={3}
-                    value={persona}
-                    onChange={(event) => setPersona(event.target.value)}
-                    placeholder="예: 유진. 나이대: 20대 후반, 피부타입: 복합성 …"
+                <label className="sb-gen-skip">
+                  <input
+                    type="checkbox"
+                    checked={skipExisting}
+                    onChange={(event) => {
+                      setSkipExisting(event.target.checked)
+                      if (event.target.checked) setReplaceExisting(false)
+                    }}
                   />
+                  이미 케이스가 있는 조합은 제외
                 </label>
-                <label className="sb-gen-field">
-                  <span>추가 지시사항 <em>선택</em></span>
-                  <textarea
-                    rows={3}
-                    value={notes}
-                    onChange={(event) => setNotes(event.target.value)}
-                    placeholder="예: 존댓말 유지, 이모지 사용 금지, 각 단계 설명은 2문장 이내 …"
-                  />
-                </label>
-              </div>
-              <label className="sb-gen-field">
-                <span>상품 카탈로그 — 한 줄에 하나, "브랜드 | 상품명 | 가격 | 정가 | 특징". AI는 이 목록에서 고르기만 합니다.</span>
-                <textarea
-                  className="sb-gen-catalog"
-                  rows={7}
-                  value={catalogText}
-                  onChange={(event) => setCatalogText(event.target.value)}
-                  spellCheck={false}
-                />
-                <small>{catalog.length}개 상품 인식됨 · 기존 케이스와 상품명이 같으면 이미지·색상 등 표시 정보를 승계합니다.</small>
-              </label>
-            </section>
-
-            {setupProblems.length > 0 && (
-              <div className="sb-llm-validation__errors sb-gen-problems">
-                {setupProblems.map((problem, index) => <p key={index}>{problem}</p>)}
-              </div>
-            )}
-
-            <div className="sb-llm-dialog__foot">
-              <p>
-                조합 {combos.length}개를 {GENERATION_BATCH_SIZE}개씩 나눠 왕복해요. 받은 케이스는 초안으로 추가됩니다.
-              </p>
-              <div>
-                <button type="button" className="sb-btn sb-btn--ghost" onClick={onClose}>취소</button>
-                <button
-                  type="button"
-                  className="sb-btn sb-btn--primary"
-                  disabled={setupProblems.length > 0}
-                  onClick={start}
-                >
-                  프롬프트 만들기
-                </button>
-              </div>
-            </div>
-          </>
-        )}
-
-        {phase === 'exchange' && (
-          <>
-            <div className="sb-batch-bar">
-              <div>
-                <strong>배치 {batchIndex + 1} / {batches.length}</strong>
-                <small>{activeBatch.map((combo) => combo.key).join(' · ')}</small>
-              </div>
-              <div className="sb-batch-bar__meter" aria-hidden="true">
-                <i style={{ width: `${progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0}%` }} />
-              </div>
-              <span>{progress.done} / {progress.total} 조합</span>
-            </div>
-
-            <PromptExchange
-              title="이 배치의 프롬프트"
-              hint="검증에 성공하면 다음 배치로 넘어가요."
-              prompt={batchPrompt}
-              onCopied={(ok) => onToast(ok
-                ? `배치 ${batchIndex + 1}/${batches.length} 프롬프트를 복사했어요.`
-                : '복사하지 못했어요. 프롬프트를 펼쳐 직접 복사해주세요.')}
-              answerText={answerText}
-              answerPlaceholder={'{"cases":[...]} JSON을 붙여넣으세요.'}
-              onAnswerChange={setAnswerText}
-              rows={8}
-            />
-
-            {runErrors.map((error, index) => <p key={index} className="sb-llm-error">{error}</p>)}
-            {results.length > 0 && <p className="sb-llm-summary">지금까지 {results.length}개 케이스 생성됨</p>}
-
-            <div className="sb-llm-dialog__foot">
-              <p>중간에 그만둬도 이미 검증된 케이스는 검토·적용할 수 있어요.</p>
-              <div>
-                <button type="button" className="sb-btn sb-btn--ghost" onClick={() => setPhase('review')}>
-                  여기까지만 검토
-                </button>
-                <button
-                  type="button"
-                  className="sb-btn sb-btn--primary"
-                  disabled={!answerText.trim()}
-                  onClick={submitAnswer}
-                >
-                  {batchIndex + 1 >= batches.length ? '응답 검증 · 검토로' : '응답 검증 · 다음 배치'}
-                </button>
-              </div>
-            </div>
-          </>
-        )}
-
-        {phase === 'review' && (
-          <>
-            <section className="sb-llm-section">
-              <div className="sb-llm-section__head">
-                <div>
-                  <strong>생성 결과 검토</strong>
-                </div>
-                <span>{selectedKeys.size}/{results.length}개 선택</span>
-              </div>
-              {runErrors.length > 0 && (
-                <div className="sb-llm-validation__errors">
-                  <strong>일부 실패</strong>
-                  {runErrors.map((error, index) => <p key={index}>{error}</p>)}
-                </div>
-              )}
-              {runWarnings.slice(0, 8).map((warning, index) => (
-                <p key={index} className="sb-llm-warning">{warning}</p>
-              ))}
-              {runWarnings.length > 8 && <p className="sb-llm-warning">…외 경고 {runWarnings.length - 8}건</p>}
-              <div className="sb-llm-revisions sb-gen-results">
-                {results.map(({ combo, generated }) => (
-                  <label key={generated.comboKey} className="sb-llm-revision">
+                {!skipExisting && (
+                  <label className="sb-gen-skip" title="페이지 재구성으로 고친 골든 케이스를 전체 조합에 전파할 때 사용해요">
                     <input
                       type="checkbox"
-                      checked={selectedKeys.has(generated.comboKey)}
-                      onChange={() => toggleResult(generated.comboKey)}
+                      checked={replaceExisting}
+                      onChange={(event) => setReplaceExisting(event.target.checked)}
                     />
-                    <div>
-                      <strong>{generated.comboKey}</strong>
-                      <small>
-                        텍스트 {Object.keys(generated.texts).length}개 · 상품 선택 {Object.keys(generated.products).length}개
-                      </small>
-                      <p>{previewText(generated) || '(생성된 제목 없음)'}</p>
-                    </div>
+                    같은 조합의 기존 케이스를 새로 만든 것으로 교체
                   </label>
-                ))}
-                {results.length === 0 && (
-                  <div className="sb-llm-empty">
-                    <strong>생성된 케이스가 없습니다.</strong>
-                    <p>오류 메시지를 확인하고 다시 시도해주세요.</p>
-                  </div>
                 )}
               </div>
-            </section>
-            <div className="sb-llm-dialog__foot">
-              <p>적용하면 기본(폴백) 케이스 앞에 초안으로 추가됩니다. Undo(⌘Z)로 되돌릴 수 있어요.</p>
+            </div>
+          </section>
+
+          <section className="sb-llm-section">
+            <div className="sb-llm-section__head">
               <div>
-                <button type="button" className="sb-btn sb-btn--ghost" onClick={() => setPhase('setup')}>설정으로</button>
-                <button
-                  type="button"
-                  className="sb-btn sb-btn--primary"
-                  disabled={selectedKeys.size === 0}
-                  onClick={applySelected}
-                >
-                  선택한 {selectedKeys.size}개 케이스 추가
-                </button>
+                <strong>페르소나 · 상품 카탈로그</strong>
               </div>
             </div>
-          </>
-        )}
-      </section>
-    </div>
+            <div className="sb-gen-grid">
+              <label className="sb-gen-field">
+                <span>페르소나</span>
+                <textarea
+                  rows={3}
+                  value={persona}
+                  onChange={(event) => setPersona(event.target.value)}
+                  placeholder="예: 유진. 나이대: 20대 후반, 피부타입: 복합성 …"
+                />
+              </label>
+              <label className="sb-gen-field">
+                <span>추가 지시사항 <em>선택</em></span>
+                <textarea
+                  rows={3}
+                  value={notes}
+                  onChange={(event) => setNotes(event.target.value)}
+                  placeholder="예: 존댓말 유지, 이모지 사용 금지, 각 단계 설명은 2문장 이내 …"
+                />
+              </label>
+            </div>
+            <label className="sb-gen-field">
+              <span>상품 카탈로그 — 한 줄에 하나, "브랜드 | 상품명 | 가격 | 정가 | 특징". AI는 이 목록에서 고르기만 합니다.</span>
+              <textarea
+                className="sb-gen-catalog"
+                rows={7}
+                value={catalogText}
+                onChange={(event) => setCatalogText(event.target.value)}
+                spellCheck={false}
+              />
+              <small>{catalog.length}개 상품 인식됨 · 기존 케이스와 상품명이 같으면 이미지·색상 등 표시 정보를 승계합니다.</small>
+            </label>
+          </section>
+
+          {setupProblems.length > 0 && (
+            <div className="sb-llm-validation__errors sb-gen-problems">
+              {setupProblems.map((problem, index) => <p key={index}>{problem}</p>)}
+            </div>
+          )}
+
+          <div className="sb-llm-dialog__foot">
+            <p>
+              조합 {combos.length}개를 {GENERATION_BATCH_SIZE}개씩 나눠 왕복해요. 받은 케이스는 초안으로 추가됩니다.
+            </p>
+            <div>
+              <button type="button" className="sb-btn sb-btn--ghost" onClick={onClose}>취소</button>
+              <button
+                type="button"
+                className="sb-btn sb-btn--primary"
+                disabled={setupProblems.length > 0}
+                onClick={start}
+              >
+                프롬프트 만들기
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {phase === 'exchange' && (
+        <>
+          <BatchBar
+            index={batchIndex}
+            count={batches.length}
+            caption={activeBatch.map((combo) => combo.key).join(' · ')}
+            percent={progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0}
+            status={`${progress.done} / ${progress.total} 조합`}
+          />
+
+          <PromptExchange
+            title="이 배치의 프롬프트"
+            hint="검증에 성공하면 다음 배치로 넘어가요."
+            prompt={batchPrompt}
+            onCopied={(ok) => onToast(ok
+              ? `배치 ${batchIndex + 1}/${batches.length} 프롬프트를 복사했어요.`
+              : '복사하지 못했어요. 프롬프트를 펼쳐 직접 복사해주세요.')}
+            answerText={answerText}
+            answerPlaceholder={'{"cases":[...]} JSON을 붙여넣으세요.'}
+            onAnswerChange={setAnswerText}
+            rows={8}
+          />
+
+          {runErrors.map((error, index) => <p key={index} className="sb-llm-error">{error}</p>)}
+          {results.length > 0 && <p className="sb-llm-summary">지금까지 {results.length}개 케이스 생성됨</p>}
+
+          <div className="sb-llm-dialog__foot">
+            <p>중간에 그만둬도 이미 검증된 케이스는 검토·적용할 수 있어요.</p>
+            <div>
+              <button type="button" className="sb-btn sb-btn--ghost" onClick={() => setPhase('review')}>
+                여기까지만 검토
+              </button>
+              <button
+                type="button"
+                className="sb-btn sb-btn--primary"
+                disabled={!answerText.trim()}
+                onClick={submitAnswer}
+              >
+                {batchIndex + 1 >= batches.length ? '응답 검증 · 검토로' : '응답 검증 · 다음 배치'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {phase === 'review' && (
+        <>
+          <section className="sb-llm-section">
+            <div className="sb-llm-section__head">
+              <div>
+                <strong>생성 결과 검토</strong>
+              </div>
+              <span>{selectedKeys.size}/{results.length}개 선택</span>
+            </div>
+            {runErrors.length > 0 && (
+              <div className="sb-llm-validation__errors">
+                <strong>일부 실패</strong>
+                {runErrors.map((error, index) => <p key={index}>{error}</p>)}
+              </div>
+            )}
+            {runWarnings.slice(0, 8).map((warning, index) => (
+              <p key={index} className="sb-llm-warning">{warning}</p>
+            ))}
+            {runWarnings.length > 8 && <p className="sb-llm-warning">…외 경고 {runWarnings.length - 8}건</p>}
+            <div className="sb-llm-revisions sb-gen-results">
+              {results.map(({ combo, generated }) => (
+                <label key={generated.comboKey} className="sb-llm-revision">
+                  <input
+                    type="checkbox"
+                    checked={selectedKeys.has(generated.comboKey)}
+                    onChange={() => toggleResult(generated.comboKey)}
+                  />
+                  <div>
+                    <strong>{generated.comboKey}</strong>
+                    <small>
+                      텍스트 {Object.keys(generated.texts).length}개 · 상품 선택 {Object.keys(generated.products).length}개
+                    </small>
+                    <p>{previewText(generated) || '(생성된 제목 없음)'}</p>
+                  </div>
+                </label>
+              ))}
+              {results.length === 0 && (
+                <div className="sb-llm-empty">
+                  <strong>생성된 케이스가 없습니다.</strong>
+                  <p>오류 메시지를 확인하고 다시 시도해주세요.</p>
+                </div>
+              )}
+            </div>
+          </section>
+          <div className="sb-llm-dialog__foot">
+            <p>적용하면 기본(폴백) 케이스 앞에 초안으로 추가됩니다. Undo(⌘Z)로 되돌릴 수 있어요.</p>
+            <div>
+              <button type="button" className="sb-btn sb-btn--ghost" onClick={() => setPhase('setup')}>설정으로</button>
+              <button
+                type="button"
+                className="sb-btn sb-btn--primary"
+                disabled={selectedKeys.size === 0}
+                onClick={applySelected}
+              >
+                선택한 {selectedKeys.size}개 케이스 추가
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </LlmDialogShell>
   )
 }

@@ -5,6 +5,7 @@ import {
   normalizeComponentEvaluation,
 } from '../evaluation.js'
 import { parseJsonAnswer } from './jsonAnswer.js'
+import { chunkList } from './chatPrompt.js'
 
 /*
  * 평가 피드백의 전체 전파.
@@ -127,11 +128,7 @@ export function propagationTargets(planCases, seeds) {
     .filter((target) => target.components.length > 0)
 }
 
-export const chunkTargets = (targets, size = PROPAGATION_BATCH_SIZE) => {
-  const batches = []
-  for (let index = 0; index < targets.length; index += size) batches.push(targets.slice(index, index + size))
-  return batches
-}
+export const chunkTargets = (targets, size = PROPAGATION_BATCH_SIZE) => chunkList(targets, size)
 
 export function buildPropagationRequest({ scenario, seeds, targets }) {
   return {

@@ -1,5 +1,5 @@
 /*
- * 채팅형 AI(claude.ai 등)에 붙여넣을 프롬프트 봉투(envelope).
+ * 채팅형 AI(claude.ai 등)에 붙여넣을 프롬프트 봉투(envelope) + 왕복 공용 유틸.
  *
  * 스튜디오는 API 키를 쓰지 않는다. 모든 AI 기능은 "프롬프트를 복사해 쓰던 AI에 붙여넣고,
  * 돌아온 결과를 다시 붙여넣는다"는 하나의 왕복으로 통일돼 있다.
@@ -7,6 +7,20 @@
  * 봉투가 (1) 출력 형식을 앞뒤로 두 번 못 박고, (2) 스키마 밖 키를 막고,
  * (3) 결과를 스튜디오 어디에 붙여넣을지까지 알려준다.
  */
+
+/* 워크스페이스 프로필 → 프롬프트에 넣을 페르소나 문장. AI 다이얼로그들의 초기값 공용. */
+export const personaFromProfile = (profile) => {
+  const name = profile?.name ? `${profile.name}.` : ''
+  const traits = (profile?.items || []).map((item) => `${item.label}: ${item.value}`).join(', ')
+  return [name, traits].filter(Boolean).join(' ')
+}
+
+/* 배치 왕복용 분할 — 채팅 한 번에 다 못 싣는 요청을 size개씩 나눈다 */
+export const chunkList = (list, size) => {
+  const out = []
+  for (let index = 0; index < list.length; index += size) out.push(list.slice(index, index + size))
+  return out
+}
 
 const JSON_RULES = [
   '- 설명·머리말·맺음말 없이 ```json 코드블록 **하나만** 출력합니다.',

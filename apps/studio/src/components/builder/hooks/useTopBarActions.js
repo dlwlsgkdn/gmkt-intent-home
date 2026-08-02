@@ -1,5 +1,7 @@
 import { classifyImportPayload, normalizeScenario } from '../../../lib/store.js'
 import { buildShareUrl } from '../../../lib/share.js'
+import { copyToClipboard } from '../../../lib/clipboard.js'
+import { downloadJson, readFileText } from '../../../lib/jsonFile.js'
 import {
   VERSION_LIMIT,
   publishSnapshot,
@@ -58,23 +60,17 @@ export function useTopBarActions({
   /* 현재 시나리오 JSON 입출력 — 홈 드로어의 목록 단위 입출력과 달리 이 시나리오 하나만 다룬다 */
   const exportScenarioJson = () => {
     closeMenu()
-    const blob = new Blob([JSON.stringify(scenario, null, 2)], { type: 'application/json' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = `ddak-scenario-${(scenario.chip || scenario.title || '시나리오').replace(/\s+/g, '_')}.json`
-    a.click()
-    URL.revokeObjectURL(a.href)
+    downloadJson(scenario, `ddak-scenario-${(scenario.chip || scenario.title || '시나리오').replace(/\s+/g, '_')}.json`)
     api.showToast('현재 시나리오를 JSON 파일로 내보냈어요.')
   }
 
   const importScenarioJson = (file) => {
     closeMenu()
     if (!file || previewMode) return
-    const reader = new FileReader()
-    reader.onload = () => {
+    readFileText(file).then((text) => {
       try {
         // 드로어와 같은 감지기를 공유 — 봉투(ddak-export)·목록(배열)이면 첫 시나리오를 쓴다
-        const detected = classifyImportPayload(JSON.parse(reader.result))
+        const detected = classifyImportPayload(JSON.parse(text))
         if (detected.kind === 'workspace') {
           api.showToast('전체 백업 파일이에요. 홈 드로어의 "JSON 가져오기"에서 복원해주세요.')
           return
@@ -99,18 +95,14 @@ export function useTopBarActions({
       } catch {
         api.showToast('가져오기 실패: 시나리오 JSON 형식을 확인해주세요.')
       }
-    }
-    reader.readAsText(file)
+    }, () => api.showToast('가져오기 실패: 파일을 읽을 수 없어요.'))
   }
 
   /* 공유 링크: URL 해시에 시나리오 전체가 담겨 어디서든 바로 실행된다 */
-  const copyShareLink = () => {
+  const copyShareLink = async () => {
     const url = buildShareUrl(scenario)
-    if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(url).then(
-        () => api.showToast('공유 링크를 복사했어요. 받는 사람은 링크만 열면 바로 체험할 수 있어요.'),
-        () => window.prompt('아래 링크를 복사하세요', url)
-      )
+    if (await copyToClipboard(url)) {
+      api.showToast('공유 링크를 복사했어요. 받는 사람은 링크만 열면 바로 체험할 수 있어요.')
     } else {
       window.prompt('아래 링크를 복사하세요', url)
     }

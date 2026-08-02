@@ -6,6 +6,7 @@ import StarterPanel from './StarterPanel.jsx'
 import { TEMPLATES } from '../lib/templates.js'
 import { classifyImportPayload, createScenariosExport, hexToRgba, DEVICE_PRESETS } from '../lib/store.js'
 import { scenariosFromImport } from '../lib/scenarioOps.js'
+import { downloadJson, readFileText } from '../lib/jsonFile.js'
 import { renderItem } from '../lib/registry.jsx'
 import ScenarioGenerationDialog from './builder/ScenarioGenerationDialog.jsx'
 
@@ -65,16 +66,6 @@ export default function HomeView({ api }) {
      가져오기: 파일 형식을 자동 감지(classifyImportPayload)해 동작별 확인 다이얼로그
      (목록 추가 / 전체 교체)로 갈라진다 — 파일이 어느 버튼용인지 기억할 필요가 없다.
      빌더의 현재 시나리오 입출력은 별도 유지(현재 열린 시나리오에 덮는 컨텍스트 동작). */
-  const downloadJson = (data, filename) => {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = filename
-    a.click()
-    URL.revokeObjectURL(url)
-  }
-
   const today = () => new Date().toISOString().slice(0, 10)
 
   /* 내보내기는 지연 로드된 행을 서버와 마저 맞춘 뒤 만든다 — 부분 데이터 저장 방지.
@@ -109,10 +100,9 @@ export default function HomeView({ api }) {
   const handleJsonFile = (e) => {
     const file = e.target.files && e.target.files[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => {
+    readFileText(file).then((text) => {
       try {
-        const detected = classifyImportPayload(JSON.parse(reader.result))
+        const detected = classifyImportPayload(JSON.parse(text))
         if (detected.kind === 'workspace') {
           const metaParts = []
           if (Array.isArray(detected.payload?.data?.accounts)) metaParts.push(`프로필 ${detected.payload.data.accounts.length}개`)
@@ -131,9 +121,7 @@ export default function HomeView({ api }) {
       } catch (err) {
         api.showToast('가져오기 실패: JSON 형식을 확인해주세요.')
       }
-    }
-    reader.onerror = () => api.showToast('가져오기 실패: 파일을 읽을 수 없어요.')
-    reader.readAsText(file)
+    }, () => api.showToast('가져오기 실패: 파일을 읽을 수 없어요.'))
     e.target.value = ''
   }
 

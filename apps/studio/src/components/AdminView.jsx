@@ -10,6 +10,7 @@ import {
   setAdminToken,
 } from '../lib/adminApi.js'
 import { renderMarkdown, statusLabel, threadMarkdown } from '../lib/adminReport.jsx'
+import { timeAgo } from '../lib/timeAgo.js'
 
 /*
  * thread 관리 페이지 — #admin 해시로만 진입한다 (홈·플레이어 어디에도 링크 없음).
@@ -17,17 +18,6 @@ import { renderMarkdown, statusLabel, threadMarkdown } from '../lib/adminReport.
  * 보관해 반복 입력을 없앤다. 401이 오면 보관 토큰을 지우고 게이트로 돌아간다.
  * "삭제"는 보관(archived) 처리 — 데이터는 남고 사용자 목록에서만 숨겨진다.
  */
-
-function timeAgo(iso) {
-  const t = new Date(iso || '').getTime()
-  if (!t) return '—'
-  const m = Math.floor((Date.now() - t) / 60000)
-  if (m < 1) return '방금 전'
-  if (m < 60) return `${m}분 전`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}시간 전`
-  return new Date(t).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })
-}
 
 export default function AdminView({ api }) {
   const [token, setToken] = useState(getAdminToken)
@@ -278,7 +268,7 @@ export default function AdminView({ api }) {
                       <span className={`sb-admin-status sb-admin-status--${t.status}`}>{statusLabel(t.status)}</span>
                     </td>
                     <td><code>{t.userId}</code></td>
-                    <td title={t.updatedAt}>{timeAgo(t.updatedAt)}</td>
+                    <td title={t.updatedAt}>{timeAgo(t.updatedAt, { empty: '—' })}</td>
                     <td className="sb-admin-table__actions">
                       <button type="button" className="sb-btn sb-btn--ghost sb-btn--tiny" onClick={() => openDetail(t.id)}>
                         열람

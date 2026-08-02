@@ -69,7 +69,7 @@ npm run db:migrate --workspace=apps/core    # 마이그레이션 SQL 순서 적�
 - `lib/richtext.jsx` — 인라인 리치텍스트 엔진: `{{옵션|텍스트}}`/`[[키워드]]` 마크업 ↔ contentEditable 변환, 서식 적용/병합, InlineEditor, FONT_OPTIONS/TEXT_COLORS
 - `lib/templates.js` — 새 시나리오 템플릿 (빈/뷰티 브리프/선물 추천)
 - `lib/prompt/` — **AI 왕복 계층**. 스튜디오는 LLM API를 호출하지 않는다: 모든 AI 기능이 "프롬프트 복사 → 쓰던 AI에 붙여넣기 → 결과 가져오기" 한 가지 왕복이다
-  - `chatPrompt.js` 채팅창용 출력 규칙 봉투(코드블록 하나·스키마 밖 키 금지·붙여넣을 위치)
+  - `chatPrompt.js` 채팅창용 출력 규칙 봉투(코드블록 하나·스키마 밖 키 금지·붙여넣을 위치) + 왕복 공용 유틸(`personaFromProfile` 프로필→페르소나 문장, `chunkList` 배치 분할)
   - `jsonAnswer.js` 붙여넣은 응답에서 JSON만 건져내기 — 모든 검증기가 공유
   - `scenarioDraft.js` 빠른 초안: 레이아웃은 코드 스캐폴드가 소유, AI는 텍스트·상품 배치만
   - `scenarioDb.js` 전체 구성: 레지스트리에서 컴포넌트 사양을 자동 추출해 DB JSON 전체를 요청하고, 가져오기 시 조건이 실제 질문 id·선택지를 가리키는지 검증
@@ -82,6 +82,7 @@ npm run db:migrate --workspace=apps/core    # 마이그레이션 SQL 순서 적�
 - `components/builder/EvaluationPanel.jsx` — 평가 스튜디오 오케스트레이터 (말풍선 배치·케이스 탭·AI 진입점). 표현 컴포넌트는 `components/builder/evaluation/`: StarRating(+SCORE_GUIDE)/Rubric/Leaderboard/CommentBubble/PreviewBoundary
 - `components/builder/BuilderTopBar.jsx` / `PlanCaseBar.jsx` / `BuilderCanvas.jsx` — 상태 없는 표현 컴포넌트
 - `components/builder/PromptExchange.jsx` — "프롬프트 복사 → 결과 붙여넣기" UI 한 벌. 세 AI 다이얼로그가 공유
+- `components/builder/LlmDialogShell.jsx` — AI 다이얼로그 공용 셸(백드롭 클릭 닫기·헤더·AiRoundTripNote 배지) + `DialogSteps`(진행 breadcrumb) + `BatchBar`(배치 진행 바). 여섯 AI 다이얼로그(시나리오/조합 케이스/문구 다듬기/재구성/전체 반영/AiFixChooser)가 공유
 - `components/builder/CanvasItem.jsx` — 스택 위 최상위 아이템 한 개 (선택/순서 드래그/잠금/숨김, 우클릭 — 문서 흐름이라 좌표·리사이즈·높이 측정 없음)
 - `components/builder/Palette.jsx` — 팔레트(검색·클릭 추가·캔버스로 드래그)/레이어 패널(잠금·숨김·순서)
 - `components/builder/Inspector.jsx` — 속성 편집 / 필드 드래그 선택 서식 툴바 (크기 슬라이더는 컨테이너 자식 카드 전용). 목록형 필드(kind: options·stringList·cards·table)는 `ListEditors.jsx`의 행 단위 GUI 편집기로 위임 — 저장 형식은 기존 구분자 문자열 그대로, 줄바꿈 직렬화로 항목 안 쉼표 보존

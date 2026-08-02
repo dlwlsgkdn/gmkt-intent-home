@@ -1,17 +1,5 @@
 import React, { useEffect, useState } from 'react'
-
-function timeAgo(iso) {
-  const t = new Date(iso || '').getTime()
-  if (!t) return ''
-  const m = Math.floor((Date.now() - t) / 60000)
-  if (m < 1) return '방금 전'
-  if (m < 60) return `${m}분 전`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}시간 전`
-  const d = Math.floor(h / 24)
-  if (d < 7) return `${d}일 전`
-  return new Date(t).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })
-}
+import { timeAgo } from '../lib/timeAgo.js'
 
 /* 원본(gmarket-advanced-clean-home)의 "마지막 페이즈" 라벨을 스튜디오 단계에 맞게 매핑 */
 function phaseLabel(t) {

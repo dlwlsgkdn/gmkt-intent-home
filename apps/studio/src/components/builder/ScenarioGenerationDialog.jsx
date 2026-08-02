@@ -16,17 +16,12 @@ import {
   mergeCatalogText,
   parseProductSearchResult,
 } from '../../lib/prompt/productSearch.js'
-import { wrapForChatApp } from '../../lib/prompt/chatPrompt.js'
+import { personaFromProfile, wrapForChatApp } from '../../lib/prompt/chatPrompt.js'
 import { buildScenarioDbPrompt, combinationCount, parseScenarioDbJson } from '../../lib/prompt/scenarioDb.js'
 import { copyToClipboard } from '../../lib/clipboard.js'
+import { readFileText } from '../../lib/jsonFile.js'
 import PromptExchange from './PromptExchange.jsx'
-import AiRoundTripNote from './AiRoundTripNote.jsx'
-
-const personaFromProfile = (profile) => {
-  const name = profile?.name ? `${profile.name}.` : ''
-  const traits = (profile?.items || []).map((item) => `${item.label}: ${item.value}`).join(', ')
-  return [name, traits].filter(Boolean).join(' ')
-}
+import LlmDialogShell, { DialogSteps } from './LlmDialogShell.jsx'
 
 const CATALOG_PLACEHOLDER = [
   '브랜드 | 상품명 | 가격 | 정가 | 특징',
@@ -155,18 +150,14 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onImport, 
     const file = event.target.files && event.target.files[0]
     event.target.value = ''
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => {
-      const text = String(reader.result || '')
+    readFileText(file).then((text) => {
       setAnswerFileName(file.name)
       setAnswerText(text)
       const parsed = verifyAnswer(text)
       if (parsed && !parsed.errors?.length) {
         onToast(`${file.name}을(를) 읽었어요.`)
       }
-    }
-    reader.onerror = () => onToast('파일을 읽지 못했어요.')
-    reader.readAsText(file)
+    }, () => onToast('파일을 읽지 못했어요.'))
   }
 
   const runImport = () => {
@@ -188,355 +179,342 @@ export default function ScenarioGenerationDialog({ profile, onCreate, onImport, 
   const activeMode = MODES.find((entry) => entry.key === mode) || MODES[0]
 
   return (
-    <div className="sb-llm-modal" role="presentation" onMouseDown={(event) => {
-      if (event.target === event.currentTarget) onClose()
-    }}>
-      <section className="sb-llm-dialog sb-gen-dialog" role="dialog" aria-modal="true" aria-labelledby="sb-sgen-title">
-        <div className="sb-llm-dialog__head">
-          <div>
-            <p className="sb-panel-label">조건 입력 → 프롬프트 → 내 AI → 결과 가져오기</p>
-            <h2 id="sb-sgen-title">AI로 시나리오 만들기</h2>
-            <p>검색어와 페르소나, 추천할 상품을 적으면 프롬프트를 만들어 드려요.</p>
-            <AiRoundTripNote>
-              조건을 채우면 <b>프롬프트</b>가 나와요. 쓰던 AI에 붙여넣고 결과만 가져오면 됩니다.
-            </AiRoundTripNote>
-          </div>
-          <button type="button" className="sb-icon-btn" onClick={onClose} aria-label="닫기">×</button>
-        </div>
+    <LlmDialogShell
+      titleId="sb-sgen-title"
+      className="sb-gen-dialog"
+      label="조건 입력 → 프롬프트 → 내 AI → 결과 가져오기"
+      title="AI로 시나리오 만들기"
+      description="검색어와 페르소나, 추천할 상품을 적으면 프롬프트를 만들어 드려요."
+      note={<>조건을 채우면 <b>프롬프트</b>가 나와요. 쓰던 AI에 붙여넣고 결과만 가져오면 됩니다.</>}
+      onClose={onClose}
+    >
+      <DialogSteps steps={[
+        { label: '조건 입력', state: phase === 'setup' ? 'active' : 'done' },
+        { label: '프롬프트 왕복', state: phase === 'prompt' ? 'active' : phase === 'review' ? 'done' : null },
+        { label: '확인 · 만들기', state: phase === 'review' ? 'active' : null },
+      ]} />
 
-        <ol className="sb-steps" aria-label="진행 단계">
-          <li className={'sb-steps__item' + (phase === 'setup' ? ' is-active' : ' is-done')}>조건 입력</li>
-          <li className="sb-steps__sep" aria-hidden="true">›</li>
-          <li className={'sb-steps__item'
-            + (phase === 'prompt' ? ' is-active' : (phase === 'review' ? ' is-done' : ''))}>
-            프롬프트 왕복
-          </li>
-          <li className="sb-steps__sep" aria-hidden="true">›</li>
-          <li className={'sb-steps__item' + (phase === 'review' ? ' is-active' : '')}>확인 · 만들기</li>
-        </ol>
-
-        {phase === 'setup' && (
-          <>
-            <section className="sb-llm-section">
-              <div className="sb-llm-section__head">
-                <div>
-                  <strong>검색어 · 페르소나</strong>
-                </div>
-              </div>
-              <label className="sb-gen-field">
-                <span>검색어 — 사용자가 홈에서 검색할 문장</span>
-                <input
-                  type="text"
-                  className="sb-gen-input"
-                  value={query}
-                  placeholder="예: 소개팅 때 안 무너지는 메이크업 추천"
-                  onChange={(event) => setQuery(event.target.value)}
-                />
-              </label>
-              <div className="sb-gen-grid">
-                <label className="sb-gen-field">
-                  <span>페르소나</span>
-                  <textarea
-                    rows={3}
-                    value={persona}
-                    onChange={(event) => setPersona(event.target.value)}
-                    placeholder="예: 유진. 나이대: 20대 후반, 피부타입: 복합성 …"
-                  />
-                </label>
-                <label className="sb-gen-field">
-                  <span>추가 지시사항 <em>선택</em></span>
-                  <textarea
-                    rows={3}
-                    value={notes}
-                    onChange={(event) => setNotes(event.target.value)}
-                    placeholder="예: 존댓말 유지, 이모지 사용 금지, 예산 5만원 이하 중심 …"
-                  />
-                </label>
-              </div>
-            </section>
-
-            <section className="sb-llm-section">
-              <div className="sb-llm-section__head">
-                <div>
-                  <strong>추천 상품 · 구성</strong>
-                </div>
-                <div className="sb-gen-headbtns">
-                  <button
-                    type="button"
-                    className="sb-btn sb-btn--search"
-                    disabled={!query.trim()}
-                    title={query.trim() ? '웹 검색이 가능한 AI에 붙여넣을 상품 찾기 프롬프트를 복사합니다' : '검색어를 먼저 입력해주세요'}
-                    onClick={copySearchPrompt}
-                  >
-                    ✦ 상품 찾기 프롬프트
-                  </button>
-                  <button
-                    type="button"
-                    className="sb-btn sb-btn--ghost sb-btn--tiny"
-                    disabled={!catalogText.trim()}
-                    title="붙여넣은 검색 결과에서 표·번호·설명 문장을 걷어내고 상품 줄만 남깁니다"
-                    onClick={tidyCatalog}
-                  >
-                    결과 정리
-                  </button>
-                </div>
-              </div>
-              <label className="sb-gen-field">
-                <span>
-                  추천할 상품 <em>선택</em> — 한 줄에 하나. AI는 이 목록에서 고르기만 하고 가격·사실을 만들지 않습니다.
-                </span>
-                <textarea
-                  className="sb-gen-catalog"
-                  rows={6}
-                  value={catalogText}
-                  placeholder={CATALOG_PLACEHOLDER}
-                  spellCheck={false}
-                  onChange={(event) => {
-                    setCatalogText(event.target.value)
-                    setSearchNote('')
-                  }}
-                />
-                <small>
-                  {searchNote || (catalog.length > 0
-                    ? `${catalog.length}개 상품 인식됨 — 각 계획 단계에 배치됩니다.`
-                    : '비워두면 AI가 국내에서 실제 판매되는 상품을 직접 조사해 채웁니다. 위 버튼으로 먼저 찾아올 수도 있어요.')}
-                </small>
-              </label>
-              <div className="sb-gen-grid sb-gen-grid--three">
-                <label className="sb-gen-field">
-                  <span>설문 질문 수</span>
-                  <select value={questionCount} onChange={(event) => setQuestionCount(Number(event.target.value))}>
-                    {Array.from({ length: MAX_QUESTIONS - MIN_QUESTIONS + 1 }, (_, index) => MIN_QUESTIONS + index).map((count) => (
-                      <option key={count} value={count}>{count}개</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="sb-gen-field">
-                  <span>질문당 최대 선택지 수</span>
-                  <select value={optionCount} onChange={(event) => setOptionCount(Number(event.target.value))}>
-                    {[2, 3, 4, 5].map((count) => (
-                      <option key={count} value={count}>{count}개</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="sb-gen-field">
-                  <span>계획 단계 수</span>
-                  <select value={stepCount} onChange={(event) => setStepCount(Number(event.target.value))}>
-                    {Array.from({ length: MAX_STEPS - MIN_STEPS + 1 }, (_, index) => MIN_STEPS + index).map((count) => (
-                      <option key={count} value={count}>{count}단계</option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-            </section>
-
-            <section className="sb-llm-section">
-              <div className="sb-llm-section__head">
-                <div>
-                  <strong>만드는 방식</strong>
-                </div>
-              </div>
-              <div className="sb-mode-grid" role="radiogroup" aria-label="만드는 방식">
-                {MODES.map((entry) => (
-                  <button
-                    key={entry.key}
-                    type="button"
-                    role="radio"
-                    aria-checked={mode === entry.key}
-                    className={'sb-mode-card' + (mode === entry.key ? ' is-selected' : '')}
-                    onClick={() => setMode(entry.key)}
-                  >
-                    <span className="sb-mode-card__head">
-                      <strong>{entry.label}</strong>
-                      <em>{entry.tagline}</em>
-                    </span>
-                    <small>{entry.desc}</small>
-                  </button>
-                ))}
-              </div>
-              {mode === 'full' && (
-                <p className={'sb-gen-total' + (totalCases > 60 ? ' sb-gen-total--warn' : '')}>
-                  질문 {questionCount}개 × 선택지 최대 {optionCount}개 = 최대 <b>{totalCases.toLocaleString()}개</b> 케이스 + 기본 1개
-                  <small>
-                    {totalCases > 60
-                      ? ' — 조합이 많아 AI가 한 번에 다 만들지 못할 수 있어요. 질문 수나 최대 선택지 수를 줄이는 편이 안전합니다.'
-                      : ' — 선택지 개수는 AI가 질문에 맞게 정하고, 그 모든 조합에 케이스가 하나씩 생깁니다.'}
-                  </small>
-                </p>
-              )}
-            </section>
-
-            {(problems.length > 0 || errors.length > 0) && (
-              <div className="sb-llm-validation__errors sb-gen-problems">
-                {problems.map((problem, index) => <p key={`p${index}`}>{problem}</p>)}
-                {errors.map((error, index) => <p key={`e${index}`}>{error}</p>)}
-              </div>
-            )}
-
-            <div className="sb-llm-dialog__foot">
-              <p>API 키 없이 프롬프트 왕복으로 진행돼요.</p>
+      {phase === 'setup' && (
+        <>
+          <section className="sb-llm-section">
+            <div className="sb-llm-section__head">
               <div>
-                <button type="button" className="sb-btn sb-btn--ghost" onClick={onClose}>취소</button>
+                <strong>검색어 · 페르소나</strong>
+              </div>
+            </div>
+            <label className="sb-gen-field">
+              <span>검색어 — 사용자가 홈에서 검색할 문장</span>
+              <input
+                type="text"
+                className="sb-gen-input"
+                value={query}
+                placeholder="예: 소개팅 때 안 무너지는 메이크업 추천"
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            </label>
+            <div className="sb-gen-grid">
+              <label className="sb-gen-field">
+                <span>페르소나</span>
+                <textarea
+                  rows={3}
+                  value={persona}
+                  onChange={(event) => setPersona(event.target.value)}
+                  placeholder="예: 유진. 나이대: 20대 후반, 피부타입: 복합성 …"
+                />
+              </label>
+              <label className="sb-gen-field">
+                <span>추가 지시사항 <em>선택</em></span>
+                <textarea
+                  rows={3}
+                  value={notes}
+                  onChange={(event) => setNotes(event.target.value)}
+                  placeholder="예: 존댓말 유지, 이모지 사용 금지, 예산 5만원 이하 중심 …"
+                />
+              </label>
+            </div>
+          </section>
+
+          <section className="sb-llm-section">
+            <div className="sb-llm-section__head">
+              <div>
+                <strong>추천 상품 · 구성</strong>
+              </div>
+              <div className="sb-gen-headbtns">
+                <button
+                  type="button"
+                  className="sb-btn sb-btn--search"
+                  disabled={!query.trim()}
+                  title={query.trim() ? '웹 검색이 가능한 AI에 붙여넣을 상품 찾기 프롬프트를 복사합니다' : '검색어를 먼저 입력해주세요'}
+                  onClick={copySearchPrompt}
+                >
+                  ✦ 상품 찾기 프롬프트
+                </button>
+                <button
+                  type="button"
+                  className="sb-btn sb-btn--ghost sb-btn--tiny"
+                  disabled={!catalogText.trim()}
+                  title="붙여넣은 검색 결과에서 표·번호·설명 문장을 걷어내고 상품 줄만 남깁니다"
+                  onClick={tidyCatalog}
+                >
+                  결과 정리
+                </button>
+              </div>
+            </div>
+            <label className="sb-gen-field">
+              <span>
+                추천할 상품 <em>선택</em> — 한 줄에 하나. AI는 이 목록에서 고르기만 하고 가격·사실을 만들지 않습니다.
+              </span>
+              <textarea
+                className="sb-gen-catalog"
+                rows={6}
+                value={catalogText}
+                placeholder={CATALOG_PLACEHOLDER}
+                spellCheck={false}
+                onChange={(event) => {
+                  setCatalogText(event.target.value)
+                  setSearchNote('')
+                }}
+              />
+              <small>
+                {searchNote || (catalog.length > 0
+                  ? `${catalog.length}개 상품 인식됨 — 각 계획 단계에 배치됩니다.`
+                  : '비워두면 AI가 국내에서 실제 판매되는 상품을 직접 조사해 채웁니다. 위 버튼으로 먼저 찾아올 수도 있어요.')}
+              </small>
+            </label>
+            <div className="sb-gen-grid sb-gen-grid--three">
+              <label className="sb-gen-field">
+                <span>설문 질문 수</span>
+                <select value={questionCount} onChange={(event) => setQuestionCount(Number(event.target.value))}>
+                  {Array.from({ length: MAX_QUESTIONS - MIN_QUESTIONS + 1 }, (_, index) => MIN_QUESTIONS + index).map((count) => (
+                    <option key={count} value={count}>{count}개</option>
+                  ))}
+                </select>
+              </label>
+              <label className="sb-gen-field">
+                <span>질문당 최대 선택지 수</span>
+                <select value={optionCount} onChange={(event) => setOptionCount(Number(event.target.value))}>
+                  {[2, 3, 4, 5].map((count) => (
+                    <option key={count} value={count}>{count}개</option>
+                  ))}
+                </select>
+              </label>
+              <label className="sb-gen-field">
+                <span>계획 단계 수</span>
+                <select value={stepCount} onChange={(event) => setStepCount(Number(event.target.value))}>
+                  {Array.from({ length: MAX_STEPS - MIN_STEPS + 1 }, (_, index) => MIN_STEPS + index).map((count) => (
+                    <option key={count} value={count}>{count}단계</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </section>
+
+          <section className="sb-llm-section">
+            <div className="sb-llm-section__head">
+              <div>
+                <strong>만드는 방식</strong>
+              </div>
+            </div>
+            <div className="sb-mode-grid" role="radiogroup" aria-label="만드는 방식">
+              {MODES.map((entry) => (
+                <button
+                  key={entry.key}
+                  type="button"
+                  role="radio"
+                  aria-checked={mode === entry.key}
+                  className={'sb-mode-card' + (mode === entry.key ? ' is-selected' : '')}
+                  onClick={() => setMode(entry.key)}
+                >
+                  <span className="sb-mode-card__head">
+                    <strong>{entry.label}</strong>
+                    <em>{entry.tagline}</em>
+                  </span>
+                  <small>{entry.desc}</small>
+                </button>
+              ))}
+            </div>
+            {mode === 'full' && (
+              <p className={'sb-gen-total' + (totalCases > 60 ? ' sb-gen-total--warn' : '')}>
+                질문 {questionCount}개 × 선택지 최대 {optionCount}개 = 최대 <b>{totalCases.toLocaleString()}개</b> 케이스 + 기본 1개
+                <small>
+                  {totalCases > 60
+                    ? ' — 조합이 많아 AI가 한 번에 다 만들지 못할 수 있어요. 질문 수나 최대 선택지 수를 줄이는 편이 안전합니다.'
+                    : ' — 선택지 개수는 AI가 질문에 맞게 정하고, 그 모든 조합에 케이스가 하나씩 생깁니다.'}
+                </small>
+              </p>
+            )}
+          </section>
+
+          {(problems.length > 0 || errors.length > 0) && (
+            <div className="sb-llm-validation__errors sb-gen-problems">
+              {problems.map((problem, index) => <p key={`p${index}`}>{problem}</p>)}
+              {errors.map((error, index) => <p key={`e${index}`}>{error}</p>)}
+            </div>
+          )}
+
+          <div className="sb-llm-dialog__foot">
+            <p>API 키 없이 프롬프트 왕복으로 진행돼요.</p>
+            <div>
+              <button type="button" className="sb-btn sb-btn--ghost" onClick={onClose}>취소</button>
+              <button
+                type="button"
+                className="sb-btn sb-btn--primary"
+                disabled={problems.length > 0}
+                onClick={goPrompt}
+              >
+                프롬프트 만들기
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {phase === 'prompt' && (
+        <>
+          <PromptExchange
+            title={`${activeMode.label} 프롬프트`}
+            hint={mode === 'draft'
+              ? '설문 화면과 기본 계획 하나를 채워요.'
+              : '설문 + 모든 조합 케이스 + 평가 A/B/C 전체를 요청해요. 결과는 ddak-scenario.json 파일로 받아 올립니다.'}
+            prompt={prompt}
+            onCopied={(ok) => onToast(ok
+              ? '프롬프트를 복사했어요. 쓰던 AI에 붙여넣고 결과를 가져오세요.'
+              : '복사하지 못했어요. 프롬프트를 펼쳐 직접 복사해주세요.')}
+            answerText={answerText}
+            answerFileName={answerFileName}
+            answerPlaceholder={mode === 'draft'
+              ? 'AI가 반환한 {"title":…,"survey":…,"plan":…} JSON을 붙여넣으세요.'
+              : 'AI가 만든 [{ "title": …, "stages": …, "planCases": … }] JSON을 붙여넣으세요.'}
+            onAnswerChange={(value) => {
+              setAnswerText(value)
+              setImportResult(null)
+              setDraftResult(null)
+              setAnswerFileName('')
+            }}
+            onPickFile={() => answerFileRef.current && answerFileRef.current.click()}
+            onVerify={() => verifyAnswer()}
+          />
+          <input
+            ref={answerFileRef}
+            type="file"
+            accept=".json,application/json,text/plain"
+            className="hidden"
+            onChange={handleAnswerFile}
+          />
+
+          {(errors.length > 0 || importResult) && (
+            <div className="sb-llm-validation">
+              {errors.length > 0 && (
+                <div className="sb-llm-validation__errors">
+                  <strong>가져올 수 없음</strong>
+                  {errors.map((error, index) => <p key={index}>{error}</p>)}
+                </div>
+              )}
+              {importResult?.errors.length > 0 && (
+                <div className="sb-llm-validation__errors">
+                  <strong>가져올 수 없음</strong>
+                  {importResult.errors.map((error, index) => <p key={index}>{error}</p>)}
+                </div>
+              )}
+              {(importResult?.warnings || []).slice(0, 8).map((warning, index) => (
+                <p key={index} className="sb-llm-warning">{warning}</p>
+              ))}
+              {importResult && importResult.errors.length === 0 && (
+                <div className="sb-llm-validation__ok">
+                  <strong>✓ 시나리오 {importResult.scenarios.length}개를 가져올 수 있어요</strong>
+                  <span>가져오면 홈 목록에 추가됩니다.</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="sb-llm-dialog__foot">
+            <p>가져온 뒤에는 빌더에서 자유롭게 수정할 수 있고, 배치가 어긋나면 상단 "자동 정렬"로 정리하세요.</p>
+            <div>
+              <button type="button" className="sb-btn sb-btn--ghost" onClick={() => setPhase('setup')}>조건 수정</button>
+              {mode === 'draft' ? (
                 <button
                   type="button"
                   className="sb-btn sb-btn--primary"
-                  disabled={problems.length > 0}
-                  onClick={goPrompt}
+                  disabled={!answerText.trim()}
+                  onClick={() => verifyAnswer()}
                 >
-                  프롬프트 만들기
+                  응답 검증
                 </button>
-              </div>
+              ) : (
+                <button
+                  type="button"
+                  className="sb-btn sb-btn--primary"
+                  disabled={!answerText.trim() || (importResult ? importResult.errors.length > 0 : false)}
+                  onClick={runImport}
+                >
+                  가져오기
+                </button>
+              )}
             </div>
-          </>
-        )}
+          </div>
+        </>
+      )}
 
-        {phase === 'prompt' && (
-          <>
-            <PromptExchange
-              title={`${activeMode.label} 프롬프트`}
-              hint={mode === 'draft'
-                ? '설문 화면과 기본 계획 하나를 채워요.'
-                : '설문 + 모든 조합 케이스 + 평가 A/B/C 전체를 요청해요. 결과는 ddak-scenario.json 파일로 받아 올립니다.'}
-              prompt={prompt}
-              onCopied={(ok) => onToast(ok
-                ? '프롬프트를 복사했어요. 쓰던 AI에 붙여넣고 결과를 가져오세요.'
-                : '복사하지 못했어요. 프롬프트를 펼쳐 직접 복사해주세요.')}
-              answerText={answerText}
-              answerFileName={answerFileName}
-              answerPlaceholder={mode === 'draft'
-                ? 'AI가 반환한 {"title":…,"survey":…,"plan":…} JSON을 붙여넣으세요.'
-                : 'AI가 만든 [{ "title": …, "stages": …, "planCases": … }] JSON을 붙여넣으세요.'}
-              onAnswerChange={(value) => {
-                setAnswerText(value)
-                setImportResult(null)
-                setDraftResult(null)
-                setAnswerFileName('')
-              }}
-              onPickFile={() => answerFileRef.current && answerFileRef.current.click()}
-              onVerify={() => verifyAnswer()}
-            />
-            <input
-              ref={answerFileRef}
-              type="file"
-              accept=".json,application/json,text/plain"
-              className="hidden"
-              onChange={handleAnswerFile}
-            />
+      {phase === 'review' && draftResult?.draft && (
+        <>
+          <section className="sb-llm-section">
+            <div className="sb-llm-section__head">
+              <div>
+                <strong>{draftResult.draft.title}</strong>
+              </div>
+              <span>질문 {draftResult.draft.survey.questions.length}개 · 단계 {draftResult.draft.plan.steps.length}개</span>
+            </div>
+            {draftResult.warnings.slice(0, 6).map((warning, index) => (
+              <p key={index} className="sb-llm-warning">{warning}</p>
+            ))}
 
-            {(errors.length > 0 || importResult) && (
-              <div className="sb-llm-validation">
-                {errors.length > 0 && (
-                  <div className="sb-llm-validation__errors">
-                    <strong>가져올 수 없음</strong>
-                    {errors.map((error, index) => <p key={index}>{error}</p>)}
+            <div className="sb-sgen-preview">
+              <div className="sb-sgen-preview__col">
+                <h4>설문 화면</h4>
+                <p className="sb-sgen-preview__lead">{draftResult.draft.survey.introTitle}</p>
+                {draftResult.draft.survey.questions.map((entry, index) => (
+                  <div key={index} className="sb-sgen-q">
+                    <strong>{entry.question}</strong>
+                    <div>{entry.options.map((option) => <span key={option}>{option}</span>)}</div>
                   </div>
-                )}
-                {importResult?.errors.length > 0 && (
-                  <div className="sb-llm-validation__errors">
-                    <strong>가져올 수 없음</strong>
-                    {importResult.errors.map((error, index) => <p key={index}>{error}</p>)}
-                  </div>
-                )}
-                {(importResult?.warnings || []).slice(0, 8).map((warning, index) => (
-                  <p key={index} className="sb-llm-warning">{warning}</p>
                 ))}
-                {importResult && importResult.errors.length === 0 && (
-                  <div className="sb-llm-validation__ok">
-                    <strong>✓ 시나리오 {importResult.scenarios.length}개를 가져올 수 있어요</strong>
-                    <span>가져오면 홈 목록에 추가됩니다.</span>
+              </div>
+              <div className="sb-sgen-preview__col">
+                <h4>계획 화면</h4>
+                <p className="sb-sgen-preview__lead">{draftResult.draft.plan.titleText}</p>
+                {draftResult.draft.plan.steps.map((step, index) => (
+                  <div key={index} className="sb-sgen-step">
+                    <strong>{index + 1}. {step.title}</strong>
+                    <p>{step.desc}</p>
+                    <em>
+                      {step.products.length > 0
+                        ? step.products
+                          .map((pick) => catalog.find((entry) => entry.id === pick.catalogId)?.name)
+                          .filter(Boolean)
+                          .join(' · ')
+                        : (step.productHint ? `상품 자리 — ${step.productHint}` : '배치된 상품 없음')}
+                    </em>
                   </div>
-                )}
-              </div>
-            )}
-
-            <div className="sb-llm-dialog__foot">
-              <p>가져온 뒤에는 빌더에서 자유롭게 수정할 수 있고, 배치가 어긋나면 상단 "자동 정렬"로 정리하세요.</p>
-              <div>
-                <button type="button" className="sb-btn sb-btn--ghost" onClick={() => setPhase('setup')}>조건 수정</button>
-                {mode === 'draft' ? (
-                  <button
-                    type="button"
-                    className="sb-btn sb-btn--primary"
-                    disabled={!answerText.trim()}
-                    onClick={() => verifyAnswer()}
-                  >
-                    응답 검증
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="sb-btn sb-btn--primary"
-                    disabled={!answerText.trim() || (importResult ? importResult.errors.length > 0 : false)}
-                    onClick={runImport}
-                  >
-                    가져오기
-                  </button>
-                )}
+                ))}
               </div>
             </div>
-          </>
-        )}
+          </section>
 
-        {phase === 'review' && draftResult?.draft && (
-          <>
-            <section className="sb-llm-section">
-              <div className="sb-llm-section__head">
-                <div>
-                  <strong>{draftResult.draft.title}</strong>
-                </div>
-                <span>질문 {draftResult.draft.survey.questions.length}개 · 단계 {draftResult.draft.plan.steps.length}개</span>
-              </div>
-              {draftResult.warnings.slice(0, 6).map((warning, index) => (
-                <p key={index} className="sb-llm-warning">{warning}</p>
-              ))}
-
-              <div className="sb-sgen-preview">
-                <div className="sb-sgen-preview__col">
-                  <h4>설문 화면</h4>
-                  <p className="sb-sgen-preview__lead">{draftResult.draft.survey.introTitle}</p>
-                  {draftResult.draft.survey.questions.map((entry, index) => (
-                    <div key={index} className="sb-sgen-q">
-                      <strong>{entry.question}</strong>
-                      <div>{entry.options.map((option) => <span key={option}>{option}</span>)}</div>
-                    </div>
-                  ))}
-                </div>
-                <div className="sb-sgen-preview__col">
-                  <h4>계획 화면</h4>
-                  <p className="sb-sgen-preview__lead">{draftResult.draft.plan.titleText}</p>
-                  {draftResult.draft.plan.steps.map((step, index) => (
-                    <div key={index} className="sb-sgen-step">
-                      <strong>{index + 1}. {step.title}</strong>
-                      <p>{step.desc}</p>
-                      <em>
-                        {step.products.length > 0
-                          ? step.products
-                            .map((pick) => catalog.find((entry) => entry.id === pick.catalogId)?.name)
-                            .filter(Boolean)
-                            .join(' · ')
-                          : (step.productHint ? `상품 자리 — ${step.productHint}` : '배치된 상품 없음')}
-                      </em>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
-
-            <div className="sb-llm-dialog__foot">
-              <p>
-                만들면 설문 화면과 "기본 계획" 케이스가 채워진 채로 빌더가 열립니다.
-                이어서 계획 탭의 <b>✦ 케이스 만들기</b>로 설문 조합별 케이스를 늘릴 수 있어요.
-              </p>
-              <div>
-                <button type="button" className="sb-btn sb-btn--ghost" onClick={() => setPhase('prompt')}>결과 다시</button>
-                <button type="button" className="sb-btn sb-btn--primary" onClick={createScenario}>
-                  이 시나리오 만들기
-                </button>
-              </div>
+          <div className="sb-llm-dialog__foot">
+            <p>
+              만들면 설문 화면과 "기본 계획" 케이스가 채워진 채로 빌더가 열립니다.
+              이어서 계획 탭의 <b>✦ 케이스 만들기</b>로 설문 조합별 케이스를 늘릴 수 있어요.
+            </p>
+            <div>
+              <button type="button" className="sb-btn sb-btn--ghost" onClick={() => setPhase('prompt')}>결과 다시</button>
+              <button type="button" className="sb-btn sb-btn--primary" onClick={createScenario}>
+                이 시나리오 만들기
+              </button>
             </div>
-          </>
-        )}
-      </section>
-    </div>
+          </div>
+        </>
+      )}
+    </LlmDialogShell>
   )
 }
