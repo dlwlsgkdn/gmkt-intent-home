@@ -19,3 +19,4 @@
 @import './styles/viewer.css';           /* 실행 프레임 · 기기/프로필 컨트롤 · 미디어 카드 · 플레이어 */
 @import './styles/responsive.css';       /* 반응형 (모바일 ↔ 데스크톱) */
 @import './styles/ai-dialogs.css';       /* AI 왕복 다이얼로그 한 벌 */
+@import './styles/admin.css';            /* thread 관리 페이지 (#admin) — 게이트 · 목록 · 마크다운 문서 */

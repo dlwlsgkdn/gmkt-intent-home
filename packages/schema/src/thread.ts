@@ -14,8 +14,9 @@ export const THREAD_ID_PATTERN = /^\d{19}$/
 export const ThreadId = z.string().regex(THREAD_ID_PATTERN, 'threadId는 19자리 스노우플레이크 숫자 문자열입니다')
 export type ThreadId = z.infer<typeof ThreadId>
 
-/** 쓰레드 상태: 탐색 → 설문 → 계획 → 완료 (이탈은 abandoned) */
-export const ThreadStatus = z.enum(['exploring', 'surveying', 'planning', 'done', 'abandoned'])
+/** 쓰레드 상태: 탐색 → 설문 → 계획 → 완료 (이탈은 abandoned).
+ * archived = 관리 페이지의 보관 처리 — 데이터는 보존하고 사용자 목록에서만 숨긴다 */
+export const ThreadStatus = z.enum(['exploring', 'surveying', 'planning', 'done', 'abandoned', 'archived'])
 export type ThreadStatus = z.infer<typeof ThreadStatus>
 
 /** 스텝 단계 — 쓰레드에서 일어난 일의 종류 (payload 형태는 단계별로 다르다) */

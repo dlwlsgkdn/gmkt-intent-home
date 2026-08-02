@@ -72,6 +72,19 @@ PlanPageWire   = { headline, summary, sections: [
                    { kind: 'steps',    title, steps[] } ] }
 ```
 
+## 1-1. BFF — admin API (스튜디오 #admin 전용)
+
+Base: `/api/admin/*` (스튜디오 프록시 `/api/bff/admin/*` 경유) · 인증: **서비스 토큰 + `x-admin-token: <ADMIN_TOKEN>`** 이중 가드
+(ADMIN_TOKEN 미설정 시 프로덕션은 전부 401 — fail closed). 진입점은 스튜디오 `#admin` 해시뿐 — 유저 UI에 링크가 없다.
+
+| 메서드 | 경로 | 역할 |
+|---|---|---|
+| GET | `/api/admin/threads?cursor=&limit=` | 전체 쓰레드 목록 — archived 포함, id(스노우플레이크) 키셋 커서·생성 최신순 |
+| GET | `/api/admin/threads/:id` | 쓰레드 상세 — core `ThreadWithSteps` 원본(라이프사이클 로그, llmMeta·action 포함) |
+| POST | `/api/admin/threads/:id/archive` | **보관 처리** — `status=archived`. 데이터 보존, 사용자 목록(`GET /api/threads`)에서만 숨김 |
+| GET | `/api/admin/model` | LLM 모델 설정 — `{ current, defaultModel, configured, options[] }` (카탈로그는 BFF `llm.service` 소유) |
+| PUT | `/api/admin/model` | 모델 변경 — `{ model }` (카탈로그 밖 400, `null`이면 기본값 복귀). core `settings.llm-model`에 저장, 새 생성부터 반영(인스턴스 캐시 ≤30s) |
+
 ## 2. Core — internal API (BFF 전용, 비공개)
 
 Base: `https://ddak-core.vercel.app` · 인증: **`Authorization: Bearer <CORE_SERVICE_TOKEN>`** (healthz·docs 제외)
@@ -80,10 +93,12 @@ Base: `https://ddak-core.vercel.app` · 인증: **`Authorization: Bearer <CORE_S
 | 메서드 | 경로 | 역할 |
 |---|---|---|
 | POST | `/internal/threads` | 쓰레드 생성 (`CreateThreadBody`) — **threadId(스노우플레이크) 발급** |
-| PATCH | `/internal/threads/:id` | title/status 갱신 (`UpdateThreadBody`) |
+| PATCH | `/internal/threads/:id` | title/status 갱신 (`UpdateThreadBody`) — admin 보관은 `status=archived`로 이 경로를 쓴다 |
 | PUT | `/internal/threads/:id/steps/:seq` | **스텝 멱등 upsert** (`UpsertStepBody`) — (thread_id, seq)가 멱등 키 |
 | GET | `/internal/threads/:id` | 쓰레드 + 스텝 전체 (`ThreadWithSteps`) |
-| GET | `/internal/users/:uid/threads?cursor=&limit=` | 사용자 쓰레드 목록 (updatedAt 키셋 커서) |
+| GET | `/internal/threads?cursor=&limit=` | 전체 목록 (관리용) — archived 포함, id 키셋 커서 |
+| GET | `/internal/users/:uid/threads?cursor=&limit=` | 사용자 쓰레드 목록 (updatedAt 키셋 커서) — **archived 제외** |
+| GET | `/internal/settings/:key` · PUT · DELETE | 운영 설정 KV (jsonb — core는 해석 안 함). 예: `llm-model` |
 | GET | `/healthz` | 헬스체크 (가드 밖) |
 
 **스텝 seq 규약** (BFF가 부여 — 쓰레드 1개의 이벤트 소싱 로그):
@@ -107,5 +122,5 @@ Base: `https://ddak-core.vercel.app` · 인증: **`Authorization: Bearer <CORE_S
 
 | 프로젝트 | Root Directory | 주요 env |
 |---|---|---|
-| ddak-bff | `apps/bff` | `ANTHROPIC_API_KEY`(없으면 생성 요청이 실패 안내로 응답), `CORE_URL`, `CORE_SERVICE_TOKEN`, `NODEJS_HELPERS=0`, `ALLOWED_ORIGINS?` |
+| ddak-bff | `apps/bff` | `ANTHROPIC_API_KEY`(없으면 생성 요청이 실패 안내로 응답), `CORE_URL`, `CORE_SERVICE_TOKEN`, **`ADMIN_TOKEN`**(관리 페이지 — 없으면 admin API 전부 401), `NODEJS_HELPERS=0`, `ALLOWED_ORIGINS?` |
 | ddak-core | `apps/core` | `DATABASE_URL`(Neon 통합 자동 주입), `CORE_SERVICE_TOKEN`, `NODEJS_HELPERS=0`, `API_DOCS?` |

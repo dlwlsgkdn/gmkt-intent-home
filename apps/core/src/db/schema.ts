@@ -39,5 +39,13 @@ export const threadSteps = pgTable(
   (t) => [uniqueIndex('thread_steps_thread_seq_uq').on(t.threadId, t.seq)],
 )
 
+/** 운영 설정 KV — BFF가 런타임에 읽고 관리 페이지가 바꾼다 (예: llm-model). core는 값을 해석하지 않는다 */
+export const settings = pgTable('settings', {
+  key: text('key').primaryKey(),
+  value: jsonb('value').$type<unknown>().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
 export type ThreadRow = typeof threads.$inferSelect
 export type ThreadStepRow = typeof threadSteps.$inferSelect
+export type SettingRow = typeof settings.$inferSelect

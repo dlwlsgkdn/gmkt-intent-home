@@ -112,4 +112,19 @@ export class ThreadsController {
   ) {
     return this.threads.listByUser(uid, cursor, limit)
   }
+
+  @Get('threads')
+  @ApiOperation({
+    summary: '전체 쓰레드 목록 (관리용)',
+    description: 'archived 포함 전체 — id(스노우플레이크) 키셋 커서, 생성 최신순. BFF admin API가 쓴다.',
+  })
+  @ApiQuery({ name: 'cursor', required: false, description: '이전 응답의 nextCursor (threadId)' })
+  @ApiQuery({ name: 'limit', required: false, type: 'integer', example: 20 })
+  @ApiOkResponse({ schema: toOpenApi(ThreadListPage) })
+  listAll(
+    @Query('cursor') cursor?: string,
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number,
+  ) {
+    return this.threads.listAll(cursor, limit)
+  }
 }

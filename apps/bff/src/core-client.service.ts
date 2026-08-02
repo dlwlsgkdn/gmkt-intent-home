@@ -1,6 +1,7 @@
 import { HttpException, Injectable, ServiceUnavailableException } from '@nestjs/common'
 import type {
   CreateThreadBody,
+  SettingWire,
   Thread,
   ThreadListPage,
   ThreadStep,
@@ -59,5 +60,30 @@ export class CoreClientService {
       'GET',
       `/internal/users/${encodeURIComponent(uid)}/threads${qs ? `?${qs}` : ''}`,
     )
+  }
+
+  /** 관리용 전체 목록 — archived 포함, id 키셋 커서 */
+  listAllThreads(cursor?: string, limit?: number) {
+    const q = new URLSearchParams()
+    if (cursor) q.set('cursor', cursor)
+    if (limit) q.set('limit', String(limit))
+    const qs = q.toString()
+    return this.req<ThreadListPage>('GET', `/internal/threads${qs ? `?${qs}` : ''}`)
+  }
+
+  /** 설정 KV — 없는 키는 null (404를 삼킨다) */
+  async getSetting(key: string): Promise<SettingWire | null> {
+    try {
+      return await this.req<SettingWire>('GET', `/internal/settings/${encodeURIComponent(key)}`)
+    } catch (e) {
+      if (e instanceof HttpException && e.getStatus() === 404) return null
+      throw e
+    }
+  }
+  putSetting(key: string, value: unknown) {
+    return this.req<SettingWire>('PUT', `/internal/settings/${encodeURIComponent(key)}`, { value })
+  }
+  deleteSetting(key: string) {
+    return this.req<{ ok: boolean }>('DELETE', `/internal/settings/${encodeURIComponent(key)}`)
   }
 }

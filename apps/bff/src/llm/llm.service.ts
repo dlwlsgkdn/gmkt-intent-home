@@ -1,11 +1,26 @@
 import { Injectable, Logger } from '@nestjs/common'
 import Anthropic from '@anthropic-ai/sdk'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
-import type { Answer, LlmMeta, Profile, SurveyPageWire } from '@ddak/schema'
+import type { AdminModelOption, Answer, LlmMeta, Profile, SurveyPageWire } from '@ddak/schema'
+import { CoreClientService } from '../core-client.service'
 import { PlanGen, SurveyGen } from './gen-schemas'
 import { PLAN_SYSTEM, PROMPT_VERSION, SURVEY_SYSTEM, buildPlanRequest, buildSurveyRequest } from './prompts'
 
-const MODEL = 'claude-opus-5'
+export const DEFAULT_MODEL = 'claude-opus-5'
+
+/** 관리 페이지에서 고를 수 있는 모델 카탈로그 — 여기 있는 id만 설정으로 저장을 허용한다.
+ * supportsEffort=false(haiku)는 output_config.effort를 빼고 호출한다 (넣으면 400) */
+export const MODEL_OPTIONS: AdminModelOption[] = [
+  { id: 'claude-opus-5', label: 'Claude Opus 5', note: '기본값 — 품질 우선 ($5/$25 per MTok)', supportsEffort: true },
+  { id: 'claude-sonnet-5', label: 'Claude Sonnet 5', note: '속도·비용 균형 ($3/$15)', supportsEffort: true },
+  { id: 'claude-opus-4-8', label: 'Claude Opus 4.8', note: '이전 세대 Opus ($5/$25)', supportsEffort: true },
+  { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', note: '최저 비용 ($1/$5) — effort 미지원', supportsEffort: false },
+]
+
+/** 런타임 모델 설정이 저장되는 core 설정 키 */
+export const LLM_MODEL_SETTING_KEY = 'llm-model'
+/** 설정 조회 캐시 TTL — 관리 페이지 변경이 새 생성에 반영되는 최대 지연 */
+const MODEL_CACHE_MS = 30_000
 
 export type GenResult<T> = { content: T; meta: LlmMeta }
 
@@ -31,6 +46,31 @@ export class LlmGenerationError extends Error {
 export class LlmService {
   private readonly logger = new Logger(LlmService.name)
   private client: Anthropic | null | undefined
+  private modelCache: { value: string; at: number } | null = null
+
+  constructor(private readonly core: CoreClientService) {}
+
+  /** 지금 생성에 쓸 모델 — core 설정(llm-model) 우선, 없거나 조회 실패면 기본값.
+   * 짧은 캐시(30s)로 생성 1회당 core 왕복을 줄인다. 카탈로그 밖 값은 무시한다 */
+  async resolveModel(): Promise<string> {
+    if (this.modelCache && Date.now() - this.modelCache.at < MODEL_CACHE_MS) return this.modelCache.value
+    let value = DEFAULT_MODEL
+    try {
+      const setting = await this.core.getSetting(LLM_MODEL_SETTING_KEY)
+      const configured = typeof setting?.value === 'string' ? setting.value : null
+      if (configured && MODEL_OPTIONS.some((option) => option.id === configured)) value = configured
+      else if (configured) this.logger.warn(`설정된 모델이 카탈로그에 없어 기본값 사용: ${configured}`)
+    } catch (e) {
+      this.logger.warn(`모델 설정 조회 실패 — 기본값 사용: ${(e as Error).message}`)
+    }
+    this.modelCache = { value, at: Date.now() }
+    return value
+  }
+
+  /** 관리 페이지가 모델을 바꾼 직후 캐시를 비워 즉시 반영한다 (같은 인스턴스 한정 — 다른 인스턴스는 TTL로 따라온다) */
+  invalidateModelCache() {
+    this.modelCache = null
+  }
 
   private requireClient(): Anthropic {
     if (this.client === undefined) {
@@ -77,14 +117,19 @@ export class LlmService {
     req: { system: string; effort: 'medium' | 'high'; user: string },
   ): Promise<GenResult<S['_output']>> {
     const client = this.requireClient()
+    const model = await this.resolveModel()
+    // effort 미지원 모델(haiku)은 effort를 빼고 호출한다 — 넣으면 400
+    const supportsEffort = MODEL_OPTIONS.find((option) => option.id === model)?.supportsEffort !== false
     const started = Date.now()
     let response: Awaited<ReturnType<typeof client.messages.parse>>
     try {
       response = await client.messages.parse({
-        model: MODEL,
+        model,
         max_tokens: 16000,
         system: [{ type: 'text', text: req.system, cache_control: { type: 'ephemeral', ttl: '1h' } }],
-        output_config: { effort: req.effort, format: zodOutputFormat(schema) },
+        output_config: supportsEffort
+          ? { effort: req.effort, format: zodOutputFormat(schema) }
+          : { format: zodOutputFormat(schema) },
         messages: [{ role: 'user', content: req.user }],
       })
     } catch (e) {

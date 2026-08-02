@@ -2,6 +2,7 @@ import { Controller, Get, Module, Redirect } from '@nestjs/common'
 import { ApiExcludeEndpoint, ApiOperation, ApiTags } from '@nestjs/swagger'
 import { CoreClientService } from './core-client.service'
 import { LlmService } from './llm/llm.service'
+import { AdminController } from './admin/admin.controller'
 import { ThreadsController } from './threads/threads.controller'
 import { ThreadsService } from './threads/threads.service'
 
@@ -22,13 +23,14 @@ export class AppController {
       service: 'ddak-bff',
       llm: Boolean(process.env.ANTHROPIC_API_KEY) ? 'configured' : 'not_configured',
       core: Boolean(process.env.CORE_URL) ? 'configured' : 'missing',
+      admin: Boolean(process.env.ADMIN_TOKEN) ? 'configured' : 'not_configured',
       now: new Date().toISOString(),
     }
   }
 }
 
 @Module({
-  controllers: [AppController, ThreadsController],
+  controllers: [AppController, ThreadsController, AdminController],
   providers: [CoreClientService, LlmService, ThreadsService],
 })
 export class AppModule {}

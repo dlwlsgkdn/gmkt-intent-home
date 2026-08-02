@@ -2,6 +2,7 @@ import { Controller, Get, Module, Redirect } from '@nestjs/common'
 import { ApiExcludeEndpoint } from '@nestjs/swagger'
 import { DbModule } from './db/db.module'
 import { ThreadsModule } from './threads/threads.module'
+import { SettingsModule } from './settings/settings.module'
 
 /** 헬스체크·루트 — 가드 밖 (배포 확인·모니터링용) */
 @Controller()
@@ -19,7 +20,7 @@ export class AppController {
 }
 
 @Module({
-  imports: [DbModule, ThreadsModule],
+  imports: [DbModule, ThreadsModule, SettingsModule],
   controllers: [AppController],
 })
 export class AppModule {}

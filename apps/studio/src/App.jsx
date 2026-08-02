@@ -8,6 +8,7 @@ import Builder from './components/Builder.jsx'
 import Player from './components/Player.jsx'
 import LivePlayer from './components/LivePlayer.jsx'
 import ExploreEditor from './components/ExploreEditor.jsx'
+import AdminView from './components/AdminView.jsx'
 
 /*
  * 앱 셸 — 라우팅과 토스트를 갖고, 화면들이 쓰는 api 객체를 조립한다.
@@ -18,7 +19,10 @@ import ExploreEditor from './components/ExploreEditor.jsx'
 export default function App() {
   // route: {name:'home'} | {name:'builder', id} | {name:'player', id, resume}
   //      | {name:'live', query?, resumeThreadId?, runId} | {name:'explore-editor', back}
-  const [route, setRoute] = useState({ name: 'home' })
+  //      | {name:'admin'} — #admin 해시로만 진입 (유저 진입점에 링크 없음)
+  const [route, setRoute] = useState(() =>
+    typeof location !== 'undefined' && location.hash === '#admin' ? { name: 'admin' } : { name: 'home' }
+  )
   const [toast, setToast] = useState(null)
   const showToast = (message) => setToast(message)
   const goHome = () => setRoute({ name: 'home' })
@@ -53,6 +57,15 @@ export default function App() {
     const timer = setTimeout(() => setToast(null), 2600)
     return () => clearTimeout(timer)
   }, [toast])
+
+  /* 관리 페이지 — 주소창에 #admin을 치면 (새로고침 없이도) 진입한다 */
+  useEffect(() => {
+    const onHash = () => {
+      if (location.hash === '#admin') setRoute({ name: 'admin' })
+    }
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
 
   /* ── 시나리오 ── */
   /* 업데이터가 같은 참조를 돌려주면 updatedAt 도장도 찍지 않는다 — 빌더 진입 시
@@ -188,6 +201,11 @@ export default function App() {
     /* 라이브 생성 체험(BFF) — 자유 검색 진입. runId로 리마운트해 "새로 생성"이 새 쓰레드를 만든다 */
     playLive: (query) => setRoute({ name: 'live', query, runId: Date.now() }),
     resumeLive: (threadId) => setRoute({ name: 'live', resumeThreadId: threadId, runId: Date.now() }),
+    /* 관리 페이지 이탈 — #admin 해시를 지워야 새로고침이 홈으로 돌아온다 */
+    exitAdmin: () => {
+      if (location.hash === '#admin') history.replaceState(null, '', location.pathname + location.search)
+      goHome()
+    },
     openExploreEditor: () => setRoute((prev) => ({ name: 'explore-editor', back: prev })),
     closeExploreEditor: () => setRoute((prev) => prev.back || { name: 'home' }),
     explore: workspace.explore,
@@ -256,7 +274,8 @@ export default function App() {
         /* key: 같은 검색어라도 runId마다 새 쓰레드로 다시 생성한다 */
         <LivePlayer key={route.runId} api={api} query={route.query} resumeThreadId={route.resumeThreadId} />
       )}
-      {route.name !== 'home' && route.name !== 'explore-editor' && route.name !== 'live' && !current && <HomeView api={api} />}
+      {route.name === 'admin' && <AdminView api={api} />}
+      {route.name !== 'home' && route.name !== 'explore-editor' && route.name !== 'live' && route.name !== 'admin' && !current && <HomeView api={api} />}
 
       {toast && <div className="sb-toast">{toast}</div>}
     </>
