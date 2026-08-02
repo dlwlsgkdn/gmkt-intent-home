@@ -8,7 +8,6 @@ import {
   normalizeComponentEvaluation,
   structuredComponentEvaluationStats,
 } from '../../lib/evaluation.js'
-import { sortByPosition } from '../../lib/store.js'
 import { LIBRARY, renderItem } from '../../lib/registry.jsx'
 import LlmRevisionDialog from './LlmRevisionDialog.jsx'
 import AiFixChooser from './AiFixChooser.jsx'
@@ -85,7 +84,7 @@ export default function EvaluationPanel({
 
   /* 페이지에 그릴 최상위 아이템 (실행 화면과 동일: 숨김 제외, 위→아래) */
   const pageItems = useMemo(
-    () => sortByPosition((activeCase?.items || []).filter((item) => !item.parentId && !item.hidden)),
+    () => (activeCase?.items || []).filter((item) => !item.parentId && !item.hidden),
     [activeCase]
   )
 
@@ -306,7 +305,6 @@ export default function EvaluationPanel({
                   + (activeAnchorId === item.id ? ' is-active' : '')
                   + (noted ? ' is-noted' : '')
                 }
-                style={{ maxWidth: item.w || undefined }}
                 onClick={() => focusFromPage(item.id)}
               >
                 <PreviewBoundary resetKey={`${item.id}:${item.type}`}>

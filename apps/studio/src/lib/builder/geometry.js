@@ -1,36 +1,70 @@
 import { LIBRARY } from '../registry.jsx'
 
 /*
- * 캔버스 좌표 계산 — 순수 함수만 둔다.
+ * 스택 캔버스의 순서·슬롯 계산 — 순수 함수만 둔다.
  *
- * "포인터가 어느 컨테이너의 어느 슬롯을 가리키는가"는 드래그·팔레트 드롭·레이어 트리가
- * 모두 물어보는 질문인데, 예전에는 Builder 안에서 컴포넌트 상태를 클로저로 붙잡은 채
- * 계산하고 있어 재사용도 검증도 불가능했다. 여기 있는 함수는 필요한 값을 전부 인자로 받는다.
+ * 아이템 모델은 순서 기반이다(배열 순서 = 최상위 렌더 순서, 자식은 parentId + slot).
+ * "포인터가 어느 위치를 가리키는가"는 모델 좌표가 아니라 실제 렌더된 DOM rect로 판정한다 —
+ * 드래그 재정렬·팔레트 드롭·컨테이너 삽입이 전부 같은 질문을 하므로 여기 모아 둔다.
+ * 필요한 값(canvasEl·zoom·아이템 목록)은 전부 인자로 받는다.
  */
 
-/* 컨테이너 삽입 ↔ 회피 구역 분리 (트리뷰의 drop-into/drop-between 패턴):
-   컨테이너 세로 중앙부 = 삽입 존, 상/하 이 폭만큼의 밴드 = 밀어내기 존 */
+/* 컨테이너 자식 카드의 최소 너비 (자식 리사이즈·AI 가져오기 검증 공용) */
+export const MIN_ITEM_W = 160
+
+/* 컨테이너 삽입 존: 상/하 이 폭만큼의 밴드를 제외한 중앙부에서만 "안에 배치"로 판정 */
 export const NEST_EDGE_ZONE = 18
 
-/* 컨테이너 가장자리 밴드 — 아이템이 얇으면 높이의 1/4까지만 */
-export const edgeBand = (height) => Math.min(NEST_EDGE_ZONE, height / 4)
+/* 최상위 아이템의 DOM 노드들 — 캔버스 스택 순서 그대로 */
+const topItemEls = (canvasEl, excludeIds) =>
+  [...canvasEl.querySelectorAll('[data-canvas-item-id]')]
+    .filter((el) => !excludeIds || !excludeIds.has(el.dataset.canvasItemId))
 
-/* 표시 높이: 편집 모드의 컨테이너는 자식이 잘리지 않게 측정값과 지정값 중 큰 쪽을 쓴다 */
-export function itemHeight(item, heights, { previewMode = false } = {}) {
-  const measured = heights[item.id]
-  if (!previewMode && LIBRARY[item.type]?.container) return Math.max(item.h || 0, measured || 0, 80)
-  return item.h || measured || 80
+/* 포인터(화면 좌표)가 가리키는 최상위 삽입 인덱스(0-base) —
+   각 아이템 rect의 세로 중심과 비교한다. excludeIds(드래그 중인 아이템)는 계산에서 뺀다 */
+export function topInsertIndexAt({ canvasEl, clientY, excludeIds }) {
+  if (!canvasEl) return 0
+  let index = 0
+  topItemEls(canvasEl, excludeIds).forEach((el) => {
+    const rect = el.getBoundingClientRect()
+    if (clientY > rect.top + rect.height / 2) index++
+  })
+  return index
 }
 
-/* (x, y)가 어떤 컨테이너의 삽입 존(중앙부) 안이면 그 컨테이너를 돌려준다 */
-export function containerAt(topItems, x, y, { excludeId, heightOf } = {}) {
-  return topItems.find((item) => {
-    if (item.id === excludeId) return false
-    if (!LIBRARY[item.type]?.container) return false
-    const height = heightOf(item)
-    const band = edgeBand(height)
-    return x >= item.x && x <= item.x + item.w && y >= item.y + band && y <= item.y + height - band
-  })
+/* 최상위 삽입 인덱스 → 캔버스 좌표의 가이드 라인 { x, y, len }. 아이템이 없으면 null */
+export function topInsertLineAt({ canvasEl, zoom, index, excludeIds }) {
+  if (!canvasEl) return null
+  const els = topItemEls(canvasEl, excludeIds)
+  if (els.length === 0) return null
+  const rect = canvasEl.getBoundingClientRect()
+  const target = els[Math.min(index, els.length - 1)].getBoundingClientRect()
+  const after = index >= els.length
+  const sy = after ? target.bottom + 6 : target.top - 6
+  return {
+    x: (target.left - rect.left) / zoom,
+    y: (sy - rect.top) / zoom,
+    len: target.width / zoom,
+  }
+}
+
+/* 포인터(화면 좌표)가 어떤 컨테이너의 삽입 존(중앙부) 안이면 그 아이템을 돌려준다.
+   판정은 렌더된 DOM rect 기준 — 상/하 가장자리 밴드는 "사이에 놓기"로 남겨 둔다 */
+export function containerAtClient({ canvasEl, items, clientX, clientY, excludeId }) {
+  if (!canvasEl) return null
+  for (const el of topItemEls(canvasEl)) {
+    const id = el.dataset.canvasItemId
+    if (id === excludeId) continue
+    const item = items.find((candidate) => candidate.id === id)
+    if (!item || !LIBRARY[item.type]?.container) continue
+    const rect = el.getBoundingClientRect()
+    const band = Math.min(NEST_EDGE_ZONE, rect.height / 4)
+    if (
+      clientX >= rect.left && clientX <= rect.right
+      && clientY >= rect.top + band && clientY <= rect.bottom - band
+    ) return item
+  }
+  return null
 }
 
 /* 포인터(캔버스 좌표)가 가리키는 컨테이너 안 삽입 위치(0-base) — 자식 슬롯 DOM과 비교한다.
@@ -111,6 +145,18 @@ export function placeChild(list, childId, containerId, index) {
 export const nextSlot = (list, parentId) =>
   list.filter((item) => item.parentId === parentId).reduce((max, item) => Math.max(max, item.slot || 0), 0) + 1
 
-/* 최상위 아이템들의 아래쪽 끝 — 새 아이템을 스택 맨 밑에 붙일 때의 기준 */
-export const stackBottom = (list, heightOf, top) =>
-  list.filter((item) => !item.parentId).reduce((max, item) => Math.max(max, item.y + heightOf(item)), top)
+/* 최상위 아이템(들)을 지정 인덱스로 재배열 — index는 "이동 아이템을 뺀 나머지" 기준이다
+   (topInsertIndexAt의 excludeIds와 같은 기준). 자식은 배열 끝에 그대로 통과한다 */
+export function reorderTop(list, movedIds, index) {
+  const movedSet = new Set(Array.isArray(movedIds) ? movedIds : [movedIds])
+  const moved = list.filter((item) => !item.parentId && movedSet.has(item.id))
+  if (moved.length === 0) return list
+  const rest = list.filter((item) => !item.parentId && !movedSet.has(item.id))
+  const children = list.filter((item) => item.parentId)
+  const at = Math.max(0, Math.min(rest.length, index))
+  return [...rest.slice(0, at), ...moved, ...rest.slice(at), ...children]
+}
+
+/* 최상위에서의 순서 인덱스 (자식이면 -1) */
+export const topIndexOf = (list, id) =>
+  list.filter((item) => !item.parentId).findIndex((item) => item.id === id)

@@ -1,7 +1,7 @@
 import React from 'react'
 import { LIBRARY } from '../../lib/registry.jsx'
 import { TEXT_COLORS, SizeMenu, FontMenu, applyOptToRaw } from '../../lib/richtext.jsx'
-import { MIN_ITEM_W } from '../../lib/layout.js'
+import { MIN_ITEM_W } from '../../lib/builder/geometry.js'
 import { ListFieldEditor, TableFieldEditor } from './ListEditors.jsx'
 import { ProfileChipManager, SummaryChipManager } from './ChipManagers.jsx'
 
@@ -16,16 +16,12 @@ export default function Inspector({
   selected,
   selectedIds,
   itemW,
-  canvasW,
-  heightsRef,
   updateProps,
   updateItem,
-  setSize,
   duplicateSelected,
   removeSelected,
   duplicateItem,
   removeItem,
-  alignSelected,
   ensureKeyword,
   unnestItem,
   profile,
@@ -43,15 +39,7 @@ export default function Inspector({
         <div className="sb-inspector__empty">
           <p className="sb-panel-label">다중 선택</p>
           <strong className="sb-multi-count">{selectedIds.length}개</strong> 컴포넌트가 선택됐어요.<br />
-          드래그하면 함께 이동하고, 방향키로 같이 움직여요.
-
-          <p className="sb-panel-label" style={{ marginTop: 18 }}>정렬</p>
-          <div className="sb-align-tools">
-            <button type="button" onClick={() => alignSelected('left')} title="왼쪽 정렬">⇤ 왼쪽</button>
-            <button type="button" onClick={() => alignSelected('center')} title="가운데 정렬">↔ 가운데</button>
-            <button type="button" onClick={() => alignSelected('right')} title="오른쪽 정렬">⇥ 오른쪽</button>
-            <button type="button" onClick={() => alignSelected('vspace')} title="세로 간격 균등">☰ 간격 균등</button>
-          </div>
+          드래그하면 함께 순서를 옮기고, 방향키(↑↓)로 같이 움직여요.
 
           <div className="sb-inspector__actions">
             <button type="button" className="sb-btn" onClick={duplicateSelected}>모두 복제</button>
@@ -256,44 +244,42 @@ export default function Inspector({
         </>
       )}
 
-      <div className="sb-field">
-        <label>너비 — {selected.w}px</label>
-        <input
-          type="range"
-          min={MIN_ITEM_W}
-          max={itemW}
-          step={8}
-          value={selected.w}
-          onChange={(e) => {
-            const w = Number(e.target.value)
-            setSize(selected.id, { w, x: Math.min(selected.x, canvasW - w) })
-          }}
-        />
-      </div>
-
-      <div className="sb-field">
-        <label>높이 — {selected.h ? `${selected.h}px` : '자동'}</label>
-        <input
-          type="range"
-          min={48}
-          max={720}
-          step={8}
-          value={selected.h || heightsRef.current[selected.id] || 120}
-          onChange={(e) => setSize(selected.id, { h: Number(e.target.value) })}
-        />
-        {selected.h ? (
-          <button
-            type="button"
-            className="sb-btn sb-btn--ghost sb-btn--small"
-            onClick={() => {
-              delete heightsRef.current[selected.id]
-              updateItem(selected.id, { h: null })
-            }}
-          >
-            자동 높이로 되돌리기
-          </button>
-        ) : null}
-      </div>
+      {/* 크기 조절은 컨테이너 자식(카드)만 — 최상위 컴포넌트는 전폭·자동 높이 스택이다 */}
+      {selected.parentId && (
+        <>
+          <div className="sb-field">
+            <label>카드 너비 — {selected.w ? `${selected.w}px` : '자동'}</label>
+            <input
+              type="range"
+              min={MIN_ITEM_W}
+              max={itemW}
+              step={8}
+              value={selected.w || 320}
+              onChange={(e) => updateItem(selected.id, { w: Number(e.target.value) })}
+            />
+          </div>
+          <div className="sb-field">
+            <label>카드 높이 — {selected.h ? `${selected.h}px` : '자동'}</label>
+            <input
+              type="range"
+              min={48}
+              max={720}
+              step={8}
+              value={selected.h || 120}
+              onChange={(e) => updateItem(selected.id, { h: Number(e.target.value) })}
+            />
+            {selected.h ? (
+              <button
+                type="button"
+                className="sb-btn sb-btn--ghost sb-btn--small"
+                onClick={() => updateItem(selected.id, { h: null })}
+              >
+                자동 높이로 되돌리기
+              </button>
+            ) : null}
+          </div>
+        </>
+      )}
 
       <div className="sb-inspector__actions">
         <button

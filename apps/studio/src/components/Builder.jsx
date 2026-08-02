@@ -1,14 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { STAGES, DEVICE_PRESETS, planCasesForScenario, visibleProfileItems } from '../lib/store.js'
 import { LIBRARY } from '../lib/registry.jsx'
-import { PAD, layoutCompactUp } from '../lib/layout.js'
-import {
-  containerAt as containerAtPoint,
-  insertHintAt,
-  itemHeight,
-  slotIndexAt,
-} from '../lib/builder/geometry.js'
-import { createLayoutOps } from '../lib/builder/layoutOps.js'
+import { insertHintAt, slotIndexAt } from '../lib/builder/geometry.js'
 import {
   EVALUATION_CASE_SLOTS,
   evaluationCasesFor,
@@ -29,7 +22,7 @@ import FeedbackFocusBar from './builder/FeedbackFocusBar.jsx'
 import { useBuilderHistory } from './builder/hooks/useBuilderHistory.js'
 import { useStageItems } from './builder/hooks/useStageItems.js'
 import { usePlanCases } from './builder/hooks/usePlanCases.js'
-import { useCanvasDrag } from './builder/hooks/useCanvasDrag.js'
+import { useStackDrag } from './builder/hooks/useStackDrag.js'
 import { useContainerNesting } from './builder/hooks/useContainerNesting.js'
 import { useBuilderShortcuts } from './builder/hooks/useBuilderShortcuts.js'
 import { useItemOps } from './builder/hooks/useItemOps.js'
@@ -41,19 +34,19 @@ import { useEvaluationBridge } from './builder/hooks/useEvaluationBridge.js'
  * 빌더 오케스트레이터.
  *
  * 편집 상태(무엇이 선택됐고 어느 단계를 보고 있는가)를 갖고, 각 관심사를 담당하는
- * 훅과 컴포넌트를 연결한다. 실제 규칙은 아래로 내려가 있다:
- *   lib/builder/geometry     — 좌표·슬롯 계산
- *   lib/builder/layoutOps    — 겹침 해소·컴팩트 커밋 관문
+ * 훅과 컴포넌트를 연결한다. 배치는 순서 기반 스택(배열 순서 = 렌더 순서)이라
+ * 좌표·겹침 해소가 없다. 실제 규칙은 아래로 내려가 있다:
+ *   lib/builder/geometry     — 순서·슬롯 계산 (DOM rect 기반)
  *   lib/builder/itemClipboard— 사본 만들기
- *   lib/builder/publishing   — 발행 점검·버전 스냅샷·기기 폭 환산
+ *   lib/builder/publishing   — 발행 점검·버전 스냅샷
  *   hooks/useStageItems      — 아이템을 어디서 읽고 어디에 저장할지
  *   hooks/useBuilderHistory  — Undo/Redo 스택
  *   hooks/usePlanCases       — 계획 케이스 CRUD·평가
- *   hooks/useCanvasDrag      — 드래그·리사이즈·밀림 미리보기
+ *   hooks/useStackDrag       — 최상위 순서 드래그·컨테이너 삽입
  *   hooks/useContainerNesting— 컨테이너 자식 넣기/꺼내기/순서
  *   hooks/useBuilderShortcuts— 키보드
  *   hooks/useTopBarActions   — 시나리오 명령 (기기·발행·버전·JSON·공유)
- *   hooks/useCanvasInteractions — 캔버스 표면 이벤트 (마퀴·우클릭·팔레트 DnD·줌·재측정)
+ *   hooks/useCanvasInteractions — 캔버스 표면 이벤트 (우클릭·팔레트 DnD·줌)
  *   hooks/useEvaluationBridge   — 평가 ↔ 편집 이동과 피드백 반영 문맥
  */
 
@@ -66,22 +59,21 @@ export default function Builder({ api, scenario }) {
   const activePlanCase = planCases.find((planCase) => planCase.id === planCaseId) || planCases[0]
 
   const [selectedIds, setSelectedIds] = useState([]) // 다중 선택 (⇧+클릭)
-  const [openMenu, setOpenMenu] = useState(null) // 'device' | 'compact' | 'layout' | 'color' | 'version' | 'case'
+  const [openMenu, setOpenMenu] = useState(null) // 'device' | 'color' | 'version' | 'case' | 'json'
   const [inlineEdit, setInlineEdit] = useState(null) // 캔버스 인라인 텍스트 편집 { itemId, key }
   const [zoom, setZoom] = useState(1)
   const [canvasView, setCanvasView] = useState('edit') // 'edit'(편집 크롬) | 'preview'(실사용 모습)
   const previewMode = !isEvaluation && canvasView === 'preview'
-  const [marquee, setMarquee] = useState(null) // 러버밴드 선택 박스
-  const [ctxMenu, setCtxMenu] = useState(null) // 우클릭 메뉴 { sx, sy, cx, cy, itemId }
+  const [ctxMenu, setCtxMenu] = useState(null) // 우클릭 메뉴 { sx, sy, itemId }
   const [dropTargetId, setDropTargetId] = useState(null) // 컨테이너 드롭 대상 하이라이트
   const [insertHint, setInsertHint] = useState(null) // 컨테이너 삽입 캐럿 { dir, x, y, len }
+  const [insertLine, setInsertLine] = useState(null) // 최상위 순서 삽입 라인 { x, y, len }
   const [draggingChildId, setDraggingChildId] = useState(null)
-  const [childDragGhost, setChildDragGhost] = useState(null) // 자식 재정렬 중 포인터 옆 피드백
+  const [dragGhost, setDragGhost] = useState(null) // 드래그 중 포인터 옆 피드백 (자식·최상위 공용)
   const [caseGenOpen, setCaseGenOpen] = useState(false)
   const [caseRevOpen, setCaseRevOpen] = useState(false) // 현재 케이스 통째 재구성
 
   const canvasRef = useRef(null)
-  const heightsRef = useRef({}) // ResizeObserver가 채우는 실제 표시 높이
   const clipboardRef = useRef(null) // ⌘C 스냅샷 (단계 간 붙여넣기 가능)
 
   /* ── 현재 편집 대상 ── */
@@ -96,11 +88,7 @@ export default function Builder({ api, scenario }) {
 
   const device = DEVICE_PRESETS.find((preset) => preset.key === (scenario.device || 'desktop')) || DEVICE_PRESETS[0]
   const canvasW = device.w
-  const itemW = canvasW - PAD * 2
-  /* 구버전 gravity: false 데이터는 'none'으로 해석 */
-  const compactType = scenario.compact || (scenario.gravity === false ? 'none' : 'vertical')
-  const layout = createLayoutOps({ heightsRef, compactType, canvasW })
-  const heightOf = (item) => itemHeight(item, heightsRef.current, { previewMode })
+  const itemW = canvasW - 48 // 컨테이너 자식 카드 폭의 상한 (캔버스 좌우 패딩 제외)
 
   /* ── 히스토리 · 저장 ── */
   const history = useBuilderHistory({
@@ -128,7 +116,7 @@ export default function Builder({ api, scenario }) {
     },
   })
 
-  const { setItems, setItemsFromMeasure } = useStageItems({
+  const { setItems } = useStageItems({
     api, scenario, stageKey, planCaseId, previewMode, pushHistory: history.pushHistory,
   })
 
@@ -137,8 +125,7 @@ export default function Builder({ api, scenario }) {
     pushHistory: history.pushHistory,
   })
 
-  /* ── 좌표 헬퍼 (geometry에 현재 캔버스 상태를 묶어 둔 얇은 래퍼) ── */
-  const containerAt = (x, y, excludeId) => containerAtPoint(topItems, x, y, { excludeId, heightOf })
+  /* ── 슬롯 헬퍼 (geometry에 현재 캔버스 상태를 묶어 둔 얇은 래퍼) ── */
   const slotIndexOf = (containerId, containerType, cx, cy, excludeId) =>
     slotIndexAt({ canvasEl: canvasRef.current, zoom, containerId, containerType, cx, cy, excludeId })
   const insertHintOf = (container, cx, cy, excludeId) =>
@@ -167,19 +154,18 @@ export default function Builder({ api, scenario }) {
     : []
 
   /* ── 드래그 · 중첩 ── */
-  const drag = useCanvasDrag({
-    items, topItems, itemW, canvasW, zoom, canvasRef, heightsRef, heightOf, layout,
-    slotIndexOf, insertHintOf, setItems, setSelectedIds, selectedIds,
-    setDropTargetId, setInsertHint, showToast: api.showToast,
+  const drag = useStackDrag({
+    items, zoom, canvasRef, slotIndexOf, insertHintOf, setItems, setSelectedIds, selectedIds,
+    setDropTargetId, setInsertHint, setInsertLine, setDragGhost, showToast: api.showToast,
   })
 
   const nesting = useContainerNesting({
-    items, itemW, heightsRef, zoom, canvasRef, heightOf, layout, slotIndexOf, insertHintOf,
+    items, itemW, zoom, canvasRef, slotIndexOf, insertHintOf,
     setItems, setSelectedIds, onSelect: handleSelect, previewMode, showToast: api.showToast,
-    drag, setDropTargetId, setInsertHint, setDraggingChildId, setChildDragGhost,
+    drag, setDropTargetId, setInsertHint, setDraggingChildId, setChildDragGhost: setDragGhost,
   })
 
-  /* ── 아이템 추가 · 편집 · 삭제 · 클립보드 (규칙은 useItemOps에) ── */
+  /* ── 아이템 추가 · 편집 · 삭제 · 복제 · 클립보드 (규칙은 useItemOps에) ── */
   const {
     addItem,
     addItemAt,
@@ -189,22 +175,22 @@ export default function Builder({ api, scenario }) {
     removeSelected,
     duplicateItem,
     duplicateSelected,
+    moveSelectedBy,
     copySelected,
     pasteClipboard,
     hasClipboard,
   } = useItemOps({
-    items, itemW, canvasW, layout, heightOf, setItems,
-    selectedIds, setSelectedIds, nesting, clipboardRef,
+    items, setItems, selectedIds, setSelectedIds, nesting, clipboardRef,
     showToast: api.showToast,
   })
 
-  /* ── 캔버스 표면 이벤트 (마퀴·우클릭·팔레트 DnD·줌·재측정 — 규칙은 useCanvasInteractions에) ── */
+  /* ── 캔버스 표면 이벤트 (우클릭·팔레트 DnD·줌 — 규칙은 useCanvasInteractions에) ── */
   const interactions = useCanvasInteractions({
-    previewMode, zoom, setZoom, canvasRef, topItems, heightOf,
-    selectedIds, setSelectedIds, setMarquee, ctxMenu, setCtxMenu,
-    items, setItems, setItemsFromMeasure,
-    containerAt, insertHintOf, setDropTargetId, setInsertHint,
-    nesting, addItemAt, layout, drag,
+    previewMode, zoom, setZoom, canvasRef,
+    selectedIds, setSelectedIds, ctxMenu, setCtxMenu,
+    items, setItems,
+    setDropTargetId, setInsertHint, setInsertLine,
+    insertHintOf, nesting, addItemAt,
   })
 
   /* ── 상단 바 ── */
@@ -212,8 +198,7 @@ export default function Builder({ api, scenario }) {
   const closeMenu = () => setOpenMenu(null)
 
   const topbar = useTopBarActions({
-    api, scenario, planCases, history, layout, setItems, setSelectedIds,
-    heightsRef, canvasW, itemW, compactType, previewMode, closeMenu,
+    api, scenario, planCases, history, setSelectedIds, previewMode, closeMenu,
   })
 
   /* ── 평가 ↔ 편집 이동 ── */
@@ -245,8 +230,8 @@ export default function Builder({ api, scenario }) {
     setSelectedIds([])
     setInlineEdit(null)
     setDraggingChildId(null)
-    setChildDragGhost(null)
     setInsertHint(null)
+    setInsertLine(null)
     drag.reset()
   }, [stageKey, planCaseId])
 
@@ -255,35 +240,14 @@ export default function Builder({ api, scenario }) {
     if (!previewMode) return
     setSelectedIds([])
     setInlineEdit(null)
-    setMarquee(null)
     setCtxMenu(null)
     setOpenMenu(null)
     setDropTargetId(null)
     setInsertHint(null)
+    setInsertLine(null)
     setDraggingChildId(null)
-    setChildDragGhost(null)
     drag.reset()
   }, [previewMode])
-
-  /* 탐색 아이템은 계정 공유라 시나리오 기기 폭과 무관하게 저장된다 —
-     현재 캔버스보다 넓은 아이템은 진입/기기 변경 시 폭에 맞게 보정 */
-  useEffect(() => {
-    if (!isExplore) return
-    const current = api.explore.items || []
-    if (!current.some((item) => item.w > itemW || item.x + item.w > canvasW - PAD)) return
-    api.updateExplore((prev) => ({
-      ...prev,
-      items: (prev.items || []).map((item) => {
-        if (item.parentId) return item
-        const w = Math.min(item.w, itemW)
-        return { ...item, w, x: Math.max(0, Math.min(canvasW - PAD - w, item.x)) }
-      }),
-    }))
-    setTimeout(() => {
-      setItems((prev) => layout.withTopOnly(prev, (top) => layoutCompactUp(top, heightsRef.current)))
-    }, 200)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isExplore, canvasW])
 
   useBuilderShortcuts({
     enabled: !previewMode,
@@ -303,7 +267,7 @@ export default function Builder({ api, scenario }) {
         setCtxMenu(null)
         return true
       },
-      nudge: drag.nudgeSelected,
+      moveOrder: moveSelectedBy,
       zoomIn: () => interactions.zoomBy(1),
       zoomOut: () => interactions.zoomBy(-1),
       zoomReset: () => setZoom(1),
@@ -311,15 +275,6 @@ export default function Builder({ api, scenario }) {
   })
 
   /* ── 렌더 ── */
-  const displayItems = drag.decorateForDrag(items)
-  const canvasHeight = Math.max(
-    560,
-    ...displayItems.map((item) => {
-      const y = (drag.dragPos && drag.dragPos.positions[item.id]?.y) ?? item.y
-      return y + heightOf(item) + 120
-    })
-  )
-
   const ensureKeyword = (word) => {
     if (!word) return
     if ((api.keywords || []).some((keyword) => keyword.word === word)) return
@@ -385,8 +340,6 @@ export default function Builder({ api, scenario }) {
         evaluatedCaseCount={planCases.filter((planCase) => normalizeCaseEvaluation(planCase.evaluation).selection.active).length}
         chipColor={scenario.color || '#5f7465'}
         device={device}
-        compactType={compactType}
-        compactOn={layout.compactOn}
         canvasView={canvasView}
         setCanvasView={setCanvasView}
         zoom={zoom}
@@ -398,8 +351,6 @@ export default function Builder({ api, scenario }) {
         onPlay={() => api.playScenario(scenario.id)}
         onPatchScenario={topbar.patchScenario}
         onChangeDevice={topbar.changeDevice}
-        onChangeCompact={topbar.changeCompact}
-        onAutoLayout={topbar.runAutoLayout}
         onZoomIn={() => interactions.zoomBy(1)}
         onZoomOut={() => interactions.zoomBy(-1)}
         onZoomReset={() => setZoom(1)}
@@ -511,35 +462,25 @@ export default function Builder({ api, scenario }) {
           <BuilderCanvas
             canvasRef={canvasRef}
             canvasW={canvasW}
-            canvasHeight={canvasHeight}
             zoom={zoom}
             canvasView={canvasView}
             previewMode={previewMode}
             items={items}
-            displayItems={displayItems}
             selectedIds={selectedIds}
             dropTargetId={dropTargetId}
-            dragPos={drag.dragPos}
-            sizeDraft={drag.sizeDraft}
-            guides={drag.guides}
-            gateCharging={drag.gateCharging}
+            dragIds={drag.dragIds}
             insertHint={insertHint}
-            marquee={marquee}
-            heightsRef={heightsRef}
+            insertLine={insertLine}
             renderCtx={canvasCtx}
-            onClearSelection={() => setSelectedIds([])}
             onCanvasPointerDown={interactions.onCanvasPointerDown}
             onContextMenu={interactions.openCtxMenu}
             onPaletteDragOver={interactions.paletteDragOver}
             onPaletteDragLeave={interactions.paletteDragLeave}
             onPaletteDrop={interactions.paletteDrop}
-            onItemMeasure={interactions.onItemMeasure}
             onSelect={handleSelect}
-            onDragStart={drag.onGroupDragStart}
+            onDragStart={drag.onDragStart}
             onDrag={drag.onDrag}
             onDragEnd={drag.onDragEnd}
-            onResize={drag.onResize}
-            onResizeEnd={drag.onResizeEnd}
             onInspect={(id) => { setSelectedIds([id]); bridge.focusInspector() }}
           />
 
@@ -573,19 +514,12 @@ export default function Builder({ api, scenario }) {
             selected={selected}
             selectedIds={selectedIds}
             itemW={itemW}
-            canvasW={canvasW}
-            heightsRef={heightsRef}
             updateProps={updateProps}
             updateItem={updateItem}
-            setSize={drag.setSize}
             duplicateSelected={duplicateSelected}
             removeSelected={removeSelected}
             duplicateItem={duplicateItem}
             removeItem={removeItem}
-            alignSelected={(mode) => {
-              if (selectedIds.length < 2) return
-              setItems((prev) => layout.align(prev, selectedIds, mode))
-            }}
             ensureKeyword={ensureKeyword}
             unnestItem={nesting.unnestItem}
             profile={api.profile}
@@ -614,10 +548,10 @@ export default function Builder({ api, scenario }) {
         </div>
       )}
 
-      {childDragGhost && (
-        <div className="sb-child-drag-ghost" style={{ left: childDragGhost.x, top: childDragGhost.y }} aria-hidden="true">
-          <span>{childDragGhost.icon}</span>
-          {childDragGhost.label}
+      {dragGhost && dragGhost.x != null && (
+        <div className="sb-child-drag-ghost" style={{ left: dragGhost.x, top: dragGhost.y }} aria-hidden="true">
+          <span>{dragGhost.icon}</span>
+          {dragGhost.label}
         </div>
       )}
     </div>

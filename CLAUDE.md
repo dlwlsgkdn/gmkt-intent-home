@@ -46,12 +46,11 @@ npm run db:generate --workspace=apps/core   # core 스키마 → drizzle/ 마이
 - `hooks/remote/` — **서버 미러링 한 벌** (위 "서버 동기화" 항목의 구현): `useRemoteSync.js`(공유 ref·동기화 상태·업로드 흐름 배선 — 반환하는 `remoteSync` 한 벌을 useWorkspace가 그대로 노출), `rowAdoption.js`(서버 행 채택 — 행→메모리 병합+기준선), `onDemandSync.js`(필요 시점 로드 syncRow·ensure*), `hydration.js`(부트 1왕복+백그라운드+구형 이관 — 시딩 가드 포함), `push.js`(미저장 감지 accountDirty + 업로드 코어 pushCore — 행 단위 게이트·명시적 삭제·충돌 처리), `starterSync.js`(기본 시나리오 라이브러리 미러링 — 즉시 쓰기·설치 직전 스냅샷 로드)
 - `lib/scenarioOps.js` — 시나리오 통째 복사(복제·가져오기·공유 채택)의 **id 재발급 규칙**. 아이템 id는 parentId·계획 조건 questionId·평가 기록 키 세 곳에서 참조되므로 한 곳에서 다시 매단다
 - `lib/store.js` — 데이터 계층 **배럴**. 실제 구현은 `lib/store/` 네 모듈:
-  - `store/model.js` 시나리오·아이템의 형태와 정규화, STAGES/DEVICE_PRESETS/CHIP_COLORS
+  - `store/model.js` 시나리오·아이템의 형태와 정규화(`normalizeItems` — 구 좌표 모델 → 순서 모델 이관 관문), STAGES/DEVICE_PRESETS/CHIP_COLORS
   - `store/planCases.js` 조건 형태와 평가 규칙. **폴백은 언제나 하나·목록의 끝**이라는 불변식을 강제
   - `store/defaults.js` 첫 실행 기본값(탐색 페이지·프로필·키워드)과 exploreItemsFrom/visibleProfileItems
   - `store/persistence.js` **localStorage를 아는 유일한 곳** + 계정(구 키 마이그레이션)·전체 백업·JSON 입출력 봉투(`ddak-export` + `classifyImportPayload` — 구형 파일 3종도 계속 인식)
-- `lib/layout.js` — **레이아웃 엔진** (순수 함수): resolveCollision(겹침 해소, 다중 이동+잠금 지원), previewResolve(드래그 미리보기), compactItems(COMPACT_TYPES: vertical/horizontal/none — 핀·잠금 제외 스택), layoutStack/TwoColumns/CompactUp, alignItems(다중 정렬), PAD/GAP 상수
-- `lib/builder/` — 빌더가 쓰는 순수 로직: `geometry.js`(좌표·슬롯·컨테이너 판정 — 필요한 값을 전부 인자로 받는다), `layoutOps.js`(겹침 해소·컴팩트 **커밋 관문 settle**), `itemClipboard.js`(사본 만들기), `publishing.js`(발행 점검·칩 라벨·버전 스냅샷·기기 폭 환산)
+- `lib/builder/` — 빌더가 쓰는 순수 로직: `geometry.js`(순서·슬롯·컨테이너 판정 — 모델 좌표가 아니라 렌더된 DOM rect 기준, 필요한 값을 전부 인자로 받는다. reorderTop/topInsertIndexAt/containerAtClient/placeChild 등), `itemClipboard.js`(사본 만들기), `publishing.js`(발행 점검·칩 라벨·버전 스냅샷 — 구 스냅샷은 복원 시점에 normalizeItems로 이관)
 - `lib/share.js` — 공유 링크: 시나리오를 `#s=<base64url JSON>` 해시로 인코딩/디코딩 (서버 불필요)
 - `lib/evaluation.js` — 평가 계층 **배럴**. 실제 구현은 `lib/evaluation/` 네 모듈:
   - `evaluation/model.js` 평가 레코드 **v2 스키마**(selection/review/components)와 정규화·v1 마이그레이션 관문, remapCaseEvaluation(id 재발급), liveComponentEntries(고아 레코드 필터), plainEvaluationText
@@ -74,13 +73,13 @@ npm run db:generate --workspace=apps/core   # core 스키마 → drizzle/ 마이
   - `revision.js` 평가 피드백 → 필드 단위 수정안. 허용 목록(caseId·itemId·fieldKey) 밖은 전부 차단
   - `caseRevision.js` 케이스 **통째 재생성** (컴포넌트 추가·삭제·순서까지). 안전 모델이 다르다: 유지 컴포넌트는 id 보존(평가 기록이 id에 묶임)+원본 props에서 시작해 편집 가능 키만 덮음(사실 필드·팩 메타데이터 보존), 새 상품은 카탈로그 대조, 조건은 불변, 부분 적용 없음(전부/전무 + ⌘Z)
 - `components/Builder.jsx` — **편집기 오케스트레이터**. 편집 상태만 갖고 규칙은 전부 아래로 위임한다
-- `components/builder/hooks/` — `useStageItems`(아이템을 어디서 읽고 어디에 저장할지: 탐색/설문/계획), `useItemOps`(추가·수정·삭제·복제·클립보드 — 배치 커밋은 전부 layout.settle/compact 경유), `useBuilderHistory`(Undo 스택), `usePlanCases`(케이스 CRUD·평가), `useCanvasDrag`(밀림 게이트·히스테리시스·삽입 존 보호·WYSIWYG 커밋), `useContainerNesting`(컨테이너 자식 넣기/꺼내기/슬롯), `useBuilderShortcuts`(키 매핑), `useTopBarActions`(시나리오 명령 — 기기·컴팩트·자동 정렬·발행·버전 복원·JSON 입출력·공유 링크), `useCanvasInteractions`(캔버스 표면 이벤트 — 마퀴·우클릭·팔레트 DnD·줌·재측정 재컴팩트), `useEvaluationBridge`(평가↔편집 이동 — feedbackTarget·인스펙터 포커스 신호, 상단 문맥 바는 `FeedbackFocusBar.jsx`)
+- `components/builder/hooks/` — `useStageItems`(아이템을 어디서 읽고 어디에 저장할지: 탐색/설문/계획), `useItemOps`(추가·수정·삭제·복제·순서 이동·클립보드 — 순서 변경은 전부 geometry.reorderTop 경유), `useBuilderHistory`(Undo 스택), `usePlanCases`(케이스 CRUD·평가), `useStackDrag`(최상위 순서 드래그 — 삽입 인덱스 미리보기 라인 + 컨테이너 삽입, 드롭 한 번으로 커밋), `useContainerNesting`(컨테이너 자식 넣기/꺼내기/슬롯 — 자식을 컨테이너 밖으로 끌면 최상위 순서 드래그로 전환), `useBuilderShortcuts`(키 매핑 — ↑↓ = 순서 한 칸 이동), `useTopBarActions`(시나리오 명령 — 기기 폭·발행·버전 복원·JSON 입출력·공유 링크), `useCanvasInteractions`(캔버스 표면 이벤트 — 우클릭·팔레트 DnD·줌), `useEvaluationBridge`(평가↔편집 이동 — feedbackTarget·인스펙터 포커스 신호, 상단 문맥 바는 `FeedbackFocusBar.jsx`)
 - `components/builder/EvaluationPanel.jsx` — 평가 스튜디오 오케스트레이터 (말풍선 배치·케이스 탭·AI 진입점). 표현 컴포넌트는 `components/builder/evaluation/`: StarRating(+SCORE_GUIDE)/Rubric/Leaderboard/CommentBubble/PreviewBoundary
 - `components/builder/BuilderTopBar.jsx` / `PlanCaseBar.jsx` / `BuilderCanvas.jsx` — 상태 없는 표현 컴포넌트
 - `components/builder/PromptExchange.jsx` — "프롬프트 복사 → 결과 붙여넣기" UI 한 벌. 세 AI 다이얼로그가 공유
-- `components/builder/CanvasItem.jsx` — 캔버스 아이템 (드래그/리사이즈/잠금/숨김, zoom 좌표 보정, 우클릭)
+- `components/builder/CanvasItem.jsx` — 스택 위 최상위 아이템 한 개 (선택/순서 드래그/잠금/숨김, 우클릭 — 문서 흐름이라 좌표·리사이즈·높이 측정 없음)
 - `components/builder/Palette.jsx` — 팔레트(검색·클릭 추가·캔버스로 드래그)/레이어 패널(잠금·숨김·순서)
-- `components/builder/Inspector.jsx` — 속성 편집 / 필드 드래그 선택 서식 툴바 / 다중 선택 정렬 도구. 목록형 필드(kind: options·stringList·cards·table)는 `ListEditors.jsx`의 행 단위 GUI 편집기로 위임 — 저장 형식은 기존 구분자 문자열 그대로, 줄바꿈 직렬화로 항목 안 쉼표 보존
+- `components/builder/Inspector.jsx` — 속성 편집 / 필드 드래그 선택 서식 툴바 (크기 슬라이더는 컨테이너 자식 카드 전용). 목록형 필드(kind: options·stringList·cards·table)는 `ListEditors.jsx`의 행 단위 GUI 편집기로 위임 — 저장 형식은 기존 구분자 문자열 그대로, 줄바꿈 직렬화로 항목 안 쉼표 보존
 - `components/builder/CanvasTextToolbar.jsx` — 캔버스 인라인 편집 중 선택 위에 뜨는 서식 툴바
 - `components/ui/Dropdown.jsx` — 드롭다운 공용 래퍼 (버튼은 호출부, 메뉴/백드롭 담당)
 - `components/Frame.jsx` — 공통 프레임 조각: BgBlobs, FloatingBar(하단, 햄버거=쓰레드 패널, 버튼 위치→패널 방향), ViewerDeviceControl(기기 폭), ProfileControl(프로필 전환/추가/삭제), StudioFab
@@ -97,7 +96,7 @@ npm run db:generate --workspace=apps/core   # core 스키마 → drizzle/ 마이
 1. **프로필별 워크스페이스**: 계정 = 프로필+탐색 페이지+시나리오+쓰레드. 홈 좌상단 프로필 컨트롤로 전환/추가/삭제
 2. **홈**: 발행 칩(클릭 실행·드래그 순서·색상), 검색 매칭, 검색창 말줄임/멀티라인 옵션
 3. **쓰레드 히스토리**: 햄버거 → 원본 룩 패널(버튼 위치 방향에서 등장), 체험 자동 기록, 이어보기
-4. **빌더**: 자유 배치+겹침 회피+스냅, 다중 선택(⇧/⌘A/러버밴드), 우클릭 메뉴, ⌘C/X/V(단계 간), 줌, 팔레트 드래그 배치, 인라인 WYSIWYG 편집+서식 툴바(볼드/폰트/크기/색/키워드 밑줄), Undo/Redo, 기기 프리셋, 자동 정렬, 발행/버전 복원(versionAt으로 현재 사용 중 버전 표시), 현재 시나리오 JSON 파일 입출력(상단 JSON 메뉴), 공유 링크
+4. **빌더**: 순서 기반 세로 스택(드래그 = 삽입 인덱스 재정렬, 컨테이너 위 드롭 = 안에 배치), 다중 선택(⇧/⌘A), 우클릭 메뉴, ⌘C/X/V(단계 간), 줌, 팔레트 드래그 배치, 인라인 WYSIWYG 편집+서식 툴바(볼드/폰트/크기/색/키워드 밑줄), Undo/Redo, 기기 프리셋(프레임 폭), 발행/버전 복원(versionAt으로 현재 사용 중 버전 표시), 현재 시나리오 JSON 파일 입출력(상단 JSON 메뉴), 공유 링크
 5. **컴포넌트 15종** (+탐색 레거시 5종): 설문 3, 계획 8, 공통 4(텍스트/안내/가로 스크롤 패널/이미지)
 6. **플레이어**: 설문→계획 스테퍼, 프로필 배지 제외, 설문 요약, 담기/완료, 쓰레드 기록
 7. **공유**: URL 해시 링크(즉시 체험, 가져오기), JSON 백업/이관
@@ -119,11 +118,10 @@ npm run db:generate --workspace=apps/core   # core 스키마 → drizzle/ 마이
 
 ## 핵심 설계 결정
 
-- **탐색은 공통 페이지** (시나리오 소유 아님, 계정 소유). 칩 클릭 = 탐색 완료 → 플레이어는 설문부터 시작. **탐색 콘텐츠도 아이템 기반**: `explore.items[]`를 빌더의 "탐색" 탭에서 설문/계획처럼 캔버스 편집(자동 저장·즉시 홈 반영). 구버전 설정(greeting/stories 등)은 `exploreItemsFrom()`으로 최초 1회 아이템 변환. 발행 칩은 `scenarioChips` 컴포넌트 자리에 렌더
-- **프로필/설문 요약 패널은 일반 컴포넌트** (`profilePanel`, `surveySummary`) — 고정 아님, 드래그 배치. 노출 항목은 인스펙터 칩 관리(`ChipManagers.jsx`)로 조절: profilePanel은 props.hidden(캔버스 배지 클릭과 동일)+계정 프로필 항목 편집(문구·추가·순서는 계정 공통), surveySummary는 props.hiddenProfile(라벨 매칭)·hiddenQuestions(질문 문구 매칭, 줄바꿈 직렬화). hidden 계열은 AI 제외 목록(NON_LLM_EDITABLE/FACT/NON_GENERATED) 포함
-- **겹침 해소 + 컴팩트**: `resolveCollision(items, movedIds[], heights, soft?)` — 이동한 아이템은 고정, 겹치는 다른 아이템이 아래로 밀림. 드래그 미리보기는 **지속시간 게이트** — 겹치자마자 반응하지 않고, 겹침 45%(`DRAG_SOFT_RATIO`/`CONTAINER_SOFT_RATIO`) 이상이 지속시간(일반 250ms `DRAG_PUSH_DELAY_MS` / 컨테이너 400ms `CONTAINER_PUSH_DELAY_MS`)을 채운 아이템만 밀림, 그 외는 전부 제자리 고정(핀). 조건이 깨지면 타이머 리셋. 재배치 기준 위치는 250ms 스로틀(`DRAG_PREVIEW_MS`). 커밋(`settle`)은 soft 없이 정확 해소. **컨테이너 삽입↔회피는 구역으로 분리**(트리뷰 drop-into/between 패턴): 세로 중앙부 = 삽입 존(포인터가 있으면 "안에 배치"+밀림 보호), 상/하 `NEST_EDGE_ZONE`(18px) 밴드 = 밀어내기 존(깊은 겹침 지속 시 컨테이너가 비켜남). **히스테리시스**: 한 번 밀린 아이템은 겹침 15%(`PUSH_EXIT_RATIO`) 아래로 떨어질 때까지 밀림 유지(삽입 존 보호 무시) — 밀려나 있는 컨테이너는 삽입 대상에서도 제외되어 비워진 자리는 순수 빈자리로 배치된다. **미리보기 해소는 `previewResolve`**(layout.js): 게이트 통과 아이템만 드래그 박스에서 밀리고, 밀린 아이템이 덮친 아이템은 연쇄로 함께 밀려 자리를 만든다. 잠긴 아이템을 넘어야만 자리가 나면 밀지 않고 제자리 유지(blockedIds) → 그 상태로 드롭하면 커밋 없이 드래그가 원위치 복귀(토스트). 게이트가 열려 밀림이 시작되면 나머지 아이템도 컴팩트에 함께 참여(연쇄 스택 이동 — 먼 아이템이 중간을 건너뛰어 순간이동하지 않음), 아무도 안 밀렸으면 전원 핀 고정. 드롭 커밋은 마지막 미리보기 레이아웃(`previewLayoutRef`)을 기준으로 적용해 미리보기 = 드롭 결과(WYSIWYG). 회피가 발동하지 않은 겹침 상태로 드롭하면(미리보기에서 미해소 겹침) 커밋하지 않고 드래그가 원위치 복귀(토스트) — 컨테이너 삽입 존 드롭은 예외(정상 삽입). 시나리오별 `compact`('vertical' 기본 | 'horizontal' | 'none')에 따라 모든 배치 커밋 후 `compactItems`로 스택(빌더의 `settle()` 경유, 드래그 중엔 드래그 아이템만 핀 고정). 구버전 `gravity: false`는 'none'으로 해석
-- **아이템 모델**: `{ id, type, x, y, w, h(null=자동), props }`, 높이는 ResizeObserver로 heightsRef에 측정
-- **컨테이너(레이아웃) 컴포넌트**: 가로/세로 스크롤·그리드·캐러셀은 `container: true` — 다른 컴포넌트를 자식으로 수용. 자식은 같은 스테이지 배열에 `parentId + slot`으로 저장(플랫 유지), 캔버스 절대배치·레이아웃 연산은 최상위만(빌더 `withTopOnly`). 팔레트/캔버스 드래그를 컨테이너 위에 놓으면 중첩, 꺼내기는 인스펙터·레이어 패널. 삭제·복제·복사는 자식 연쇄. 레이아웃끼리 중첩 불가. 팔레트는 `category`(content/layout)로 그룹 표시. **기기 폭 전환은 최상위만 비례 환산하고 자식 폭은 건드리지 않는다**(`rescaleForDevice`) — 자식 폭은 캔버스가 아니라 컨테이너 안에서의 콘텐츠 크기이고, 자식엔 maxItemW 클램프가 안 걸려 비율 환산이 왕복마다 증폭된다. 좁은 기기에서 넘치는 문제는 슬롯 CSS가 맡는다: 가로 스크롤(`hscroll`)은 카드 크기를 유지해 스크롤로 흡수하고, 교차 축(`vscroll`·`gridPanel`)과 `carousel`은 `max-width: 100%`로 눌러 담는다. **주의: 아이템 id 재발급 시 parentId 매핑 필수** (`lib/scenarioOps.js` 참고 — parentId·계획 조건 questionId·평가 기록 키 세 곳을 함께 다시 매단다)
+- **탐색은 공통 페이지** (시나리오 소유 아님, 계정 소유). 칩 클릭 = 탐색 완료 → 플레이어는 설문부터 시작. **탐색 콘텐츠도 아이템 기반**: `explore.items[]`를 빌더의 "탐색" 탭에서 설문/계획처럼 스택 편집(자동 저장·즉시 홈 반영). 구버전 설정(greeting/stories 등)은 `exploreItemsFrom()`으로 최초 1회 아이템 변환. 발행 칩은 `scenarioChips` 컴포넌트 자리에 렌더
+- **프로필/설문 요약 패널은 일반 컴포넌트** (`profilePanel`, `surveySummary`) — 고정 아님, 드래그로 순서 배치. 노출 항목은 인스펙터 칩 관리(`ChipManagers.jsx`)로 조절: profilePanel은 props.hidden(캔버스 배지 클릭과 동일)+계정 프로필 항목 편집(문구·추가·순서는 계정 공통), surveySummary는 props.hiddenProfile(라벨 매칭)·hiddenQuestions(질문 문구 매칭, 줄바꿈 직렬화). hidden 계열은 AI 제외 목록(NON_LLM_EDITABLE/FACT/NON_GENERATED) 포함
+- **아이템 모델은 순서 기반 스택**: `{ id, type, props, hidden?, locked?, parentId?, slot?, w?, h? }` — **배열 순서 = 최상위 렌더 순서**, 좌표(x/y)와 최상위 크기(w/h)는 없다(전폭·자동 높이). w/h는 **컨테이너 자식 전용**(카드의 콘텐츠 크기 — 예: hscroll 상품 카드 232px). 이 모델은 BFF 와이어 형식(순서 있는 의미 목록)과 정합을 위해 좌표 자유 배치에서 전환한 것(2026-08). **구 좌표 데이터는 `normalizeItems`가 이관**: 최상위에 숫자 x/y가 보이면 y→x 순으로 재배열해 배열 순서로 굳히고 좌표 필드를 버린다(멱등). 이 관문을 지나는 경로 = localStorage 로드·서버 행 채택·가져오기·공유 링크·스타터 설치·버전 복원(`scenarioFromSnapshot`) — 스냅샷·서버 행 원본은 그대로 두고 읽을 때마다 이관되는 lazy 방식이라 별도 일괄 마이그레이션이 없다. 캔버스 드래그는 `useStackDrag`: 드래그 아이템은 제자리에서 흐려지고(삽입 라인이 위치 미리보기), 드롭 시 `reorderTop` 한 번으로 커밋. 판정은 전부 렌더된 DOM rect 기준(`geometry.js`)
+- **컨테이너(레이아웃) 컴포넌트**: 가로/세로 스크롤·그리드·캐러셀은 `container: true` — 다른 컴포넌트를 자식으로 수용. 자식은 같은 스테이지 배열에 `parentId + slot`으로 저장(플랫 유지), 스택 순서는 최상위만 본다. 팔레트/캔버스 드래그를 컨테이너 중앙부(상/하 `NEST_EDGE_ZONE` 18px 밴드 제외)에 놓으면 중첩, 꺼내기는 인스펙터·레이어 패널·컨테이너 박스 밖으로 드래그. 삭제·복제·복사는 자식 연쇄. 레이아웃끼리 중첩 불가. 팔레트는 `category`(content/layout)로 그룹 표시. **기기 폭 전환은 프레임 폭만 바뀐다** — 최상위는 전폭이라 환산이 없고, 자식 카드 크기는 그대로 유지된다. 좁은 기기에서 넘치는 문제는 슬롯 CSS가 맡는다: 가로 스크롤(`hscroll`)은 카드 크기를 유지해 스크롤로 흡수하고, 교차 축(`vscroll`·`gridPanel`)과 `carousel`은 `max-width: 100%`로 눌러 담는다. **주의: 아이템 id 재발급 시 parentId 매핑 필수** (`lib/scenarioOps.js` 참고 — parentId·계획 조건 questionId·평가 기록 키 세 곳을 함께 다시 매단다)
 - **원본 룩 유지**: `public/`에 원본 CSS(gmarket-advanced*.css) 복사본 + Tailwind CDN. 원본 클래스 그대로 재사용
 - **프로필별 워크스페이스(계정)**: `ddak-accounts-v1`에 `{accounts[], activeId}` — 계정 = 프로필+탐색 페이지+시나리오+쓰레드 묶음. 프로필 전환은 홈 드로어. 구 단일 키(`ddak-scenarios-v1`, `ddak-explore-page-v1`, `ddak-profile-v1`, `ddak-threads-v1`)는 최초 1회 첫 계정으로 마이그레이션 (발행은 브라우저 로컬 한정)
 - **컴포넌트 텍스트는 kText()로 렌더**: 인스펙터 서식 툴바가 모든 텍스트 필드에 `{{서식|텍스트}}` 마크업을 넣을 수 있으므로, 레지스트리에서 사용자 노출 텍스트 prop은 반드시 `kText(p.x, ctx, 'x')`로 감쌀 것 (안 그러면 마크업 원문이 그대로 노출됨)
@@ -134,7 +132,7 @@ npm run db:generate --workspace=apps/core   # core 스키마 → drizzle/ 마이
 - pointerup 커밋은 `setTimeout(0)`으로 미룸 (React 렌더 중 setState 경고 방지)
 - 드로어의 발행 버튼 텍스트 매칭 시 "발행 취소"와 "발행하기" 구분 필요
 - 히스토리 스냅샷은 `{stages, planCases, device, exploreItems}` JSON (Builder가 `useBuilderHistory`에 주입) — 시나리오 필드 추가 시 undo 포함 여부 검토
-- 아이템 목록을 바꾸는 함수는 항상 **업데이터 함수**를 넘길 것. 드래그/보정 커밋이 `setTimeout`으로 미뤄지므로 값으로 덮으면 낡은 클로저가 최신 상태를 지운다
-- 배치를 커밋하는 모든 경로는 `layoutOps.settle()`을 통과시킬 것 (겹침 해소 + 컴팩트가 한 곳에 있다)
-- **레이아웃 함수에 아이템 목록을 통째로 넘기지 말 것.** `layout.js`의 함수들(`compactItems`/`layoutCompactUp`/`resolveCollision`)은 받은 목록을 전부 캔버스 아이템으로 취급하므로, 컨테이너 자식이 섞이면 자식에 좌표를 부여하고 그 유령 블록이 최상위 아이템을 아래로 밀어낸다(캔버스 상단에 수백 px 빈 띠). 반드시 `layout.withTopOnly(prev, (top) => ...)`로 감쌀 것
-- `CanvasItem`의 ResizeObserver는 아이템당 한 번만 만들고 콜백은 ref로 갱신한다. 콜백을 그대로 붙잡으면 `previewMode`·컴팩트 방향이 첫 렌더 값에 얼어붙는다
+- 아이템 목록을 바꾸는 함수는 항상 **업데이터 함수**를 넘길 것. 드래그 커밋이 `setTimeout`으로 미뤄지므로 값으로 덮으면 낡은 클로저가 최신 상태를 지운다
+- 최상위 순서를 바꾸는 모든 경로는 `geometry.reorderTop()`을 통과시킬 것 — index는 "이동 아이템을 뺀 나머지" 기준이고, 자식은 배열 끝으로 통과한다
+- 아이템에 x/y/w/h를 새로 넣지 말 것 (최상위 기준). 좌표가 들어가면 `normalizeItems`가 구형 데이터로 판정해 재정렬한다 — 자식 카드 크기만 w/h 허용
+- 캔버스 줌은 `transform: scale`이 아니라 CSS `zoom` — 문서 흐름 스택이라 확대·축소가 레이아웃 크기(스크롤 범위)에 반영돼야 한다

@@ -78,17 +78,11 @@ export function useBuilderShortcuts({ enabled, actions }) {
         actions.clearSelection()
         return
       }
-      // ⇧ + 방향키 = 1px 미세 이동, 그냥 방향키 = 8px
-      const step = event.shiftKey ? 1 : 8
-      const delta = {
-        ArrowUp: [0, -step],
-        ArrowDown: [0, step],
-        ArrowLeft: [-step, 0],
-        ArrowRight: [step, 0],
-      }[event.key]
-      if (delta) {
+      // 방향키 = 선택 컴포넌트를 스택에서 한 칸 위/아래로
+      const dir = { ArrowUp: -1, ArrowDown: 1 }[event.key]
+      if (dir) {
         event.preventDefault()
-        actions.nudge(delta[0], delta[1])
+        actions.moveOrder(dir)
       }
     }
     window.addEventListener('keydown', onKey)

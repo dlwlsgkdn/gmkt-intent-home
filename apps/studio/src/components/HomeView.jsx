@@ -4,7 +4,7 @@ import ExploreFrame from './ExploreFrame.jsx'
 import ThreadPanel from './ThreadPanel.jsx'
 import StarterPanel from './StarterPanel.jsx'
 import { TEMPLATES } from '../lib/templates.js'
-import { classifyImportPayload, createScenariosExport, hexToRgba, DEVICE_PRESETS, sortByPosition } from '../lib/store.js'
+import { classifyImportPayload, createScenariosExport, hexToRgba, DEVICE_PRESETS } from '../lib/store.js'
 import { scenariosFromImport } from '../lib/scenarioOps.js'
 import { renderItem } from '../lib/registry.jsx'
 import ScenarioGenerationDialog from './builder/ScenarioGenerationDialog.jsx'
@@ -165,9 +165,9 @@ export default function HomeView({ api }) {
     )
   })
 
-  /* 탐색 아이템(캔버스 배치) — 숨김·컨테이너 자식 제외한 최상위만, 위→아래 순서로 스택 */
+  /* 탐색 아이템 — 숨김·컨테이너 자식 제외한 최상위만, 배열 순서대로 스택 */
   const allExploreItems = api.explore.items || []
-  const exploreItems = sortByPosition(allExploreItems).filter((it) => !it.hidden && !it.parentId)
+  const exploreItems = allExploreItems.filter((it) => !it.hidden && !it.parentId)
 
   const submit = () => {
     const q = query.trim()
@@ -229,11 +229,7 @@ export default function HomeView({ api }) {
           /* 탐색 페이지 = 캔버스 아이템 스택 (빌더 탐색 탭에서 자유 배치·편집) */
           <div className="sb-player__stack sb-home-stack">
             {exploreItems.map((it) => (
-              <div
-                key={it.id}
-                className="sb-player__item"
-                style={{ maxWidth: it.w, height: it.h || undefined, overflow: it.h ? 'hidden' : undefined }}
-              >
+              <div key={it.id} className="sb-player__item">
                 {renderItem(it, { mode: 'player', player: homePlayer, profile: api.profile, chips, allItems: allExploreItems })}
               </div>
             ))}

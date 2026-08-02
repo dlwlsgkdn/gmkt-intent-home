@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { STAGES, DEVICE_PRESETS, resolvePlanCase, sortByPosition, uid, visibleProfileItems } from '../lib/store.js'
+import { STAGES, DEVICE_PRESETS, resolvePlanCase, uid, visibleProfileItems } from '../lib/store.js'
 import { renderItem } from '../lib/registry.jsx'
 import { BgBlobs, FloatingBar, StudioFab, ViewerDeviceControl } from './Frame.jsx'
 import ThreadPanel from './ThreadPanel.jsx'
@@ -65,12 +65,12 @@ export default function Player({ api, scenario, resume }) {
     [scenario, answers]
   )
 
-  /* 숨김·컨테이너 자식 제외한 최상위만 스택 렌더 (자식은 컨테이너가 렌더) */
+  /* 숨김·컨테이너 자식 제외한 최상위만 배열 순서대로 스택 렌더 (자식은 컨테이너가 렌더) */
   const stageItems = stage.key === 'plan'
     ? (matchedPlanCase?.items || [])
     : (scenario.stages[stage.key] || [])
   const items = useMemo(
-    () => sortByPosition(stageItems).filter((it) => !it.hidden && !it.parentId),
+    () => stageItems.filter((it) => !it.hidden && !it.parentId),
     [stageItems]
   )
 
@@ -249,11 +249,7 @@ export default function Player({ api, scenario, resume }) {
             </div>
           )}
           {items.map((it) => (
-            <div
-              key={it.id}
-              className="sb-player__item"
-              style={{ maxWidth: it.w, height: it.h || undefined, overflow: it.h ? 'hidden' : undefined }}
-            >
+            <div key={it.id} className="sb-player__item">
               {renderItem(it, { mode: 'player', player: playerApi, profile: api.profile, allItems: stageItems })}
             </div>
           ))}

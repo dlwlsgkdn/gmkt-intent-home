@@ -6,11 +6,8 @@ import { planCasesForScenario } from '../../../lib/store.js'
  * 탐색 단계는 계정이 소유한 공통 페이지, 설문은 시나리오의 stages, 계획은 활성 케이스의 items로
  * 저장 위치가 갈린다. 이 분기가 예전에는 Builder 곳곳의 setItems 호출부에 스며 있었다.
  *
- * setItems  — 사용자 편집. Undo 스냅샷을 남긴다.
- * setItemsFromMeasure — 높이 재측정에 따른 자동 보정. 사용자 편집이 아니므로 Undo에 넣지 않는다.
- *
- * 두 함수 모두 업데이터(함수)만 받는다: 드래그/보정 커밋이 setTimeout으로 미뤄지므로
- * 값으로 덮어쓰면 낡은 클로저가 최신 상태를 지운다.
+ * setItems — 사용자 편집. Undo 스냅샷을 남긴다. 업데이터(함수)만 받는다:
+ * 드래그 커밋이 setTimeout으로 미뤄지므로 값으로 덮어쓰면 낡은 클로저가 최신 상태를 지운다.
  */
 export function useStageItems({ api, scenario, stageKey, planCaseId, previewMode, pushHistory }) {
   const isExplore = stageKey === 'explore'
@@ -57,27 +54,5 @@ export function useStageItems({ api, scenario, stageKey, planCaseId, previewMode
     write(updater)
   }
 
-  /* 재측정 보정이 실제로 아무 좌표도 안 바꿨으면 원본 배열을 돌려줘 쓰기 자체를 없앤다 */
-  const sameGeometry = (prev, next) =>
-    prev === next || (
-      Array.isArray(next) && prev.length === next.length
-      && prev.every((item, index) => {
-        const other = next[index]
-        return item === other || (
-          item.id === other.id && item.x === other.x && item.y === other.y
-          && item.w === other.w && item.h === other.h
-          && item.parentId === other.parentId && item.slot === other.slot
-        )
-      })
-    )
-
-  const setItemsFromMeasure = (updater) => {
-    if (previewMode) return
-    write((items) => {
-      const next = updater(items)
-      return sameGeometry(items, next) ? items : next
-    })
-  }
-
-  return { setItems, setItemsFromMeasure }
+  return { setItems }
 }

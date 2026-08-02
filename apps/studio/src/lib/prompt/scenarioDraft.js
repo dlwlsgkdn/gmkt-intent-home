@@ -8,26 +8,12 @@ import { parseJsonAnswer } from './jsonAnswer.js'
  * 이쪽은 그 골든 케이스 자체를 페르소나·검색어·상품만으로 처음부터 만든다.
  *
  * 역할 분담은 동일하다:
- *   코드 = 레이아웃(좌표·컴포넌트 구성·컨테이너 중첩)과 상품 사실(가격·URL 등)
+ *   코드 = 레이아웃(스택 순서·컴포넌트 구성·컨테이너 중첩)과 상품 사실(가격·URL 등)
  *   LLM  = 텍스트 슬롯과 카탈로그 내 상품 배치
- * LLM은 좌표를 만들지 않으므로 레이아웃 엔진과 충돌할 수 없다.
+ * 배치는 순서 모델이라 배열에 넣는 순서가 곧 화면 순서다.
  */
 
-/* 검증된 레이아웃 상수 — date-makeup 팩의 실제 케이스 배치에서 가져왔다 */
-const X = 24
-const W = 672
-const SURVEY_INTRO_Y = 194
-const SURVEY_Q_Y = 438
-const SURVEY_Q_GAP = 164
-const PLAN_SUMMARY_Y = 24
-const PLAN_TITLE_Y = 178
-const PLAN_NOTICE_Y = 300
-const PLAN_STEP_Y = 440
-const PLAN_GROUP_GAP = 660 // planStep + 상품 패널 한 묶음의 높이
-const PLAN_HINT_GAP = 480 // planStep + 상품 자리 안내 카드 묶음 (패널보다 낮다)
-const PLAN_STEP_ONLY_GAP = 280 // planStep 단독
-const PLAN_PANEL_OFFSET = 280 // planStep → 아래 붙는 패널/안내 카드 간격
-const PLAN_CTA_OFFSET = 120 // 마지막 묶음 → CTA
+/* 가로 스크롤 패널 안 상품 카드의 콘텐츠 폭 — date-makeup 팩의 실제 값 */
 const PRODUCT_CARD_W = 232
 
 export const MIN_QUESTIONS = 2
@@ -39,14 +25,7 @@ export const MAX_STEPS = 4
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value))
 
-const make = (type, props, y, w = W) => {
-  const item = createItem(type, { ...LIBRARY[type].defaults, ...props })
-  item.x = X
-  item.y = y
-  item.w = w
-  item.h = null
-  return item
-}
+const make = (type, props) => createItem(type, { ...LIBRARY[type].defaults, ...props })
 
 /* 제목 → 칩 라벨 (기존 팩과 같은 규칙: 공백을 _로) */
 export const chipFromTitle = (title) =>
@@ -332,15 +311,15 @@ export function validateScenarioResponse(raw, request) {
 export function assembleScenario({ draft, catalog, query }) {
   const catalogById = Object.fromEntries(catalog.map((entry) => [entry.id, entry]))
 
-  /* 설문 화면 */
+  /* 설문 화면 — 배열 순서가 곧 화면 순서 */
   const surveyItems = [
-    make('profilePanel', { hint: '이번엔 빼고 싶은 항목을 눌러주세요' }, 24),
+    make('profilePanel', { hint: '이번엔 빼고 싶은 항목을 눌러주세요' }),
     make('surveyIntro', {
       kicker: draft.survey.introKicker,
       title: draft.survey.introTitle,
       desc: draft.survey.introDesc,
-    }, SURVEY_INTRO_Y),
-    ...draft.survey.questions.map((entry, index) =>
+    }),
+    ...draft.survey.questions.map((entry) =>
       make('surveyQuestion', {
         question: entry.question,
         options: entry.options.join(', '),
@@ -350,30 +329,28 @@ export function assembleScenario({ draft, catalog, query }) {
         horizontalScroll: true,
         defaultAnswer: '',
         locked: false,
-      }, SURVEY_Q_Y + index * SURVEY_Q_GAP)
+      })
     ),
     make('noticeCard', {
       title: draft.survey.noticeTitle,
       body: draft.survey.noticeBody,
-    }, SURVEY_Q_Y + draft.survey.questions.length * SURVEY_Q_GAP),
+    }),
   ]
 
   /* 계획 화면(골든 케이스) — 단계마다 planStep + 가로 스크롤 상품 패널 */
   const planItems = [
-    make('surveySummary', { title: draft.plan.summaryTitle }, PLAN_SUMMARY_Y),
-    make('planTitle', { kicker: draft.plan.titleKicker, title: draft.plan.titleText }, PLAN_TITLE_Y),
-    make('noticeCard', { title: draft.plan.noticeTitle, body: draft.plan.noticeBody }, PLAN_NOTICE_Y),
+    make('surveySummary', { title: draft.plan.summaryTitle }),
+    make('planTitle', { kicker: draft.plan.titleKicker, title: draft.plan.titleText }),
+    make('noticeCard', { title: draft.plan.noticeTitle, body: draft.plan.noticeBody }),
   ]
 
-  /* 단계마다 붙는 블록 높이가 달라서(상품 패널 / 상품 자리 안내 / 없음) y를 누적한다 */
-  let y = PLAN_STEP_Y
   draft.plan.steps.forEach((step, index) => {
     planItems.push(make('planStep', {
       no: String(index + 1),
       title: step.title,
       desc: step.desc,
       points: step.points,
-    }, y))
+    }))
 
     if (step.products.length === 0) {
       // 상품을 안 받았을 때: 상품을 지어내지 않고, 어떤 상품을 넣을 자리인지만 남긴다
@@ -381,10 +358,7 @@ export function assembleScenario({ draft, catalog, query }) {
         planItems.push(make('noticeCard', {
           title: `${step.groupTitle} — 상품을 넣을 자리`,
           body: `${step.productHint} · 빌더에서 "추천 상품 카드"를 이 자리에 배치하세요.`,
-        }, y + PLAN_PANEL_OFFSET))
-        y += PLAN_HINT_GAP
-      } else {
-        y += PLAN_STEP_ONLY_GAP
+        }))
       }
       return
     }
@@ -394,7 +368,7 @@ export function assembleScenario({ draft, catalog, query }) {
       cardW: String(PRODUCT_CARD_W),
       scrollbar: false,
       items: '',
-    }, y + PLAN_PANEL_OFFSET)
+    })
     planItems.push(panel)
     step.products.forEach((pick, slot) => {
       const product = catalogById[pick.catalogId] || {}
@@ -411,20 +385,19 @@ export function assembleScenario({ draft, catalog, query }) {
         mall: product.mall || '',
         imageUrl: product.imageUrl || '',
         url: product.url || '',
-      }, 0, PRODUCT_CARD_W)
-      card.x = 0
+      })
+      card.w = PRODUCT_CARD_W // 컨테이너 자식 카드의 콘텐츠 폭
       card.parentId = panel.id
       card.slot = slot
       planItems.push(card)
     })
-    y += PLAN_GROUP_GAP
   })
 
   planItems.push(make('ctaBar', {
     countLabel: draft.plan.cta.countLabel,
     price: draft.plan.cta.price,
     buttonText: draft.plan.cta.buttonText,
-  }, y + PLAN_CTA_OFFSET))
+  }))
 
   const generationId = `sgen-${uid()}`
   return {
@@ -433,7 +406,6 @@ export function assembleScenario({ draft, catalog, query }) {
     query: String(query || draft.title),
     color: colorForTitle(draft.title),
     device: 'desktop',
-    compact: 'vertical',
     stages: { survey: surveyItems, plan: [] },
     planCases: [createPlanCase({
       name: '기본 계획',

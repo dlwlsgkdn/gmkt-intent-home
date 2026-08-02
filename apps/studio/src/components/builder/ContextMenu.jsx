@@ -1,7 +1,7 @@
 import React from 'react'
 
 /* 캔버스 우클릭 컨텍스트 메뉴 (Figma/Canva식).
-   menu = { sx, sy(화면 좌표), cx, cy(캔버스 좌표), itemId|null } — null이면 빈 캔버스 메뉴 */
+   menu = { sx, sy(화면 좌표), itemId|null } — null이면 빈 캔버스 메뉴 */
 export default function ContextMenu({
   menu,
   items,
@@ -34,12 +34,12 @@ export default function ContextMenu({
             <button type="button" onClick={run(onCopy)}>
               복사 <kbd>⌘C</kbd>
             </button>
-            <button type="button" disabled={!hasClipboard} onClick={run(() => onPaste({ x: menu.cx, y: menu.cy }))}>
+            <button type="button" disabled={!hasClipboard} onClick={run(() => onPaste())}>
               붙여넣기 <kbd>⌘V</kbd>
             </button>
             <span className="sb-ctx-menu__sep" />
             <button type="button" onClick={run(() => onToggle('locked'))}>
-              {target?.locked ? '잠금 해제' : '위치 잠금'}
+              {target?.locked ? '잠금 해제' : '순서 잠금'}
             </button>
             <button type="button" onClick={run(() => onToggle('hidden'))}>
               {target?.hidden ? '실행 시 보이기' : '실행 시 숨기기'}
@@ -51,8 +51,8 @@ export default function ContextMenu({
           </>
         ) : (
           <>
-            <button type="button" disabled={!hasClipboard} onClick={run(() => onPaste({ x: menu.cx, y: menu.cy }))}>
-              여기에 붙여넣기 <kbd>⌘V</kbd>
+            <button type="button" disabled={!hasClipboard} onClick={run(() => onPaste())}>
+              붙여넣기 <kbd>⌘V</kbd>
             </button>
             <button type="button" onClick={run(onSelectAll)}>
               전체 선택 <kbd>⌘A</kbd>

@@ -19,7 +19,7 @@ export {
   createScenario,
   isDefaultScenario,
   normalizeScenario,
-  sortByPosition,
+  normalizeItems,
   splitList,
   splitTextList,
   joinTextList,

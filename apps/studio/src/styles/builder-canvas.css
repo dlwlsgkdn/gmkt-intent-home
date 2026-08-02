@@ -186,18 +186,8 @@
   flex-direction: column;
   gap: 14px;
 }
-/* 줌 스케일 래퍼 — transform은 레이아웃 크기에 영향이 없어 스크롤 영역을 직접 잡아준다 */
+/* 줌 래퍼 — 확대·축소는 CSS zoom(레이아웃 반영)이라 래퍼는 기준점만 잡는다 */
 .sb-canvas-scale { position: relative; flex-shrink: 0; }
-
-/* 러버밴드(마퀴) 다중 선택 박스 */
-.sb-marquee {
-  position: absolute;
-  z-index: 40;
-  border: 1px solid var(--sb-accent);
-  background: rgba(95, 116, 101, 0.08);
-  border-radius: var(--sb-r-xs);
-  pointer-events: none;
-}
 
 /* 우클릭 컨텍스트 메뉴 */
 .sb-ctx-menu {
@@ -276,9 +266,15 @@
   white-space: nowrap;
 }
 .sb-pinned-panel__empty { font-size: var(--sb-t-small); color: var(--sb-n-400); }
+/* 캔버스 = 세로 스택 (배열 순서 = 렌더 순서). 높이는 콘텐츠가 결정한다 */
 .sb-canvas {
   position: relative;
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 24px;
+  min-height: 560px;
   border-radius: var(--sb-r-2xl);
   border: 1px solid var(--sb-line);
   background: rgba(255, 255, 255, 0.9);
@@ -302,27 +298,14 @@
 }
 .sb-canvas__empty span { font-size: var(--sb-t-small); }
 
-/* 스마트 스냅 가이드라인 */
-.sb-guide {
-  position: absolute;
-  z-index: 30;
-  background: #f43f5e;
-  pointer-events: none;
-}
-.sb-guide--v { top: 0; bottom: 0; width: 1px; }
-.sb-guide--h { left: 0; right: 0; height: 1px; }
-
+/* 스택 위의 최상위 컴포넌트 — 문서 흐름(전폭), 드래그는 순서 재배열 */
 .sb-canvas-item {
-  position: absolute;
+  position: relative;
   border-radius: var(--sb-r-xl);
   border: 1.5px solid transparent;
   cursor: grab;
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
   user-select: none;
-}
-/* 드래그 중 다른 아이템들이 밀려날 때 부드럽게 이동 */
-.sb-canvas-item:not(.sb-canvas-item--dragging):not(.sb-canvas-item--resizing) {
-  transition: left 0.18s ease, top 0.18s ease, border-color 0.12s ease, box-shadow 0.12s ease;
 }
 .sb-canvas-item:hover { border-color: rgba(95, 116, 101, 0.45); }
 .sb-canvas-item--selected {
@@ -330,11 +313,10 @@
   box-shadow: 0 0 0 4px var(--sb-accent-soft);
   z-index: 5;
 }
+/* 드래그 중인 아이템은 제자리에서 흐려지고, 삽입 라인이 놓일 위치를 보여준다 */
 .sb-canvas-item--dragging {
   cursor: grabbing;
-  opacity: 0.88;
-  z-index: 20;
-  box-shadow: 0 24px 48px -20px rgba(15, 23, 42, 0.35);
+  opacity: 0.45;
 }
 .sb-canvas-item__tag {
   position: absolute;

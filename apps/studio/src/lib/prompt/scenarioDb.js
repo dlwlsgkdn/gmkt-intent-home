@@ -67,28 +67,23 @@ const SHAPE_DOC = `시나리오 하나는 아래 형태의 객체입니다. 최�
   ]
 }
 
-아이템(컴포넌트) 하나는 이 형태입니다.
+아이템(컴포넌트) 하나는 이 형태입니다. 좌표는 없습니다 — 배열 순서가 곧 화면의 위→아래 순서입니다.
 
 {
   "id": "고유문자열",        // 16자 내외 영숫자. 시나리오 안에서 유일해야 합니다
   "type": "surveyQuestion",  // 아래 목록의 type
-  "x": 24,
-  "y": 194,
-  "w": 672,
-  "h": null,                 // null = 자동 높이 (항상 null 권장)
   "props": { ... }           // 아래 목록의 props 키만 사용
 }
 
 컨테이너(가로 스크롤 등)에 담는 자식 아이템은 같은 items 배열에 두고 부모를 가리킵니다.
 
-{ "id": "...", "type": "productCard", "x": 0, "y": 0, "w": 232, "h": null,
+{ "id": "...", "type": "productCard", "w": 232,
   "parentId": "<컨테이너 아이템의 id>", "slot": 0, "props": { ... } }`
 
 const LAYOUT_RULES = `배치 규칙:
-- 최상위 아이템은 x=24, w=672로 두고 y만 늘려가며 세로로 쌓습니다. 겹치지 않게 충분히 띄우세요.
-- 권장 y 간격: 설문 질문 164, 안내/제목 카드 120~250, 계획 단계 카드 280, 가로 스크롤 패널 380.
+- 좌표·크기 필드는 쓰지 않습니다. items 배열에 넣는 순서가 곧 세로 스택 순서입니다.
 - 계획 케이스 items는 보통 이 순서입니다: surveySummary → planTitle → noticeCard → (planStep → hscroll(+productCard 자식)) 반복 → hscroll(+videoCard/articleCard 자식) → ctaBar.
-- 컨테이너 자식은 x=0, y=0, slot을 0부터 매기고 w는 컨테이너 props.cardW와 맞춥니다(예: 232).
+- 컨테이너 자식은 slot을 0부터 매기고, 카드 폭 w는 컨테이너 props.cardW와 맞춥니다(예: 232).
 - 컨테이너 안에 컨테이너를 넣지 않습니다.
 
 조건 규칙:

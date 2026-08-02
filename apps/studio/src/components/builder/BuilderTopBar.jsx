@@ -1,6 +1,5 @@
 import React from 'react'
 import { CHIP_COLORS, DEVICE_PRESETS, STAGES, planCasesForScenario } from '../../lib/store.js'
-import { COMPACT_TYPES, LAYOUT_MODES } from '../../lib/layout.js'
 import Dropdown from '../ui/Dropdown.jsx'
 import SyncButton from '../SyncButton.jsx'
 
@@ -9,7 +8,7 @@ import SyncButton from '../SyncButton.jsx'
  *
  * 4개 행이 각기 다른 관심사를 담당한다:
  *   1행 문서   — 제목·칩·상태·발행
- *   2행 도구   — 히스토리 / 보기(모드·줌) / 레이아웃(기기·컴팩트·정렬) / 공유
+ *   2행 도구   — 히스토리 / 보기(모드·줌) / 기기 폭 / 공유
  *   3행 단계   — 탐색 · 설문 · 계획 · 평가 탭
  *   4행(children) — 계획 케이스 바처럼 단계에 종속된 행
  */
@@ -38,8 +37,6 @@ export default function BuilderTopBar({
   evaluatedCaseCount,
   chipColor,
   device,
-  compactType,
-  compactOn,
   canvasView,
   setCanvasView,
   zoom,
@@ -51,8 +48,6 @@ export default function BuilderTopBar({
   onPlay,
   onPatchScenario,
   onChangeDevice,
-  onChangeCompact,
-  onAutoLayout,
   onZoomIn,
   onZoomOut,
   onZoomReset,
@@ -235,7 +230,7 @@ export default function BuilderTopBar({
           </div>
         </div>
         <span className="sb-tb-sep" aria-hidden="true" />
-        <div className="sb-tb-group" role="group" aria-label="레이아웃">
+        <div className="sb-tb-group" role="group" aria-label="기기 폭">
           <Dropdown
             open={openMenu === 'device'}
             onClose={closeMenu}
@@ -255,53 +250,6 @@ export default function BuilderTopBar({
               >
                 <strong>{preset.icon} {preset.label}</strong>
                 <small>캔버스 폭 {preset.w}px{preset.key === device.key ? ' · 사용 중' : ''}</small>
-              </button>
-            ))}
-          </Dropdown>
-
-          <Dropdown
-            open={openMenu === 'compact'}
-            onClose={closeMenu}
-            button={
-              <button
-                type="button"
-                disabled={previewMode}
-                className={'sb-btn' + (compactOn ? ' sb-btn--compact-on' : '') + (openMenu === 'compact' ? ' sb-btn--open' : '')}
-                title="컴팩트 방향 — 배치가 바뀔 때 빈 공간 없이 스택되는 방향"
-                onClick={() => toggleMenu('compact')}
-              >
-                🧲 {COMPACT_TYPES.find((type) => type.key === compactType)?.label || '컴팩트'}
-                {chevron}
-              </button>
-            }
-          >
-            {COMPACT_TYPES.map((type) => (
-              <button
-                key={type.key}
-                type="button"
-                className={'sb-menu__item' + (type.key === compactType ? ' sb-menu__item--active' : '')}
-                onClick={() => onChangeCompact(type)}
-              >
-                <strong>{type.label}</strong>
-                <small>{type.desc}{type.key === compactType ? ' · 사용 중' : ''}</small>
-              </button>
-            ))}
-          </Dropdown>
-
-          <Dropdown
-            open={openMenu === 'layout'}
-            onClose={closeMenu}
-            button={
-              <button type="button" disabled={previewMode} className={'sb-btn' + (openMenu === 'layout' ? ' sb-btn--open' : '')} onClick={() => toggleMenu('layout')}>
-                자동 정렬
-                {chevron}
-              </button>
-            }
-          >
-            {LAYOUT_MODES.map((mode) => (
-              <button key={mode.key} type="button" className="sb-menu__item" onClick={() => onAutoLayout(mode)}>
-                <strong>{mode.label}</strong>
-                <small>{mode.desc}</small>
               </button>
             ))}
           </Dropdown>

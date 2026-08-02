@@ -72,21 +72,21 @@ export const DEFAULT_KEYWORDS = [
   },
 ]
 
-/* ── 탐색(홈) 페이지의 캔버스 아이템 ──
-   탐색 콘텐츠도 설문/계획과 같은 아이템 모델로 자유 배치·편집한다.
+/* ── 탐색(홈) 페이지의 아이템 ──
+   탐색 콘텐츠도 설문/계획과 같은 아이템 모델(배열 순서 = 렌더 순서)로 편집한다.
    구버전 설정(greeting/searchPlaceholder/stories)은 최초 1회 아이템으로 변환된다. */
 export function exploreItemsFrom(config) {
   const merged = { ...DEFAULT_EXPLORE, ...(config || {}) }
   const stories = Array.isArray(merged.stories) && merged.stories.length === 3
     ? merged.stories
     : DEFAULT_EXPLORE.stories
-  const make = (type, y, props, w = 672) => ({ id: uid(), type, x: 24, y, w, h: null, props })
+  const make = (type, props) => ({ id: uid(), type, props })
   return [
-    make('greeting', 24, { text: merged.greeting }),
-    make('searchBox', 170, { placeholder: merged.searchPlaceholder, multiline: merged.searchOverflow === 'multiline' }),
-    make('scenarioChips', 290, {}),
-    make('storyFeature', 380, { ...stories[0] }),
-    make('storyCard', 900, { kicker: stories[1].kicker, title: stories[1].title, imageUrl: stories[1].imageUrl }),
-    make('storyCard', 1300, { kicker: stories[2].kicker, title: stories[2].title, imageUrl: stories[2].imageUrl }),
+    make('greeting', { text: merged.greeting }),
+    make('searchBox', { placeholder: merged.searchPlaceholder, multiline: merged.searchOverflow === 'multiline' }),
+    make('scenarioChips', {}),
+    make('storyFeature', { ...stories[0] }),
+    make('storyCard', { kicker: stories[1].kicker, title: stories[1].title, imageUrl: stories[1].imageUrl }),
+    make('storyCard', { kicker: stories[2].kicker, title: stories[2].title, imageUrl: stories[2].imageUrl }),
   ]
 }

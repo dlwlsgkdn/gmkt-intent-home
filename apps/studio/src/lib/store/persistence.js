@@ -1,4 +1,4 @@
-import { DEVICE_PRESETS, normalizeScenario, uid } from './model.js'
+import { DEVICE_PRESETS, normalizeItems, normalizeScenario, uid } from './model.js'
 import { DEFAULT_EXPLORE, DEFAULT_KEYWORDS, DEFAULT_PROFILE, exploreItemsFrom } from './defaults.js'
 
 /*
@@ -108,7 +108,8 @@ export function createAccount(partial = {}) {
 }
 
 /* 계정 보정: 탐색 페이지에 아이템이 없으면 기존 설정으로부터 만들고,
-   모든 시나리오를 현재 계획 케이스 모델로 이관한다. */
+   모든 시나리오를 현재 계획 케이스 모델로 이관한다.
+   탐색 아이템도 normalizeItems를 통과시킨다 — 구 좌표 데이터의 순서 이관 관문. */
 function normalizeAccount(raw) {
   const account = { ...createAccount(), ...raw }
   if (!account.explore || typeof account.explore !== 'object') {
@@ -116,6 +117,9 @@ function normalizeAccount(raw) {
   }
   if (!Array.isArray(account.explore.items) || account.explore.items.length === 0) {
     account.explore = { ...account.explore, items: exploreItemsFrom(account.explore) }
+  } else {
+    const items = normalizeItems(account.explore.items)
+    if (items !== account.explore.items) account.explore = { ...account.explore, items }
   }
   account.scenarios = Array.isArray(account.scenarios) ? account.scenarios.map(normalizeScenario) : []
   return account

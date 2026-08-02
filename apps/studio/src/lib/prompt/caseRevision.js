@@ -1,6 +1,5 @@
 import { LIBRARY } from '../registry.jsx'
-import { DEVICE_PRESETS } from '../store.js'
-import { PAD, MIN_ITEM_W } from '../layout.js'
+import { MIN_ITEM_W } from '../builder/geometry.js'
 import {
   componentEvaluationStructureForCase,
   normalizeCaseEvaluation,
@@ -47,16 +46,13 @@ export const CASE_REVISION_RESPONSE_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['id', 'type', 'x', 'y', 'w', 'props'],
+        required: ['id', 'type', 'props'],
         properties: {
           id: { type: 'string' },
           type: { type: 'string' },
-          x: { type: 'number' },
-          y: { type: 'number' },
-          w: { type: 'number' },
-          h: { type: ['number', 'null'] },
           parentId: { type: 'string' },
           slot: { type: 'number' },
+          w: { type: 'number' },
           props: { type: 'object' },
         },
       },
@@ -98,13 +94,11 @@ const conditionText = (planCase, surveyQuestions) => {
 
 export function buildCaseRevisionRequest({ scenario, planCase, persona, notes, catalog }) {
   const surveyQuestions = (scenario?.stages?.survey || []).filter((item) => item.type === 'surveyQuestion')
-  const device = DEVICE_PRESETS.find((preset) => preset.key === (scenario?.device || 'desktop')) || DEVICE_PRESETS[0]
   return {
-    schemaVersion: 1,
+    schemaVersion: 2, // v2: 순서 모델 — 좌표 없음, items 배열 순서 = 화면 순서
     scenario: { title: scenario?.title || '', query: scenario?.query || scenario?.title || '' },
     persona: String(persona || ''),
     notes: String(notes || ''),
-    canvasW: device.w,
     case: {
       caseId: planCase.id,
       name: planCase.name,
@@ -122,14 +116,11 @@ export function buildCaseRevisionRequest({ scenario, planCase, persona, notes, c
       price: entry.price,
       desc: entry.desc,
     })),
+    /* 배열 순서 = 화면 순서. 컨테이너 자식만 parentId/slot(+카드 폭 w)을 갖는다 */
     currentItems: (planCase.items || []).map((item) => ({
       id: item.id,
       type: item.type,
-      x: item.x,
-      y: item.y,
-      w: item.w,
-      h: item.h ?? null,
-      ...(item.parentId ? { parentId: item.parentId, slot: item.slot || 0 } : {}),
+      ...(item.parentId ? { parentId: item.parentId, slot: item.slot || 0, ...(item.w != null ? { w: item.w } : {}) } : {}),
       props: item.props || {},
     })),
   }
@@ -151,9 +142,10 @@ export function buildCaseRevisionPrompt(request) {
     '5. 새 영상·게시글·이미지 카드(videoCard/articleCard/imageCard)는 대한민국 기준으로 실제 확인한 콘텐츠만 씁니다.',
     '   url·imageUrl은 확인된 실제 주소만 넣고, 확인 못 했으면 빈 문자열("")로 둡니다. 주소를 지어내면 안 됩니다.',
     '6. 배치 규칙:',
-    `   - 최상위 아이템은 x=${PAD}, w=${request.canvasW - PAD * 2} 기준으로 y만 늘려 세로로 쌓고, 겹치지 않게 충분히 띄웁니다.`,
-    '   - 컨테이너(hscroll/gridPanel/carousel/vscroll)의 자식은 같은 items 배열에 parentId와 slot(0부터)으로 넣고 x=0, y=0으로 둡니다.',
-    '   - 컨테이너 안에 컨테이너를 넣지 않습니다. h는 자동 높이를 뜻하는 null을 권장합니다.',
+    '   - 좌표는 없습니다. items 배열의 순서가 곧 화면의 위→아래 순서입니다.',
+    '   - 컨테이너(hscroll/gridPanel/carousel/vscroll)의 자식은 같은 items 배열에 parentId와 slot(0부터)으로 넣습니다.',
+    '   - 자식 카드의 폭이 중요하면 w(px)를 줄 수 있습니다(예: 상품 카드 232). 최상위에는 w를 넣지 않습니다.',
+    '   - 컨테이너 안에 컨테이너를 넣지 않습니다.',
     '7. summary에는 무엇을 추가/삭제/수정했고 왜 그랬는지 2~4문장으로 적습니다.',
     '8. 설명 없이 아래 스키마의 JSON 하나만 출력합니다. items에는 유지·수정·추가된 컴포넌트 전부를 담습니다(빠진 id는 삭제로 처리됩니다).',
     '',
@@ -260,14 +252,17 @@ export function validateCaseRevisionResponse(raw, request, { originalItems, cata
     }
 
     seenIds.add(id)
+    const isChild = !!row.parentId
     items.push({
       id,
       type,
-      x: Math.max(0, Math.round(Number(row.x) || 0)),
-      y: Math.max(0, Math.round(Number(row.y) || 0)),
-      w: Math.max(MIN_ITEM_W, Math.round(Number(row.w) || MIN_ITEM_W)),
-      h: row.h == null ? null : Math.max(48, Math.round(Number(row.h))),
-      ...(row.parentId ? { parentId: String(row.parentId), slot: Math.max(0, Math.round(Number(row.slot) || 0)) } : {}),
+      ...(isChild
+        ? {
+            parentId: String(row.parentId),
+            slot: Math.max(0, Math.round(Number(row.slot) || 0)),
+            ...(row.w != null ? { w: Math.max(MIN_ITEM_W, Math.round(Number(row.w))) } : {}),
+          }
+        : {}),
       props,
     })
   })
@@ -284,14 +279,12 @@ export function validateCaseRevisionResponse(raw, request, { originalItems, cata
       else if (!LIBRARY[parent.type]?.container) errors.push(`"${item.id}": parentId가 컨테이너가 아닙니다.`)
     }
   })
-  // 자식 좌표는 슬롯이 결정한다 — 강제 0 (store의 normalizeItems 불변식과 동일)
-  items.forEach((item) => { if (item.parentId) { item.x = 0; item.y = 0 } })
-  // 최상위 좌표를 캔버스 안으로 클램프
-  const maxW = request.canvasW - PAD * 2
+  // 유지 아이템의 카드 크기(w/h)는 원본을 승계한다 — AI가 좌우할 값이 아니다
   items.forEach((item) => {
-    if (item.parentId) return
-    item.w = Math.min(item.w, maxW)
-    item.x = Math.max(0, Math.min(request.canvasW - PAD - item.w, item.x))
+    const original = originalById[item.id]
+    if (!original) return
+    if (original.w != null && item.parentId) item.w = original.w
+    if (original.h != null && item.parentId) item.h = original.h
   })
 
   if (items.length === 0 && errors.length === 0) errors.push('items가 비어 있습니다.')

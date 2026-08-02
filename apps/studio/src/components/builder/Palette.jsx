@@ -1,6 +1,5 @@
 import React, { useRef, useState } from 'react'
 import { LIBRARY, libraryForStage } from '../../lib/registry.jsx'
-import { sortByPosition } from '../../lib/store.js'
 
 /* 왼쪽 패널: 컴포넌트 팔레트(검색 포함) / 레이어 목록(잠금·숨김·순서) */
 const CATEGORIES = [
@@ -36,8 +35,8 @@ export default function Palette({
     return def.label.toLowerCase().includes(q) || (def.hint || '').toLowerCase().includes(q)
   })
 
-  /* 레이어 목록: 최상위(위치순) 아래에 컨테이너 자식(슬롯순)을 들여쓰기로 */
-  const layerRows = sortByPosition(items.filter((it) => !it.parentId)).flatMap((it) => [
+  /* 레이어 목록: 최상위(배열 순서) 아래에 컨테이너 자식(슬롯순)을 들여쓰기로 */
+  const layerRows = items.filter((it) => !it.parentId).flatMap((it) => [
     { it, depth: 0 },
     ...items
       .filter((k) => k.parentId === it.id)
@@ -164,7 +163,7 @@ export default function Palette({
             <dl>
               <div><dt>⌘Z / ⇧⌘Z</dt><dd>실행 취소 / 다시 실행</dd></div>
               <div><dt>⇧+클릭</dt><dd>다중 선택 (함께 이동)</dd></div>
-              <div><dt>빈 곳 드래그</dt><dd>범위로 다중 선택</dd></div>
+              <div><dt>드래그</dt><dd>스택 순서 바꾸기 · 레이아웃 위에 놓으면 안에 배치</dd></div>
               <div><dt>레이아웃 선택+추가</dt><dd>선택한 레이아웃 안에 바로 삽입</dd></div>
               <div><dt>레이어 ⠿ 드래그</dt><dd>부모·내부 순서 정밀 변경</dd></div>
               <div><dt>우클릭</dt><dd>복제·잠금·삭제 메뉴</dd></div>
@@ -173,7 +172,7 @@ export default function Palette({
               <div><dt>⌘D</dt><dd>선택 컴포넌트 복제</dd></div>
               <div><dt>⌘+ / ⌘- / ⌘0</dt><dd>캔버스 확대 / 축소 / 100%</dd></div>
               <div><dt>Delete</dt><dd>선택 컴포넌트 삭제</dd></div>
-              <div><dt>방향키</dt><dd>8px 이동 (⇧: 1px)</dd></div>
+              <div><dt>방향키 ↑↓</dt><dd>순서 한 칸 이동</dd></div>
               <div><dt>Esc</dt><dd>선택 해제</dd></div>
               <div><dt>더블클릭</dt><dd>바로 문구 편집</dd></div>
             </dl>
@@ -221,7 +220,7 @@ export default function Palette({
                 <span className="sb-layer__btns">
                   <button
                     type="button"
-                    title={it.locked ? '잠금 해제' : '위치 잠금 (드래그 방지)'}
+                    title={it.locked ? '잠금 해제' : '순서 잠금 (드래그 방지)'}
                     className={it.locked ? 'sb-layer__btn--on' : ''}
                     onClick={(e) => { e.stopPropagation(); onToggleLock(it.id) }}
                   >{it.locked ? '🔒' : '🔓'}</button>

@@ -52,25 +52,38 @@ export const STAGES = [
   { key: 'plan', label: '계획', desc: '설문 조건에 따라 선택되는 여러 맞춤 계획 케이스' },
 ]
 
-export function createItem(type, defaults, index = 0) {
+export function createItem(type, defaults) {
   return {
     id: uid(),
     type,
-    x: 0,
-    y: 24 + index * 40,
-    w: 672,
-    h: null, // null = 자동 높이 (실제 높이는 캔버스가 측정한다)
     props: { ...defaults },
   }
 }
 
-/* 컨테이너 자식은 슬롯 순서가 배치를 결정하므로 x/y를 갖지 않는다.
-   좌표가 남아 있으면 레이아웃 연산이 자식을 캔버스 아이템으로 착각할 여지가 생기므로
-   읽어 들이는 지점에서 0으로 되돌린다. (자식까지 컴팩트에 넘기던 옛 버전이 남긴 좌표 복구) */
+/* 아이템 모델은 순서 기반 스택이다 — 배열 순서 = 렌더 순서(최상위), 자식은 parentId + slot.
+   최상위 아이템은 좌표·크기를 갖지 않는다(전폭·자동 높이). 자식의 w/h만 콘텐츠 크기
+   (컨테이너 슬롯 안 카드 크기)로 남는다.
+
+   구 좌표 모델(x/y/w/h 자유 배치) 데이터는 여기서 1회 이관한다: 최상위를 y→x 순으로
+   재배열해 배열 순서로 굳히고 좌표 필드를 버린다. 멱등이라 몇 번 지나도 같다. */
 export function normalizeItems(list) {
-  return (Array.isArray(list) ? list : []).map((item) => (
-    item && item.parentId && (item.x || item.y) ? { ...item, x: 0, y: 0 } : item
-  ))
+  const arr = (Array.isArray(list) ? list : []).filter((item) => item && typeof item === 'object')
+  const top = arr.filter((item) => !item.parentId)
+  const children = arr.filter((item) => item.parentId)
+  const legacy = top.some((item) => Number.isFinite(item.x) || Number.isFinite(item.y))
+  const orderedTop = legacy
+    ? [...top].sort((a, b) => ((a.y || 0) - (b.y || 0)) || ((a.x || 0) - (b.x || 0)))
+    : top
+  const strip = (item, keepSize) => {
+    const { x, y, w, h, ...rest } = item
+    if (!keepSize) return rest
+    if (w != null) rest.w = w
+    if (h != null) rest.h = h
+    return rest
+  }
+  const dirty = legacy || arr.some((item) => 'x' in item || 'y' in item || (!item.parentId && ('w' in item || 'h' in item)))
+  if (!dirty) return arr.length === list.length ? list : arr
+  return [...orderedTop.map((item) => strip(item, false)), ...children.map((item) => strip(item, true))]
 }
 
 /* 구 번들 팩(강제 설치 시절)이 심어 둔 시드 표식 — 기존 계정 데이터에 플래그가 남아 있어
@@ -83,18 +96,19 @@ export function normalizeScenario(input = {}) {
   const raw = input && typeof input === 'object' && !Array.isArray(input) ? input : {}
   const now = new Date().toISOString()
   const stages = raw.stages && typeof raw.stages === 'object' ? raw.stages : {}
+  // 구 좌표 모델의 배치 설정(compact·gravity)은 스택 모델에서 의미가 없다 — 버린다
+  const { compact, gravity, ...rest } = raw
   const scenario = {
     title: '새 시나리오',
     chip: '새_시나리오',
     query: '',
     device: 'desktop',
     color: '#5f7465',
-    compact: 'vertical', // 'vertical'(위로 스택) | 'horizontal'(왼쪽) | 'none'
     versions: [], // 발행 시점 스냅샷 (최근 5개 — publishing.js VERSION_LIMIT)
     status: 'draft',
     createdAt: now,
     updatedAt: now,
-    ...raw,
+    ...rest,
     id: String(raw.id || uid()),
     versions: Array.isArray(raw.versions) ? raw.versions : [],
     stages: {
@@ -109,10 +123,6 @@ export function normalizeScenario(input = {}) {
 
 export function createScenario(partial = {}) {
   return normalizeScenario(partial)
-}
-
-export function sortByPosition(items) {
-  return [...items].sort((a, b) => (a.y - b.y) || (a.x - b.x))
 }
 
 export function splitList(text) {

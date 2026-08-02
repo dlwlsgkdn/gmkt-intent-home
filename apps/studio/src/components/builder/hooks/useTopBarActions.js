@@ -1,64 +1,30 @@
 import { classifyImportPayload, normalizeScenario } from '../../../lib/store.js'
-import { PAD, MIN_ITEM_W, layoutCompactUp } from '../../../lib/layout.js'
 import { buildShareUrl } from '../../../lib/share.js'
 import {
   VERSION_LIMIT,
   publishSnapshot,
   publishWarnings,
-  rescaleForDevice,
   resolveChipLabel,
   scenarioFromSnapshot,
 } from '../../../lib/builder/publishing.js'
 
 /*
- * 상단 바의 시나리오 단위 명령 — 기기/컴팩트/자동 정렬, 발행·버전 복원,
- * 현재 시나리오 JSON 입출력, 공유 링크. 편집 상태는 만지지 않고
- * 시나리오(와 배치)만 바꾼다.
+ * 상단 바의 시나리오 단위 명령 — 기기 폭, 발행·버전 복원,
+ * 현재 시나리오 JSON 입출력, 공유 링크. 편집 상태는 만지지 않고 시나리오만 바꾼다.
  */
 export function useTopBarActions({
-  api, scenario, planCases, history, layout, setItems, setSelectedIds,
-  heightsRef, canvasW, itemW, compactType, previewMode, closeMenu,
+  api, scenario, planCases, history, setSelectedIds, previewMode, closeMenu,
 }) {
   const patchScenario = (patch) => api.updateScenario(scenario.id, (current) => ({ ...current, ...patch }))
 
+  /* 기기 폭 전환 — 스택 모델이라 프레임 폭만 바뀐다 (아이템은 전폭·자동 높이) */
   const changeDevice = (preset) => {
     if (previewMode) return
     closeMenu()
     if (preset.key === (scenario.device || 'desktop')) return
     history.pushHistory()
-    api.updateScenario(scenario.id, (current) => ({
-      ...current,
-      ...rescaleForDevice(current, preset, { pad: PAD, minItemW: MIN_ITEM_W, currentCanvasW: canvasW }),
-    }))
-    // 폭 변경으로 높이가 다시 측정된 뒤 겹침/간격을 보정한다.
-    // withTopOnly 필수 — 자식까지 넘기면 컴팩트가 자식을 캔버스 아이템으로 취급해
-    // 좌표를 부여하고, 그 유령 블록이 최상위 아이템을 아래로 밀어낸다.
-    setTimeout(() => {
-      setItems((prev) => layout.withTopOnly(prev, (top) => layoutCompactUp(top, heightsRef.current)))
-    }, 200)
+    patchScenario({ device: preset.key })
     api.showToast(`${preset.label} 폭 기준으로 캔버스를 전환했어요.`)
-  }
-
-  const changeCompact = (type) => {
-    if (previewMode) return
-    closeMenu()
-    if (type.key === compactType) return
-    patchScenario({ compact: type.key })
-    if (type.key !== 'none') setItems((prev) => layout.compactTo(prev, type.key))
-    api.showToast(`${type.label} — ${type.desc}`)
-  }
-
-  const runAutoLayout = (mode) => {
-    if (previewMode) return
-    closeMenu()
-    setItems((prev) => layout.withTopOnly(prev, (top) => mode.fn(top, heightsRef.current, { itemW, canvasW })))
-    // 너비가 바뀌는 정렬은 높이가 다시 측정된 뒤 한 번 더 보정한다
-    if (mode.key !== 'compact') {
-      setTimeout(() => {
-        setItems((prev) => layout.withTopOnly(prev, (top) => layoutCompactUp(top, heightsRef.current)))
-      }, 180)
-    }
-    api.showToast(`${mode.label}로 겹침 없이 배치했어요.`)
   }
 
   const publish = () => {
@@ -126,7 +92,6 @@ export function useTopBarActions({
           query: next.query,
           device: next.device,
           color: next.color,
-          compact: next.compact,
           stages: next.stages,
           planCases: next.planCases,
         })
@@ -154,8 +119,6 @@ export function useTopBarActions({
   return {
     patchScenario,
     changeDevice,
-    changeCompact,
-    runAutoLayout,
     publish,
     restoreVersion,
     exportScenarioJson,

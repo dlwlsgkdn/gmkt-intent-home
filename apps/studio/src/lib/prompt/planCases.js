@@ -72,9 +72,6 @@ export function comboSignature(combo) {
 
 /* ── 골든 케이스 → 템플릿 슬롯 추출 ────────────────────────────────── */
 
-const positionSort = (left, right) =>
-  ((left.y || 0) - (right.y || 0)) || ((left.x || 0) - (right.x || 0)) || ((left.slot || 0) - (right.slot || 0))
-
 export function templateFromCase(goldenCase) {
   const items = (goldenCase?.items || []).filter((item) => !item.hidden)
   const byId = Object.fromEntries(items.map((item) => [item.id, item]))
@@ -87,8 +84,11 @@ export function templateFromCase(goldenCase) {
     }
     return current || item
   }
+  /* 화면 순서 = 최상위 배열 순서, 컨테이너 자식은 자기 루트 뒤에 슬롯순 */
+  const arrayIndex = Object.fromEntries(items.map((item, index) => [item.id, index]))
   const orderedItems = [...items].sort((left, right) =>
-    positionSort(rootOf(left), rootOf(right)) || ((left.slot || 0) - (right.slot || 0))
+    ((arrayIndex[rootOf(left).id] || 0) - (arrayIndex[rootOf(right).id] || 0))
+    || ((left.slot || 0) - (right.slot || 0))
   )
 
   const textSlots = []
