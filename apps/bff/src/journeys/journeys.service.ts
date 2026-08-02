@@ -37,10 +37,13 @@ export class JourneysService {
       title: body.title ?? body.query ?? body.chipId,
       source,
     })
-    this.recordAsync(thread.id, SEQ.explore, {
-      stage: 'explore',
-      payload: { source, profile: body.profile ?? null },
-    })
+    await this.persist(
+      'explore',
+      this.core.upsertStep(thread.id, SEQ.explore, {
+        stage: 'explore',
+        payload: { source, profile: body.profile ?? null },
+      }),
+    )
     return { threadId: thread.id }
   }
 
@@ -53,8 +56,11 @@ export class JourneysService {
       intro: content.intro,
       questions: content.questions.map((q, i) => ({ id: `q${i + 1}`, ...q })),
     }
-    this.recordAsync(threadId, SEQ.survey, { stage: 'survey', payload: { page }, llmMeta: meta })
-    void this.core.updateThread(threadId, { status: 'surveying' }).catch(() => undefined)
+    await this.persist(
+      'survey',
+      this.core.upsertStep(threadId, SEQ.survey, { stage: 'survey', payload: { page }, llmMeta: meta }),
+      this.core.updateThread(threadId, { status: 'surveying' }),
+    )
     return page
   }
 
@@ -69,9 +75,15 @@ export class JourneysService {
     const { content, meta } = await this.llm.generatePlan(intent, survey, answers, profile)
     const page = this.resolvePlan(content)
 
-    this.recordAsync(threadId, SEQ.answers, { stage: 'answers', payload: { answers, profile: profile ?? null } })
-    this.recordAsync(threadId, SEQ.plan, { stage: 'plan', payload: { page }, llmMeta: meta })
-    void this.core.updateThread(threadId, { status: 'planning' }).catch(() => undefined)
+    await this.persist(
+      'plan',
+      this.core.upsertStep(threadId, SEQ.answers, {
+        stage: 'answers',
+        payload: { answers, profile: profile ?? null },
+      }),
+      this.core.upsertStep(threadId, SEQ.plan, { stage: 'plan', payload: { page }, llmMeta: meta }),
+      this.core.updateThread(threadId, { status: 'planning' }),
+    )
     return page
   }
 
@@ -131,11 +143,18 @@ export class JourneysService {
     return this.core.listThreads(deviceId, cursor, limit)
   }
 
-  /** 기록은 사용자 응답을 막지 않는다 — 실패는 로그만 (v1, §3 at-least-once는 추후) */
-  private recordAsync(threadId: string, seq: number, body: Parameters<CoreClientService['upsertStep']>[2]) {
-    void this.core.upsertStep(threadId, seq, body).catch((e: Error) => {
-      this.logger.error(`스텝 기록 실패 thread=${threadId} seq=${seq}: ${e.message}`)
-    })
+  /*
+   * 기록 실패는 로그만 남기고 응답을 실패시키지 않는다 — 단, fire-and-forget은 금지.
+   * Vercel 서버리스는 응답 종료 직후 실행을 동결하므로, 응답 전에 완료를 기다려야
+   * 스텝이 유실되지 않는다 (SSE status가 선행해 체감 지연은 없다).
+   */
+  private async persist(label: string, ...ops: Promise<unknown>[]) {
+    const results = await Promise.allSettled(ops)
+    for (const r of results) {
+      if (r.status === 'rejected') {
+        this.logger.error(`${label} 기록 실패: ${(r.reason as Error)?.message ?? r.reason}`)
+      }
+    }
   }
 }
 
