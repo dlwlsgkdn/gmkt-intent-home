@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Headers, Logger, Param, ParseUUIDPipe, Post, Query, Res } from '@nestjs/common'
+import { Body, Controller, Get, Headers, Logger, Param, ParseUUIDPipe, Post, Query, Res, UseGuards } from '@nestjs/common'
 import {
+  ApiBearerAuth,
   ApiBody,
   ApiCreatedResponse,
   ApiHeader,
@@ -9,6 +10,7 @@ import {
   ApiProduces,
   ApiQuery,
   ApiTags,
+  ApiUnauthorizedResponse,
 } from '@nestjs/swagger'
 import {
   PlanRequestBody,
@@ -19,6 +21,7 @@ import {
   ThreadListPage,
   ThreadResumeWire,
 } from '@ddak/schema'
+import { ServiceTokenGuard } from '../common/service-token.guard'
 import { ZodValidationPipe } from '../common/zod-validation.pipe'
 import { toOpenApi } from '../common/openapi'
 import { LlmGenerationError } from '../llm/llm.service'
@@ -38,8 +41,13 @@ const DEVICE_HEADER = {
 /*
  * threads API — FE 대상 (DESIGN-LLM-SERVICE.md §4-1, 계약은 @ddak/schema).
  * 사용자 식별은 x-device-id 헤더 (익명 디바이스 id). 설문·계획 생성은 SSE.
+ * FE는 스튜디오 same-origin 경로(/api/bff/*)로 호출하고, 스튜디오 엣지 미들웨어(루트 middleware.js)가
+ * 서비스 토큰을 주입한다 — 직접 호출은 BFF_SERVICE_TOKEN 설정 시 401.
  */
 @ApiTags('threads')
+@ApiBearerAuth()
+@ApiUnauthorizedResponse({ description: '서비스 토큰 없음/불일치 (BFF_SERVICE_TOKEN 설정 시)' })
+@UseGuards(ServiceTokenGuard)
 @Controller('api/threads')
 export class ThreadsController {
   private readonly logger = new Logger(ThreadsController.name)

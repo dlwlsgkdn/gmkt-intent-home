@@ -41,5 +41,15 @@ SSE 확인: `curl -N -X POST localhost:8788/api/threads/<id>/survey -H 'content-
 1. 같은 GitHub 리포로 새 프로젝트 (예: `ddak-bff`)
 2. **Root Directory: `apps/bff`** (대시보드), Framework: Other
 3. 환경변수: `ANTHROPIC_API_KEY`(없으면 생성 요청이 실패 안내), `CORE_URL=https://ddak-core.vercel.app`,
-   `CORE_SERVICE_TOKEN`(core와 동일 값), `NODEJS_HELPERS=0`, (선택) `ALLOWED_ORIGINS`
+   `CORE_SERVICE_TOKEN`(core와 동일 값), `BFF_SERVICE_TOKEN`(스튜디오 프록시 인증 — 아래 참고),
+   `NODEJS_HELPERS=0`, (선택) `ALLOWED_ORIGINS`
 4. Ignored Build Step은 vercel.json의 ignoreCommand로 커밋돼 있음 — 대시보드 불필요
+
+## 스튜디오 프록시 (FE 진입 경로)
+
+FE는 bff URL을 직접 부르지 않고 스튜디오 same-origin 경로 `/api/bff/*` 를 쓴다. 리포 루트
+`middleware.js`(스튜디오 프로젝트의 Vercel Edge Middleware)가 그 경로를 이 서비스의 `/api/*` 로
+rewrite 하면서 `Authorization: Bearer <BFF_SERVICE_TOKEN>` 을 주입한다 — 미들웨어는 라우팅 결정만
+내리고 끝나므로 SSE 동안 함수가 이중으로 뜨지 않는다. 이를 위해 **스튜디오 Vercel 프로젝트**에
+`BFF_URL`(이 배포 주소)과 `BFF_SERVICE_TOKEN`(위 3번과 동일 값)을 설정한다.
+토큰을 설정하면 threads API 직접 호출은 401이 된다(로컬 개발은 토큰 없이 개방 — Vite 프록시 경유).

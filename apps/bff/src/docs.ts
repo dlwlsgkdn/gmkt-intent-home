@@ -11,11 +11,14 @@ export function setupDocs(app: INestApplication) {
   const config = new DocumentBuilder()
     .setTitle('ddak-bff threads API')
     .setDescription(
-      'DDAK 저니 오케스트레이션 — FE 대상 공개 API. 사용자 식별은 `x-device-id` 헤더(익명 디바이스 id). ' +
+      'DDAK 저니 오케스트레이션 — FE 대상 API. FE는 스튜디오 same-origin 경로(`/api/bff/*`)로 호출하고 ' +
+        '엣지 미들웨어가 `Authorization: Bearer <BFF_SERVICE_TOKEN>` 을 주입한다(토큰 설정 시 직접 호출은 401). ' +
+        '사용자 식별은 `x-device-id` 헤더(익명 디바이스 id). ' +
         '설문·계획 생성은 SSE(`event: status → result | error`)로 응답한다. ' +
         'LLM 실패 시 가짜 콘텐츠 대신 실패 안내(`error { code, message, retryable }`)를 보낸다.',
     )
     .setVersion('0.1.0')
+    .addBearerAuth()
     .build()
   const document = SwaggerModule.createDocument(app, config)
   SwaggerModule.setup('docs', app, document, {

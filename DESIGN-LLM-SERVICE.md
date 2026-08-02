@@ -265,7 +265,9 @@ sequenceDiagram
   0이면 prefix에 가변 바이트가 섞인 것.
 - **관측성**: 요청 id를 FE→BFF→core로 전파. LLM 호출 로그에 threadId·prompt_version·usage·
   latency 구조화 기록. 검증 실패율·수리 왕복율·폴백율을 지표로.
-- **보안**: API 키는 BFF 환경변수만, FE 번들에 절대 노출 금지. CORS는 FE 오리진 고정.
+- **보안**: API 키는 BFF 환경변수만, FE 번들에 절대 노출 금지. FE는 스튜디오 same-origin 경로
+  (`/api/bff/*`)로만 호출 — 루트 `middleware.js`(엣지 미들웨어)가 `BFF_SERVICE_TOKEN`을 주입하고
+  BFF가 ServiceTokenGuard로 검증한다(직접 URL 호출 차단). CORS(ALLOWED_ORIGINS)는 보조 방어.
   프로필(피부타입 등)은 PII 최소 수집 — 프롬프트 로그에 원문 저장 여부는 정책으로 결정.
 - **SSE 인프라**: Vercel이면 Node runtime 스트리밍으로 가능. 자체 배포면 Fastify 권장.
 

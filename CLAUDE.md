@@ -12,6 +12,7 @@ apps/core/         ← NestJS backend core — 쓰레드 저장·조회 (Drizzle
 apps/bff/          ← (예정) BFF — LLM·core 오케스트레이션. DESIGN-LLM-SERVICE.md §4 참고
 packages/schema/   ← @ddak/schema — 쓰레드 도메인·internal API zod 계약 (install 시 prepare로 dist 빌드)
 api/               ← 스튜디오 동기화 서버리스 (Vercel 함수, 루트 고정)
+middleware.js      ← 스튜디오 엣지 미들웨어 (루트 고정) — /api/bff/* 를 BFF로 rewrite + BFF_SERVICE_TOKEN 주입 (FE는 bff URL을 직접 안 부름. 스튜디오 프로젝트 환경변수 BFF_URL·BFF_SERVICE_TOKEN 필요)
 legacy/            ← 옛 HTML 프로토타입 원본 (빌드 시 apps/studio/dist/legacy 로 복사됨)
 ```
 

@@ -7,6 +7,14 @@ export default defineConfig({
   server: {
     // 개발 중 /api는 Vercel 배포(서버 함수 + Neon DB)로 프록시
     proxy: {
+      // /api/bff → 로컬 bff (배포에선 루트 middleware.js가 같은 경로를 토큰 주입해 rewrite).
+      // '/api'보다 먼저 선언할 것 — 프록시 매칭이 선언 순서라 뒤에 두면 /api가 삼킨다
+      '/api/bff': {
+        target: process.env.VITE_BFF_PROXY || 'http://localhost:8788',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (p) => p.replace(/^\/api\/bff/, '/api'),
+      },
       // secure: false — 사내망 TLS 검사(자체 서명 인증서 체인)에서 node가 핸드셰이크를 거부하는 문제 회피
       // VITE_API_PROXY — 로컬 목 API로 바꿔 운영 DB를 건드리지 않고 동기화 로직을 검증할 때
       '/api': {
