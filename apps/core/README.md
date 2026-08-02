@@ -19,16 +19,27 @@ npm run start:dev --workspace=apps/core    # http://localhost:8790/healthz
 
 DATABASE_URL 없이도 부팅된다 — DB를 쓰는 라우트만 503을 준다(스모크 테스트 용도).
 
-## DB 마이그레이션 (drizzle-kit)
+## DB 마이그레이션 (drizzle)
 
 ```bash
 npm run db:generate --workspace=apps/core   # src/db/schema.ts → drizzle/ SQL 생성
-npm run db:push --workspace=apps/core       # 개발 DB에 스키마 반영 (DATABASE_URL 필요)
+npm run db:migrate --workspace=apps/core    # drizzle/ SQL을 저널 순서대로 적용 (권장 반영 경로)
+npm run db:push --workspace=apps/core       # (개발 편의) diff 직접 반영 — 대화형 확인
+```
+
+**반영은 `db:migrate`가 기본 경로다.** push는 diff를 즉석 ALTER로 만들기 때문에 타입 전환처럼
+캐스트가 없는 변경(실사례: 0001의 uuid→text)에서 실패한다 — migrate는 커밋된 SQL을 그대로
+실행하므로 이런 변경도 파일에 적힌 대로 재현된다. 적용 이력은 `drizzle.__drizzle_migrations`에
+남고, `-- --status`로 조회한다.
+
+push 등으로 이미 최신 스키마가 된 DB는 최초 1회 baseline으로 이력만 채운다 (SQL 실행 없음):
+
+```bash
+npm run db:migrate --workspace=apps/core -- --baseline
 ```
 
 > `0001` 마이그레이션은 threadId를 uuid → **스노우플레이크(text 19자리)** 로 바꾸며 테이블을
-> 재생성한다(기존 쓰레드 데이터 삭제 — uuid 값은 19자리 숫자 계약에 안 맞는다). `db:push`도
-> 같은 이유로 테이블 truncate/재생성을 확인받는다.
+> 재생성한다(기존 쓰레드 데이터 삭제 — uuid 값은 19자리 숫자 계약에 안 맞는다).
 
 ## threadId — 스노우플레이크
 

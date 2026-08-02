@@ -31,6 +31,7 @@ npm run build --workspace=apps/studio       # 스튜디오 빌드. vite build &&
 npm run build --workspace=apps/core         # core(NestJS) 빌드
 npm run start:dev --workspace=apps/core     # core 로컬 실행 (환경변수: apps/core/.env.example — 없어도 부팅, DB 라우트만 503)
 npm run db:generate --workspace=apps/core   # core 스키마 → drizzle/ 마이그레이션 SQL (오프라인)
+npm run db:migrate --workspace=apps/core    # 마이그레이션 SQL 순서 적용 — DB 반영은 push(diff·타입 전환 실패)보다 이쪽 (--status·--baseline 지원)
 ```
 개발 서버: `.claude/launch.json`의 `scenario-studio` (포트 5173), 정적 검증용 `pages-static` (포트 8899, apps/studio/dist 서빙 — 빌드 후 사용).
 
