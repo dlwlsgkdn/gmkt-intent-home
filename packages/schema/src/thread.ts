@@ -9,11 +9,11 @@ import { z } from 'zod'
 export const ThreadStatus = z.enum(['exploring', 'surveying', 'planning', 'done', 'abandoned'])
 export type ThreadStatus = z.infer<typeof ThreadStatus>
 
-/** 스텝 단계 — 저니에서 일어난 일의 종류 (payload 형태는 단계별로 다르다) */
+/** 스텝 단계 — 쓰레드에서 일어난 일의 종류 (payload 형태는 단계별로 다르다) */
 export const StepStage = z.enum(['explore', 'survey', 'answers', 'plan', 'action'])
 export type StepStage = z.infer<typeof StepStage>
 
-/** 저니 시작점 — 칩 클릭 또는 검색 */
+/** 쓰레드 시작점 — 칩 클릭 또는 검색 */
 export const ThreadSource = z.object({
   kind: z.enum(['chip', 'search']),
   chipId: z.string().optional(),

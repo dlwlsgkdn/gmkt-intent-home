@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 /*
- * 저니(journeys) 계약 — FE ↔ BFF.
+ * 쓰레드 플로우 계약 — FE ↔ BFF (threads API). 공식 용어는 thread 하나다:
  * 와이어 형식은 의미 단위 페이지 JSON이다. 스튜디오 레지스트리 아이템(x/y/w 배치)으로의
  * 투영은 FE 통합 단계에서 얹는다 — 매핑 기준: question→surveyQuestion, guide→planStep,
  * products→productCard, steps→checklist (DESIGN-LLM-SERVICE.md §2-1).
@@ -13,7 +13,7 @@ export type Profile = z.infer<typeof Profile>
 
 /* ── 요청 ────────────────────────────────────────────────────────────── */
 
-export const StartJourneyBody = z
+export const StartThreadBody = z
   .object({
     chipId: z.string().optional(),
     query: z.string().optional(),
@@ -21,7 +21,7 @@ export const StartJourneyBody = z
     profile: Profile.optional(),
   })
   .refine((v) => v.chipId || v.query, { message: 'chipId 또는 query가 필요합니다' })
-export type StartJourneyBody = z.infer<typeof StartJourneyBody>
+export type StartThreadBody = z.infer<typeof StartThreadBody>
 
 export const SurveyRequestBody = z.object({
   profile: Profile.optional(),
@@ -40,12 +40,12 @@ export const PlanRequestBody = z.object({
 })
 export type PlanRequestBody = z.infer<typeof PlanRequestBody>
 
-export const JourneyEventBody = z.object({
+export const ThreadEventBody = z.object({
   /** cartAdd | cartRemove | complete | restart 등 — FE 정의 이벤트 이름 */
   type: z.string().min(1),
   data: z.record(z.string(), z.unknown()).optional(),
 })
-export type JourneyEventBody = z.infer<typeof JourneyEventBody>
+export type ThreadEventBody = z.infer<typeof ThreadEventBody>
 
 /* ── 와이어 페이지 (BFF → FE) ────────────────────────────────────────── */
 

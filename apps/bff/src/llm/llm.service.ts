@@ -9,48 +9,53 @@ const MODEL = 'claude-opus-5'
 
 export type GenResult<T> = { content: T; meta: LlmMeta }
 
+/** LLM 생성 실패 — 컨트롤러가 SSE error 이벤트(실패 안내)로 변환한다 */
+export class LlmGenerationError extends Error {
+  constructor(
+    readonly code: 'llm_not_configured' | 'llm_refused' | 'llm_failed',
+    message: string,
+    readonly retryable: boolean,
+  ) {
+    super(message)
+  }
+}
+
 /*
- * Claude 호출 계층 — 구조화 출력(parse) + 프롬프트 캐싱 + refusal 처리 + 폴백.
- * 키가 없거나 호출이 실패하면 폴백 템플릿으로 응답해 저니가 끊기지 않는다
- * (meta.fallback=true 로 기록 — DESIGN-LLM-SERVICE.md §4-2).
+ * Claude 호출 계층 — 구조화 출력(parse) + 프롬프트 캐싱 + refusal 처리.
+ * 실패 정책은 "실패 안내"다: 가짜 맞춤 콘텐츠(폴백 템플릿)를 지어내지 않고
+ * LlmGenerationError를 던져 FE가 사용자에게 상태를 정직하게 보여주게 한다.
+ * (캐시 재서빙·스튜디오 시나리오 폴백 등 강등 사다리는 인프라 마련 후 백로그 —
+ *  DESIGN-LLM-SERVICE.md §4-2 참고. 일시 장애 재시도는 SDK 기본 2회에 맡긴다)
  */
 @Injectable()
 export class LlmService {
   private readonly logger = new Logger(LlmService.name)
   private client: Anthropic | null | undefined
 
-  private clientOrNull(): Anthropic | null {
-    if (this.client !== undefined) return this.client
-    try {
-      this.client = new Anthropic()
-    } catch {
-      this.logger.warn('Anthropic 클라이언트 생성 실패 (자격증명 없음) — 폴백 템플릿으로 동작')
-      this.client = null
+  private requireClient(): Anthropic {
+    if (this.client === undefined) {
+      try {
+        this.client = new Anthropic()
+      } catch {
+        this.client = null
+      }
+    }
+    if (!this.client) {
+      throw new LlmGenerationError(
+        'llm_not_configured',
+        'AI 생성이 아직 준비되지 않았어요. 잠시 후 다시 찾아주세요.',
+        false,
+      )
     }
     return this.client
   }
 
   async generateSurvey(intent: string, profile?: Profile): Promise<GenResult<SurveyGen>> {
-    const client = this.clientOrNull()
-    if (!client) return { content: fallbackSurvey(), meta: { fallback: true, promptVersion: PROMPT_VERSION } }
-    const started = Date.now()
-    try {
-      const response = await client.messages.parse({
-        model: MODEL,
-        max_tokens: 16000,
-        system: [{ type: 'text', text: SURVEY_SYSTEM, cache_control: { type: 'ephemeral', ttl: '1h' } }],
-        output_config: { effort: 'medium', format: zodOutputFormat(SurveyGen) },
-        messages: [{ role: 'user', content: buildSurveyRequest(intent, profile) }],
-      })
-      if (response.stop_reason === 'refusal' || !response.parsed_output) {
-        this.logger.warn(`설문 생성 폴백 — stop_reason=${response.stop_reason}`)
-        return { content: fallbackSurvey(), meta: this.meta(started, response, true) }
-      }
-      return { content: response.parsed_output, meta: this.meta(started, response) }
-    } catch (e) {
-      this.logger.warn(`설문 생성 실패 → 폴백: ${(e as Error).message}`)
-      return { content: fallbackSurvey(), meta: { fallback: true, promptVersion: PROMPT_VERSION, latencyMs: Date.now() - started } }
-    }
+    return this.generate('설문 생성', SurveyGen, {
+      system: SURVEY_SYSTEM,
+      effort: 'medium' as const,
+      user: buildSurveyRequest(intent, profile),
+    })
   }
 
   async generatePlan(
@@ -59,29 +64,66 @@ export class LlmService {
     answers: Answer[],
     profile?: Profile,
   ): Promise<GenResult<PlanGen>> {
-    const client = this.clientOrNull()
-    if (!client) return { content: fallbackPlan(), meta: { fallback: true, promptVersion: PROMPT_VERSION } }
-    const started = Date.now()
-    try {
-      const response = await client.messages.parse({
-        model: MODEL,
-        max_tokens: 16000,
-        system: [{ type: 'text', text: PLAN_SYSTEM, cache_control: { type: 'ephemeral', ttl: '1h' } }],
-        output_config: { effort: 'high', format: zodOutputFormat(PlanGen) },
-        messages: [{ role: 'user', content: buildPlanRequest(intent, survey, answers, profile) }],
-      })
-      if (response.stop_reason === 'refusal' || !response.parsed_output) {
-        this.logger.warn(`계획 생성 폴백 — stop_reason=${response.stop_reason}`)
-        return { content: fallbackPlan(), meta: this.meta(started, response, true) }
-      }
-      return { content: response.parsed_output, meta: this.meta(started, response) }
-    } catch (e) {
-      this.logger.warn(`계획 생성 실패 → 폴백: ${(e as Error).message}`)
-      return { content: fallbackPlan(), meta: { fallback: true, promptVersion: PROMPT_VERSION, latencyMs: Date.now() - started } }
-    }
+    return this.generate('계획 생성', PlanGen, {
+      system: PLAN_SYSTEM,
+      effort: 'high' as const,
+      user: buildPlanRequest(intent, survey, answers, profile),
+    })
   }
 
-  private meta(started: number, response: Anthropic.Message, fallback?: boolean): LlmMeta {
+  private async generate<S extends typeof SurveyGen | typeof PlanGen>(
+    label: string,
+    schema: S,
+    req: { system: string; effort: 'medium' | 'high'; user: string },
+  ): Promise<GenResult<S['_output']>> {
+    const client = this.requireClient()
+    const started = Date.now()
+    let response: Awaited<ReturnType<typeof client.messages.parse>>
+    try {
+      response = await client.messages.parse({
+        model: MODEL,
+        max_tokens: 16000,
+        system: [{ type: 'text', text: req.system, cache_control: { type: 'ephemeral', ttl: '1h' } }],
+        output_config: { effort: req.effort, format: zodOutputFormat(schema) },
+        messages: [{ role: 'user', content: req.user }],
+      })
+    } catch (e) {
+      // 인증 실패 = 키 미설정/무효. SDK는 자격증명 부재를 호출 시점에 일반 AnthropicError
+      // ("Could not resolve authentication method")로 던지므로 그 경우까지 함께 매핑한다
+      if (
+        e instanceof Anthropic.AuthenticationError ||
+        (e instanceof Error && e.message.includes('Could not resolve authentication method'))
+      ) {
+        this.logger.warn(`${label} 인증 실패 — ANTHROPIC_API_KEY 확인 필요`)
+        throw new LlmGenerationError(
+          'llm_not_configured',
+          'AI 생성이 아직 준비되지 않았어요. 잠시 후 다시 찾아주세요.',
+          false,
+        )
+      }
+      this.logger.warn(`${label} 호출 실패: ${(e as Error).message}`)
+      throw new LlmGenerationError(
+        'llm_failed',
+        `일시적인 문제로 ${label}에 실패했어요. 잠시 후 다시 시도해 주세요.`,
+        true,
+      )
+    }
+    if (response.stop_reason === 'refusal') {
+      this.logger.warn(`${label} 거절 — category=${response.stop_details?.category ?? 'null'}`)
+      throw new LlmGenerationError('llm_refused', '이 요청은 처리할 수 없어요. 다른 검색어로 시도해 주세요.', false)
+    }
+    if (!response.parsed_output) {
+      this.logger.warn(`${label} 결과 파싱 실패 — stop_reason=${response.stop_reason}`)
+      throw new LlmGenerationError(
+        'llm_failed',
+        `일시적인 문제로 ${label}에 실패했어요. 잠시 후 다시 시도해 주세요.`,
+        true,
+      )
+    }
+    return { content: response.parsed_output as S['_output'], meta: this.meta(started, response) }
+  }
+
+  private meta(started: number, response: Anthropic.Message): LlmMeta {
     return {
       model: response.model,
       promptVersion: PROMPT_VERSION,
@@ -91,32 +133,6 @@ export class LlmService {
         cacheReadTokens: response.usage.cache_read_input_tokens ?? undefined,
       },
       latencyMs: Date.now() - started,
-      ...(fallback ? { fallback: true } : {}),
     }
-  }
-}
-
-/* ── 폴백 템플릿 — LLM 없이도 저니가 동작하게 하는 안전망 ─────────────── */
-
-function fallbackSurvey(): SurveyGen {
-  return {
-    intro: '몇 가지만 여쭤보면 딱 맞는 계획을 세워드릴 수 있어요.',
-    questions: [
-      { question: '어떤 고민을 해결하고 싶으세요?', options: ['수분 부족', '트러블·진정', '탄력·주름', '톤·잡티'], multi: true },
-      { question: '피부 타입을 알려주세요.', options: ['건성', '지성', '복합성', '민감성'], multi: false },
-      { question: '예산은 어느 정도로 생각하세요?', options: ['3만원 이하', '3~6만원', '6~10만원', '상관없음'], multi: false },
-    ],
-  }
-}
-
-function fallbackPlan(): PlanGen {
-  return {
-    headline: '기본 스킨케어 플랜을 준비했어요',
-    summary: '응답을 바탕으로 한 맞춤 생성이 잠시 어려워, 무난하게 쓰기 좋은 기본 구성을 담았어요.',
-    sections: [
-      { kind: 'guide', title: '이렇게 시작해 보세요', body: '순한 클렌저와 보습 중심의 기본 루틴부터 잡는 것이 좋아요. 피부가 안정되면 기능성 제품을 하나씩 더해 보세요.' },
-      { kind: 'products', title: '기본 추천', reason: '피부 타입을 가리지 않고 무난하게 쓰기 좋은 구성이에요.', productIds: ['p-010', 'p-001', 'p-006'] },
-      { kind: 'steps', title: '사용 순서', steps: ['약산성 클렌저로 세안', '토너로 결 정돈', '크림으로 마무리', '아침에는 선크림 필수'] },
-    ],
   }
 }

@@ -125,12 +125,12 @@ thread_steps (
 
 | 메서드 | 경로 | 역할 |
 |---|---|---|
-| POST | `/api/journeys` | 저니 시작. `{ chipId?\|query, profile }` → `{ threadId }` |
-| POST | `/api/journeys/{id}/survey` | 설문 페이지 생성 (LLM #1). **SSE** |
-| POST | `/api/journeys/{id}/plan` | 응답 제출 → 계획 생성 (LLM #2). `{ answers }` **SSE** |
-| POST | `/api/journeys/{id}/events` | 담기/제외/완료 행동 기록 (fire-and-forget) |
-| GET | `/api/journeys/{id}` | 이어보기 — 생성된 설문/응답/계획 복원 |
-| GET | `/api/journeys` | 쓰레드 목록 (히스토리 패널) |
+| POST | `/api/threads` | 저니 시작. `{ chipId?\|query, profile }` → `{ threadId }` |
+| POST | `/api/threads/{id}/survey` | 설문 페이지 생성 (LLM #1). **SSE** |
+| POST | `/api/threads/{id}/plan` | 응답 제출 → 계획 생성 (LLM #2). `{ answers }` **SSE** |
+| POST | `/api/threads/{id}/events` | 담기/제외/완료 행동 기록 (fire-and-forget) |
+| GET | `/api/threads/{id}` | 이어보기 — 생성된 설문/응답/계획 복원 |
+| GET | `/api/threads` | 쓰레드 목록 (히스토리 패널) |
 
 SSE 이벤트: `status`(생성 단계 진행 — "질문 구성 중…"), `result`(완성 페이지 JSON), `error`.
 
@@ -160,7 +160,7 @@ const response = await client.messages.parse({
   messages: [{ role: 'user', content: buildSurveyRequest(intent, profile) }],
 })
 
-if (response.stop_reason === 'refusal') return fallbackSurvey(intent) // content 읽기 전 반드시 체크
+if (response.stop_reason === 'refusal') throw new LlmGenerationError(...) // content 읽기 전 반드시 체크 → 실패 안내
 const page = response.parsed_output
 ```
 
@@ -179,8 +179,10 @@ const page = response.parsed_output
   beta `server-side-fallback-2026-07-01`) 옵트인을 권장 — 거절 시 같은 왕복 안에서
   대체 모델이 이어받는다.
 - **타임아웃·재시도**: SDK 기본 재시도(429/5xx, 2회)에 맡기고 BFF 자체 상한(예: 60s).
-  최종 실패 시 **폴백 정적 템플릿**(스튜디오 `templates.js` 이식)으로 응답 —
-  저니가 끊기지 않게 하고 `llm_meta.fallback: true`로 기록.
+- **실패 정책 (2026-08 확정)**: 최종 실패 시 가짜 맞춤 콘텐츠(폴백 템플릿)를 지어내지 않고
+  **실패 안내**로 응답한다 — SSE `error` 이벤트 `{ code, message, retryable }` (API.md §1).
+  강등 사다리(같은 검색어 성공본 캐시 재서빙 → 칩 저니의 스튜디오 발행 시나리오 폴백)는
+  캐시 조회 인프라 마련 후 백로그.
 
 ### 4-3. 상품 그라운딩 (계획 생성)
 
@@ -197,7 +199,7 @@ const page = response.parsed_output
 parse (zod 스키마)
   → 도메인 검증 (질문 수 3~5, 선택지 2~6, 상품 허용 목록, 필수 컴포넌트)
   → 실패 시 1회 수리 왕복 (오류 명세 포함 재요청)
-  → 그래도 실패면 폴백 템플릿 + llm_meta 기록
+  → 그래도 실패면 실패 안내 (SSE error — 가짜 콘텐츠로 대체하지 않는다)
 ```
 
 ### 4-5. 프롬프트 자산 — 스튜디오와의 관계
@@ -219,7 +221,7 @@ parse (zod 스키마)
   (+ 어느 단계든 `error` → 재시도/폴백). 탐색은 스튜디오와 동일하게 정적 공통 페이지 —
   칩 클릭/검색이 곧 탐색 완료 신호다.
 - **SSE 소비**: `status` 이벤트로 로딩 문구 갱신(스켈레톤), `result`로 페이지 렌더.
-- **이어보기**: 쓰레드 패널 → `GET /api/journeys/{id}` → 마지막 단계 복원.
+- **이어보기**: 쓰레드 패널 → `GET /api/threads/{id}` → 마지막 단계 복원.
 - **데이터 프로필 확장**: 기존 `local`/`prod`(localStorage±미러링) 위에 `live`(BFF 호출) 모드를
   추가하면 목업 모드와 실서비스 모드가 한 코드베이스에서 토글된다 — 스튜디오는 저작·시연,
   live는 실서비스.
@@ -233,25 +235,25 @@ sequenceDiagram
     participant Claude as Claude API
     participant Core as Backend Core
 
-    FE->>BFF: POST /journeys {chipId, profile}
+    FE->>BFF: POST /threads {chipId, profile}
     BFF->>Core: POST /internal/threads
     Core-->>BFF: threadId
     BFF-->>FE: { threadId }
 
-    FE->>BFF: POST /journeys/{id}/survey (SSE 열기)
+    FE->>BFF: POST /threads/{id}/survey (SSE 열기)
     BFF->>Claude: messages.parse (캐시 prefix + 의도·프로필, effort medium)
     BFF-->>FE: SSE status ("질문 구성 중…")
     Claude-->>BFF: SurveyPage (구조화 출력)
     BFF-->>FE: SSE result (검증·id 부여 완료된 설문 페이지)
     BFF--)Core: PUT steps/1 {stage: survey, payload, llm_meta} (비동기)
 
-    FE->>BFF: POST /journeys/{id}/plan {answers}
+    FE->>BFF: POST /threads/{id}/plan {answers}
     BFF->>BFF: 카탈로그 검색 (답변 → 후보 상품 top-N)
     BFF->>Claude: messages.parse (설문+답변+후보상품, effort high)
     BFF-->>FE: SSE status → result (계획 페이지)
     BFF--)Core: PUT steps/2 {answers} · steps/3 {plan}
 
-    FE->>BFF: POST /journeys/{id}/events {담기/완료}
+    FE->>BFF: POST /threads/{id}/events {담기/완료}
     BFF--)Core: PUT steps/n {action} + PATCH status
 ```
 
@@ -276,7 +278,7 @@ apps/
   bff/          # Node/TS — Anthropic SDK, zod, SSE
   core/         # NestJS — 쓰레드 저장·조회 (별도 Vercel 프로젝트)
 packages/
-  schema/       # UI DSL zod + journeys API 타입 (FE·BFF·core 공유)
+  schema/       # UI DSL zod + threads API 타입 (FE·BFF·core 공유)
   ui-registry/  # 레지스트리 렌더 컴포넌트 (스튜디오·FE 공유)
 prompts/        # 프롬프트 팩 (버전 관리) — 스튜디오 발행물에서 생성
 ```
@@ -291,7 +293,7 @@ prompts/        # 프롬프트 팩 (버전 관리) — 스튜디오 발행물에
 
 | 단계 | 내용 | LLM 사용 |
 |---|---|---|
-| **0. 계약 고정** | UI DSL zod 스키마 + journeys API 확정. 목 BFF가 스튜디오 발행 시나리오를 planCases 평가 규칙으로 서빙 → FE 플로우·SSE·쓰레드 기록을 LLM 없이 먼저 완성 | 없음 |
+| **0. 계약 고정** | UI DSL zod 스키마 + threads API 확정. 목 BFF가 스튜디오 발행 시나리오를 planCases 평가 규칙으로 서빙 → FE 플로우·SSE·쓰레드 기록을 LLM 없이 먼저 완성 | 없음 |
 | **1. 부분 생성** | 계획 페이지의 문구만 LLM 생성(레이아웃·상품·구조는 골든 케이스), 설문은 정적 | 저위험 |
 | **2. 전체 생성** | 설문+계획 전체 LLM 생성, 카탈로그 그라운딩, 수리 왕복·폴백 완비 | 본격 |
 | **3. 품질 루프** | 쓰레드 히스토리 기반 개인화, 스튜디오 평가 데이터를 프롬프트 회귀 테스트로, 부분 스트리밍(v2 SSE) | 고도화 |

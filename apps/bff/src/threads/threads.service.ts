@@ -1,11 +1,11 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common'
 import type {
   Answer,
-  JourneyEventBody,
+  ThreadEventBody,
   PlanPageWire,
   PlanSectionWire,
   Profile,
-  StartJourneyBody,
+  StartThreadBody,
   SurveyPageWire,
   ThreadSource,
   ThreadWithSteps,
@@ -19,16 +19,16 @@ import type { PlanGen } from '../llm/gen-schemas'
 const SEQ = { explore: 1, survey: 2, answers: 3, plan: 4, actionBase: 5 } as const
 
 @Injectable()
-export class JourneysService {
-  private readonly logger = new Logger(JourneysService.name)
+export class ThreadsService {
+  private readonly logger = new Logger(ThreadsService.name)
 
   constructor(
     private readonly core: CoreClientService,
     private readonly llm: LlmService,
   ) {}
 
-  /** 저니 시작 — 쓰레드 생성 + 탐색 스텝(의도·프로필) 기록 */
-  async start(deviceId: string, body: StartJourneyBody) {
+  /** 쓰레드 시작 — 생성 + 탐색 스텝(의도·프로필) 기록 */
+  async start(deviceId: string, body: StartThreadBody) {
     const source: ThreadSource = body.chipId
       ? { kind: 'chip', chipId: body.chipId, query: body.query }
       : { kind: 'search', query: body.query }
@@ -110,7 +110,7 @@ export class JourneysService {
   }
 
   /** 담기/완료 등 행동 기록 — 다음 빈 seq에 기록, complete면 상태 갱신 */
-  async recordEvent(threadId: string, event: JourneyEventBody) {
+  async recordEvent(threadId: string, event: ThreadEventBody) {
     const thread = await this.core.getThread(threadId)
     const nextSeq = Math.max(SEQ.actionBase - 1, ...thread.steps.map((s) => s.seq)) + 1
     await this.core.upsertStep(threadId, nextSeq, {
@@ -160,7 +160,7 @@ export class JourneysService {
 
 function intentOf(thread: ThreadWithSteps): string {
   if (!thread.source) {
-    if (!thread.title) throw new NotFoundException('저니 의도를 알 수 없습니다')
+    if (!thread.title) throw new NotFoundException('쓰레드 의도를 알 수 없습니다')
     return thread.title
   }
   return thread.source.query ?? thread.source.chipId ?? thread.title ?? '뷰티 쇼핑'

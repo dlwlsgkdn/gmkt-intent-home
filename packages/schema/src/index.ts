@@ -1,2 +1,2 @@
 export * from './thread'
-export * from './journey'
+export * from './thread-flow'
