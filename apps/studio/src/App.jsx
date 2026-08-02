@@ -6,6 +6,7 @@ import { useWorkspace } from './hooks/useWorkspace.js'
 import HomeView from './components/HomeView.jsx'
 import Builder from './components/Builder.jsx'
 import Player from './components/Player.jsx'
+import LivePlayer from './components/LivePlayer.jsx'
 import ExploreEditor from './components/ExploreEditor.jsx'
 
 /*
@@ -15,7 +16,8 @@ import ExploreEditor from './components/ExploreEditor.jsx'
  * lib/scenarioOps가 담당한다. 여기서는 "무엇을 보여줄지"만 결정한다.
  */
 export default function App() {
-  // route: {name:'home'} | {name:'builder', id} | {name:'player', id, resume} | {name:'explore-editor', back}
+  // route: {name:'home'} | {name:'builder', id} | {name:'player', id, resume}
+  //      | {name:'live', query?, resumeThreadId?, runId} | {name:'explore-editor', back}
   const [route, setRoute] = useState({ name: 'home' })
   const [toast, setToast] = useState(null)
   const showToast = (message) => setToast(message)
@@ -183,6 +185,9 @@ export default function App() {
     /* resume = { threadId, stage } — 기존 쓰레드를 이어서 해당 단계부터.
        칩 클릭 체험은 시나리오 콘텐츠(stages·planCases)를 맞춘 뒤 시작한다 */
     playScenario: (id, resume) => openSynced(workspace.ensureScenarioSynced(id), () => setRoute({ name: 'player', id, resume })),
+    /* 라이브 생성 체험(BFF) — 자유 검색 진입. runId로 리마운트해 "새로 생성"이 새 쓰레드를 만든다 */
+    playLive: (query) => setRoute({ name: 'live', query, runId: Date.now() }),
+    resumeLive: (threadId) => setRoute({ name: 'live', resumeThreadId: threadId, runId: Date.now() }),
     openExploreEditor: () => setRoute((prev) => ({ name: 'explore-editor', back: prev })),
     closeExploreEditor: () => setRoute((prev) => prev.back || { name: 'home' }),
     explore: workspace.explore,
@@ -247,7 +252,11 @@ export default function App() {
           resume={route.resume}
         />
       )}
-      {route.name !== 'home' && route.name !== 'explore-editor' && !current && <HomeView api={api} />}
+      {route.name === 'live' && (
+        /* key: 같은 검색어라도 runId마다 새 쓰레드로 다시 생성한다 */
+        <LivePlayer key={route.runId} api={api} query={route.query} resumeThreadId={route.resumeThreadId} />
+      )}
+      {route.name !== 'home' && route.name !== 'explore-editor' && route.name !== 'live' && !current && <HomeView api={api} />}
 
       {toast && <div className="sb-toast">{toast}</div>}
     </>

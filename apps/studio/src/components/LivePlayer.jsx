@@ -1,0 +1,444 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { DEVICE_PRESETS, STAGES } from '../lib/store.js'
+import { renderItem } from '../lib/registry.jsx'
+import { fetchLiveThread, recordLiveEvent, startLiveThread, streamLivePlan, streamLiveSurvey } from '../lib/liveApi.js'
+import { livePlanItems, liveSurveyItems } from '../lib/livePage.js'
+import { BgBlobs, FloatingBar, ViewerDeviceControl } from './Frame.jsx'
+import ThreadPanel from './ThreadPanel.jsx'
+
+/*
+ * 라이브 생성 체험 — 스튜디오 시나리오가 아니라 BFF(LLM)가 설문·계획을 실시간 생성한다.
+ * 구분 원칙: 진입은 홈 자유 검색(칩 = 시나리오 체험), 화면에는 ✦ 배지가 상시,
+ * 로딩은 SSE status + 스켈레톤(시나리오 체험엔 없는 생성 대기), 실패는 정직한 안내
+ * (가짜 콘텐츠 금지 — 발행 칩 폴백은 자동 강등이 아니라 사용자 클릭으로).
+ * 렌더 계층은 Player와 동일: 와이어 페이지를 livePage.js로 아이템에 투영해 레지스트리 재사용.
+ */
+
+/* 생성 대기 스켈레톤 — 라이브 전용 연출. 시나리오 체험과 "다르게 느껴지는" 것이 목적이다 */
+function LiveSkeleton({ message }) {
+  return (
+    <div className="sb-live-loading" role="status" aria-live="polite">
+      <p className="sb-live-status">
+        <span className="sb-live-status__spark" aria-hidden="true">✦</span>
+        {message || '생성하고 있어요…'}
+      </p>
+      <div className="sb-live-skel sb-live-skel--title" />
+      <div className="sb-live-skel" />
+      <div className="sb-live-skel sb-live-skel--tall" />
+      <div className="sb-live-skel" />
+    </div>
+  )
+}
+
+/* 실패 안내 — retryable이면 다시 시도, 발행 시나리오가 있으면 강등 제안(사용자 선택) */
+function LiveError({ error, onRetry, fallbacks, onPlayScenario }) {
+  return (
+    <div className="sb-live-error">
+      <p className="sb-live-error__title">생성하지 못했어요</p>
+      <p className="sb-live-error__msg">{error.message}</p>
+      {error.retryable && (
+        <button type="button" className="sb-btn sb-btn--primary" onClick={onRetry}>다시 시도</button>
+      )}
+      {fallbacks.length > 0 && (
+        <div className="sb-live-error__fallback">
+          <p>대신 스튜디오에서 만든 시나리오로 체험해볼 수 있어요.</p>
+          <div className="sb-live-error__chips">
+            {fallbacks.map((s) => (
+              <button key={s.id} type="button" className="suggestion-tag sb-chip-scenario" onClick={() => onPlayScenario(s.id)}>
+                #{s.chip}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function LivePlayer({ api, query, resumeThreadId }) {
+  const [threadId, setThreadId] = useState(resumeThreadId || null)
+  const [liveQuery, setLiveQuery] = useState(query || '')
+  const [surveyPage, setSurveyPage] = useState(null)
+  const [planPage, setPlanPage] = useState(null)
+  const [planKey, setPlanKey] = useState(null) // 계획을 만든 시점의 답변 스냅샷 (변경 감지)
+  const [stageKey, setStageKey] = useState('survey')
+  const [loading, setLoading] = useState(null) // null | { step: 'start'|'survey'|'plan', message }
+  const [error, setError] = useState(null) // null | { step, code, message, retryable }
+  const [answers, setAnswers] = useState({})
+  const [excludedProfile, setExcludedProfile] = useState([])
+  const [cart, setCart] = useState([])
+  const [completed, setCompleted] = useState(false)
+  const [keyword, setKeyword] = useState(null)
+  const [threadOrigin, setThreadOrigin] = useState(null)
+  /* 이어보기면 워크스페이스 기록의 시작 시각을 보존한다 (Player와 같은 규칙) */
+  const startedAtRef = useRef(
+    (resumeThreadId && (api.threads || []).find((t) => t.id === resumeThreadId)?.startedAt) || new Date().toISOString()
+  )
+  const cancelledRef = useRef(false)
+  useEffect(() => () => { cancelledRef.current = true }, [])
+
+  const profileItems = ((api.profile && api.profile.items) || []).filter((it) => it.label && it.label.trim())
+  const includedProfile = profileItems.filter((it) => !excludedProfile.includes(it.label))
+  const profileWire = () => includedProfile.map((it) => ({ label: it.label, value: String(it.value || '') }))
+
+  const questions = (surveyPage && surveyPage.questions) || []
+  const answersWire = () => questions
+    .map((q) => {
+      const a = answers[q.id]
+      const choices = Array.isArray(a) ? a.filter(Boolean) : a != null && String(a).length > 0 ? [a] : []
+      return { questionId: q.id, choices }
+    })
+    .filter((entry) => entry.choices.length > 0)
+
+  const generateSurvey = (id) => {
+    setError(null)
+    setLoading({ step: 'survey', message: '질문을 구성하고 있어요…' })
+    streamLiveSurvey(id, { profile: profileWire() }, {
+      onStatus: (message) => { if (!cancelledRef.current) setLoading((prev) => ({ ...(prev || { step: 'survey' }), message })) },
+      onResult: (page) => {
+        if (cancelledRef.current) return
+        setSurveyPage(page)
+        setLoading(null)
+        setStageKey('survey')
+      },
+      onError: (e) => {
+        if (cancelledRef.current) return
+        setLoading(null)
+        setError({ step: 'survey', code: e.code, message: e.message, retryable: e.retryable })
+      },
+    })
+  }
+
+  const generatePlan = () => {
+    const wire = answersWire()
+    if (wire.length === 0) {
+      api.showToast('질문에 하나 이상 답해주세요.')
+      return
+    }
+    setError(null)
+    setLoading({ step: 'plan', message: '답변에 맞는 계획을 세우고 있어요…' })
+    streamLivePlan(threadId, { answers: wire, profile: profileWire() }, {
+      onStatus: (message) => { if (!cancelledRef.current) setLoading((prev) => ({ ...(prev || { step: 'plan' }), message })) },
+      onResult: (page) => {
+        if (cancelledRef.current) return
+        setPlanPage(page)
+        setPlanKey(JSON.stringify(wire))
+        setLoading(null)
+        setStageKey('plan')
+        window.scrollTo(0, 0)
+      },
+      onError: (e) => {
+        if (cancelledRef.current) return
+        setLoading(null)
+        setError({ step: 'plan', code: e.code, message: e.message, retryable: e.retryable })
+      },
+    })
+  }
+
+  /* 마운트 1회: 새 검색이면 쓰레드 시작 → 설문 생성, 이어보기면 서버 기록 복원.
+     "새로 생성"은 api.playLive의 runId 리마운트가 재실행을 만든다 */
+  useEffect(() => {
+    const run = async () => {
+      if (resumeThreadId) {
+        setLoading({ step: 'start', message: '이어볼 내용을 불러오고 있어요…' })
+        try {
+          const t = await fetchLiveThread(resumeThreadId)
+          if (cancelledRef.current) return
+          const restoredQuery = (t.source && t.source.query) || t.title || ''
+          if (restoredQuery) setLiveQuery(restoredQuery)
+          if (t.survey) setSurveyPage(t.survey)
+          if (Array.isArray(t.answers) && t.survey) {
+            const map = {}
+            for (const entry of t.answers) {
+              const q = t.survey.questions.find((question) => question.id === entry.questionId)
+              map[entry.questionId] = q && q.multi ? entry.choices : entry.choices[0]
+            }
+            setAnswers(map)
+            if (t.plan) setPlanKey(JSON.stringify(t.answers))
+          }
+          if (t.plan) setPlanPage(t.plan)
+          setCompleted(t.status === 'done')
+          setLoading(null)
+          setStageKey(t.plan ? 'plan' : 'survey')
+          if (!t.survey) generateSurvey(resumeThreadId)
+        } catch (e) {
+          if (cancelledRef.current) return
+          setLoading(null)
+          setError({ step: 'start', code: e.code || 'internal', message: e.message, retryable: e.retryable !== false })
+        }
+        return
+      }
+      setLoading({ step: 'start', message: '쓰레드를 시작하고 있어요…' })
+      try {
+        const { threadId: id } = await startLiveThread({ query: liveQuery, title: liveQuery, profile: profileWire() })
+        if (cancelledRef.current) return
+        setThreadId(id)
+        generateSurvey(id)
+      } catch (e) {
+        if (cancelledRef.current) return
+        setLoading(null)
+        setError({ step: 'start', code: e.code || 'internal', message: e.message, retryable: e.retryable !== false })
+      }
+    }
+    run()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  /* 워크스페이스 쓰레드 기록 — Player와 같은 upsert 흐름, live 마커로 구분한다.
+     threadId(스노우플레이크)가 나온 뒤부터 단계 이동/답변/담기/완료마다 갱신 */
+  useEffect(() => {
+    if (!threadId) return
+    api.recordThread({
+      id: threadId,
+      live: true,
+      scenarioId: null,
+      title: liveQuery || 'AI 실시간 생성',
+      chip: 'AI',
+      color: null,
+      query: liveQuery,
+      stage: stageKey,
+      stageLabel: stageKey === 'plan' ? '계획' : '설문',
+      answers,
+      excludedProfile,
+      cart,
+      status: completed ? 'completed' : 'ongoing',
+      startedAt: startedAtRef.current,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threadId, stageKey, answers, excludedProfile, cart, completed])
+
+  const answerText = (q) => {
+    const a = answers[q.id]
+    if (a == null || (Array.isArray(a) && a.length === 0)) return '아무거나'
+    return Array.isArray(a) ? a.join(', ') : a
+  }
+
+  const toggleProfileItem = (label) => {
+    setExcludedProfile((prev) => (prev.includes(label) ? prev.filter((l) => l !== label) : [...prev, label]))
+  }
+
+  const playerApi = {
+    query: liveQuery,
+    setQuery: setLiveQuery,
+    submitQuery: () => {},
+    answers,
+    setAnswer: (itemId, value) => setAnswers((prev) => ({ ...prev, [itemId]: value })),
+    addToCart: (name) => {
+      setCart((prev) => [...prev, name])
+      api.showToast(`"${name}" 을(를) 쓰레드에 담았어요.`)
+      if (threadId) recordLiveEvent(threadId, 'cartAdd', { name })
+    },
+    complete: () => {
+      setCompleted(true)
+      if (threadId) recordLiveEvent(threadId, 'complete')
+      api.showToast('AI 생성 체험 완료! 홈으로 돌아갑니다. 🎉')
+      setTimeout(api.goHome, 900)
+    },
+    showKeyword: (word) => {
+      const hit = (api.keywords || []).find((k) => k.word === word)
+      setKeyword({ word, desc: hit?.desc, points: hit?.points })
+    },
+    openExternal: (label, rawUrl) => {
+      try {
+        const url = new URL(String(rawUrl || '').trim())
+        if (!['http:', 'https:'].includes(url.protocol)) throw new Error('unsupported protocol')
+        window.open(url.href, '_blank', 'noopener,noreferrer')
+        api.showToast(`${label}을(를) 새 탭에서 열었어요.`)
+      } catch {
+        api.showToast(`${label}의 링크 URL을 먼저 입력해주세요.`)
+      }
+    },
+    excludedProfile,
+    toggleProfileItem,
+    summary: {
+      profile: includedProfile,
+      questions: questions.map((q) => ({ q: q.question, a: answerText(q) })),
+    },
+  }
+
+  const surveyItems = useMemo(() => (surveyPage ? liveSurveyItems(surveyPage) : []), [surveyPage])
+  const planItems = useMemo(() => (planPage ? livePlanItems(planPage) : []), [planPage])
+  const allItems = stageKey === 'plan' ? planItems : surveyItems
+  const items = allItems.filter((it) => !it.parentId)
+
+  const stageIdx = STAGES.findIndex((s) => s.key === stageKey)
+  const viewer = DEVICE_PRESETS.find((d) => d.key === api.viewerDevice) || DEVICE_PRESETS[0]
+  const answeredCount = questions.filter((q) => answers[q.id] != null && String(answers[q.id]).length > 0).length
+  const planStale = planPage && planKey !== JSON.stringify(answersWire())
+
+  /* 설문 → 계획: 답이 그대로면 만든 계획을 다시 보여주고, 바뀌었으면 재생성한다 */
+  const goPlan = () => {
+    if (planPage && !planStale) {
+      setStageKey('plan')
+      window.scrollTo(0, 0)
+      return
+    }
+    generatePlan()
+  }
+
+  const goStage = (idx) => {
+    const target = STAGES[idx]
+    if (!target || target.key === stageKey || loading) return
+    if (target.key === 'plan') goPlan()
+    else {
+      setStageKey('survey')
+      window.scrollTo(0, 0)
+    }
+  }
+
+  const retry = () => {
+    if (!error) return
+    if (error.step === 'start') api.playLive(liveQuery)
+    else if (error.step === 'survey') generateSurvey(threadId)
+    else generatePlan()
+  }
+
+  const fallbacks = api.scenarios.filter((s) => s.status === 'published').slice(0, 3)
+
+  return (
+    <>
+      <BgBlobs />
+      <FloatingBar
+        onHome={api.goHome}
+        onMy={() => api.showToast('마이 페이지는 프로토타입에서 준비 중이에요.')}
+        onList={(origin) => setThreadOrigin((v) => (v ? null : origin || 'right'))}
+      />
+      <ViewerDeviceControl deviceKey={api.viewerDevice} onChange={api.setViewerDevice} />
+
+      {/* 단계 스테퍼 — 시나리오 플레이어와 같은 골격 */}
+      <nav className="sb-player-stepper" aria-label="라이브 생성 단계">
+        {STAGES.map((s, i) => (
+          <React.Fragment key={s.key}>
+            {i > 0 && <span className="sb-player-stepper__line" aria-hidden="true" />}
+            <button
+              type="button"
+              className={
+                'sb-player-stepper__step' +
+                (i === stageIdx ? ' sb-player-stepper__step--active' : '') +
+                (i < stageIdx ? ' sb-player-stepper__step--done' : '')
+              }
+              onClick={() => goStage(i)}
+            >
+              <span className="sb-player-stepper__dot">{i + 1}</span>
+              <span className="sb-player-stepper__label">{s.label}</span>
+            </button>
+          </React.Fragment>
+        ))}
+      </nav>
+
+      <section className="sb-player min-h-screen relative z-10">
+        <div className="sb-phone sb-phone--player" style={{ width: viewer.w }}>
+          <div className="sb-player__head">
+            <div className="sb-player__head-row">
+              {/* 상시 모드 배지 — 이 체험이 실시간 생성임을 저니 내내 보여준다 */}
+              <p className="sb-eyebrow sb-live-eyebrow">
+                <span className="sb-live-eyebrow__spark" aria-hidden="true">✦</span>
+                AI 실시간 생성{loading ? ' · 생성 중' : ''}
+              </p>
+              <button
+                type="button"
+                className="sb-player-restart"
+                title="같은 검색어로 새 쓰레드를 시작해 처음부터 다시 생성해요"
+                disabled={!liveQuery || !!loading}
+                onClick={() => api.playLive(liveQuery)}
+              >
+                ↺ 새로 생성
+              </button>
+            </div>
+            <h2>{liveQuery || 'AI 실시간 생성 체험'}</h2>
+            {stageKey === 'survey' && questions.length > 0 && !loading && !error && (
+              <div className="clean-survey-progress sb-player__progress" aria-label="설문 진행률">
+                <div className="clean-survey-progress__meta">
+                  <span>{answeredCount} / {questions.length}</span>
+                </div>
+                <div className="clean-survey-progress__track">
+                  <div
+                    className="clean-survey-progress__fill"
+                    style={{ width: `${questions.length ? (answeredCount / questions.length) * 100 : 0}%` }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {loading ? (
+            <LiveSkeleton message={loading.message} />
+          ) : error ? (
+            <LiveError error={error} onRetry={retry} fallbacks={fallbacks} onPlayScenario={api.playScenario} />
+          ) : (
+            <>
+              {stageKey === 'plan' && planStale && (
+                <div className="sb-live-stale">
+                  <span>설문 답변이 바뀌었어요. 이 계획은 이전 답변 기준이에요.</span>
+                  <button type="button" className="sb-btn sb-btn--ai sb-btn--tiny" onClick={generatePlan}>
+                    ✦ 계획 다시 생성
+                  </button>
+                </div>
+              )}
+              <div className="sb-player__stack">
+                {items.map((it) => (
+                  <div key={it.id} className="sb-player__item">
+                    {renderItem(it, { mode: 'player', player: playerApi, profile: api.profile, allItems })}
+                  </div>
+                ))}
+              </div>
+              <div className="clean-survey-nav sb-player__nav">
+                {stageKey === 'plan' ? (
+                  <button type="button" className="clean-survey-nav-btn clean-survey-nav-btn--ghost" onClick={() => goStage(0)}>
+                    이전 단계
+                  </button>
+                ) : (
+                  <button type="button" className="clean-survey-nav-btn clean-survey-nav-btn--ghost" onClick={api.goHome}>
+                    홈으로
+                  </button>
+                )}
+                {stageKey === 'plan' ? (
+                  <button type="button" className="clean-plan-submit" onClick={playerApi.complete}>
+                    체험 완료
+                  </button>
+                ) : (
+                  <button type="button" className="clean-plan-submit" onClick={goPlan} disabled={!surveyPage}>
+                    맞춤 계획 확인하기
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+
+          {cart.length > 0 && !loading && <p className="sb-player__cart">🧺 담은 상품 {cart.length}개</p>}
+        </div>
+      </section>
+
+      <ThreadPanel api={api} open={!!threadOrigin} origin={threadOrigin || 'right'} onClose={() => setThreadOrigin(null)} />
+
+      {/* 키워드 설명 모달 (Player와 동일한 원본 스타일) */}
+      {keyword && (
+        <div className="keyword-detail-modal" role="dialog" aria-modal="true">
+          <button
+            type="button"
+            className="keyword-detail-modal__backdrop"
+            aria-label="키워드 설명 닫기"
+            onClick={() => setKeyword(null)}
+          />
+          <article className="keyword-detail-card">
+            <div className="keyword-detail-card__head">
+              <span>Keyword</span>
+              <button type="button" className="keyword-detail-card__close" aria-label="닫기" onClick={() => setKeyword(null)}>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <h3>{keyword.word}</h3>
+            <p>{keyword.desc || '아직 설명이 등록되지 않은 키워드예요. 탐색 페이지 편집기의 "키워드 사전"에서 추가할 수 있어요.'}</p>
+            {keyword.points ? (
+              <ul>
+                {String(keyword.points).split(',').map((pt, i) => (
+                  <li key={i}>{pt.trim()}</li>
+                ))}
+              </ul>
+            ) : null}
+          </article>
+        </div>
+      )}
+    </>
+  )
+}

@@ -32,9 +32,13 @@ export default function ThreadPanel({ api, open, origin = 'right', onClose }) {
   }, [open])
   if (!open) return null
 
-  /* 쓰레드 이동: 새 쓰레드를 만들지 않고 기존 쓰레드를 이어서, 마지막 단계의 맨 위에서 연다 */
+  /* 쓰레드 이동: 새 쓰레드를 만들지 않고 기존 쓰레드를 이어서, 마지막 단계의 맨 위에서 연다.
+     라이브 쓰레드는 서버(BFF) 기록에서 생성된 설문·답변·계획을 복원한다 */
   const resume = (t) => {
-    if (api.scenarios.some((s) => s.id === t.scenarioId)) {
+    if (t.live) {
+      onClose()
+      api.resumeLive(t.id)
+    } else if (api.scenarios.some((s) => s.id === t.scenarioId)) {
       onClose()
       api.playScenario(t.scenarioId, { threadId: t.id, stage: t.stage })
     } else {
@@ -124,7 +128,11 @@ export default function ThreadPanel({ api, open, origin = 'right', onClose }) {
                           }}
                         >
                           <div className="flex items-center justify-between">
-                            <span className="text-[11px] font-bold text-gmarket-blue uppercase tracking-[0.16em]">#{t.chip}</span>
+                            {t.live ? (
+                              <span className="sb-thread-live-badge">✦ AI 실시간 생성</span>
+                            ) : (
+                              <span className="text-[11px] font-bold text-gmarket-blue uppercase tracking-[0.16em]">#{t.chip}</span>
+                            )}
                             <div className="flex items-center gap-2">
                               <span className="purpose-cart-count text-[10px] text-slate-400 font-bold">{timeAgo(t.updatedAt || t.startedAt)}</span>
                               <span className={'purpose-cart-chevron' + (isExpanded ? ' is-expanded' : '')} aria-hidden="true">

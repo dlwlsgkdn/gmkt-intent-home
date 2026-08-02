@@ -524,3 +524,98 @@
   color: var(--sb-ink);
 }
 
+
+/* ── 라이브 생성 체험 (LivePlayer) — 상시 배지 · 생성 대기 스켈레톤 · 실패 안내 ──
+   시나리오 체험과 "다르게 느껴지는" 것이 목적이라 로딩 연출은 라이브 전용이다 */
+.sb-live-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--sb-ai);
+}
+.sb-live-eyebrow__spark { color: var(--sb-ai); }
+
+.sb-live-loading {
+  padding: 8px 0 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.sb-live-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--sb-t-small);
+  font-weight: 400;
+  color: var(--sb-ai);
+}
+.sb-live-status__spark { animation: sb-live-spark 1.2s var(--sb-ease) infinite; }
+@keyframes sb-live-spark {
+  0%, 100% { opacity: 0.35; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+.sb-live-skel {
+  height: 72px;
+  border-radius: var(--sb-r-lg);
+  background: linear-gradient(100deg, var(--sb-n-100) 40%, var(--sb-n-50) 50%, var(--sb-n-100) 60%);
+  background-size: 200% 100%;
+  animation: sb-live-shimmer 1.4s linear infinite;
+}
+.sb-live-skel--title { height: 40px; width: 70%; }
+.sb-live-skel--tall { height: 140px; }
+@keyframes sb-live-shimmer {
+  to { background-position: -200% 0; }
+}
+
+/* 실패 안내 — 가짜 콘텐츠 없이 정직하게. 발행 칩 폴백은 사용자 클릭으로만 넘어간다 */
+.sb-live-error {
+  margin: 12px 0 24px;
+  padding: 20px;
+  border: 1px dashed var(--sb-n-300);
+  border-radius: var(--sb-r-xl);
+  background: var(--sb-n-0);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+.sb-live-error__title {
+  font-size: var(--sb-t-body);
+  font-weight: 500;
+  color: var(--sb-ink);
+}
+.sb-live-error__msg {
+  font-size: var(--sb-t-small);
+  line-height: 1.6;
+  color: var(--sb-muted);
+}
+.sb-live-error__fallback {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sb-live-error__fallback p {
+  font-size: var(--sb-t-micro);
+  color: var(--sb-subtle);
+}
+.sb-live-error__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* 답변 변경 뒤 계획이 이전 답 기준일 때의 안내 바 — 재생성은 명시적 버튼으로만 */
+.sb-live-stale {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--sb-ai-line);
+  border-radius: var(--sb-r-lg);
+  background: var(--sb-ai-soft);
+  font-size: var(--sb-t-micro);
+  color: var(--sb-ink-2);
+}

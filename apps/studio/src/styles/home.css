@@ -452,3 +452,20 @@
   transition: background-color var(--sb-dur) var(--sb-ease), border-color var(--sb-dur) var(--sb-ease);
 }
 .sb-starter-row > .sb-danger:hover { background: var(--sb-danger-soft); border-color: rgba(220, 38, 38, 0.4); }
+
+/* ── 라이브 생성 구분 표기 (홈·쓰레드 패널) — ✦ 는 라이브 생성 전용 기호 ── */
+/* 체험 선택 시트의 AI 옵션 강조 — 시나리오 옵션(기본 sb-json-option)과 색으로 갈린다 */
+.sb-json-option--ai {
+  border-color: var(--sb-ai-line);
+  background: var(--sb-ai-soft);
+}
+.sb-json-option--ai strong { color: var(--sb-ai); }
+.sb-json-option--ai:hover { border-color: var(--sb-ai); background: var(--sb-ai-soft); }
+
+/* 쓰레드 패널 카드의 라이브 배지 — 시나리오 쓰레드의 #칩 라벨 자리를 대신한다 */
+.sb-thread-live-badge {
+  font-size: var(--sb-t-micro);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--sb-ai);
+}

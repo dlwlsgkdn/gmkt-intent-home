@@ -15,6 +15,7 @@ export default function HomeView({ api }) {
   const [starterPanelOpen, setStarterPanelOpen] = useState(false)
   const [scenarioGenOpen, setScenarioGenOpen] = useState(false)
   const [threadOrigin, setThreadOrigin] = useState(null) // null=닫힘 | 'left'|'center'|'right'
+  const [liveChoice, setLiveChoice] = useState(null) // 검색어가 발행 칩과 매칭될 때의 체험 선택 시트: { query, hit }
   const [draggingChipId, setDraggingChipId] = useState(null)
   const [scenarioFilter, setScenarioFilter] = useState('')
   const importInputRef = useRef(null)
@@ -160,7 +161,8 @@ export default function HomeView({ api }) {
         style={{ color: c, borderColor: hexToRgba(c, 0.45), background: hexToRgba(c, 0.08) }}
         onPointerDown={(e) => onChipPointerDown(e, s.id)}
       >
-        <span className="sb-chip-scenario__spark">✦</span>#{s.chip}
+        {/* ✦ 는 라이브 생성 표기 전용이라 시나리오 칩에서는 뗐다 (기호 충돌 방지) */}
+        #{s.chip}
       </button>
     )
   })
@@ -169,6 +171,9 @@ export default function HomeView({ api }) {
   const allExploreItems = api.explore.items || []
   const exploreItems = allExploreItems.filter((it) => !it.hidden && !it.parentId)
 
+  /* 검색 진입 분기 — 칩 = 시나리오 체험, 자유 검색 = AI 라이브 생성 (BFF).
+     검색어가 발행 시나리오와 매칭되면 어느 쪽으로 체험할지 시트로 명시적으로 고르게 한다
+     — 자동으로 한쪽에 보내면 "지금 뭘 보는지"가 불투명해지기 때문 */
   const submit = () => {
     const q = query.trim()
     if (!q) return
@@ -179,11 +184,8 @@ export default function HomeView({ api }) {
       const fields = [s.title, s.chip, s.query].map(norm).filter(Boolean)
       return fields.some((f) => f.includes(nq) || nq.includes(f))
     })
-    if (hit) {
-      api.playScenario(hit.id)
-    } else {
-      api.showToast('일치하는 시나리오가 없어요. 스튜디오에서 새로 만들어보세요!')
-    }
+    if (hit) setLiveChoice({ query: q, hit })
+    else api.playLive(q)
   }
 
   /* 탐색 아이템에 공급하는 실행 컨텍스트 — 검색/칩/키워드만 실제 동작, 나머지는 목업 */
@@ -383,6 +385,53 @@ export default function HomeView({ api }) {
           onClose={() => setScenarioGenOpen(false)}
           onToast={api.showToast}
         />
+      )}
+
+      {/* 체험 선택 시트 — 같은 검색어로 AI 라이브 생성 / 발행 시나리오 중 고른다 */}
+      {liveChoice && (
+        <div
+          className="sb-llm-modal"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setLiveChoice(null)
+          }}
+        >
+          <section className="sb-llm-dialog sb-json-dialog" role="dialog" aria-modal="true" aria-labelledby="sb-live-choice-title">
+            <div className="sb-json-dialog__body">
+              <div className="sb-json-dialog__head">
+                <h2 id="sb-live-choice-title" className="sb-json-dialog__title">어떻게 체험할까요?</h2>
+                <button type="button" className="sb-icon-btn" onClick={() => setLiveChoice(null)} aria-label="닫기">×</button>
+              </div>
+              <p className="sb-json-dialog__note">
+                「{liveChoice.query}」 — 만들어진 시나리오와 겹치는 검색어예요. 두 가지 방식으로 체험할 수 있어요.
+              </p>
+              <div className="sb-json-dialog__options">
+                <button
+                  type="button"
+                  className="sb-json-option sb-json-option--ai"
+                  onClick={() => {
+                    setLiveChoice(null)
+                    api.playLive(liveChoice.query)
+                  }}
+                >
+                  <strong>✦ AI 실시간 생성</strong>
+                  <small>입력한 의도에 맞춰 설문과 계획을 지금 만들어요. 매번 결과가 달라요.</small>
+                </button>
+                <button
+                  type="button"
+                  className="sb-json-option"
+                  onClick={() => {
+                    setLiveChoice(null)
+                    api.playScenario(liveChoice.hit.id)
+                  }}
+                >
+                  <strong>#{liveChoice.hit.chip} — 만들어진 시나리오</strong>
+                  <small>스튜디오에서 만든 발행 시나리오로 체험해요. 언제나 같은 구성이에요.</small>
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
       )}
 
       {/* JSON 통합 입출력 — 내보내기는 범위 선택, 가져오기는 자동 감지 결과별 확인 */}

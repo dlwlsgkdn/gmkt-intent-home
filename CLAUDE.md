@@ -63,6 +63,8 @@ npm run db:migrate --workspace=apps/core    # 마이그레이션 SQL 순서 적�
   - `registry/support.jsx` 공용 렌더 도구 — kText() 텍스트 렌더러(키워드+부분 서식+인라인 편집 진입), ScrollTrack(드래그 스크롤), Img/parseCards/isEditView 등
   - `registry/exploreComponents.jsx` · `surveyComponents.jsx` · `planComponents.jsx` · `commonComponents.jsx` · `layoutComponents.jsx` 단계·카테고리별 컴포넌트 정의
   - LIBRARY를 알아야 하는 renderItem/ChildShell/childrenOf/libraryForStage는 배럴(registry.jsx)에 남는다 — 순환 참조 방지
+- `lib/liveApi.js` — **라이브 생성 체험 클라이언트** (BFF threads API, API.md §1): 디바이스 id(`ddak-device-id`)·쓰레드 시작·SSE 소비(fetch 스트림 — POST라 EventSource 불가)·행동 기록·이어보기. FE는 same-origin `/api/bff/*`만 부른다 (배포 = 루트 middleware.js, 로컬 = vite 프록시 → 8788)
+- `lib/livePage.js` — 라이브 와이어 페이지 → 스튜디오 아이템 투영: question→surveyQuestion(아이템 id = 와이어 질문 id — answers 왕복에 재매핑 없음), guide→planStep, products→hscroll+productCard(이모지 목업), steps→checklist. 새 렌더 계층을 만들지 않는다
 - `lib/richtext.jsx` — 인라인 리치텍스트 엔진: `{{옵션|텍스트}}`/`[[키워드]]` 마크업 ↔ contentEditable 변환, 서식 적용/병합, InlineEditor, FONT_OPTIONS/TEXT_COLORS
 - `lib/templates.js` — 새 시나리오 템플릿 (빈/뷰티 브리프/선물 추천)
 - `lib/prompt/` — **AI 왕복 계층**. 스튜디오는 LLM API를 호출하지 않는다: 모든 AI 기능이 "프롬프트 복사 → 쓰던 AI에 붙여넣기 → 결과 가져오기" 한 가지 왕복이다
@@ -88,6 +90,7 @@ npm run db:migrate --workspace=apps/core    # 마이그레이션 SQL 순서 적�
 - `components/ThreadPanel.jsx` — 쇼핑 쓰레드 히스토리 패널 (원본 history-sidebar 룩, 좌/우/중앙 등장, 아코디언 카드, 이어보기/삭제)
 - `components/StarterPanel.jsx` — 기본 시나리오 패널 (전역 라이브러리 목록·내리기 — 진입은 드로어 하단 도구 행의 ⭐ 버튼, 지정은 시나리오 행)
 - `components/Player.jsx` — 시나리오 실행(설문→계획 스테퍼). 기기 폭 반영, hidden 아이템 제외, 다시 시작, 응답/프로필 제외 상태를 ctx.player로 공급, **쓰레드 자동 기록**(체험 1회 = 쓰레드 1개)
+- `components/LivePlayer.jsx` — **라이브 생성 체험** (설문→계획을 BFF의 LLM이 실시간 생성). 진입은 홈 자유 검색(칩 = 시나리오 체험 — 매칭 겹치면 선택 시트로 명시 선택), `✦ AI 실시간 생성` 배지 상시, SSE status+스켈레톤 로딩(시나리오 체험엔 없는 연출 — 일부러 다르게 느껴지게), 실패는 정직한 안내(retryable 재시도 + 발행 칩 폴백은 사용자 클릭으로만), 답변 변경 시 계획은 자동 재생성하지 않고 안내 바의 버튼으로만. 워크스페이스 쓰레드에 `live: true`로 upsert — ThreadPanel이 ✦ 배지로 구분하고 이어보기는 `GET /api/bff/threads/:id` 복원. 렌더는 livePage 투영 + 레지스트리 재사용
 - `components/HomeView.jsx` — 홈. 발행 칩(색상/드래그 순서변경/클릭 실행), 좌상단 기기+프로필 컨트롤, 시나리오 드로어(템플릿·복제·**JSON 통합 입출력** — 내보내기는 범위 선택(시나리오 목록/전체 백업), 가져오기는 `classifyImportPayload` 자동 감지 후 동작별 확인 다이얼로그(추가/전체 교체). 빌더의 현재 시나리오 입출력은 별도), 쓰레드 패널
 - `components/ExploreFrame.jsx` — 구버전 설정 기반 탐색 렌더러 (explore.items가 없을 때의 안전망 전용)
 - `components/ExploreEditor.jsx` — 사용자 프로필 + 키워드 사전 편집기 (탐색 콘텐츠 편집은 빌더 "탐색" 탭으로 이동)
@@ -116,7 +119,7 @@ npm run db:migrate --workspace=apps/core    # 마이그레이션 SQL 순서 적�
 - **라벨 언어**: 스튜디오 크롬에 영문 아이브로우("영어 타이틀 + 한글 서브타이틀" 스택 — 예: 옛 `SCORING RUBRIC`/`STEP 1`) 금지. 패널·섹션 제목은 한글만, 왕복 단계 번호는 "n단계 · 스튜디오에서" 형식. 예외: `CASE A/B/C` 같은 식별자와 원본 프로토타입 CSS 영역(`keyword-detail-card` 등)
 - **포커스**: 개별 규칙에 `outline: none`을 쓰지 말 것. 전역 `[class^='sb-']:focus-visible` 규칙이 키보드 포커스 링을 담당한다
 - **버튼**: `.sb-btn` + 성격(`--primary`/`--ghost`/`--danger`/`--ai`/`--open`) + 크기(`--small`/`--tiny`). hover·active·disabled는 기본 정의에만 있다. AI를 부르는 버튼은 전부 `--ai`
-- **AI 왕복 표기 규칙**: AI 기능은 "누르면 만들어진다"고 약속하지 않는다. 트리거는 `✦`(생성)가 아니라 **`⇄`(왕복)** 를 쓰고 라벨에 "프롬프트"를 넣는다. 다이얼로그는 머리말에 `AiRoundTripNote`를 두고, `PromptExchange`가 1 복사 → 2 **스튜디오 밖에서** 붙여넣기 → 3 결과 가져오기를 항상 펼쳐 보인다. 번호는 이 왕복(`.sb-handoff`)에만 쓰고 다이얼로그 단계(`.sb-steps`)는 번호 없는 breadcrumb이다. 성격이 비슷한 AI 기능을 나란히 버튼으로 두지 말 것 — 진입점을 하나로 합치고 선택 카드(`AiFixChooser` 참고)에서 "무엇을 고치고 싶은지" 예시 문장으로 가른다
+- **AI 왕복 표기 규칙**: AI 기능은 "누르면 만들어진다"고 약속하지 않는다. 트리거는 `✦`(생성)가 아니라 **`⇄`(왕복)** 를 쓰고 라벨에 "프롬프트"를 넣는다. 다이얼로그는 머리말에 `AiRoundTripNote`를 두고, `PromptExchange`가 1 복사 → 2 **스튜디오 밖에서** 붙여넣기 → 3 결과 가져오기를 항상 펼쳐 보인다. 번호는 이 왕복(`.sb-handoff`)에만 쓰고 다이얼로그 단계(`.sb-steps`)는 번호 없는 breadcrumb이다. 성격이 비슷한 AI 기능을 나란히 버튼으로 두지 말 것 — 진입점을 하나로 합치고 선택 카드(`AiFixChooser` 참고)에서 "무엇을 고치고 싶은지" 예시 문장으로 가른다. **`✦`(생성)는 라이브 생성 체험 전용이다** — 진짜로 눌러서 만들어지는 곳(LivePlayer 배지·선택 시트·쓰레드 라이브 배지)에만 쓰고, 시나리오 칩·스튜디오 왕복 기능에는 쓰지 않는다 (시나리오 칩의 옛 스파크는 이 이유로 뗐다)
 
 ## 핵심 설계 결정
 

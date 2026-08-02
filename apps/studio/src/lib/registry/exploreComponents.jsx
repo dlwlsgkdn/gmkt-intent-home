@@ -95,8 +95,9 @@ export const EXPLORE_COMPONENTS = {
         {ctx.chips && ctx.chips.length > 0 ? (
           ctx.chips
         ) : (
+          // ✦ 는 라이브 생성 표기 전용 — 시나리오 칩 자리표시자에서도 쓰지 않는다
           <span className="suggestion-tag sb-chip-scenario sb-chip-scenario--sample">
-            <span className="sb-chip-scenario__spark">✦</span>#발행된_시나리오_칩_자리
+            #발행된_시나리오_칩_자리
           </span>
         )}
       </div>
