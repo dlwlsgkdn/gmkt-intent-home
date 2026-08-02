@@ -1,14 +1,45 @@
 import { Body, Controller, Get, Headers, Logger, Param, ParseUUIDPipe, Post, Query, Res } from '@nestjs/common'
-import { ThreadEventBody, PlanRequestBody, StartThreadBody, SurveyRequestBody } from '@ddak/schema'
+import {
+  ApiBody,
+  ApiCreatedResponse,
+  ApiHeader,
+  ApiOkResponse,
+  ApiOperation,
+  ApiParam,
+  ApiProduces,
+  ApiQuery,
+  ApiTags,
+} from '@nestjs/swagger'
+import {
+  PlanRequestBody,
+  StartThreadBody,
+  StartThreadResult,
+  SurveyRequestBody,
+  ThreadEventBody,
+  ThreadListPage,
+  ThreadResumeWire,
+} from '@ddak/schema'
 import { ZodValidationPipe } from '../common/zod-validation.pipe'
+import { toOpenApi } from '../common/openapi'
 import { LlmGenerationError } from '../llm/llm.service'
 import { ThreadsService } from './threads.service'
 import { openSse, sseClose, sseSend, type SseRes } from './sse'
 
+const SSE_DESC =
+  'SSE 스트림(text/event-stream)으로 응답한다: `event: status`(진행 문구) → `event: result`(완성 페이지) 또는 ' +
+  '`event: error`(실패 안내 `{ code, message, retryable }` — llm_not_configured|llm_refused|llm_failed|internal).'
+
+const DEVICE_HEADER = {
+  name: 'x-device-id',
+  required: false,
+  description: '익명 디바이스 id (없으면 anonymous)',
+} as const
+
 /*
- * threads API — FE 대상 (DESIGN-LLM-SERVICE.md §4-1).
+ * threads API — FE 대상 (DESIGN-LLM-SERVICE.md §4-1, 계약은 @ddak/schema).
  * 사용자 식별은 x-device-id 헤더 (익명 디바이스 id). 설문·계획 생성은 SSE.
  */
+@ApiTags('threads')
 @Controller('api/threads')
 export class ThreadsController {
   private readonly logger = new Logger(ThreadsController.name)
@@ -16,6 +47,10 @@ export class ThreadsController {
   constructor(private readonly threads: ThreadsService) {}
 
   @Post()
+  @ApiOperation({ summary: '쓰레드 시작', description: '쓰레드 생성 + 탐색 스텝(의도·프로필) 기록.' })
+  @ApiHeader(DEVICE_HEADER)
+  @ApiBody({ schema: toOpenApi(StartThreadBody) })
+  @ApiCreatedResponse({ schema: toOpenApi(StartThreadResult) })
   start(
     @Headers('x-device-id') deviceId: string | undefined,
     @Body(new ZodValidationPipe(StartThreadBody)) body: StartThreadBody,
@@ -24,6 +59,14 @@ export class ThreadsController {
   }
 
   @Post(':id/survey')
+  @ApiOperation({
+    summary: '설문 페이지 생성 (LLM #1, SSE)',
+    description: `result.page = SurveyPageWire. ${SSE_DESC}`,
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiBody({ schema: toOpenApi(SurveyRequestBody) })
+  @ApiProduces('text/event-stream')
+  @ApiOkResponse({ description: 'SSE 스트림 — result.page: SurveyPageWire' })
   async survey(
     @Param('id', ParseUUIDPipe) id: string,
     @Body(new ZodValidationPipe(SurveyRequestBody)) body: SurveyRequestBody,
@@ -41,6 +84,14 @@ export class ThreadsController {
   }
 
   @Post(':id/plan')
+  @ApiOperation({
+    summary: '응답 제출 → 계획 페이지 생성 (LLM #2, SSE)',
+    description: `카탈로그 그라운딩 — 상품 id는 허용 목록 검증을 거친다. result.page = PlanPageWire. ${SSE_DESC}`,
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiBody({ schema: toOpenApi(PlanRequestBody) })
+  @ApiProduces('text/event-stream')
+  @ApiOkResponse({ description: 'SSE 스트림 — result.page: PlanPageWire' })
   async plan(
     @Param('id', ParseUUIDPipe) id: string,
     @Body(new ZodValidationPipe(PlanRequestBody)) body: PlanRequestBody,
@@ -76,6 +127,10 @@ export class ThreadsController {
   }
 
   @Post(':id/events')
+  @ApiOperation({ summary: '행동 기록', description: '담기/완료 등. type이 complete면 status=done.' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiBody({ schema: toOpenApi(ThreadEventBody) })
+  @ApiCreatedResponse({ schema: { type: 'object', properties: { ok: { type: 'boolean' } } } })
   events(
     @Param('id', ParseUUIDPipe) id: string,
     @Body(new ZodValidationPipe(ThreadEventBody)) body: ThreadEventBody,
@@ -84,11 +139,19 @@ export class ThreadsController {
   }
 
   @Get(':id')
+  @ApiOperation({ summary: '이어보기', description: '단계별 페이지(survey/answers/plan)를 복원한다.' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiOkResponse({ schema: toOpenApi(ThreadResumeWire) })
   get(@Param('id', ParseUUIDPipe) id: string) {
     return this.threads.get(id)
   }
 
   @Get()
+  @ApiOperation({ summary: '쓰레드 목록', description: '히스토리 패널용 — updatedAt 키셋 커서.' })
+  @ApiHeader(DEVICE_HEADER)
+  @ApiQuery({ name: 'cursor', required: false, description: '이전 응답의 nextCursor' })
+  @ApiQuery({ name: 'limit', required: false, type: 'integer', example: 20 })
+  @ApiOkResponse({ schema: toOpenApi(ThreadListPage) })
   list(
     @Headers('x-device-id') deviceId: string | undefined,
     @Query('cursor') cursor?: string,

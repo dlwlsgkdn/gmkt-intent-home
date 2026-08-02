@@ -1,13 +1,21 @@
-import { Controller, Get, Module } from '@nestjs/common'
+import { Controller, Get, Module, Redirect } from '@nestjs/common'
+import { ApiExcludeEndpoint, ApiOperation, ApiTags } from '@nestjs/swagger'
 import { CoreClientService } from './core-client.service'
 import { LlmService } from './llm/llm.service'
 import { ThreadsController } from './threads/threads.controller'
 import { ThreadsService } from './threads/threads.service'
 
-/** 헬스체크 — 배포 확인·모니터링용 */
+@ApiTags('app')
 @Controller()
 export class AppController {
+  /** 루트 → API 문서 (API_DOCS=0이면 /docs가 404지만, 문서를 끈 배포에선 루트 접근도 무의미) */
+  @Get()
+  @ApiExcludeEndpoint()
+  @Redirect('/docs', 302)
+  root() {}
+
   @Get('healthz')
+  @ApiOperation({ summary: '상태 확인', description: 'llm: configured|not_configured, core: configured|missing' })
   healthz() {
     return {
       ok: true,

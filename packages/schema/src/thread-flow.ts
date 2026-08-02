@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ThreadSource, ThreadStatus } from './thread'
 
 /*
  * 쓰레드 플로우 계약 — FE ↔ BFF (threads API). 공식 용어는 thread 하나다:
@@ -90,3 +91,20 @@ export const PlanPageWire = z.object({
   sections: z.array(PlanSectionWire).min(1),
 })
 export type PlanPageWire = z.infer<typeof PlanPageWire>
+
+/** 쓰레드 시작 응답 */
+export const StartThreadResult = z.object({ threadId: z.string().uuid() })
+export type StartThreadResult = z.infer<typeof StartThreadResult>
+
+/** 이어보기 응답 — 단계별 페이지를 FE가 복원하기 좋은 형태로 */
+export const ThreadResumeWire = z.object({
+  threadId: z.string().uuid(),
+  title: z.string().nullable(),
+  status: ThreadStatus,
+  source: ThreadSource.nullable(),
+  survey: SurveyPageWire.nullable(),
+  answers: z.array(Answer).nullable(),
+  plan: PlanPageWire.nullable(),
+  updatedAt: z.string(),
+})
+export type ThreadResumeWire = z.infer<typeof ThreadResumeWire>
