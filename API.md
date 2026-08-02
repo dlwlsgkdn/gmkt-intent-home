@@ -9,6 +9,23 @@ FE ──(공개, x-device-id)──▶ BFF(ddak-bff) ──(Bearer 서비스 �
                                  └──▶ Claude API (claude-opus-5, 구조화 출력)
 ```
 
+## 0. 용어 정리
+
+**저니(journey)와 쓰레드(thread)는 같은 것의 두 층위다 — 저니는 진행 중인 과정, 쓰레드는 그 과정의
+영속 기록.** 관계는 1:1이고 식별자는 `threadId` 하나를 공유한다(저니에 별도 id를 만들지 않아
+"저니 1회 = 쓰레드 1개"를 계약 수준에서 강제). API 경계가 곧 용어 경계다:
+**FE·BFF는 journey 언어**(시작·생성·제출·이어보기 — `/api/journeys/*`),
+**core는 thread 언어**(저장·조회 — `/internal/threads/*`)로 말한다.
+
+| 용어 | 뜻 |
+|---|---|
+| **저니(journey)** | 사용자가 지금 겪는 과정 — 탐색→설문→계획→행동. 일시적, BFF·FE 소유 |
+| **쓰레드(thread)** | 저니의 영속 기록(행 + 스텝 로그). 이어보기·히스토리의 원천, core 소유. 스튜디오의 "쇼핑 쓰레드 히스토리"(체험 1회=쓰레드 1개)에서 온 개념 |
+| **스텝(step)/스테이지(stage)** | 쓰레드에 쌓이는 사건 단위 — seq 규약(§2)이 저니 진행을 이벤트 소싱 로그로 만든다 |
+| **페이지(page)** | 한 단계의 화면 콘텐츠(`SurveyPageWire`·`PlanPageWire`) — 스텝 payload에 저장 |
+| **의도(intent)** | 저니를 시작시킨 것 — 칩 또는 검색어. 쓰레드에는 `source`로 기록 |
+| **llmMeta** | 생성 스텝(2·4)에 붙는 LLM 호출 메타 — 모델·프롬프트 버전·토큰·지연·폴백 여부 |
+
 ## 1. BFF — journeys API (FE 대상, 공개)
 
 Base: `https://ddak-bff.vercel.app` · 사용자 식별: **`x-device-id` 헤더**(익명 디바이스 id, 없으면 `anonymous`) · 별도 인증 없음(v1)
