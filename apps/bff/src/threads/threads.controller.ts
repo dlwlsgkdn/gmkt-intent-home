@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Logger, Param, ParseUUIDPipe, Post, Query, Res, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Headers, Logger, Param, Post, Query, Res, UseGuards } from '@nestjs/common'
 import {
   ApiBearerAuth,
   ApiBody,
@@ -23,6 +23,7 @@ import {
 } from '@ddak/schema'
 import { ServiceTokenGuard } from '../common/service-token.guard'
 import { ZodValidationPipe } from '../common/zod-validation.pipe'
+import { ParseThreadIdPipe } from '../common/thread-id.pipe'
 import { toOpenApi } from '../common/openapi'
 import { LlmGenerationError } from '../llm/llm.service'
 import { ThreadsService } from './threads.service'
@@ -36,6 +37,12 @@ const DEVICE_HEADER = {
   name: 'x-device-id',
   required: false,
   description: '익명 디바이스 id (없으면 anonymous)',
+} as const
+
+const THREAD_ID_PARAM = {
+  name: 'id',
+  description: '스노우플레이크 threadId (19자리 십진 문자열 — 쓰레드 시작 응답의 threadId)',
+  example: '2195943212345678901',
 } as const
 
 /*
@@ -71,12 +78,12 @@ export class ThreadsController {
     summary: '설문 페이지 생성 (LLM #1, SSE)',
     description: `result.page = SurveyPageWire. ${SSE_DESC}`,
   })
-  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiParam(THREAD_ID_PARAM)
   @ApiBody({ schema: toOpenApi(SurveyRequestBody) })
   @ApiProduces('text/event-stream')
   @ApiOkResponse({ description: 'SSE 스트림 — result.page: SurveyPageWire' })
   async survey(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id', ParseThreadIdPipe) id: string,
     @Body(new ZodValidationPipe(SurveyRequestBody)) body: SurveyRequestBody,
     @Res() res: SseRes,
   ) {
@@ -96,12 +103,12 @@ export class ThreadsController {
     summary: '응답 제출 → 계획 페이지 생성 (LLM #2, SSE)',
     description: `카탈로그 그라운딩 — 상품 id는 허용 목록 검증을 거친다. result.page = PlanPageWire. ${SSE_DESC}`,
   })
-  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiParam(THREAD_ID_PARAM)
   @ApiBody({ schema: toOpenApi(PlanRequestBody) })
   @ApiProduces('text/event-stream')
   @ApiOkResponse({ description: 'SSE 스트림 — result.page: PlanPageWire' })
   async plan(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id', ParseThreadIdPipe) id: string,
     @Body(new ZodValidationPipe(PlanRequestBody)) body: PlanRequestBody,
     @Res() res: SseRes,
   ) {
@@ -136,11 +143,11 @@ export class ThreadsController {
 
   @Post(':id/events')
   @ApiOperation({ summary: '행동 기록', description: '담기/완료 등. type이 complete면 status=done.' })
-  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiParam(THREAD_ID_PARAM)
   @ApiBody({ schema: toOpenApi(ThreadEventBody) })
   @ApiCreatedResponse({ schema: { type: 'object', properties: { ok: { type: 'boolean' } } } })
   events(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id', ParseThreadIdPipe) id: string,
     @Body(new ZodValidationPipe(ThreadEventBody)) body: ThreadEventBody,
   ) {
     return this.threads.recordEvent(id, body)
@@ -148,9 +155,9 @@ export class ThreadsController {
 
   @Get(':id')
   @ApiOperation({ summary: '이어보기', description: '단계별 페이지(survey/answers/plan)를 복원한다.' })
-  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiParam(THREAD_ID_PARAM)
   @ApiOkResponse({ schema: toOpenApi(ThreadResumeWire) })
-  get(@Param('id', ParseUUIDPipe) id: string) {
+  get(@Param('id', ParseThreadIdPipe) id: string) {
     return this.threads.get(id)
   }
 

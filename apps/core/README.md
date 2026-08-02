@@ -26,11 +26,23 @@ npm run db:generate --workspace=apps/core   # src/db/schema.ts → drizzle/ SQL 
 npm run db:push --workspace=apps/core       # 개발 DB에 스키마 반영 (DATABASE_URL 필요)
 ```
 
+> `0001` 마이그레이션은 threadId를 uuid → **스노우플레이크(text 19자리)** 로 바꾸며 테이블을
+> 재생성한다(기존 쓰레드 데이터 삭제 — uuid 값은 19자리 숫자 계약에 안 맞는다). `db:push`도
+> 같은 이유로 테이블 truncate/재생성을 확인받는다.
+
+## threadId — 스노우플레이크
+
+쓰레드 생성 시 core가 발급한다 (`src/common/snowflake.ts`): 64비트 = 41b ms 타임스탬프 | 10b 워커 |
+12b 시퀀스. 에포크(2010-01-01) 덕에 **항상 19자리 십진 문자열**(2079년경까지)이라 문자열 사전순
+정렬 = 생성 시각순 — DB(text)·와이어(JSON) 모두 문자열 하나로 다루고 변환 계층이 없다.
+워커 id는 `SNOWFLAKE_WORKER_ID`(0~1023)로 고정 가능 — 비우면 인스턴스마다 무작위 배정
+(서버리스 콜드스타트 대응).
+
 ## internal API (BFF 전용 — `Authorization: Bearer <CORE_SERVICE_TOKEN>`)
 
 | 메서드 | 경로 | 역할 |
 |---|---|---|
-| POST | `/internal/threads` | 쓰레드 생성 |
+| POST | `/internal/threads` | 쓰레드 생성 — threadId(스노우플레이크) 발급 |
 | PATCH | `/internal/threads/:id` | title/status 갱신 |
 | PUT | `/internal/threads/:id/steps/:seq` | 스텝 멱등 upsert |
 | GET | `/internal/threads/:id` | 쓰레드 + 스텝 전체 (이어보기) |

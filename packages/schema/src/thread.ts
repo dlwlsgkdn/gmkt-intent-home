@@ -5,6 +5,15 @@ import { z } from 'zod'
  * DESIGN-LLM-SERVICE.md §2-2 참고. 필드는 스튜디오 recordThread 레코드와 정합을 유지한다.
  */
 
+/**
+ * threadId — core가 발급하는 스노우플레이크 id (64비트: 41b 타임스탬프 | 10b 워커 | 12b 시퀀스).
+ * 분산 유니크 + 생성 시각순 정렬. 에포크(2010-01-01) 덕에 **항상 19자리 십진 문자열**이라
+ * (2079년경까지) 문자열 사전순 정렬 = 시간순이다. 저장·와이어 모두 문자열로 다룬다.
+ */
+export const THREAD_ID_PATTERN = /^\d{19}$/
+export const ThreadId = z.string().regex(THREAD_ID_PATTERN, 'threadId는 19자리 스노우플레이크 숫자 문자열입니다')
+export type ThreadId = z.infer<typeof ThreadId>
+
 /** 쓰레드 상태: 탐색 → 설문 → 계획 → 완료 (이탈은 abandoned) */
 export const ThreadStatus = z.enum(['exploring', 'surveying', 'planning', 'done', 'abandoned'])
 export type ThreadStatus = z.infer<typeof ThreadStatus>
@@ -66,7 +75,7 @@ export type UpsertStepBody = z.infer<typeof UpsertStepBody>
 /* ── internal API 응답 (와이어 형식 — 날짜는 ISO 문자열) ─────────────── */
 
 export const Thread = z.object({
-  id: z.string().uuid(),
+  id: ThreadId,
   userId: z.string(),
   title: z.string().nullable(),
   source: ThreadSource.nullable(),
@@ -78,7 +87,7 @@ export type Thread = z.infer<typeof Thread>
 
 export const ThreadStep = z.object({
   id: z.string().uuid(),
-  threadId: z.string().uuid(),
+  threadId: ThreadId,
   seq: z.number().int(),
   stage: StepStage,
   payload: z.record(z.string(), z.unknown()),

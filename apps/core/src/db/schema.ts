@@ -9,7 +9,8 @@ import type { LlmMeta, StepStage, ThreadSource, ThreadStatus } from '@ddak/schem
 export const threads = pgTable(
   'threads',
   {
-    id: uuid('id').primaryKey().defaultRandom(),
+    /** 스노우플레이크 (common/snowflake.ts — 앱이 생성, DB default 없음). 19자리 고정이라 text 정렬 = 생성 시각순 */
+    id: text('id').primaryKey(),
     /** 익명 디바이스 id 또는 로그인 사용자 id — 불투명 문자열 */
     userId: text('user_id').notNull(),
     title: text('title'),
@@ -25,7 +26,7 @@ export const threadSteps = pgTable(
   'thread_steps',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    threadId: uuid('thread_id')
+    threadId: text('thread_id')
       .notNull()
       .references(() => threads.id, { onDelete: 'cascade' }),
     /** BFF가 부여하는 순번 — (thread_id, seq) 유니크가 멱등 upsert 키 */

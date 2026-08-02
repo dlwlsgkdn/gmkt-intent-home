@@ -3,6 +3,7 @@ import { and, asc, desc, eq, lt } from 'drizzle-orm'
 import type { CreateThreadBody, ThreadStatus, UpdateThreadBody, UpsertStepBody } from '@ddak/schema'
 import { DB, type DbOrNull } from '../db/db.module'
 import type { Db } from '../db/client'
+import { snowflake } from '../common/snowflake'
 import { threadSteps, threads } from '../db/schema'
 
 const FK_VIOLATION = '23503'
@@ -16,10 +17,12 @@ export class ThreadsService {
     return this.db
   }
 
+  /** 쓰레드 생성 — threadId는 여기서 스노우플레이크로 발급한다 (분산 유니크·시간순 정렬) */
   async create(body: CreateThreadBody) {
     const [row] = await this.conn()
       .insert(threads)
       .values({
+        id: snowflake.next(),
         userId: body.userId,
         title: body.title ?? null,
         source: body.source ?? null,

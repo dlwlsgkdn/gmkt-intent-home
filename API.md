@@ -29,6 +29,10 @@ FE ──(공개, x-device-id)──▶ BFF(ddak-bff) ──(Bearer 서비스 �
 
 Base: `https://ddak-bff.vercel.app` · 사용자 식별: **`x-device-id` 헤더**(익명 디바이스 id, 없으면 `anonymous`) · 별도 인증 없음(v1)
 
+`threadId`는 쓰레드 시작 시 **core가 발급하는 스노우플레이크 id**(64비트: 41b 타임스탬프|10b 워커|12b 시퀀스)다.
+에포크(2010-01-01) 덕에 **항상 19자리 십진 문자열**(예: `"2195943212345678901"`)이라 문자열 사전순 정렬 =
+생성 시각순이며, 분산 유니크가 보장된다. 저장·와이어 모두 문자열로 다룬다.
+
 | 메서드 | 경로 | 역할 | 요청 본문 | 응답 |
 |---|---|---|---|---|
 | POST | `/api/threads` | 쓰레드 시작 — 생성 + 탐색 스텝 기록 | `StartThreadBody` `{ chipId?\|query, title?, profile? }` | `{ threadId }` |
@@ -75,7 +79,7 @@ Base: `https://ddak-core.vercel.app` · 인증: **`Authorization: Bearer <CORE_S
 
 | 메서드 | 경로 | 역할 |
 |---|---|---|
-| POST | `/internal/threads` | 쓰레드 생성 (`CreateThreadBody`) |
+| POST | `/internal/threads` | 쓰레드 생성 (`CreateThreadBody`) — **threadId(스노우플레이크) 발급** |
 | PATCH | `/internal/threads/:id` | title/status 갱신 (`UpdateThreadBody`) |
 | PUT | `/internal/threads/:id/steps/:seq` | **스텝 멱등 upsert** (`UpsertStepBody`) — (thread_id, seq)가 멱등 키 |
 | GET | `/internal/threads/:id` | 쓰레드 + 스텝 전체 (`ThreadWithSteps`) |

@@ -76,13 +76,14 @@ export const PlanPage = z.object({
 
 ```sql
 threads (
-  id uuid PK, user_id uuid, title text,
+  id text PK,            -- 스노우플레이크(core 발급): 41b 타임스탬프|10b 워커|12b 시퀀스, 19자리 고정
+  user_id text, title text,
   source jsonb,          -- { kind: 'chip'|'search', chipId?, query? }
   status text,           -- exploring | surveying | planning | done | abandoned
   created_at, updated_at
 )
 thread_steps (
-  id uuid PK, thread_id FK, seq int,
+  id uuid PK, thread_id text FK, seq int,
   stage text,            -- explore | survey | answers | plan | action
   payload jsonb,         -- 설문 정의 / 응답 / 계획 페이지 / 담기·완료 이벤트
   llm_meta jsonb,        -- { model, prompt_version, usage{input,output,cache_read}, latency_ms, fallback? }
@@ -91,6 +92,15 @@ thread_steps (
 )
 ```
 
+- **threadId는 core가 스노우플레이크로 발급한다** (2026-08 확정, `apps/core/src/common/snowflake.ts`):
+  검색어 입력(쓰레드 시작) 시 `POST /internal/threads`가 id를 만들어 응답하고, 이후 설문·계획 생성과
+  스텝 기록이 전부 이 id로 이어진다. 에포크를 2010-01-01로 둬 **항상 19자리 십진 문자열**(2079년경까지)
+  — 길이가 고정이라 문자열 사전순 정렬 = 생성 시각순이고, 저장(text)·와이어(JSON) 모두 문자열
+  하나로 다룬다(변환 계층 없음). 분산 유니크는 워커 id로 확보 — `SNOWFLAKE_WORKER_ID`(0~1023)로
+  고정하거나 서버리스에선 콜드스타트마다 무작위 배정.
+- **단계 도착 = 상태 저장**: 각 단계에 도착할 때마다 쓰레드 모델에 현재상태를 남긴다 —
+  시작 시 `status=exploring`+explore 스텝, 설문 생성 시 `surveying`+survey 스텝,
+  계획 생성 시 `planning`+answers·plan 스텝, 완료 이벤트 시 `done`+action 스텝.
 - payload를 jsonb로 두는 이유: 스키마 진화가 빠른 초기라 정규화 최소화. 조회는 쓰레드 단위 aggregate.
 - `llm_meta`는 비용·품질 대시보드의 원천 — 토큰·레이턴시·프롬프트 버전을 항상 기록.
 
