@@ -82,7 +82,8 @@ export function normalizeItems(list) {
     return rest
   }
   const dirty = legacy || arr.some((item) => 'x' in item || 'y' in item || (!item.parentId && ('w' in item || 'h' in item)))
-  if (!dirty) return arr.length === list.length ? list : arr
+  // list가 배열이 아니면(셸 행의 stages.survey 등 필드 부재) 빈 배열로 — undefined.length 금지
+  if (!dirty) return Array.isArray(list) && arr.length === list.length ? list : arr
   return [...orderedTop.map((item) => strip(item, false)), ...children.map((item) => strip(item, true))]
 }
 

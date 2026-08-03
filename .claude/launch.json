@@ -12,6 +12,15 @@
       "autoPort": true
     },
     {
+      "name": "scenario-studio-prodapi",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": [
+        "-c",
+        "VITE_DATA_PROFILE=prod PATH=/Users/jinhalee/.nvm/versions/node/v24.5.0/bin:/opt/homebrew/bin:$PATH node node_modules/vite/bin/vite.js apps/studio --port 5175 --strictPort"
+      ],
+      "port": 5175
+    },
+    {
       "name": "scenario-studio-mockdb",
       "runtimeExecutable": "/bin/sh",
       "runtimeArgs": [
