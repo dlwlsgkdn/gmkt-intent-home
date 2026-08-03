@@ -218,13 +218,14 @@ export class ThreadsService {
   }
 
   /** 상품 섹션 그라운딩 검증 — 카탈로그 밖 id는 버리고, 웹 상품은 URL(http/https+PDP) 검증 통과분만 채택.
+   * 상세 페이지(url) 없는 상품은 카탈로그 상품이라도 추천하지 않는다 — 상세보기가 열리는 상품만 싣는다.
    * 상품이 하나도 안 남으면 null(드롭). 결정적이라 스트림 조각과 최종 결과가 일치한다 (§4-3) */
   private resolveProductsSection(s: ProductsSectionGen, sectionIndex: number): PlanSectionWire | null {
     const products: CatalogProduct[] = s.productIds
       .map((id) => CATALOG_BY_ID.get(id))
-      .filter((p): p is NonNullable<ReturnType<typeof CATALOG_BY_ID.get>> => Boolean(p))
+      .filter((p): p is NonNullable<ReturnType<typeof CATALOG_BY_ID.get>> => Boolean(p && p.url))
     if (products.length < s.productIds.length) {
-      this.logger.warn(`카탈로그 밖 상품 id ${s.productIds.length - products.length}건 드롭`)
+      this.logger.warn(`카탈로그 밖이거나 PDP url 없는 상품 id ${s.productIds.length - products.length}건 드롭`)
     }
     s.webProducts.forEach((w, webIndex) => {
       const url = parseHttpUrl(w.url)

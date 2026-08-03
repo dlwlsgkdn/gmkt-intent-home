@@ -211,6 +211,8 @@ const page = response.parsed_output
    (name·brand·price·mall·url), BFF가 **url 검증(http/https + PDP만 — /search·category
    경로나 검색어 쿼리 키가 보이면 검색/목록 페이지로 판정해 드롭)** 통과분만 `web-*` id로
    wire products에 병합한다 — url을 지어낸 상품은 드롭. 카탈로그 id 검증(3)은 그대로.
+   **카탈로그 상품도 전부 지마켓 PDP url을 보유**(2026-08 리서치)하며, url 없는 상품은
+   카탈로그라도 추천에서 제외한다 — 상세보기가 열리는 상품만 싣는다는 불변식.
    서버 도구 루프가 `pause_turn`으로 멈추면 어시스턴트 턴을 이어붙여 최대 3회 재개한다
 
 ### 4-4. 검증 파이프라인
