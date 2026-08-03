@@ -3,6 +3,7 @@ import { STAGES, DEVICE_PRESETS, resolvePlanCase, uid, visibleProfileItems } fro
 import { renderItem } from '../lib/registry.jsx'
 import { BgBlobs, FloatingBar, StudioFab, ViewerDeviceControl } from './Frame.jsx'
 import ThreadPanel from './ThreadPanel.jsx'
+import ProductDetailPanel from './ProductDetailPanel.jsx'
 
 function defaultAnswersFor(scenario) {
   return Object.fromEntries(
@@ -35,6 +36,7 @@ export default function Player({ api, scenario, resume }) {
     resumeThread ? [...(resumeThread.excludedProfile || [])] : []
   ) // 이번 회차에서 뺀 프로필 항목
   const [keyword, setKeyword] = useState(null) // 점선 밑줄 키워드 클릭 → 설명 모달
+  const [productDetail, setProductDetail] = useState(null) // 상품 상세보기 사이드 패널 (null=닫힘)
   const [completed, setCompleted] = useState(() => (resumeThread ? resumeThread.status === 'completed' : false))
   const [threadOrigin, setThreadOrigin] = useState(null) // 쓰레드 히스토리 패널 (null=닫힘)
 
@@ -164,6 +166,16 @@ export default function Player({ api, scenario, resume }) {
         api.showToast(`${label}의 링크 URL을 먼저 입력해주세요.`)
       }
     },
+    /* 상품 상세보기 — 외부몰 페이지를 사이드 패널 iframe으로 (http(s) URL만) */
+    openProduct: ({ name, mall, url: rawUrl }) => {
+      try {
+        const url = new URL(String(rawUrl || '').trim())
+        if (!['http:', 'https:'].includes(url.protocol)) throw new Error('unsupported protocol')
+        setProductDetail({ name, mall, url: url.href })
+      } catch {
+        api.showToast('상품 페이지 URL을 먼저 입력해주세요. (인스펙터의 "상품 페이지 URL")')
+      }
+    },
     /* 프로필 요약 패널 / 설문 요약 패널 컴포넌트용 */
     excludedProfile,
     toggleProfileItem,
@@ -284,6 +296,9 @@ export default function Player({ api, scenario, resume }) {
 
       {/* 쇼핑 쓰레드 히스토리 패널 — 햄버거 버튼 위치에서 등장 */}
       <ThreadPanel api={api} open={!!threadOrigin} origin={threadOrigin || 'right'} onClose={() => setThreadOrigin(null)} />
+
+      {/* 상품 상세보기 사이드 패널 — 외부몰 페이지 iframe (모바일은 전체화면) */}
+      <ProductDetailPanel product={productDetail} onClose={() => setProductDetail(null)} />
 
       {/* 키워드 설명 모달 (원본 keyword-detail 스타일 재사용) */}
       {keyword && (

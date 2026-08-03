@@ -89,6 +89,7 @@ export function livePlanItems(page) {
             gradient: '',
             external: false,
             mall: '',
+            url: product.url || '', // 카탈로그 와이어에 아직 없는 필드 — 생기면 상세보기 패널이 바로 연다
             imageUrl: '',
           },
         })

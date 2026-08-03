@@ -107,7 +107,7 @@ export default function EvaluationPanel({
         answers: {}, setAnswer: () => {},
         excludedProfile: [], toggleProfileItem: () => {},
         summary: safeSummary,
-        addToCart: () => {}, openExternal: () => {}, showKeyword: () => {}, complete: () => {},
+        addToCart: () => {}, openExternal: () => {}, openProduct: () => {}, showKeyword: () => {}, complete: () => {},
       },
     }
   }, [activeCase, profile, summaryPreview])

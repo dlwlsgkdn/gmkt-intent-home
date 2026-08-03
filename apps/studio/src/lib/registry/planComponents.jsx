@@ -135,6 +135,7 @@ export const PLAN_COMPONENTS = {
       gradient: '',
       external: false,
       mall: '',
+      url: '',
       imageUrl: './makeup-clone-assets/8e01e19fb7cf7c96.avif',
     },
     fields: [
@@ -148,6 +149,7 @@ export const PLAN_COMPONENTS = {
       { key: 'gradient', label: '상품 배경 CSS', kind: 'text' },
       { key: 'external', label: '외부몰 상품', kind: 'toggle' },
       { key: 'mall', label: '외부몰 이름 (예: 올리브영)', kind: 'text' },
+      { key: 'url', label: '상품 페이지 URL (상세보기 패널)', kind: 'url', placeholder: 'https://...' },
       { key: 'imageUrl', label: '이미지 URL', kind: 'text' },
     ],
     render: (p, ctx) => {
@@ -201,7 +203,15 @@ export const PLAN_COMPONENTS = {
               <button
                 type="button"
                 className="flex-1 py-3 bg-slate-900 text-white text-[11px] rounded-xl font-bold transition-colors hover:bg-gmarket-blue"
-                onClick={() => { if (isPlayer) ctx.player.openExternal('상품 상세') }}
+                onClick={() => {
+                  if (!isPlayer) return
+                  // 상세보기 = 외부몰 페이지를 사이드 패널 iframe으로 (Player/LivePlayer의 ProductDetailPanel)
+                  ctx.player.openProduct({
+                    name: p.name,
+                    mall: p.external ? (p.mall || '외부몰') : 'Gmarket',
+                    url: p.url,
+                  })
+                }}
               >
                 상세보기
               </button>

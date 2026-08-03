@@ -186,6 +186,7 @@ export default function HomeView({ api }) {
     addToCart: () => {},
     complete: () => {},
     openExternal: (label) => api.showToast(`${label}(으)로 이동하는 목업이에요.`),
+    openProduct: ({ name }) => api.showToast(`"${name}" 상세보기는 시나리오 체험에서 열려요.`),
     showKeyword: (word) => {
       const hit = (api.keywords || []).find((k) => k.word === word)
       api.showToast(hit && hit.desc ? `${word} — ${hit.desc}` : `"${word}" 설명은 키워드 사전에서 채울 수 있어요.`)

@@ -5,6 +5,7 @@ import { fetchLiveThread, recordLiveEvent, startLiveThread, streamLivePlan, stre
 import { livePlanItems, liveSurveyItems } from '../lib/livePage.js'
 import { BgBlobs, FloatingBar, ViewerDeviceControl } from './Frame.jsx'
 import ThreadPanel from './ThreadPanel.jsx'
+import ProductDetailPanel from './ProductDetailPanel.jsx'
 
 /*
  * 라이브 생성 체험 — 스튜디오 시나리오가 아니라 BFF(LLM)가 설문·계획을 실시간 생성한다.
@@ -82,6 +83,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const [cart, setCart] = useState([])
   const [completed, setCompleted] = useState(false)
   const [keyword, setKeyword] = useState(null)
+  const [productDetail, setProductDetail] = useState(null) // 상품 상세보기 사이드 패널 (null=닫힘)
   const [threadOrigin, setThreadOrigin] = useState(null)
   const [reselecting, setReselecting] = useState(false) // "설문 다시 선택" 확인 후 잠금 해제 상태 — 새 계획 생성 시 다시 잠김
   const [reselectConfirm, setReselectConfirm] = useState(false) // 재선택 확인 다이얼로그
@@ -257,6 +259,17 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         api.showToast(`${label}을(를) 새 탭에서 열었어요.`)
       } catch {
         api.showToast(`${label}의 링크 URL을 먼저 입력해주세요.`)
+      }
+    },
+    /* 상품 상세보기 — 카탈로그에 URL이 있으면 사이드 패널 iframe, 없으면 정직한 안내 */
+    openProduct: ({ name, mall, url: rawUrl }) => {
+      try {
+        const url = new URL(String(rawUrl || '').trim())
+        if (!['http:', 'https:'].includes(url.protocol)) throw new Error('unsupported protocol')
+        setProductDetail({ name, mall, url: url.href })
+        if (threadId) recordLiveEvent(threadId, 'productOpen', { name })
+      } catch {
+        api.showToast('이 상품은 연결된 상세 페이지가 아직 없어요.')
       }
     },
     excludedProfile,
@@ -446,6 +459,9 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
       </section>
 
       <ThreadPanel api={api} open={!!threadOrigin} origin={threadOrigin || 'right'} onClose={() => setThreadOrigin(null)} />
+
+      {/* 상품 상세보기 사이드 패널 — 외부몰 페이지 iframe (모바일은 전체화면) */}
+      <ProductDetailPanel product={productDetail} onClose={() => setProductDetail(null)} />
 
       {/* 설문 재선택 확인 — 잠금 해제는 이 다이얼로그를 거쳐서만 */}
       {reselectConfirm && (

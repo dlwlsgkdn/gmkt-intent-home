@@ -635,3 +635,107 @@
   gap: 8px;
   margin-top: 16px;
 }
+
+/* ── 상품 상세보기 사이드 패널 — 추천 상품 카드 "상세보기"가 외부몰 상품 페이지를
+   iframe으로 연다. 데스크톱 = 우측 사이드 패널, 모바일(640px 이하) = 전체화면 ── */
+.sb-product-detail {
+  position: fixed;
+  inset: 0;
+  z-index: 250;
+  display: flex;
+  justify-content: flex-end;
+}
+.sb-product-detail__backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: rgba(15, 23, 42, 0.28);
+  backdrop-filter: blur(3px);
+  cursor: pointer;
+}
+.sb-product-detail__panel {
+  position: relative;
+  width: min(440px, 92vw);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--sb-surface);
+  border-left: 1px solid var(--sb-line);
+  box-shadow: -24px 0 60px -30px rgba(15, 23, 42, 0.25);
+  animation: sb-product-detail-in 0.22s var(--sb-ease);
+}
+@keyframes sb-product-detail-in {
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+.sb-product-detail__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--sb-line);
+}
+.sb-product-detail__titles {
+  flex: 1;
+  min-width: 0;
+}
+.sb-product-detail__mall {
+  display: block;
+  font-size: var(--sb-t-micro);
+  color: var(--sb-subtle);
+}
+.sb-product-detail__name {
+  margin: 2px 0 0;
+  font-size: var(--sb-t-body);
+  font-weight: 400;
+  color: var(--sb-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sb-product-detail__newtab {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--sb-line);
+  border-radius: var(--sb-r-pill);
+  font-size: var(--sb-t-micro);
+  color: var(--sb-accent);
+  text-decoration: none;
+  transition: border-color var(--sb-dur) var(--sb-ease);
+}
+.sb-product-detail__newtab:hover { border-color: var(--sb-accent); }
+.sb-product-detail__close {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--sb-r-md);
+  background: transparent;
+  color: var(--sb-muted);
+  cursor: pointer;
+}
+.sb-product-detail__close:hover { background: var(--sb-surface-inset); color: var(--sb-ink); }
+.sb-product-detail__frame {
+  flex: 1;
+  width: 100%;
+  border: 0;
+  background: var(--sb-surface);
+}
+.sb-product-detail__note {
+  margin: 0;
+  padding: 10px 16px;
+  border-top: 1px solid var(--sb-line);
+  font-size: var(--sb-t-micro);
+  color: var(--sb-subtle);
+  background: var(--sb-surface-sunken);
+}
+@media (max-width: 640px) {
+  .sb-product-detail__panel {
+    width: 100%;
+    border-left: 0;
+  }
+}
