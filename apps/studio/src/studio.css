@@ -1,0 +1,22 @@
+/* ─────────────────────────────────────────────
+   DDAK Scenario Studio 전용 스타일 — 배럴
+   원본 gmarket-advanced-clean-home.css 위에 얹힘
+
+   실제 규칙은 styles/ 아래 섹션 파일에 있다.
+   ⚠️ 아래 @import 순서가 곧 캐스케이드 순서다 — 파일을 옮기거나
+   순서를 바꾸면 같은 특이도 규칙의 승패가 뒤집힌다. 새 규칙은
+   내용에 맞는 섹션 파일의 "끝"에 붙일 것.
+───────────────────────────────────────────── */
+
+@import './styles/base.css';             /* 디자인 토큰 · 폰트/굵기 재정립 · 공통 · 버튼 시스템 */
+@import './styles/home.css';             /* 홈: 칩 · 드로어 · JSON 입출력 · 쓰레드 패널 */
+@import './styles/builder-frame.css';    /* 빌더 골격: 상단바 · 단계 탭 · 계획 케이스 바 */
+@import './styles/evaluation.css';       /* 평가 스튜디오: 툴바 · 별점 · 말풍선 주석 레이아웃 */
+@import './styles/evaluation-tools.css'; /* 평가 부속: 케이스 리더보드 · AI 수정 요청 */
+@import './styles/builder-canvas.css';   /* 팔레트 · 레이어 · 캔버스 크롬 · 인스펙터 · 목록 편집기 */
+@import './styles/canvas-content.css';   /* 원본 클래스 오버라이드 · 컨테이너 슬롯 · 편집/미리보기 모드 */
+@import './styles/components.css';       /* 캐러셀 · 테이블 · 설문 도형 · 인라인 편집 · 서식 툴바 */
+@import './styles/viewer.css';           /* 실행 프레임 · 기기/프로필 컨트롤 · 미디어 카드 · 플레이어 */
+@import './styles/responsive.css';       /* 반응형 (모바일 ↔ 데스크톱) */
+@import './styles/ai-dialogs.css';       /* AI 왕복 다이얼로그 한 벌 */
+@import './styles/admin.css';            /* thread 관리 페이지 (#admin) — 게이트 · 목록 · 마크다운 문서 */

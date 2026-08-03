@@ -4,44 +4,55 @@
 
 지마켓 뷰티 AI 쇼핑 컨셉의 **시나리오 목업 제작·발행 도구**. 사용자가 "설문→계획" 플로우 시나리오를 노코드로 편집·발행하면 홈 검색창 밑에 칩으로 노출되고, 칩 클릭으로 실제처럼 체험할 수 있다.
 
-## 저장소 구조
+## 저장소 구조 (npm workspaces 모노레포)
 
 ```
-scenario-studio/   ← 소스 (React 18 + Vite 5)
-legacy/            ← 옛 HTML 프로토타입 원본 (gmarket-advanced* 등, 이동만 했고 삭제 안 함)
-docs/              ← 빌드 산출물 = 배포 사이트 (빌드 시 legacy/도 docs/legacy로 복사됨)
-index.html         ← ./docs/ 리다이렉트
+apps/studio/       ← 스튜디오 소스 (React 18 + Vite 5). 빌드 산출물은 apps/studio/dist (커밋 안 함)
+apps/core/         ← NestJS backend core — 쓰레드 저장·조회 (Drizzle+Neon). 실행·배포는 apps/core/README.md
+apps/bff/          ← (예정) BFF — LLM·core 오케스트레이션. DESIGN-LLM-SERVICE.md §4 참고
+packages/schema/   ← @ddak/schema — 쓰레드 도메인·internal API zod 계약 (install 시 prepare로 dist 빌드)
+api/               ← 스튜디오 동기화 서버리스 (Vercel 함수, 루트 고정)
+middleware.js      ← 스튜디오 엣지 미들웨어 (루트 고정) — /api/bff/* 를 BFF로 rewrite + BFF_SERVICE_TOKEN 주입 (FE는 bff URL을 직접 안 부름. 스튜디오 프로젝트 환경변수 BFF_URL·BFF_SERVICE_TOKEN 필요)
+legacy/            ← 옛 HTML 프로토타입 원본 (빌드 시 apps/studio/dist/legacy 로 복사됨)
 ```
 
-- **배포 (주)**: Vercel `ddak-scenario-studio`가 GitHub main 푸시마다 **원격 빌드·배포**. `https://ddak-scenario-studio.vercel.app` — vercel.json이 루트(API 의존성)+scenario-studio를 설치하고 scenario-studio를 빌드해 outputDirectory `docs`를 서빙한다. API(`api/state.js`)도 같은 프로젝트라, **로컬 Node 없이 소스 푸시만으로 배포된다**
-- **배포 (레거시)**: GitHub Pages가 커밋된 docs/를 서빙. `https://dlwlsgkdn.github.io/gmkt-intent-home/docs/` — 로컬 빌드로 docs/를 커밋할 때만 갱신된다 (자동 아님)
-- **빌드/배포 절차**: 소스 커밋 → 사용자가 `git push origin main` (Claude는 푸시 못 함) → Vercel 자동 빌드. GitHub Pages까지 최신으로 맞추려면 로컬 `npm run build`(docs/ 갱신) 후 커밋
+루트 package.json이 워크스페이스 루트(`apps/*`, `packages/*`) — 설치는 항상 **리포 루트에서 `npm install`** 한 번, 락파일도 루트 하나다.
 
-## 명령어 (중요: Node 경로)
+- **배포 (주)**: Vercel `ddak-scenario-studio`가 GitHub main 푸시마다 **원격 빌드·배포**. `https://ddak-scenario-studio.vercel.app` — vercel.json이 루트에서 워크스페이스 전체를 설치하고 apps/studio를 빌드해 outputDirectory `apps/studio/dist`를 서빙한다. API(`api/state.js`)도 같은 프로젝트라, **로컬 Node 없이 소스 푸시만으로 배포된다**
+- **배포 (GitHub Pages)**: `.github/workflows/pages.yml`이 main 푸시마다 빌드해 아티팩트로 배포. `https://dlwlsgkdn.github.io/gmkt-intent-home/` (구 `…/docs/` 주소는 아티팩트 안 리다이렉트 스텁이 받는다). 커밋된 빌드 산출물은 더 이상 없다 — 두 배포 모두 push만 하면 각자 최신으로 빌드된다
+- **빌드/배포 절차**: 소스 커밋 → 사용자가 `git push origin main` (Claude는 푸시 못 함) → Vercel·Pages가 각각 자동 빌드
+- **배포 확장 규칙**: 새 앱(core·bff)은 같은 리포를 연결한 **별도 Vercel 프로젝트**(Root Directory=`apps/<앱>`)로 배포한다. 무관 커밋 스킵은 대시보드가 아니라 `apps/<앱>/vercel.json`의 `ignoreCommand`(`git diff --quiet HEAD^ HEAD -- ':(top)apps/<앱>' ':(top)packages' ':(top)package-lock.json'`)로 리포에 커밋한다 — Root Directory만 대시보드 설정
 
-기본 node는 v12라 빌드 불가. **반드시 nvm의 v24 사용**:
+## 명령어
+
+이 머신은 기본 node(homebrew, v23+)로 빌드된다 (옛 안내의 `/Users/jinhalee/.nvm/...` v24 경로는 이전 머신 것 — 존재하면 그쪽을 써도 무방):
 ```bash
-export PATH=/Users/jinhalee/.nvm/versions/node/v24.5.0/bin:$PATH
-cd scenario-studio && npm run build   # vite build && cp -R ../legacy ../docs/legacy
+npm run build --workspace=apps/studio       # 스튜디오 빌드. vite build && cp -R ../../legacy dist/legacy
+npm run build --workspace=apps/core         # core(NestJS) 빌드
+npm run start:dev --workspace=apps/core     # core 로컬 실행 (환경변수: apps/core/.env.example — 없어도 부팅, DB 라우트만 503)
+npm run db:generate --workspace=apps/core   # core 스키마 → drizzle/ 마이그레이션 SQL (오프라인)
+npm run db:migrate --workspace=apps/core    # 마이그레이션 SQL 순서 적용 — DB 반영은 push(diff·타입 전환 실패)보다 이쪽 (--status·--baseline 지원)
 ```
-개발 서버: `.claude/launch.json`의 `scenario-studio` (포트 5173), 정적 검증용 `pages-static` (포트 8899, 저장소 루트 서빙).
+개발 서버: `.claude/launch.json`의 `scenario-studio` (포트 5173), 정적 검증용 `pages-static` (포트 8899, apps/studio/dist 서빙 — 빌드 후 사용).
+
+워크스페이스 주의: `@ddak/schema`를 수정하면 소비자가 dist를 보므로 `npm run build --workspace=@ddak/schema`로 재빌드할 것(설치 시엔 prepare가 자동 빌드). **루트 devDependencies의 drizzle-orm은 지우지 말 것** — npm이 orm을 apps/core 아래로 중첩 배치해 루트에 호이스팅된 drizzle-kit가 못 찾는 문제를, 루트 선언으로 호이스팅을 강제해 해결한 것이다(core와 버전 범위를 항상 맞출 것).
 
 **데이터 프로필** (`lib/remote.js`): 개발 서버 = `local`(localStorage 전용, 서버 동기화 없음), 빌드 산출물 = `prod`(localStorage + Neon DB 미러링). 로컬에서 운영 DB에 붙으려면 `VITE_DATA_PROFILE=prod npm run dev`. 콘솔 `[remote] 데이터 프로필:` 로그로 확인. 서버 미러링을 운영 DB 없이 검증하려면 목 API(+`VITE_API_PROXY`)를 쓰는 `scenario-studio-mockdb`(포트 5174) 참고.
 
-**서버 동기화는 자동 다운로드 + 수동 업로드(빌더) + 트랜잭션 자동 싱크(스튜디오 밖)** (`api/state.js` + `hooks/useWorkspace.js` + `components/SyncButton.jsx`): 접속 시 서버로 하이드레이션하고, 빌더의 연속 편집은 "서버에 저장"으로 올린다 — 저장 상태·수동 저장 UI는 **빌더 상단바 SyncButton 전용**이다. 홈은 쓰기가 전부 자동 싱크라 저장 UI가 없고, 프로필 버튼 배지로 다운로드 상태만 보여준다(동기화 중 펄스·연결 안 됨). 스튜디오 밖 단발 쓰기 트랜잭션(프로필 생성·삭제, 시나리오 생성·복제·가져오기·삭제·칩 순서, 쓰레드 기록·삭제, 전체 복원, 공유 링크 가져오기 — 프로필 전환은 쓰기가 아니라 제외)은 `requestAutoSync()`가 1.2s 디바운스 뒤 자동 업로드한다 — 전체 자동 미러링은 여러 창이 서로를 덮고 실패가 조용해서 제거했고, 자동 트랜잭션 싱크는 충돌(다른 창의 선행 변경) 시 덮지 않고 멈춰 수동 저장으로 유도하며 실패를 토스트로 알린다. "동기화 중" 펄스(`remoteSync.hydrating`)는 **활성 프로필의 홈 필요분을 받는 동안** 켜진다 — 첫 하이드레이션(homeSynced 전)과 프로필 전환 직후(그 계정 콘텐츠 로드 중, `syncingAccountIds`) 둘 다. 실패 시 "연결 안 됨"을 표시한다(미저장 표시는 빌더 SyncButton만). 저장 직전 `?index=1`(행 목록·updatedAt)로 다른 창의 선행 변경을 감지해 덮어쓰기 확인을 받는다. 키는 **화면 필요 단위의 행**이다 (분해·조립은 `lib/accountRows.js`): `account:<id>`(셸 본문 — 프로필·탐색·시나리오 칩 메타, 홈 첫 화면에 필요한 전부)·`account:<id>:scenario:<sid>`(콘텐츠: stages·planCases — 칩 클릭 체험·빌더용)·`account:<id>:versions:<sid>`(발행 버전 스냅샷 — 빌더 전용)·`account:<id>:threads`·`accounts-meta`(순서만 — **활성 프로필 id는 기기별 상태라 동기화하지 않는다**)·`keywords`. **하이드레이션은 부트 1왕복 + 필요 시점 로드**: `?boot=<계정id>` 한 왕복(행 목록+메타+키워드+활성 계정 셸)으로 홈을 그리고(bootReady — 업로드 허용 시점), 나머지 계정 셸과 활성 계정 콘텐츠·쓰레드는 백그라운드(homeSynced — "동기화 중" 배지 기준), **버전 스냅샷은 빌더 진입 시**(`ensureStudioSynced`), 다른 계정 콘텐츠는 프로필 전환 시(`ensureAccountSynced`)만 받는다. 칩 클릭·복제는 `ensureScenarioSynced`, 내보내기·전체 백업은 `ensureActiveSynced`/`ensureAllSynced`가 선행한다(App.jsx `openSynced` 게이트). 하이드레이션 사이에 손댄 데이터는 서버 값으로 덮지 않는다(쓰레드만 id 합집합 병합 — 추가형 로그라서). **업로드는 행 단위 게이트**: 이 세션에서 서버와 맞춘 행(loaded)과 서버에 없는 새 행만 전송하고(`rowsRef` 기준선 — 안 받은 행을 낡은 로컬로 덮지 않는다), 삭제는 명시적(이 세션에서 지운 계정 + 셸을 맞춘 계정의 사라진 시나리오 행)이다. 예외는 시딩 가드·전체 복원 세션(`localAuthorityRef` — 로컬이 전체 의도라 전 행 전송+서버 잔여 정리). 구 형식(통짜 `accounts` 블롭 → 1차 통짜 행(`threads` 인라인) → 2차 콘텐츠 본문(scenarios에 stages 인라인))은 하이드레이션이 만나는 대로 새 행 체계로 이관한다(부속 행 먼저 → 본문 행 마지막이 완료 표식, 끊겨도 재시도). **객체 참조가 곧 미저장 신호**다: `patchActive`·`updateScenario`·`useStageItems.write`가 무변경 업데이터(같은 참조 반환)를 스킵하는 사슬을 유지할 것 — 끊기면 빌더만 열어도 미저장 배지가 켜진다. 발행 버전 스냅샷은 시나리오 전체 사본 — `VERSION_LIMIT`(5)을 늘리지 말 것. **주의: 구 클라이언트(커밋된 docs/ = GitHub Pages 레거시 빌드)로 "서버에 저장"을 누르면 구형 행을 재저장해 새 행 체계와 어긋난다** — 레거시 배포에서는 편집·저장하지 말 것.
+**서버 동기화는 자동 다운로드 + 수동 업로드(빌더) + 트랜잭션 자동 싱크(스튜디오 밖)** (`api/state.js` + `hooks/remote/`(useWorkspace가 배선) + `components/SyncButton.jsx`): 접속 시 서버로 하이드레이션하고, 빌더의 연속 편집은 "서버에 저장"으로 올린다 — 저장 상태·수동 저장 UI는 **빌더 상단바 SyncButton 전용**이다. 홈은 쓰기가 전부 자동 싱크라 저장 UI가 없고, 프로필 버튼 배지로 다운로드 상태만 보여준다(동기화 중 펄스·연결 안 됨). 스튜디오 밖 단발 쓰기 트랜잭션(프로필 생성·삭제, 시나리오 생성·복제·가져오기·삭제·칩 순서, 쓰레드 기록·삭제, 전체 복원, 공유 링크 가져오기 — 프로필 전환은 쓰기가 아니라 제외)은 `requestAutoSync()`가 1.2s 디바운스 뒤 자동 업로드한다 — 전체 자동 미러링은 여러 창이 서로를 덮고 실패가 조용해서 제거했고, 자동 트랜잭션 싱크는 충돌(다른 창의 선행 변경) 시 덮지 않고 멈춰 수동 저장으로 유도하며 실패를 토스트로 알린다. "동기화 중" 펄스(`remoteSync.hydrating`)는 **활성 프로필의 홈 필요분을 받는 동안** 켜진다 — 첫 하이드레이션(homeSynced 전)과 프로필 전환 직후(그 계정 콘텐츠 로드 중, `syncingAccountIds`) 둘 다. 실패 시 "연결 안 됨"을 표시한다(미저장 표시는 빌더 SyncButton만). 저장 직전 `?index=1`(행 목록·updatedAt)로 다른 창의 선행 변경을 감지해 덮어쓰기 확인을 받는다. 키는 **화면 필요 단위의 행**이다 (분해·조립은 `lib/accountRows.js`): `account:<id>`(셸 본문 — 프로필·탐색·시나리오 칩 메타, 홈 첫 화면에 필요한 전부)·`account:<id>:scenario:<sid>`(콘텐츠: stages·planCases — 칩 클릭 체험·빌더용)·`account:<id>:versions:<sid>`(발행 버전 스냅샷 — 빌더 전용)·`account:<id>:threads`·`accounts-meta`(순서만 — **활성 프로필 id는 기기별 상태라 동기화하지 않는다**)·`keywords`·`starters-meta`+`starter:<id>`(기본 시나리오 라이브러리 — 지정 시점 불변 스냅샷이라 기준선·충돌 기계 밖에서 즉시 쓰기(last-write-wins)로 미러링하고(`hooks/remote/starterSync.js`), push의 충돌 비교도 starter 행을 무시한다. 메타는 부트에 실려 오고 스냅샷 본문은 새 프로필 생성 직전에만 받는다). **하이드레이션은 부트 1왕복 + 필요 시점 로드**: `?boot=<계정id>` 한 왕복(행 목록+메타+키워드+활성 계정 셸)으로 홈을 그리고(bootReady — 업로드 허용 시점), 나머지 계정 셸과 활성 계정 콘텐츠·쓰레드는 백그라운드(homeSynced — "동기화 중" 배지 기준), **버전 스냅샷은 빌더 진입 시**(`ensureStudioSynced`), 다른 계정 콘텐츠는 프로필 전환 시(`ensureAccountSynced`)만 받는다. 칩 클릭·복제는 `ensureScenarioSynced`, 내보내기·전체 백업은 `ensureActiveSynced`/`ensureAllSynced`가 선행한다(App.jsx `openSynced` 게이트). 하이드레이션 사이에 손댄 데이터는 서버 값으로 덮지 않는다(쓰레드만 id 합집합 병합 — 추가형 로그라서). **업로드는 행 단위 게이트**: 이 세션에서 서버와 맞춘 행(loaded)과 서버에 없는 새 행만 전송하고(`rowsRef` 기준선 — 안 받은 행을 낡은 로컬로 덮지 않는다), 삭제는 명시적(이 세션에서 지운 계정 + 셸을 맞춘 계정의 사라진 시나리오 행)이다. 예외는 시딩 가드·전체 복원 세션(`localAuthorityRef` — 로컬이 전체 의도라 전 행 전송+서버 잔여 정리). 구 형식(통짜 `accounts` 블롭 → 1차 통짜 행(`threads` 인라인) → 2차 콘텐츠 본문(scenarios에 stages 인라인))은 하이드레이션이 만나는 대로 새 행 체계로 이관한다(부속 행 먼저 → 본문 행 마지막이 완료 표식, 끊겨도 재시도). **객체 참조가 곧 미저장 신호**다: `patchActive`·`updateScenario`·`useStageItems.write`가 무변경 업데이터(같은 참조 반환)를 스킵하는 사슬을 유지할 것 — 끊기면 빌더만 열어도 미저장 배지가 켜진다. 발행 버전 스냅샷은 시나리오 전체 사본 — `VERSION_LIMIT`(5)을 늘리지 말 것. **주의: 구 클라이언트(옛 빌드 배포본)로 "서버에 저장"을 누르면 구형 행을 재저장해 새 행 체계와 어긋날 수 있다** — 지금은 Pages도 push마다 자동 빌드라 상시 위험은 아니지만, 배포가 밀린 옛 창을 열어 두고 저장하는 경우는 여전히 해당된다.
 
-## 아키텍처 (scenario-studio/src)
+## 아키텍처 (apps/studio/src)
 
 - `App.jsx` — **앱 셸**: 라우팅(home/builder/player/explore-editor + 공유 링크 모드)과 토스트, 그리고 화면들이 쓰는 `api` 객체 조립. 시나리오 CRUD는 여기, 그 밖은 아래로 위임
-- `hooks/useWorkspace.js` — **계정(프로필별 워크스페이스) 상태와 저장**: localStorage + 서버 미러링(계정 행 단위 — 위 "서버 미러링" 항목). 서버 하이드레이션 가드 2개(가져오기 실패 시 미러링 중단 / 기본값 시드가 사용자 데이터를 덮지 않게)와 구 통짜 블롭 마이그레이션이 여기 있다
+- `hooks/useWorkspace.js` — **계정(프로필별 워크스페이스) 상태의 원본**: 로컬 상태·patchActive(무변경 참조 스킵)·localStorage 자동 저장·프로필 관리·전체 백업. 서버 쪽에는 stateRef·세터만 내어 준다
+- `hooks/remote/` — **서버 미러링 한 벌** (위 "서버 동기화" 항목의 구현): `useRemoteSync.js`(공유 ref·동기화 상태·업로드 흐름 배선 — 반환하는 `remoteSync` 한 벌을 useWorkspace가 그대로 노출), `rowAdoption.js`(서버 행 채택 — 행→메모리 병합+기준선), `onDemandSync.js`(필요 시점 로드 syncRow·ensure*), `hydration.js`(부트 1왕복+백그라운드+구형 이관 — 시딩 가드 포함), `push.js`(미저장 감지 accountDirty + 업로드 코어 pushCore — 행 단위 게이트·명시적 삭제·충돌 처리), `starterSync.js`(기본 시나리오 라이브러리 미러링 — 즉시 쓰기·설치 직전 스냅샷 로드)
 - `lib/scenarioOps.js` — 시나리오 통째 복사(복제·가져오기·공유 채택)의 **id 재발급 규칙**. 아이템 id는 parentId·계획 조건 questionId·평가 기록 키 세 곳에서 참조되므로 한 곳에서 다시 매단다
 - `lib/store.js` — 데이터 계층 **배럴**. 실제 구현은 `lib/store/` 네 모듈:
-  - `store/model.js` 시나리오·아이템의 형태와 정규화, STAGES/DEVICE_PRESETS/CHIP_COLORS
+  - `store/model.js` 시나리오·아이템의 형태와 정규화(`normalizeItems` — 구 좌표 모델 → 순서 모델 이관 관문), STAGES/DEVICE_PRESETS/CHIP_COLORS
   - `store/planCases.js` 조건 형태와 평가 규칙. **폴백은 언제나 하나·목록의 끝**이라는 불변식을 강제
   - `store/defaults.js` 첫 실행 기본값(탐색 페이지·프로필·키워드)과 exploreItemsFrom/visibleProfileItems
   - `store/persistence.js` **localStorage를 아는 유일한 곳** + 계정(구 키 마이그레이션)·전체 백업·JSON 입출력 봉투(`ddak-export` + `classifyImportPayload` — 구형 파일 3종도 계속 인식)
-- `lib/layout.js` — **레이아웃 엔진** (순수 함수): resolveCollision(겹침 해소, 다중 이동+잠금 지원), previewResolve(드래그 미리보기), compactItems(COMPACT_TYPES: vertical/horizontal/none — 핀·잠금 제외 스택), layoutStack/TwoColumns/CompactUp, alignItems(다중 정렬), PAD/GAP 상수
-- `lib/builder/` — 빌더가 쓰는 순수 로직: `geometry.js`(좌표·슬롯·컨테이너 판정 — 필요한 값을 전부 인자로 받는다), `layoutOps.js`(겹침 해소·컴팩트 **커밋 관문 settle**), `itemClipboard.js`(사본 만들기), `publishing.js`(발행 점검·칩 라벨·버전 스냅샷·기기 폭 환산)
+- `lib/builder/` — 빌더가 쓰는 순수 로직: `geometry.js`(순서·슬롯·컨테이너 판정 — 모델 좌표가 아니라 렌더된 DOM rect 기준, 필요한 값을 전부 인자로 받는다. reorderTop/topInsertIndexAt/containerAtClient/placeChild 등), `itemClipboard.js`(사본 만들기), `publishing.js`(발행 점검·칩 라벨·버전 스냅샷 — 구 스냅샷은 복원 시점에 normalizeItems로 이관)
 - `lib/share.js` — 공유 링크: 시나리오를 `#s=<base64url JSON>` 해시로 인코딩/디코딩 (서버 불필요)
 - `lib/evaluation.js` — 평가 계층 **배럴**. 실제 구현은 `lib/evaluation/` 네 모듈:
   - `evaluation/model.js` 평가 레코드 **v2 스키마**(selection/review/components)와 정규화·v1 마이그레이션 관문, remapCaseEvaluation(id 재발급), liveComponentEntries(고아 레코드 필터), plainEvaluationText
@@ -52,10 +63,13 @@ cd scenario-studio && npm run build   # vite build && cp -R ../legacy ../docs/le
   - `registry/support.jsx` 공용 렌더 도구 — kText() 텍스트 렌더러(키워드+부분 서식+인라인 편집 진입), ScrollTrack(드래그 스크롤), Img/parseCards/isEditView 등
   - `registry/exploreComponents.jsx` · `surveyComponents.jsx` · `planComponents.jsx` · `commonComponents.jsx` · `layoutComponents.jsx` 단계·카테고리별 컴포넌트 정의
   - LIBRARY를 알아야 하는 renderItem/ChildShell/childrenOf/libraryForStage는 배럴(registry.jsx)에 남는다 — 순환 참조 방지
+- `lib/liveApi.js` — **라이브 생성 체험 클라이언트** (BFF threads API, API.md §1): 디바이스 id(`ddak-device-id`)·쓰레드 시작·SSE 소비(fetch 스트림 — POST라 EventSource 불가)·행동 기록·이어보기. FE는 same-origin `/api/bff/*`만 부른다 (배포 = 루트 middleware.js, 로컬 = vite 프록시 → 8788)
+- `lib/adminApi.js` · `lib/adminReport.jsx` · `components/AdminView.jsx` — **thread 관리 페이지** (API.md §1-1). 진입은 `#admin` 해시뿐(유저 UI에 링크 없음), `x-admin-token` 헤더 인증 — 입력 토큰은 localStorage(`ddak-admin-token`) 보관, 401이면 폐기 후 게이트 복귀. 쓰레드 전체 목록(archived 포함)·개별 라이프사이클 로그를 **마크다운 문서로 시각화**(adminReport가 ThreadWithSteps→마크다운 생성 + 같은 서브셋만 아는 미니 렌더러 — 복사 버튼이 원문을 그대로 쓰므로 둘을 같이 유지), 보관 처리(= core `status=archived`, 사용자 목록에서만 숨김), LLM 모델 조회·변경(카탈로그는 BFF `llm.service.ts` `MODEL_OPTIONS` 소유, 저장은 core 설정 KV `llm-model`, 생성 시 30s 캐시로 조회 — haiku처럼 effort 미지원 모델은 BFF가 effort를 빼고 호출). 스타일은 `styles/admin.css`(배럴 끝 @import)
+- `lib/livePage.js` — 라이브 와이어 페이지 → 스튜디오 아이템 투영: question→surveyQuestion(아이템 id = 와이어 질문 id — answers 왕복에 재매핑 없음), guide→planStep, products→hscroll+productCard(이모지 목업), steps→checklist. 새 렌더 계층을 만들지 않는다
 - `lib/richtext.jsx` — 인라인 리치텍스트 엔진: `{{옵션|텍스트}}`/`[[키워드]]` 마크업 ↔ contentEditable 변환, 서식 적용/병합, InlineEditor, FONT_OPTIONS/TEXT_COLORS
 - `lib/templates.js` — 새 시나리오 템플릿 (빈/뷰티 브리프/선물 추천)
 - `lib/prompt/` — **AI 왕복 계층**. 스튜디오는 LLM API를 호출하지 않는다: 모든 AI 기능이 "프롬프트 복사 → 쓰던 AI에 붙여넣기 → 결과 가져오기" 한 가지 왕복이다
-  - `chatPrompt.js` 채팅창용 출력 규칙 봉투(코드블록 하나·스키마 밖 키 금지·붙여넣을 위치)
+  - `chatPrompt.js` 채팅창용 출력 규칙 봉투(코드블록 하나·스키마 밖 키 금지·붙여넣을 위치) + 왕복 공용 유틸(`personaFromProfile` 프로필→페르소나 문장, `chunkList` 배치 분할)
   - `jsonAnswer.js` 붙여넣은 응답에서 JSON만 건져내기 — 모든 검증기가 공유
   - `scenarioDraft.js` 빠른 초안: 레이아웃은 코드 스캐폴드가 소유, AI는 텍스트·상품 배치만
   - `scenarioDb.js` 전체 구성: 레지스트리에서 컴포넌트 사양을 자동 추출해 DB JSON 전체를 요청하고, 가져오기 시 조건이 실제 질문 id·선택지를 가리키는지 검증
@@ -64,29 +78,32 @@ cd scenario-studio && npm run build   # vite build && cp -R ../legacy ../docs/le
   - `revision.js` 평가 피드백 → 필드 단위 수정안. 허용 목록(caseId·itemId·fieldKey) 밖은 전부 차단
   - `caseRevision.js` 케이스 **통째 재생성** (컴포넌트 추가·삭제·순서까지). 안전 모델이 다르다: 유지 컴포넌트는 id 보존(평가 기록이 id에 묶임)+원본 props에서 시작해 편집 가능 키만 덮음(사실 필드·팩 메타데이터 보존), 새 상품은 카탈로그 대조, 조건은 불변, 부분 적용 없음(전부/전무 + ⌘Z)
 - `components/Builder.jsx` — **편집기 오케스트레이터**. 편집 상태만 갖고 규칙은 전부 아래로 위임한다
-- `components/builder/hooks/` — `useStageItems`(아이템을 어디서 읽고 어디에 저장할지: 탐색/설문/계획), `useItemOps`(추가·수정·삭제·복제·클립보드 — 배치 커밋은 전부 layout.settle/compact 경유), `useBuilderHistory`(Undo 스택), `usePlanCases`(케이스 CRUD·평가), `useCanvasDrag`(밀림 게이트·히스테리시스·삽입 존 보호·WYSIWYG 커밋), `useContainerNesting`(컨테이너 자식 넣기/꺼내기/슬롯), `useBuilderShortcuts`(키 매핑)
+- `components/builder/hooks/` — `useStageItems`(아이템을 어디서 읽고 어디에 저장할지: 탐색/설문/계획), `useItemOps`(추가·수정·삭제·복제·순서 이동·클립보드 — 순서 변경은 전부 geometry.reorderTop 경유), `useBuilderHistory`(Undo 스택), `usePlanCases`(케이스 CRUD·평가), `useStackDrag`(최상위 순서 드래그 — 삽입 인덱스 미리보기 라인 + 컨테이너 삽입, 드롭 한 번으로 커밋), `useContainerNesting`(컨테이너 자식 넣기/꺼내기/슬롯 — 자식을 컨테이너 밖으로 끌면 최상위 순서 드래그로 전환), `useBuilderShortcuts`(키 매핑 — ↑↓ = 순서 한 칸 이동), `useTopBarActions`(시나리오 명령 — 기기 폭·발행·버전 복원·JSON 입출력·공유 링크), `useCanvasInteractions`(캔버스 표면 이벤트 — 우클릭·팔레트 DnD·줌), `useEvaluationBridge`(평가↔편집 이동 — feedbackTarget·인스펙터 포커스 신호, 상단 문맥 바는 `FeedbackFocusBar.jsx`)
 - `components/builder/EvaluationPanel.jsx` — 평가 스튜디오 오케스트레이터 (말풍선 배치·케이스 탭·AI 진입점). 표현 컴포넌트는 `components/builder/evaluation/`: StarRating(+SCORE_GUIDE)/Rubric/Leaderboard/CommentBubble/PreviewBoundary
 - `components/builder/BuilderTopBar.jsx` / `PlanCaseBar.jsx` / `BuilderCanvas.jsx` — 상태 없는 표현 컴포넌트
 - `components/builder/PromptExchange.jsx` — "프롬프트 복사 → 결과 붙여넣기" UI 한 벌. 세 AI 다이얼로그가 공유
-- `components/builder/CanvasItem.jsx` — 캔버스 아이템 (드래그/리사이즈/잠금/숨김, zoom 좌표 보정, 우클릭)
+- `components/builder/LlmDialogShell.jsx` — AI 다이얼로그 공용 셸(백드롭 클릭 닫기·헤더·AiRoundTripNote 배지) + `DialogSteps`(진행 breadcrumb) + `BatchBar`(배치 진행 바). 여섯 AI 다이얼로그(시나리오/조합 케이스/문구 다듬기/재구성/전체 반영/AiFixChooser)가 공유
+- `components/builder/CanvasItem.jsx` — 스택 위 최상위 아이템 한 개 (선택/순서 드래그/잠금/숨김, 우클릭 — 문서 흐름이라 좌표·리사이즈·높이 측정 없음)
 - `components/builder/Palette.jsx` — 팔레트(검색·클릭 추가·캔버스로 드래그)/레이어 패널(잠금·숨김·순서)
-- `components/builder/Inspector.jsx` — 속성 편집 / 필드 드래그 선택 서식 툴바 / 다중 선택 정렬 도구. 목록형 필드(kind: options·stringList·cards·table)는 `ListEditors.jsx`의 행 단위 GUI 편집기로 위임 — 저장 형식은 기존 구분자 문자열 그대로, 줄바꿈 직렬화로 항목 안 쉼표 보존
+- `components/builder/Inspector.jsx` — 속성 편집 / 필드 드래그 선택 서식 툴바 (크기 슬라이더는 컨테이너 자식 카드 전용). 목록형 필드(kind: options·stringList·cards·table)는 `ListEditors.jsx`의 행 단위 GUI 편집기로 위임 — 저장 형식은 기존 구분자 문자열 그대로, 줄바꿈 직렬화로 항목 안 쉼표 보존
 - `components/builder/CanvasTextToolbar.jsx` — 캔버스 인라인 편집 중 선택 위에 뜨는 서식 툴바
 - `components/ui/Dropdown.jsx` — 드롭다운 공용 래퍼 (버튼은 호출부, 메뉴/백드롭 담당)
 - `components/Frame.jsx` — 공통 프레임 조각: BgBlobs, FloatingBar(하단, 햄버거=쓰레드 패널, 버튼 위치→패널 방향), ViewerDeviceControl(기기 폭), ProfileControl(프로필 전환/추가/삭제), StudioFab
 - `components/ThreadPanel.jsx` — 쇼핑 쓰레드 히스토리 패널 (원본 history-sidebar 룩, 좌/우/중앙 등장, 아코디언 카드, 이어보기/삭제)
+- `components/StarterPanel.jsx` — 기본 시나리오 패널 (전역 라이브러리 목록·내리기 — 진입은 드로어 하단 도구 행의 ⭐ 버튼, 지정은 시나리오 행)
 - `components/Player.jsx` — 시나리오 실행(설문→계획 스테퍼). 기기 폭 반영, hidden 아이템 제외, 다시 시작, 응답/프로필 제외 상태를 ctx.player로 공급, **쓰레드 자동 기록**(체험 1회 = 쓰레드 1개)
+- `components/LivePlayer.jsx` — **라이브 생성 체험** (설문→계획을 BFF의 LLM이 실시간 생성). 진입은 홈 자유 검색(칩 = 시나리오 체험 — 매칭 겹치면 선택 시트로 명시 선택), `✦ AI 실시간 생성` 배지 상시, SSE status+스켈레톤 로딩(시나리오 체험엔 없는 연출 — 일부러 다르게 느껴지게), 실패는 정직한 안내(retryable 재시도 + 발행 칩 폴백은 사용자 클릭으로만), 답변 변경 시 계획은 자동 재생성하지 않고 안내 바의 버튼으로만. 워크스페이스 쓰레드에 `live: true`로 upsert — ThreadPanel이 ✦ 배지로 구분하고 이어보기는 `GET /api/bff/threads/:id` 복원. 렌더는 livePage 투영 + 레지스트리 재사용
 - `components/HomeView.jsx` — 홈. 발행 칩(색상/드래그 순서변경/클릭 실행), 좌상단 기기+프로필 컨트롤, 시나리오 드로어(템플릿·복제·**JSON 통합 입출력** — 내보내기는 범위 선택(시나리오 목록/전체 백업), 가져오기는 `classifyImportPayload` 자동 감지 후 동작별 확인 다이얼로그(추가/전체 교체). 빌더의 현재 시나리오 입출력은 별도), 쓰레드 패널
 - `components/ExploreFrame.jsx` — 구버전 설정 기반 탐색 렌더러 (explore.items가 없을 때의 안전망 전용)
 - `components/ExploreEditor.jsx` — 사용자 프로필 + 키워드 사전 편집기 (탐색 콘텐츠 편집은 빌더 "탐색" 탭으로 이동)
-- `studio.css` — 스튜디오 전용 스타일 (`sb-` 접두사) + 원본 CSS 클래스의 절대배치 무력화 오버라이드
+- `studio.css` — 스튜디오 전용 스타일 (`sb-` 접두사) + 원본 CSS 클래스의 절대배치 무력화 오버라이드. 실제 규칙은 `styles/` 11개 섹션 파일에 있고 studio.css는 @import 배럴 — **@import 순서가 곧 캐스케이드**라 파일 간 이동·순서 변경 금지, 새 규칙은 맞는 섹션 파일 끝에 추가
 
 ## 기능 현황 (2026-07 기준 — 상세는 FEATURES.md)
 
 1. **프로필별 워크스페이스**: 계정 = 프로필+탐색 페이지+시나리오+쓰레드. 홈 좌상단 프로필 컨트롤로 전환/추가/삭제
 2. **홈**: 발행 칩(클릭 실행·드래그 순서·색상), 검색 매칭, 검색창 말줄임/멀티라인 옵션
 3. **쓰레드 히스토리**: 햄버거 → 원본 룩 패널(버튼 위치 방향에서 등장), 체험 자동 기록, 이어보기
-4. **빌더**: 자유 배치+겹침 회피+스냅, 다중 선택(⇧/⌘A/러버밴드), 우클릭 메뉴, ⌘C/X/V(단계 간), 줌, 팔레트 드래그 배치, 인라인 WYSIWYG 편집+서식 툴바(볼드/폰트/크기/색/키워드 밑줄), Undo/Redo, 기기 프리셋, 자동 정렬, 발행/버전 복원(versionAt으로 현재 사용 중 버전 표시), 현재 시나리오 JSON 파일 입출력(상단 JSON 메뉴), 공유 링크
+4. **빌더**: 순서 기반 세로 스택(드래그 = 삽입 인덱스 재정렬, 컨테이너 위 드롭 = 안에 배치), 다중 선택(⇧/⌘A), 우클릭 메뉴, ⌘C/X/V(단계 간), 줌, 팔레트 드래그 배치, 인라인 WYSIWYG 편집+서식 툴바(볼드/폰트/크기/색/키워드 밑줄), Undo/Redo, 기기 프리셋(프레임 폭), 발행/버전 복원(versionAt으로 현재 사용 중 버전 표시), 현재 시나리오 JSON 파일 입출력(상단 JSON 메뉴), 공유 링크
 5. **컴포넌트 15종** (+탐색 레거시 5종): 설문 3, 계획 8, 공통 4(텍스트/안내/가로 스크롤 패널/이미지)
 6. **플레이어**: 설문→계획 스테퍼, 프로필 배지 제외, 설문 요약, 담기/완료, 쓰레드 기록
 7. **공유**: URL 해시 링크(즉시 체험, 가져오기), JSON 백업/이관
@@ -104,15 +121,14 @@ cd scenario-studio && npm run build   # vite build && cp -R ../legacy ../docs/le
 - **라벨 언어**: 스튜디오 크롬에 영문 아이브로우("영어 타이틀 + 한글 서브타이틀" 스택 — 예: 옛 `SCORING RUBRIC`/`STEP 1`) 금지. 패널·섹션 제목은 한글만, 왕복 단계 번호는 "n단계 · 스튜디오에서" 형식. 예외: `CASE A/B/C` 같은 식별자와 원본 프로토타입 CSS 영역(`keyword-detail-card` 등)
 - **포커스**: 개별 규칙에 `outline: none`을 쓰지 말 것. 전역 `[class^='sb-']:focus-visible` 규칙이 키보드 포커스 링을 담당한다
 - **버튼**: `.sb-btn` + 성격(`--primary`/`--ghost`/`--danger`/`--ai`/`--open`) + 크기(`--small`/`--tiny`). hover·active·disabled는 기본 정의에만 있다. AI를 부르는 버튼은 전부 `--ai`
-- **AI 왕복 표기 규칙**: AI 기능은 "누르면 만들어진다"고 약속하지 않는다. 트리거는 `✦`(생성)가 아니라 **`⇄`(왕복)** 를 쓰고 라벨에 "프롬프트"를 넣는다. 다이얼로그는 머리말에 `AiRoundTripNote`를 두고, `PromptExchange`가 1 복사 → 2 **스튜디오 밖에서** 붙여넣기 → 3 결과 가져오기를 항상 펼쳐 보인다. 번호는 이 왕복(`.sb-handoff`)에만 쓰고 다이얼로그 단계(`.sb-steps`)는 번호 없는 breadcrumb이다. 성격이 비슷한 AI 기능을 나란히 버튼으로 두지 말 것 — 진입점을 하나로 합치고 선택 카드(`AiFixChooser` 참고)에서 "무엇을 고치고 싶은지" 예시 문장으로 가른다
+- **AI 왕복 표기 규칙**: AI 기능은 "누르면 만들어진다"고 약속하지 않는다. 트리거는 `✦`(생성)가 아니라 **`⇄`(왕복)** 를 쓰고 라벨에 "프롬프트"를 넣는다. 다이얼로그는 머리말에 `AiRoundTripNote`를 두고, `PromptExchange`가 1 복사 → 2 **스튜디오 밖에서** 붙여넣기 → 3 결과 가져오기를 항상 펼쳐 보인다. 번호는 이 왕복(`.sb-handoff`)에만 쓰고 다이얼로그 단계(`.sb-steps`)는 번호 없는 breadcrumb이다. 성격이 비슷한 AI 기능을 나란히 버튼으로 두지 말 것 — 진입점을 하나로 합치고 선택 카드(`AiFixChooser` 참고)에서 "무엇을 고치고 싶은지" 예시 문장으로 가른다. **`✦`(생성)는 라이브 생성 체험 전용이다** — 진짜로 눌러서 만들어지는 곳(LivePlayer 배지·선택 시트·쓰레드 라이브 배지)에만 쓰고, 시나리오 칩·스튜디오 왕복 기능에는 쓰지 않는다 (시나리오 칩의 옛 스파크는 이 이유로 뗐다)
 
 ## 핵심 설계 결정
 
-- **탐색은 공통 페이지** (시나리오 소유 아님, 계정 소유). 칩 클릭 = 탐색 완료 → 플레이어는 설문부터 시작. **탐색 콘텐츠도 아이템 기반**: `explore.items[]`를 빌더의 "탐색" 탭에서 설문/계획처럼 캔버스 편집(자동 저장·즉시 홈 반영). 구버전 설정(greeting/stories 등)은 `exploreItemsFrom()`으로 최초 1회 아이템 변환. 발행 칩은 `scenarioChips` 컴포넌트 자리에 렌더
-- **프로필/설문 요약 패널은 일반 컴포넌트** (`profilePanel`, `surveySummary`) — 고정 아님, 드래그 배치. 노출 항목은 인스펙터 칩 관리(`ChipManagers.jsx`)로 조절: profilePanel은 props.hidden(캔버스 배지 클릭과 동일)+계정 프로필 항목 편집(문구·추가·순서는 계정 공통), surveySummary는 props.hiddenProfile(라벨 매칭)·hiddenQuestions(질문 문구 매칭, 줄바꿈 직렬화). hidden 계열은 AI 제외 목록(NON_LLM_EDITABLE/FACT/NON_GENERATED) 포함
-- **겹침 해소 + 컴팩트**: `resolveCollision(items, movedIds[], heights, soft?)` — 이동한 아이템은 고정, 겹치는 다른 아이템이 아래로 밀림. 드래그 미리보기는 **지속시간 게이트** — 겹치자마자 반응하지 않고, 겹침 45%(`DRAG_SOFT_RATIO`/`CONTAINER_SOFT_RATIO`) 이상이 지속시간(일반 250ms `DRAG_PUSH_DELAY_MS` / 컨테이너 400ms `CONTAINER_PUSH_DELAY_MS`)을 채운 아이템만 밀림, 그 외는 전부 제자리 고정(핀). 조건이 깨지면 타이머 리셋. 재배치 기준 위치는 250ms 스로틀(`DRAG_PREVIEW_MS`). 커밋(`settle`)은 soft 없이 정확 해소. **컨테이너 삽입↔회피는 구역으로 분리**(트리뷰 drop-into/between 패턴): 세로 중앙부 = 삽입 존(포인터가 있으면 "안에 배치"+밀림 보호), 상/하 `NEST_EDGE_ZONE`(18px) 밴드 = 밀어내기 존(깊은 겹침 지속 시 컨테이너가 비켜남). **히스테리시스**: 한 번 밀린 아이템은 겹침 15%(`PUSH_EXIT_RATIO`) 아래로 떨어질 때까지 밀림 유지(삽입 존 보호 무시) — 밀려나 있는 컨테이너는 삽입 대상에서도 제외되어 비워진 자리는 순수 빈자리로 배치된다. **미리보기 해소는 `previewResolve`**(layout.js): 게이트 통과 아이템만 드래그 박스에서 밀리고, 밀린 아이템이 덮친 아이템은 연쇄로 함께 밀려 자리를 만든다. 잠긴 아이템을 넘어야만 자리가 나면 밀지 않고 제자리 유지(blockedIds) → 그 상태로 드롭하면 커밋 없이 드래그가 원위치 복귀(토스트). 게이트가 열려 밀림이 시작되면 나머지 아이템도 컴팩트에 함께 참여(연쇄 스택 이동 — 먼 아이템이 중간을 건너뛰어 순간이동하지 않음), 아무도 안 밀렸으면 전원 핀 고정. 드롭 커밋은 마지막 미리보기 레이아웃(`previewLayoutRef`)을 기준으로 적용해 미리보기 = 드롭 결과(WYSIWYG). 회피가 발동하지 않은 겹침 상태로 드롭하면(미리보기에서 미해소 겹침) 커밋하지 않고 드래그가 원위치 복귀(토스트) — 컨테이너 삽입 존 드롭은 예외(정상 삽입). 시나리오별 `compact`('vertical' 기본 | 'horizontal' | 'none')에 따라 모든 배치 커밋 후 `compactItems`로 스택(빌더의 `settle()` 경유, 드래그 중엔 드래그 아이템만 핀 고정). 구버전 `gravity: false`는 'none'으로 해석
-- **아이템 모델**: `{ id, type, x, y, w, h(null=자동), props }`, 높이는 ResizeObserver로 heightsRef에 측정
-- **컨테이너(레이아웃) 컴포넌트**: 가로/세로 스크롤·그리드·캐러셀은 `container: true` — 다른 컴포넌트를 자식으로 수용. 자식은 같은 스테이지 배열에 `parentId + slot`으로 저장(플랫 유지), 캔버스 절대배치·레이아웃 연산은 최상위만(빌더 `withTopOnly`). 팔레트/캔버스 드래그를 컨테이너 위에 놓으면 중첩, 꺼내기는 인스펙터·레이어 패널. 삭제·복제·복사는 자식 연쇄. 레이아웃끼리 중첩 불가. 팔레트는 `category`(content/layout)로 그룹 표시. **기기 폭 전환은 최상위만 비례 환산하고 자식 폭은 건드리지 않는다**(`rescaleForDevice`) — 자식 폭은 캔버스가 아니라 컨테이너 안에서의 콘텐츠 크기이고, 자식엔 maxItemW 클램프가 안 걸려 비율 환산이 왕복마다 증폭된다. 좁은 기기에서 넘치는 문제는 슬롯 CSS가 맡는다: 가로 스크롤(`hscroll`)은 카드 크기를 유지해 스크롤로 흡수하고, 교차 축(`vscroll`·`gridPanel`)과 `carousel`은 `max-width: 100%`로 눌러 담는다. **주의: 아이템 id 재발급 시 parentId 매핑 필수** (`lib/scenarioOps.js` 참고 — parentId·계획 조건 questionId·평가 기록 키 세 곳을 함께 다시 매단다)
+- **탐색은 공통 페이지** (시나리오 소유 아님, 계정 소유). 칩 클릭 = 탐색 완료 → 플레이어는 설문부터 시작. **탐색 콘텐츠도 아이템 기반**: `explore.items[]`를 빌더의 "탐색" 탭에서 설문/계획처럼 스택 편집(자동 저장·즉시 홈 반영). 구버전 설정(greeting/stories 등)은 `exploreItemsFrom()`으로 최초 1회 아이템 변환. 발행 칩은 `scenarioChips` 컴포넌트 자리에 렌더
+- **프로필/설문 요약 패널은 일반 컴포넌트** (`profilePanel`, `surveySummary`) — 고정 아님, 드래그로 순서 배치. 노출 항목은 인스펙터 칩 관리(`ChipManagers.jsx`)로 조절: profilePanel은 props.hidden(캔버스 배지 클릭과 동일)+계정 프로필 항목 편집(문구·추가·순서는 계정 공통), surveySummary는 props.hiddenProfile(라벨 매칭)·hiddenQuestions(질문 문구 매칭, 줄바꿈 직렬화). hidden 계열은 AI 제외 목록(NON_LLM_EDITABLE/FACT/NON_GENERATED) 포함
+- **아이템 모델은 순서 기반 스택**: `{ id, type, props, hidden?, locked?, parentId?, slot?, w?, h? }` — **배열 순서 = 최상위 렌더 순서**, 좌표(x/y)와 최상위 크기(w/h)는 없다(전폭·자동 높이). w/h는 **컨테이너 자식 전용**(카드의 콘텐츠 크기 — 예: hscroll 상품 카드 232px). 이 모델은 BFF 와이어 형식(순서 있는 의미 목록)과 정합을 위해 좌표 자유 배치에서 전환한 것(2026-08). **구 좌표 데이터는 `normalizeItems`가 이관**: 최상위에 숫자 x/y가 보이면 y→x 순으로 재배열해 배열 순서로 굳히고 좌표 필드를 버린다(멱등). 이 관문을 지나는 경로 = localStorage 로드·서버 행 채택·가져오기·공유 링크·스타터 설치·버전 복원(`scenarioFromSnapshot`) — 스냅샷·서버 행 원본은 그대로 두고 읽을 때마다 이관되는 lazy 방식이라 별도 일괄 마이그레이션이 없다. 캔버스 드래그는 `useStackDrag`: 드래그 아이템은 제자리에서 흐려지고(삽입 라인이 위치 미리보기), 드롭 시 `reorderTop` 한 번으로 커밋. 판정은 전부 렌더된 DOM rect 기준(`geometry.js`)
+- **컨테이너(레이아웃) 컴포넌트**: 가로/세로 스크롤·그리드·캐러셀은 `container: true` — 다른 컴포넌트를 자식으로 수용. 자식은 같은 스테이지 배열에 `parentId + slot`으로 저장(플랫 유지), 스택 순서는 최상위만 본다. 팔레트/캔버스 드래그를 컨테이너 중앙부(상/하 `NEST_EDGE_ZONE` 18px 밴드 제외)에 놓으면 중첩, 꺼내기는 인스펙터·레이어 패널·컨테이너 박스 밖으로 드래그. 삭제·복제·복사는 자식 연쇄. 레이아웃끼리 중첩 불가. 팔레트는 `category`(content/layout)로 그룹 표시. **기기 폭 전환은 프레임 폭만 바뀐다** — 최상위는 전폭이라 환산이 없고, 자식 카드 크기는 그대로 유지된다. 좁은 기기에서 넘치는 문제는 슬롯 CSS가 맡는다: 가로 스크롤(`hscroll`)은 카드 크기를 유지해 스크롤로 흡수하고, 교차 축(`vscroll`·`gridPanel`)과 `carousel`은 `max-width: 100%`로 눌러 담는다. **주의: 아이템 id 재발급 시 parentId 매핑 필수** (`lib/scenarioOps.js` 참고 — parentId·계획 조건 questionId·평가 기록 키 세 곳을 함께 다시 매단다)
 - **원본 룩 유지**: `public/`에 원본 CSS(gmarket-advanced*.css) 복사본 + Tailwind CDN. 원본 클래스 그대로 재사용
 - **프로필별 워크스페이스(계정)**: `ddak-accounts-v1`에 `{accounts[], activeId}` — 계정 = 프로필+탐색 페이지+시나리오+쓰레드 묶음. 프로필 전환은 홈 드로어. 구 단일 키(`ddak-scenarios-v1`, `ddak-explore-page-v1`, `ddak-profile-v1`, `ddak-threads-v1`)는 최초 1회 첫 계정으로 마이그레이션 (발행은 브라우저 로컬 한정)
 - **컴포넌트 텍스트는 kText()로 렌더**: 인스펙터 서식 툴바가 모든 텍스트 필드에 `{{서식|텍스트}}` 마크업을 넣을 수 있으므로, 레지스트리에서 사용자 노출 텍스트 prop은 반드시 `kText(p.x, ctx, 'x')`로 감쌀 것 (안 그러면 마크업 원문이 그대로 노출됨)
@@ -123,7 +139,7 @@ cd scenario-studio && npm run build   # vite build && cp -R ../legacy ../docs/le
 - pointerup 커밋은 `setTimeout(0)`으로 미룸 (React 렌더 중 setState 경고 방지)
 - 드로어의 발행 버튼 텍스트 매칭 시 "발행 취소"와 "발행하기" 구분 필요
 - 히스토리 스냅샷은 `{stages, planCases, device, exploreItems}` JSON (Builder가 `useBuilderHistory`에 주입) — 시나리오 필드 추가 시 undo 포함 여부 검토
-- 아이템 목록을 바꾸는 함수는 항상 **업데이터 함수**를 넘길 것. 드래그/보정 커밋이 `setTimeout`으로 미뤄지므로 값으로 덮으면 낡은 클로저가 최신 상태를 지운다
-- 배치를 커밋하는 모든 경로는 `layoutOps.settle()`을 통과시킬 것 (겹침 해소 + 컴팩트가 한 곳에 있다)
-- **레이아웃 함수에 아이템 목록을 통째로 넘기지 말 것.** `layout.js`의 함수들(`compactItems`/`layoutCompactUp`/`resolveCollision`)은 받은 목록을 전부 캔버스 아이템으로 취급하므로, 컨테이너 자식이 섞이면 자식에 좌표를 부여하고 그 유령 블록이 최상위 아이템을 아래로 밀어낸다(캔버스 상단에 수백 px 빈 띠). 반드시 `layout.withTopOnly(prev, (top) => ...)`로 감쌀 것
-- `CanvasItem`의 ResizeObserver는 아이템당 한 번만 만들고 콜백은 ref로 갱신한다. 콜백을 그대로 붙잡으면 `previewMode`·컴팩트 방향이 첫 렌더 값에 얼어붙는다
+- 아이템 목록을 바꾸는 함수는 항상 **업데이터 함수**를 넘길 것. 드래그 커밋이 `setTimeout`으로 미뤄지므로 값으로 덮으면 낡은 클로저가 최신 상태를 지운다
+- 최상위 순서를 바꾸는 모든 경로는 `geometry.reorderTop()`을 통과시킬 것 — index는 "이동 아이템을 뺀 나머지" 기준이고, 자식은 배열 끝으로 통과한다
+- 아이템에 x/y/w/h를 새로 넣지 말 것 (최상위 기준). 좌표가 들어가면 `normalizeItems`가 구형 데이터로 판정해 재정렬한다 — 자식 카드 크기만 w/h 허용
+- 캔버스 줌은 `transform: scale`이 아니라 CSS `zoom` — 문서 흐름 스택이라 확대·축소가 레이아웃 크기(스크롤 범위)에 반영돼야 한다

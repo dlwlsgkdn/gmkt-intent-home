@@ -1,5 +1,5 @@
 {
-  "installCommand": "npm install && cd scenario-studio && npm install",
-  "buildCommand": "cd scenario-studio && npm run build",
-  "outputDirectory": "docs"
+  "installCommand": "npm install",
+  "buildCommand": "npm run build --workspace=apps/studio",
+  "outputDirectory": "apps/studio/dist"
 }

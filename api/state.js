@@ -11,13 +11,15 @@
 
    키 체계: 'accounts-meta'(계정 순서) · 'account:<id>'(셸 본문 — 프로필·탐색·시나리오 칩 메타)
    · 'account:<id>:scenario:<sid>'(시나리오 콘텐츠: stages·planCases) · 'account:<id>:versions:<sid>'
-   (발행 버전 스냅샷 — 빌더 전용) · 'account:<id>:threads'(쓰레드) · 'keywords'.
+   (발행 버전 스냅샷 — 빌더 전용) · 'account:<id>:threads'(쓰레드) · 'keywords'
+   · 'starters-meta'(기본 시나리오 목록 — 제목·원천 정보) · 'starter:<id>'(기본 시나리오
+   스냅샷 본문 — 새 프로필 생성 때만 읽는 불변 사본, last-write-wins).
    'accounts'는 구 통짜 블롭(마이그레이션 후 삭제됨). 행을 화면 필요 단위로 쪼갠 이유:
    통짜는 Vercel 함수 본문 한도(4.5MB)에 닿았고, 첫 접속이 홈에 필요 없는 무거운 데이터
    (케이스·버전 스냅샷·쓰레드)까지 기다리게 했다. */
 import { neon } from '@neondatabase/serverless'
 
-const KEY_PATTERN = /^(accounts|keywords|accounts-meta|account:[A-Za-z0-9_-]{1,64}(?::threads|:(?:versions|scenario):[A-Za-z0-9_-]{1,64})?)$/
+const KEY_PATTERN = /^(accounts|keywords|accounts-meta|starters-meta|starter:[A-Za-z0-9_-]{1,64}|account:[A-Za-z0-9_-]{1,64}(?::threads|:(?:versions|scenario):[A-Za-z0-9_-]{1,64})?)$/
 const BODY_KEY_PATTERN = /^account:[A-Za-z0-9_-]{1,64}$/
 
 let readyPromise
@@ -64,7 +66,7 @@ export default async function handler(req, res) {
       if (boot !== undefined) {
         const all = await sql`SELECT key, updated_at FROM app_state`
         const have = new Set(all.map((r) => r.key))
-        const wanted = ['accounts-meta', 'keywords']
+        const wanted = ['accounts-meta', 'keywords', 'starters-meta']
         const bootId = typeof boot === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(boot) ? boot : null
         if (bootId && have.has(`account:${bootId}`)) wanted.push(`account:${bootId}`)
         let rows = await sql`SELECT key, data, updated_at FROM app_state WHERE key = ANY(${wanted})`
