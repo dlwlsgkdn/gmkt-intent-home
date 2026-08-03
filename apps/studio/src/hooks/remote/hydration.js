@@ -14,7 +14,7 @@ import {
   versionsKey,
   isFatAccountRow,
 } from '../../lib/accountRows.js'
-import { isDefaultScenario, normalizeAccountsState } from '../../lib/store.js'
+import { DEFAULT_PROFILE, isDefaultScenario, normalizeAccountsState } from '../../lib/store.js'
 
 /*
  * 서버 하이드레이션 (접속 최초 1회) — 부트 1왕복 + 백그라운드.
@@ -31,6 +31,9 @@ import { isDefaultScenario, normalizeAccountsState } from '../../lib/store.js'
 const accountHasWork = (account) =>
   (account.scenarios || []).some((scenario) => !isDefaultScenario(scenario))
   || (account.threads || []).length > 0
+  /* 이름을 바꾼 프로필도 사용자 작업이다 — 새 프로필(사용자 지정 이름)이 시나리오 없이
+     만들어졌어도 시드 기본 계정(기본 이름)과 구분해 지키고, 활성도 뺏지 않는다 */
+  || (account.profile?.name && account.profile.name !== DEFAULT_PROFILE.name)
 const hasUserData = (list) => list.length > 1 || list.some(accountHasWork)
 
 /* ── 구형 → 새 행 체계 이관 ──
@@ -144,7 +147,10 @@ export async function runHydration({ ctx, adoption, starterSync, syncRow, accoun
         setActiveAccountId((prev) => {
           if (slimIds.includes(prev)) return prev
           const current = stateRef.current.accounts.find((account) => account.id === prev)
-          if (current && current !== initialByIdRef.current.get(prev)) return prev // 하이드레이션 중 만든 계정
+          /* 로컬에 살아남는 계정이면 활성 유지 — 아래 정리 필터와 같은 기준. 이번 세션에
+             만든 계정뿐 아니라, 지난 세션에 만들었지만 업로드가 끝나기 전에 새로고침해
+             서버에 아직 없는 계정(작업 있음)도 부트 계정에 활성을 뺏기면 안 된다 */
+          if (current && (current !== initialByIdRef.current.get(prev) || accountHasWork(current))) return prev
           return bootAccount.id
         })
         /* 한 번도 동기화된 적 없는 로컬 기본 계정 정리 — 빈 브라우저가 접속하며 시드한
