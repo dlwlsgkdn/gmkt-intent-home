@@ -30,7 +30,8 @@ import { ThreadsService } from './threads.service'
 import { openSse, sseClose, sseSend, type SseRes } from './sse'
 
 const SSE_DESC =
-  'SSE 스트림(text/event-stream)으로 응답한다: `event: status`(진행 문구) → `event: result`(완성 페이지) 또는 ' +
+  'SSE 스트림(text/event-stream)으로 응답한다: `event: status`(진행 문구) → 부분 스트리밍(`head` 머리 필드, ' +
+  '`question`/`section` 완성 컴포넌트 — 미리보기, 구버전 FE는 무시 가능) → `event: result`(완성 페이지 — 권위) 또는 ' +
   '`event: error`(실패 안내 `{ code, message, retryable }` — llm_not_configured|llm_refused|llm_failed|internal).'
 
 const DEVICE_HEADER = {
@@ -90,7 +91,10 @@ export class ThreadsController {
     openSse(res)
     sseSend(res, 'status', { message: '질문을 구성하고 있어요…' })
     try {
-      const page = await this.threads.generateSurvey(id, body.profile)
+      const page = await this.threads.generateSurvey(id, body.profile, {
+        onIntro: (intro) => sseSend(res, 'head', { intro }),
+        onQuestion: (question, index) => sseSend(res, 'question', { index, question }),
+      })
       sseSend(res, 'result', { page })
     } catch (e) {
       this.sendFailure(res, '설문 생성', e)
@@ -115,7 +119,11 @@ export class ThreadsController {
     openSse(res)
     sseSend(res, 'status', { message: '카탈로그와 웹을 살펴 계획을 세우고 있어요…' })
     try {
-      const page = await this.threads.generatePlan(id, body.answers, body.profile)
+      const page = await this.threads.generatePlan(id, body.answers, body.profile, {
+        onHead: (patch) => sseSend(res, 'head', patch),
+        onSection: (section, index) => sseSend(res, 'section', { index, section }),
+        onSearch: (query) => sseSend(res, 'status', { message: `웹에서 "${query}" 검색 중…` }),
+      })
       sseSend(res, 'result', { page })
     } catch (e) {
       this.sendFailure(res, '계획 생성', e)

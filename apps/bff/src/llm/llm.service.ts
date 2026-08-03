@@ -5,6 +5,7 @@ import type { AdminModelOption, Answer, LlmMeta, Profile, SurveyPageWire } from 
 import { CoreClientService } from '../core-client.service'
 import { PlanGen, SurveyGen } from './gen-schemas'
 import { PLAN_SYSTEM, PROMPT_VERSION, SURVEY_SYSTEM, buildPlanRequest, buildSurveyRequest } from './prompts'
+import { StructuredStreamParser } from './stream-parse'
 
 export const DEFAULT_MODEL = 'claude-opus-5'
 
@@ -30,6 +31,16 @@ const WEB_SEARCH_MAX_USES = 3
 const MAX_CONTINUATIONS = 3
 
 export type GenResult<T> = { content: T; meta: LlmMeta }
+
+/** 부분 스트리밍 핸들러 — 원소는 원시 JSON 조각으로 전달되고, 검증·투영은 호출자(threads.service) 몫.
+ * onSearch는 웹 검색 서버 도구의 실행을 알린다 (진행 문구용) */
+export type LlmStreamHandlers = {
+  arrayKey: string
+  headKeys?: string[]
+  onHead?: (key: string, value: string) => void
+  onElement?: (element: unknown, index: number) => void
+  onSearch?: (query: string) => void
+}
 
 /** LLM 생성 실패 — 컨트롤러가 SSE error 이벤트(실패 안내)로 변환한다 */
 export class LlmGenerationError extends Error {
@@ -97,11 +108,12 @@ export class LlmService {
     return this.client
   }
 
-  async generateSurvey(intent: string, profile?: Profile): Promise<GenResult<SurveyGen>> {
+  async generateSurvey(intent: string, profile?: Profile, stream?: LlmStreamHandlers): Promise<GenResult<SurveyGen>> {
     return this.generate('설문 생성', SurveyGen, {
       system: SURVEY_SYSTEM,
       effort: 'medium' as const,
       user: buildSurveyRequest(intent, profile),
+      stream,
     })
   }
 
@@ -110,19 +122,21 @@ export class LlmService {
     survey: SurveyPageWire,
     answers: Answer[],
     profile?: Profile,
+    stream?: LlmStreamHandlers,
   ): Promise<GenResult<PlanGen>> {
     return this.generate('계획 생성', PlanGen, {
       system: PLAN_SYSTEM,
       effort: 'high' as const,
       user: buildPlanRequest(intent, survey, answers, profile),
       webSearch: true, // 상품 추천은 카탈로그 + 웹 검색을 모두 살핀다 (§4-3)
+      stream,
     })
   }
 
   private async generate<S extends typeof SurveyGen | typeof PlanGen>(
     label: string,
     schema: S,
-    req: { system: string; effort: 'medium' | 'high'; user: string; webSearch?: boolean },
+    req: { system: string; effort: 'medium' | 'high'; user: string; webSearch?: boolean; stream?: LlmStreamHandlers },
   ): Promise<GenResult<S['_output']>> {
     const client = this.requireClient()
     const model = await this.resolveModel()
@@ -133,12 +147,22 @@ export class LlmService {
     const webSearchTool = WEB_SEARCH_BASIC_MODELS.has(model)
       ? { type: 'web_search_20250305' as const, name: 'web_search' as const, max_uses: WEB_SEARCH_MAX_USES }
       : { type: 'web_search_20260209' as const, name: 'web_search' as const, max_uses: WEB_SEARCH_MAX_USES }
+    // 컴포넌트 경계 파서 — pause_turn 연속 호출에 걸쳐 같은 인스턴스에 델타를 누적한다.
+    // 스트리밍은 미리보기일 뿐, 권위는 아래의 전체 파싱·검증(parseOutput)이다
+    const parser = req.stream
+      ? new StructuredStreamParser({
+          arrayKey: req.stream.arrayKey,
+          headKeys: req.stream.headKeys,
+          onHead: req.stream.onHead,
+          onElement: req.stream.onElement,
+        })
+      : null
     const started = Date.now()
-    let response: Awaited<ReturnType<typeof client.messages.parse>>
+    let response: Anthropic.Message
     try {
       const messages: Anthropic.MessageParam[] = [{ role: 'user', content: req.user }]
-      const call = () =>
-        client.messages.parse({
+      const call = () => {
+        const stream = client.messages.stream({
           model,
           max_tokens: 16000,
           system: [{ type: 'text', text: req.system, cache_control: { type: 'ephemeral', ttl: '1h' } }],
@@ -148,6 +172,17 @@ export class LlmService {
           ...(req.webSearch ? { tools: [webSearchTool] } : {}),
           messages,
         })
+        if (parser) stream.on('text', (delta) => parser.push(delta))
+        if (req.stream?.onSearch) {
+          stream.on('contentBlock', (block) => {
+            if (block.type === 'server_tool_use' && block.name === 'web_search') {
+              const query = (block.input as { query?: string } | null)?.query
+              if (query) req.stream?.onSearch?.(query)
+            }
+          })
+        }
+        return stream.finalMessage()
+      }
       response = await call()
       // 서버 도구 루프가 반복 상한에 걸리면 pause_turn으로 멈춘다 — 어시스턴트 턴을
       // 그대로 이어붙여 재요청하면 서버가 이어서 진행한다 (추가 사용자 메시지 금지)
@@ -181,7 +216,8 @@ export class LlmService {
       this.logger.warn(`${label} 거절 — category=${response.stop_details?.category ?? 'null'}`)
       throw new LlmGenerationError('llm_refused', '이 요청은 처리할 수 없어요. 다른 검색어로 시도해 주세요.', false)
     }
-    if (!response.parsed_output) {
+    const content = this.parseOutput(schema, response)
+    if (!content) {
       this.logger.warn(`${label} 결과 파싱 실패 — stop_reason=${response.stop_reason}`)
       throw new LlmGenerationError(
         'llm_failed',
@@ -189,7 +225,27 @@ export class LlmService {
         true,
       )
     }
-    return { content: response.parsed_output as S['_output'], meta: this.meta(started, response) }
+    return { content, meta: this.meta(started, response) }
+  }
+
+  /** 구조화 출력 텍스트 → 스키마 검증. JSON은 보통 마지막 텍스트 블록이지만,
+   * 도구 사용으로 블록이 쪼개진 경우를 대비해 전체 연결로 한 번 더 시도한다 */
+  private parseOutput<S extends typeof SurveyGen | typeof PlanGen>(
+    schema: S,
+    response: Anthropic.Message,
+  ): S['_output'] | null {
+    const texts = response.content
+      .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+      .map((block) => block.text)
+    for (const candidate of [texts[texts.length - 1], texts.join('')]) {
+      if (!candidate) continue
+      try {
+        return schema.parse(JSON.parse(candidate)) as S['_output']
+      } catch {
+        /* 다음 후보 */
+      }
+    }
+    return null
   }
 
   private meta(started: number, response: Anthropic.Message): LlmMeta {

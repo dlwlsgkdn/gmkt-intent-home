@@ -43,13 +43,20 @@ Base: `https://ddak-bff.vercel.app` · 사용자 식별: **`x-device-id` 헤더*
 | GET | `/api/threads?cursor=&limit=` | 쓰레드 목록 (히스토리 패널) | — | `ThreadListPage` |
 | GET | `/healthz` | 상태 — `llm: configured\|not_configured`, `core` | — | 상태 JSON |
 
-**SSE 프레임** (`Content-Type: text/event-stream`):
+**SSE 프레임** (`Content-Type: text/event-stream`) — 컴포넌트 단위 부분 스트리밍:
 
 ```
-event: status   → { message: "질문을 구성하고 있어요…" }         (생성 중 진행 표시)
-event: result   → { page: SurveyPageWire | PlanPageWire }        (완성 페이지 — 종료)
+event: status   → { message: "질문을 구성하고 있어요…" }         (진행 표시 — 웹 검색 중엔 검색어 문구)
+event: head     → { intro } | { headline } | { summary }         (머리 필드 — 완성 즉시, 필드별 개별 발송)
+event: question → { index, question: SurveyQuestionWire }        (설문 — 질문 하나 완성 즉시)
+event: section  → { index, section: PlanSectionWire }            (계획 — 섹션 하나 완성·그라운딩 통과 즉시)
+event: result   → { page: SurveyPageWire | PlanPageWire }        (완성 페이지 — 권위·저장 기준, 종료)
 event: error    → { code, message, retryable }                   (실패 안내 — 종료)
 ```
+
+부분 이벤트(head/question/section)는 **미리보기**다: 검증·그라운딩을 통과한 wire 형태로만 나가고
+(드롭된 원소는 index가 건너뛴다), 확정은 언제나 `result`의 전체 페이지다. 모르는 이벤트는 무시해도
+안전하다 — 구버전 FE ↔ 신버전 BFF 조합에서도 스켈레톤→result 동작으로 자연 강등된다.
 
 **실패 안내 정책**: LLM 실패 시 가짜 맞춤 콘텐츠(템플릿)로 대체하지 않고 `error` 이벤트로 정직하게
 알린다. FE는 `retryable`이면 "다시 시도"를, 아니면 안내 문구를 보여준다. (캐시 재서빙·칩→스튜디오

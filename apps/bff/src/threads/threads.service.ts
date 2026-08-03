@@ -8,16 +8,32 @@ import type {
   Profile,
   StartThreadBody,
   SurveyPageWire,
+  SurveyQuestionWire,
   ThreadSource,
   ThreadWithSteps,
 } from '@ddak/schema'
 import { CoreClientService } from '../core-client.service'
 import { LlmService } from '../llm/llm.service'
 import { CATALOG_BY_ID } from '../llm/catalog'
-import type { PlanGen } from '../llm/gen-schemas'
+import { PlanSectionGen, SurveyQuestionGen, type PlanGen } from '../llm/gen-schemas'
 
 /** 스텝 순번 — (thread, seq)가 멱등 키라 단계별 고정 순번을 쓴다 */
 const SEQ = { explore: 1, survey: 2, answers: 3, plan: 4, actionBase: 5 } as const
+
+/*
+ * 부분 스트리밍 핸들러 — 생성 중 완성되는 컴포넌트를 SSE로 미리 내보내기 위한 콜백.
+ * 원소는 여기서 단독 검증·그라운딩을 거친 "확정 wire 형태"로만 나간다 — FE가 그대로 렌더한다.
+ * 어디까지나 미리보기: 최종 result(전체 검증)가 언제나 권위이고, 저장도 result 기준이다.
+ */
+export type SurveyStreamHandlers = {
+  onIntro?: (intro: string) => void
+  onQuestion?: (question: SurveyQuestionWire, index: number) => void
+}
+export type PlanStreamHandlers = {
+  onHead?: (patch: { headline?: string; summary?: string }) => void
+  onSection?: (section: PlanSectionWire, index: number) => void
+  onSearch?: (query: string) => void
+}
 
 @Injectable()
 export class ThreadsService {
@@ -48,11 +64,26 @@ export class ThreadsService {
     return { threadId: thread.id }
   }
 
-  /** 설문 페이지 생성 (LLM #1) — 생성 결과에 BFF가 질문 id를 부여한다 */
-  async generateSurvey(threadId: string, profile?: Profile): Promise<SurveyPageWire> {
+  /** 설문 페이지 생성 (LLM #1) — 생성 결과에 BFF가 질문 id를 부여한다.
+   * stream 핸들러가 있으면 질문 하나가 완성될 때마다 미리 내보낸다 (id 부여 규칙 동일 = q{i+1}) */
+  async generateSurvey(threadId: string, profile?: Profile, stream?: SurveyStreamHandlers): Promise<SurveyPageWire> {
     const thread = await this.core.getThread(threadId)
     const intent = intentOf(thread)
-    const { content, meta } = await this.llm.generateSurvey(intent, profile)
+    const { content, meta } = await this.llm.generateSurvey(
+      intent,
+      profile,
+      stream && {
+        arrayKey: 'questions',
+        headKeys: ['intro'],
+        onHead: (key, value) => {
+          if (key === 'intro') stream.onIntro?.(value)
+        },
+        onElement: (element, index) => {
+          const parsed = SurveyQuestionGen.safeParse(element)
+          if (parsed.success) stream.onQuestion?.({ id: `q${index + 1}`, ...parsed.data }, index)
+        },
+      },
+    )
     const page: SurveyPageWire = {
       intro: content.intro,
       questions: content.questions.map((q, i) => ({ id: `q${i + 1}`, ...q })),
@@ -65,15 +96,40 @@ export class ThreadsService {
     return page
   }
 
-  /** 응답 제출 → 계획 페이지 생성 (LLM #2, 카탈로그 그라운딩) */
-  async generatePlan(threadId: string, answers: Answer[], profile?: Profile): Promise<PlanPageWire> {
+  /** 응답 제출 → 계획 페이지 생성 (LLM #2, 카탈로그+웹 그라운딩).
+   * stream 핸들러가 있으면 섹션 하나가 완성될 때마다 그라운딩을 거쳐 미리 내보낸다 */
+  async generatePlan(
+    threadId: string,
+    answers: Answer[],
+    profile?: Profile,
+    stream?: PlanStreamHandlers,
+  ): Promise<PlanPageWire> {
     const thread = await this.core.getThread(threadId)
     const surveyStep = thread.steps.find((s) => s.seq === SEQ.survey)
     if (!surveyStep) throw new BadRequestException('설문이 아직 생성되지 않았습니다')
     const survey = (surveyStep.payload as { page: SurveyPageWire }).page
     const intent = intentOf(thread)
 
-    const { content, meta } = await this.llm.generatePlan(intent, survey, answers, profile)
+    const { content, meta } = await this.llm.generatePlan(
+      intent,
+      survey,
+      answers,
+      profile,
+      stream && {
+        arrayKey: 'sections',
+        headKeys: ['headline', 'summary'],
+        onHead: (key, value) => stream.onHead?.({ [key]: value }),
+        onElement: (element, index) => {
+          const parsed = PlanSectionGen.safeParse(element)
+          if (!parsed.success) return
+          // 스트림 조각도 최종과 같은 그라운딩을 통과시킨다 — 검증은 결정적이라
+          // 같은 섹션은 result에서도 같은 모습으로 확정된다 (드롭 섹션은 안 내보냄)
+          const section = this.resolveSection(parsed.data, index)
+          if (section) stream.onSection?.(section, index)
+        },
+        onSearch: stream.onSearch,
+      },
+    )
     const page = this.resolvePlan(content)
 
     await this.persist(
@@ -88,38 +144,40 @@ export class ThreadsService {
     return page
   }
 
-  /** 상품 그라운딩 검증 — 카탈로그 밖 id는 버리고, 웹 상품은 URL 검증 통과분만 채택하고,
-   * 빈 상품 섹션은 드롭한다 (§4-3). 웹 상품은 검색 결과 기반이라 상품명·가격을 그대로 싣되
-   * url이 http(s)가 아니면 지어낸 것으로 보고 버린다 */
+  /** 섹션 하나의 그라운딩 검증 — 카탈로그 밖 id는 버리고, 웹 상품은 URL 검증 통과분만 채택.
+   * 상품이 하나도 안 남은 products 섹션은 null(드롭). 결정적이라 스트림 조각과 최종 결과가 일치한다 (§4-3) */
+  private resolveSection(s: PlanSectionGen, sectionIndex: number): PlanSectionWire | null {
+    if (s.kind !== 'products') return s
+    const products: CatalogProduct[] = s.productIds
+      .map((id) => CATALOG_BY_ID.get(id))
+      .filter((p): p is NonNullable<ReturnType<typeof CATALOG_BY_ID.get>> => Boolean(p))
+    if (products.length < s.productIds.length) {
+      this.logger.warn(`카탈로그 밖 상품 id ${s.productIds.length - products.length}건 드롭`)
+    }
+    s.webProducts.forEach((w, webIndex) => {
+      if (!isHttpUrl(w.url)) {
+        this.logger.warn(`웹 상품 URL 검증 실패로 드롭: ${w.name} (${w.url})`)
+        return
+      }
+      products.push({
+        id: `web-${sectionIndex}-${webIndex}`,
+        name: w.name,
+        brand: w.brand,
+        price: w.price,
+        tags: w.tags,
+        url: w.url,
+        mall: w.mall.trim() || '외부몰',
+      })
+    })
+    return products.length ? { kind: 'products', title: s.title, reason: s.reason, products } : null
+  }
+
+  /** 전체 계획 그라운딩 — 섹션별 resolveSection을 적용하고, 전부 드롭되면 안내로 대체한다 */
   private resolvePlan(gen: PlanGen): PlanPageWire {
     const sections: PlanSectionWire[] = []
     gen.sections.forEach((s, sectionIndex) => {
-      if (s.kind !== 'products') {
-        sections.push(s)
-        return
-      }
-      const products: CatalogProduct[] = s.productIds
-        .map((id) => CATALOG_BY_ID.get(id))
-        .filter((p): p is NonNullable<ReturnType<typeof CATALOG_BY_ID.get>> => Boolean(p))
-      if (products.length < s.productIds.length) {
-        this.logger.warn(`카탈로그 밖 상품 id ${s.productIds.length - products.length}건 드롭`)
-      }
-      s.webProducts.forEach((w, webIndex) => {
-        if (!isHttpUrl(w.url)) {
-          this.logger.warn(`웹 상품 URL 검증 실패로 드롭: ${w.name} (${w.url})`)
-          return
-        }
-        products.push({
-          id: `web-${sectionIndex}-${webIndex}`,
-          name: w.name,
-          brand: w.brand,
-          price: w.price,
-          tags: w.tags,
-          url: w.url,
-          mall: w.mall.trim() || '외부몰',
-        })
-      })
-      if (products.length) sections.push({ kind: 'products', title: s.title, reason: s.reason, products })
+      const section = this.resolveSection(s, sectionIndex)
+      if (section) sections.push(section)
     })
     if (!sections.length) {
       sections.push({ kind: 'guide', title: '준비된 안내', body: gen.summary })

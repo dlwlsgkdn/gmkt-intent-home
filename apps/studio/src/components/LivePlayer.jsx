@@ -44,6 +44,20 @@ function LiveSkeleton({ message }) {
   )
 }
 
+/* 부분 스트리밍 꼬리 — 도착한 컴포넌트 아래에서 나머지 생성이 진행 중임을 보여준다.
+   몇 개가 더 올지는 모르므로 개수 흉내 없이 진행 표시 한 블록만 정직하게 둔다 */
+function LiveTail({ message }) {
+  return (
+    <div className="sb-live-tail" role="status" aria-live="polite">
+      <div className="sb-live-skel sb-live-skel--tall" />
+      <p className="sb-live-status">
+        <span className="sb-live-status__spark" aria-hidden="true">✦</span>
+        {message || '이어서 생성하고 있어요…'}
+      </p>
+    </div>
+  )
+}
+
 /* 실패 안내 — retryable이면 다시 시도, 발행 시나리오가 있으면 강등 제안(사용자 선택) */
 function LiveError({ error, onRetry, fallbacks, onPlayScenario }) {
   return (
@@ -77,6 +91,9 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const [planKey, setPlanKey] = useState(null) // 계획을 만든 시점의 답변 스냅샷 (변경 감지)
   const [stageKey, setStageKey] = useState('survey')
   const [loading, setLoading] = useState(null) // null | { step: 'start'|'survey'|'plan', message }
+  // 생성 중 부분 페이지 (컴포넌트 단위 스트리밍) — 설문 { intro?, questions[] } | 계획 { headline?, summary?, sections[] }.
+  // 미리보기 전용: 확정은 언제나 result(전체 페이지)이고, 도착 즉시 이 상태는 버린다
+  const [partial, setPartial] = useState(null)
   const [error, setError] = useState(null) // null | { step, code, message, retryable }
   const [answers, setAnswers] = useState({})
   const [excludedProfile, setExcludedProfile] = useState([])
@@ -103,17 +120,32 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
 
   const generateSurvey = (id) => {
     setError(null)
+    setPartial(null)
     setLoading({ step: 'survey', message: '질문을 구성하고 있어요…' })
     streamLiveSurvey(id, { profile: profileWire() }, {
       onStatus: (message) => { if (!cancelledRef.current) setLoading((prev) => ({ ...(prev || { step: 'survey' }), message })) },
+      /* 부분 스트리밍 — 완성된 질문부터 스켈레톤 자리를 실제 컴포넌트로 채운다 */
+      onHead: (head) => {
+        if (!cancelledRef.current) setPartial((prev) => ({ questions: [], ...(prev || {}), ...head }))
+      },
+      onQuestion: (question, index) => {
+        if (cancelledRef.current) return
+        setPartial((prev) => {
+          const next = { ...(prev || {}), questions: [...((prev && prev.questions) || [])] }
+          next.questions[index] = question // 서버가 건너뛴 index는 빈 슬롯 — 투영 전에 걸러낸다
+          return next
+        })
+      },
       onResult: (page) => {
         if (cancelledRef.current) return
         setSurveyPage(page)
+        setPartial(null)
         setLoading(null)
         setStageKey('survey')
       },
       onError: (e) => {
         if (cancelledRef.current) return
+        setPartial(null)
         setLoading(null)
         setError({ step: 'survey', code: e.code, message: e.message, retryable: e.retryable })
       },
@@ -127,20 +159,36 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
       return
     }
     setError(null)
-    setLoading({ step: 'plan', message: '답변에 맞는 계획을 세우고 있어요…' })
+    setPartial(null)
+    setLoading({ step: 'plan', message: '카탈로그와 웹을 살펴 계획을 세우고 있어요…' })
+    window.scrollTo(0, 0) // 스트리밍이 위에서부터 채워지므로 시작 시점에 올려 둔다
     streamLivePlan(threadId, { answers: wire, profile: profileWire() }, {
       onStatus: (message) => { if (!cancelledRef.current) setLoading((prev) => ({ ...(prev || { step: 'plan' }), message })) },
+      /* 부분 스트리밍 — 머리(제목·요약)부터, 그다음 완성된 섹션 순서로 채운다 */
+      onHead: (patch) => {
+        if (!cancelledRef.current) setPartial((prev) => ({ sections: [], ...(prev || {}), ...patch }))
+      },
+      onSection: (section, index) => {
+        if (cancelledRef.current) return
+        setPartial((prev) => {
+          const next = { ...(prev || {}), sections: [...((prev && prev.sections) || [])] }
+          next.sections[index] = section // 서버가 드롭한 index는 빈 슬롯 — 투영 전에 걸러낸다
+          return next
+        })
+      },
       onResult: (page) => {
         if (cancelledRef.current) return
         setPlanPage(page)
         setPlanKey(JSON.stringify(wire))
         setReselecting(false) // 새 계획이 만들어졌으니 설문을 다시 잠근다
+        setPartial(null)
         setLoading(null)
         setStageKey('plan')
         window.scrollTo(0, 0)
       },
       onError: (e) => {
         if (cancelledRef.current) return
+        setPartial(null)
         setLoading(null)
         setError({ step: 'plan', code: e.code, message: e.message, retryable: e.retryable })
       },
@@ -295,7 +343,28 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const allItems = stageKey === 'plan' ? planItems : surveyItems
   const items = allItems.filter((it) => !it.parentId)
 
-  const stageIdx = STAGES.findIndex((s) => s.key === stageKey)
+  /* 생성 중 부분 페이지 투영 — 최종과 같은 livePage 투영을 그대로 쓴다 (아이템 id가 인덱스
+     기반이라 result 확정 때 React가 기존 컴포넌트를 재사용한다). 서버가 검증 실패·드롭으로
+     건너뛴 인덱스는 빈 슬롯이므로 걸러낸다 */
+  const partialAllItems = useMemo(() => {
+    if (!loading || !partial) return []
+    if (loading.step === 'plan') {
+      return livePlanItems({
+        headline: partial.headline || '',
+        summary: partial.summary || '',
+        sections: (partial.sections || []).filter(Boolean),
+      })
+    }
+    return liveSurveyItems({
+      intro: partial.intro || '',
+      questions: (partial.questions || []).filter(Boolean),
+    })
+  }, [loading, partial])
+  const partialItems = partialAllItems.filter((it) => !it.parentId)
+
+  /* 스테퍼 표시는 생성 중엔 생성 대상 단계를 따른다 (계획 스트리밍 중엔 계획 강조) */
+  const displayStageKey = loading ? (loading.step === 'plan' ? 'plan' : 'survey') : stageKey
+  const stageIdx = STAGES.findIndex((s) => s.key === displayStageKey)
   const viewer = DEVICE_PRESETS.find((d) => d.key === api.viewerDevice) || DEVICE_PRESETS[0]
   const answeredCount = questions.filter((q) => answers[q.id] != null && String(answers[q.id]).length > 0).length
   const planStale = planPage && planKey !== JSON.stringify(answersWire())
@@ -397,10 +466,24 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
             )}
           </div>
 
-          {loading ? (
-            <LiveSkeleton message={loading.message} />
-          ) : error ? (
+          {error ? (
             <LiveError error={error} onRetry={retry} fallbacks={fallbacks} onPlayScenario={api.playScenario} />
+          ) : loading ? (
+            partialItems.length === 0 ? (
+              <LiveSkeleton message={loading.message} />
+            ) : (
+              /* 컴포넌트 단위 스트리밍 — 도착한 컴포넌트부터 실제 렌더, 아래엔 진행 꼬리 */
+              <>
+                <div className="sb-player__stack">
+                  {partialItems.map((it) => (
+                    <div key={it.id} className="sb-player__item">
+                      {renderItem(it, { mode: 'player', player: playerApi, profile: api.profile, allItems: partialAllItems })}
+                    </div>
+                  ))}
+                </div>
+                <LiveTail message={loading.message} />
+              </>
+            )
           ) : (
             <>
               {stageKey === 'plan' && planStale && (

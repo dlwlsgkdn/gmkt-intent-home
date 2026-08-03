@@ -142,11 +142,15 @@ thread_steps (
 | GET | `/api/threads/{id}` | 이어보기 — 생성된 설문/응답/계획 복원 |
 | GET | `/api/threads` | 쓰레드 목록 (히스토리 패널) |
 
-SSE 이벤트: `status`(생성 단계 진행 — "질문 구성 중…"), `result`(완성 페이지 JSON), `error`.
+SSE 이벤트: `status`(진행 — 웹 검색 중엔 검색어 문구), `head`(머리 필드), `question`/`section`
+(완성 컴포넌트 — 부분 스트리밍), `result`(완성 페이지 JSON — 권위·저장 기준), `error`. 상세는 API.md §1.
 
-> v1은 `status` + `result`만. 아이템 단위 부분 스트리밍(`item` 이벤트)은 v2 —
-> 구조화 출력의 부분 파싱이 필요해 복잡도가 크고, 설문/계획 페이지는 수 KB라
-> 스켈레톤 → 통짜 렌더로도 체감이 충분하다.
+> **부분 스트리밍 구현 (2026-08, v2 앞당김)**: 구조화 출력 텍스트 델타를 `stream-parse.ts`의
+> 경계 파서(깊이·문자열·이스케이프 상태기계)로 누적 스캔해, 대상 배열(questions/sections)의
+> 원소가 닫힐 때마다 단독 검증(zod 원소 스키마)·그라운딩을 거쳐 SSE로 내보낸다.
+> pause_turn 연속 호출에도 같은 파서 인스턴스가 이어받는다. FE는 도착분을 실제 컴포넌트로
+> 렌더하고(livePage 투영 재사용 — 인덱스 기반 id라 result 확정 때 React가 재사용), 아래에
+> 진행 꼬리 스켈레톤을 남긴다. 스트림 조각은 미리보기일 뿐 확정·저장은 언제나 `result`다.
 
 ### 4-2. LLM 호출 설계 (Claude API, TypeScript SDK)
 

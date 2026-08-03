@@ -97,7 +97,9 @@ export function recordLiveEvent(threadId, type, data) {
   }).catch(() => {})
 }
 
-/* SSE 소비 — event/data 블록을 빈 줄 기준으로 잘라 status·result·error 핸들러에 배분한다.
+/* SSE 소비 — event/data 블록을 빈 줄 기준으로 잘라 핸들러에 배분한다.
+   status(진행 문구) 외에 부분 스트리밍 이벤트(head 머리 필드, question/section 완성 컴포넌트)를
+   지원한다 — 없는 핸들러는 무시하므로 구버전 BFF/FE 조합에서도 안전하다.
    result·error 없이 스트림이 끝나면(중간 끊김) internal 오류로 정직하게 알린다 */
 async function consumeSse(res, handlers) {
   const reader = res.body.getReader()
@@ -120,6 +122,12 @@ async function consumeSse(res, handlers) {
     }
     if (event === 'status') {
       if (handlers.onStatus && payload.message) handlers.onStatus(payload.message)
+    } else if (event === 'head') {
+      if (handlers.onHead) handlers.onHead(payload)
+    } else if (event === 'question') {
+      if (handlers.onQuestion && payload.question) handlers.onQuestion(payload.question, payload.index)
+    } else if (event === 'section') {
+      if (handlers.onSection && payload.section) handlers.onSection(payload.section, payload.index)
     } else if (event === 'result') {
       terminal = true
       handlers.onResult(payload.page)
@@ -168,12 +176,14 @@ async function streamGeneration(path, body, handlers) {
   }
 }
 
-/* 설문 페이지 생성 (LLM #1) — handlers: { onStatus(message), onResult(SurveyPageWire), onError(LiveApiError) } */
+/* 설문 페이지 생성 (LLM #1) — handlers: { onStatus(message), onHead({intro}),
+   onQuestion(SurveyQuestionWire, index), onResult(SurveyPageWire), onError(LiveApiError) } */
 export function streamLiveSurvey(threadId, body, handlers) {
   return streamGeneration(`/threads/${encodeURIComponent(threadId)}/survey`, body, handlers)
 }
 
-/* 응답 제출 → 계획 페이지 생성 (LLM #2) — handlers: { onStatus, onResult(PlanPageWire), onError } */
+/* 응답 제출 → 계획 페이지 생성 (LLM #2) — handlers: { onStatus, onHead({headline?, summary?}),
+   onSection(PlanSectionWire, index), onResult(PlanPageWire), onError } */
 export function streamLivePlan(threadId, body, handlers) {
   return streamGeneration(`/threads/${encodeURIComponent(threadId)}/plan`, body, handlers)
 }
