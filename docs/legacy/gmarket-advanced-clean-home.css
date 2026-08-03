@@ -1838,6 +1838,17 @@ body.clean-home-page.clean-solution-active #solution-view {
     opacity: 0.46;
 }
 
+/* 리뷰 모드(계획 생성 후 잠금)에서는 사진 질문의 조작 UI를 숨긴다 */
+.clean-home-page .clean-photo-upload.clean-review-locked .clean-photo-upload__actions,
+.clean-home-page .clean-photo-upload.clean-review-locked .clean-photo-upload__sample {
+    display: none !important;
+}
+
+.clean-home-page .clean-photo-upload.clean-review-locked .clean-photo-upload__empty {
+    pointer-events: none;
+    opacity: 0.55;
+}
+
 .clean-home-page .info-card.ring-4 {
     box-shadow: inset 0 0 0 1px rgba(31, 41, 51, 0.18) !important;
 }

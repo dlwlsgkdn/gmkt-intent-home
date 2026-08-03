@@ -3332,7 +3332,8 @@ function executeSearch(query, options = {}) {
         state.rawQuery = query;
         state.choices = { ...getEmptyChoices(), ...(existingSession[1].choices || {}) };
         state.surveyStepIndex = 0;
-        state.isSurveyReviewMode = false;
+        /* 이미 계획이 생성된 쓰레드면 설문을 잠금 상태로 연다 — 수정은 "설문 수정하기" 확인을 거쳐서만 */
+        state.isSurveyReviewMode = getSessionEffectiveThreadView(existingSession[1]) !== "info";
         renderInfoView(state.currentIntent);
         infoView?.classList.remove("hidden");
         infoView?.classList.add("flex");
@@ -4091,6 +4092,13 @@ function applySurveyReviewMode() {
         button.disabled = state.isSurveyReviewMode;
         button.classList.toggle("clean-review-locked", state.isSurveyReviewMode);
     });
+    /* 사진 질문도 함께 잠근다 — 업로드·초기화·샘플 버튼 숨김, 파일 입력 비활성 */
+    container.querySelectorAll(".clean-photo-upload").forEach((box) => {
+        box.classList.toggle("clean-review-locked", state.isSurveyReviewMode);
+    });
+    container.querySelectorAll(".clean-photo-upload__input").forEach((input) => {
+        input.disabled = state.isSurveyReviewMode;
+    });
 }
 
 function ensureSurveyResultSession() {
@@ -4294,6 +4302,7 @@ window.handleBeautyPhotoUpload = function handleBeautyPhotoUpload(input, categor
 };
 
 window.resetBeautyPhoto = function resetBeautyPhoto(category = "photo") {
+    if (state.isSurveyReviewMode) return;
     state.choices[category] = "";
     state.choices.photoName = "";
     renderInfoView(state.currentIntent);
