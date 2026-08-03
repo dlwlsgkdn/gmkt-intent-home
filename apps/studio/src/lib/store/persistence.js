@@ -1,5 +1,6 @@
 import { DEVICE_PRESETS, normalizeItems, normalizeScenario, uid } from './model.js'
 import { DEFAULT_EXPLORE, DEFAULT_KEYWORDS, DEFAULT_PROFILE, exploreItemsFrom } from './defaults.js'
+import { REMOTE_ENABLED } from '../remote.js'
 
 /*
  * localStorage 영속화와 계정(프로필별 워크스페이스), 전체 백업.
@@ -160,8 +161,28 @@ export function loadAccounts() {
   return { accounts: [first], activeId: first.id }
 }
 
+/* 운영(서버 미러링) 프로필의 캐시에는 발행 버전 스냅샷을 싣지 않는다 — 전체 계정 블롭이
+   localStorage 한도(5MB 브라우저)를 넘으면 저장이 통째로 조용히 실패해, 캐시가 마지막
+   성공 시점에 얼어붙고 이후 채택된 계정·전환이 세션마다 증발한다. 버전은 서버가 원본이고
+   빌더 진입 시 다시 받는다(ensureStudioSynced). local 프로필은 서버가 없으므로 그대로 싣는다 */
+const cacheAccount = (account) => {
+  if (!REMOTE_ENABLED) return account
+  const scenarios = (account.scenarios || []).map((scenario) =>
+    Array.isArray(scenario.versions) && scenario.versions.length > 0
+      ? { ...scenario, versions: [] }
+      : scenario)
+  return scenarios.some((scenario, i) => scenario !== account.scenarios[i])
+    ? { ...account, scenarios }
+    : account
+}
+
 export function saveAccounts(accounts, activeId) {
-  writeJson(ACCOUNTS_KEY, { accounts, activeId })
+  try {
+    localStorage.setItem(ACCOUNTS_KEY, JSON.stringify({ accounts: accounts.map(cacheAccount), activeId }))
+  } catch (error) {
+    /* 여기서 실패하면 이 브라우저의 캐시가 낡은 채 남는다 — 원인 추적을 위해 조용히 삼키지 않는다 */
+    console.warn('[store] 계정 상태 localStorage 저장 실패 — 새로고침하면 캐시가 옛 상태로 보입니다:', error?.name || error)
+  }
 }
 
 /* ── JSON 파일 입출력 (드로어 통합 입출력의 형식 계층) ──
