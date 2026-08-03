@@ -20,43 +20,64 @@ export const SurveyGen = z.object({
 })
 export type SurveyGen = z.infer<typeof SurveyGen>
 
-export const PlanSectionGen = z.discriminatedUnion('kind', [
-  z.object({
-    kind: z.literal('guide'),
-    title: z.string(),
-    body: z.string().describe('가이드 본문 — 답변을 근거로 든다'),
-  }),
-  z.object({
-    kind: z.literal('products'),
-    title: z.string(),
-    reason: z.string().describe('이 상품들을 고른 이유 한두 문장'),
-    productIds: z.array(z.string()).max(4).describe('카탈로그에서 고른 상품 id (없으면 빈 배열)'),
-    // 웹 검색 그라운딩: 검색 결과에서 확인한 상품만 — url은 BFF가 http(s) 검증 후 채택한다
-    webProducts: z
-      .array(
-        z.object({
-          name: z.string().describe('상품명 — 검색 결과에 나온 실제 상품명'),
-          brand: z.string().describe('브랜드'),
-          price: z.number().int().describe('판매가 (원 단위 정수) — 검색 결과에서 확인한 값'),
-          mall: z.string().describe('판매처 이름 (예: 올리브영, 쿠팡)'),
-          url: z.string().describe('상품 상세 페이지(PDP) URL — 검색 결과의 주소 그대로. 검색 결과·목록 페이지 금지'),
-          tags: z.array(z.string()).max(5).describe('특징 태그'),
-        }),
-      )
-      .max(4)
-      .describe('웹 검색으로 찾은 상품 (없으면 빈 배열)'),
-  }),
-  z.object({
-    kind: z.literal('steps'),
-    title: z.string(),
-    steps: z.array(z.string()).min(2).max(6).describe('실행 순서 — 아침/저녁 루틴 등'),
-  }),
-])
-export type PlanSectionGen = z.infer<typeof PlanSectionGen>
+/*
+ * 계획은 2단계 병렬 생성이다 (DESIGN-LLM-SERVICE.md §9-1):
+ * ① 뼈대(PlanSkeletonGen) — 검색 없이 제목·요약·안내·순서 + 상품 섹션 "자리"(제목·기준)만
+ * ② 상품(PlanProductsGen) — 웹 검색 포함으로 상품 섹션 본문만. 뼈대의 자리를 채운다
+ */
 
-export const PlanGen = z.object({
+const GuideSectionGen = z.object({
+  kind: z.literal('guide'),
+  title: z.string(),
+  body: z.string().describe('가이드 본문 — 답변을 근거로 든다'),
+})
+
+const StepsSectionGen = z.object({
+  kind: z.literal('steps'),
+  title: z.string(),
+  steps: z.array(z.string()).min(2).max(6).describe('실행 순서 — 아침/저녁 루틴 등'),
+})
+
+export const ProductsSectionGen = z.object({
+  kind: z.literal('products'),
+  title: z.string(),
+  reason: z.string().describe('이 상품들을 고른 이유 한두 문장 — 답변을 근거로'),
+  productIds: z.array(z.string()).max(4).describe('카탈로그에서 고른 상품 id (없으면 빈 배열)'),
+  // 웹 검색 그라운딩: 검색 결과에서 확인한 상품만 — url은 BFF가 http(s)+PDP 검증 후 채택한다
+  webProducts: z
+    .array(
+      z.object({
+        name: z.string().describe('상품명 — 검색 결과에 나온 실제 상품명'),
+        brand: z.string().describe('브랜드'),
+        price: z.number().int().describe('판매가 (원 단위 정수) — 검색 결과에서 확인한 값'),
+        mall: z.string().describe('판매처 이름 (예: 올리브영, 쿠팡)'),
+        url: z.string().describe('상품 상세 페이지(PDP) URL — 검색 결과의 주소 그대로. 검색 결과·목록 페이지 금지'),
+        tags: z.array(z.string()).max(5).describe('특징 태그'),
+      }),
+    )
+    .max(4)
+    .describe('웹 검색으로 찾은 상품 (없으면 빈 배열)'),
+})
+export type ProductsSectionGen = z.infer<typeof ProductsSectionGen>
+
+/** 뼈대의 상품 섹션 자리 — 상품 없이 제목·기준만. 상품 단계 결과가 이 자리를 채운다 */
+const ProductsSlotGen = z.object({
+  kind: z.literal('products'),
+  title: z.string().describe('상품 섹션 제목'),
+  reason: z.string().describe('상품을 고를 기준 한두 문장 — 구체 상품명은 쓰지 않는다'),
+})
+
+export const PlanSkeletonSectionGen = z.discriminatedUnion('kind', [GuideSectionGen, ProductsSlotGen, StepsSectionGen])
+export type PlanSkeletonSectionGen = z.infer<typeof PlanSkeletonSectionGen>
+
+export const PlanSkeletonGen = z.object({
   headline: z.string().describe('계획 페이지 제목 — 설문 결과를 반영한 맞춤 문구'),
   summary: z.string().describe('추천 방향 요약 두세 문장'),
-  sections: z.array(PlanSectionGen).min(2).max(5),
+  sections: z.array(PlanSkeletonSectionGen).min(2).max(5),
 })
-export type PlanGen = z.infer<typeof PlanGen>
+export type PlanSkeletonGen = z.infer<typeof PlanSkeletonGen>
+
+export const PlanProductsGen = z.object({
+  sections: z.array(ProductsSectionGen).min(1).max(2).describe('추천 상품 섹션 1~2개'),
+})
+export type PlanProductsGen = z.infer<typeof PlanProductsGen>

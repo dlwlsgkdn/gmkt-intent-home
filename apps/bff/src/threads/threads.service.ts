@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import type {
   Answer,
   CatalogProduct,
+  LlmMeta,
   ThreadEventBody,
   PlanPageWire,
   PlanSectionWire,
@@ -15,7 +16,8 @@ import type {
 import { CoreClientService } from '../core-client.service'
 import { LlmService } from '../llm/llm.service'
 import { CATALOG_BY_ID } from '../llm/catalog'
-import { PlanSectionGen, SurveyQuestionGen, type PlanGen } from '../llm/gen-schemas'
+import { PlanSkeletonSectionGen, ProductsSectionGen, SurveyQuestionGen } from '../llm/gen-schemas'
+import { mergePlanSections, productSectionIndex } from './plan-merge'
 
 /** 스텝 순번 — (thread, seq)가 멱등 키라 단계별 고정 순번을 쓴다 */
 const SEQ = { explore: 1, survey: 2, answers: 3, plan: 4, actionBase: 5 } as const
@@ -96,8 +98,10 @@ export class ThreadsService {
     return page
   }
 
-  /** 응답 제출 → 계획 페이지 생성 (LLM #2, 카탈로그+웹 그라운딩).
-   * stream 핸들러가 있으면 섹션 하나가 완성될 때마다 그라운딩을 거쳐 미리 내보낸다 */
+  /** 응답 제출 → 계획 페이지 생성 (LLM #2, 2단계 병렬 — §9-1).
+   * 뼈대(검색 없음, 수 초)가 제목·안내·순서와 상품 "자리"를 확정해 먼저 스트리밍되고,
+   * 상품(검색 포함)이 병렬로 돌아 자리를 채운다. 상품 섹션 스트림은 뼈대 완료로 자리
+   * 인덱스가 확정된 뒤 내보낸다 — 실측상 뼈대가 항상 훨씬 먼저 끝나 체감 지연이 없다 */
   async generatePlan(
     threadId: string,
     answers: Answer[],
@@ -110,27 +114,92 @@ export class ThreadsService {
     const survey = (surveyStep.payload as { page: SurveyPageWire }).page
     const intent = intentOf(thread)
 
-    const { content, meta } = await this.llm.generatePlan(
+    const slotIndexes: number[] = []
+    let skeletonLength: number | null = null // null = 뼈대 미완 — 상품 섹션은 대기열에 쌓인다
+    const arrivedProducts: PlanSectionWire[] = []
+    let emittedProducts = 0
+    const flushProducts = () => {
+      if (skeletonLength === null || !stream?.onSection) return
+      while (emittedProducts < arrivedProducts.length) {
+        const index = productSectionIndex(slotIndexes, skeletonLength, emittedProducts)
+        stream.onSection(arrivedProducts[emittedProducts], index)
+        emittedProducts += 1
+      }
+    }
+
+    const skeletonPromise = this.llm
+      .generatePlanSkeleton(
+        intent,
+        survey,
+        answers,
+        profile,
+        stream && {
+          arrayKey: 'sections',
+          headKeys: ['headline', 'summary'],
+          onHead: (key, value) => stream.onHead?.({ [key]: value }),
+          onElement: (element, index) => {
+            const parsed = PlanSkeletonSectionGen.safeParse(element)
+            if (!parsed.success) return
+            // 상품 자리는 내보내지 않는다 — 상품 단계 결과가 이 인덱스를 차지한다
+            if (parsed.data.kind !== 'products') stream.onSection?.(parsed.data, index)
+          },
+        },
+      )
+      .then((result) => {
+        // 자리 인덱스는 스트림 조각이 아니라 최종 검증본 기준으로 확정한다 (조각 파싱 누락 보정)
+        skeletonLength = result.content.sections.length
+        slotIndexes.length = 0
+        result.content.sections.forEach((s, i) => {
+          if (s.kind === 'products') slotIndexes.push(i)
+        })
+        flushProducts()
+        return result
+      })
+
+    const productsPromise = this.llm.generatePlanProducts(
       intent,
       survey,
       answers,
       profile,
       stream && {
         arrayKey: 'sections',
-        headKeys: ['headline', 'summary'],
-        onHead: (key, value) => stream.onHead?.({ [key]: value }),
         onElement: (element, index) => {
-          const parsed = PlanSectionGen.safeParse(element)
+          const parsed = ProductsSectionGen.safeParse(element)
           if (!parsed.success) return
-          // 스트림 조각도 최종과 같은 그라운딩을 통과시킨다 — 검증은 결정적이라
-          // 같은 섹션은 result에서도 같은 모습으로 확정된다 (드롭 섹션은 안 내보냄)
-          const section = this.resolveSection(parsed.data, index)
-          if (section) stream.onSection?.(section, index)
+          // 스트림 조각도 최종과 같은 그라운딩을 통과시킨다 — 결정적이라 result와 어긋나지 않는다
+          const section = this.resolveProductsSection(parsed.data, index)
+          if (section) {
+            arrivedProducts.push(section)
+            flushProducts()
+          }
         },
         onSearch: stream.onSearch,
       },
     )
-    const page = this.resolvePlan(content)
+
+    const [skeletonSettled, productsSettled] = await Promise.allSettled([skeletonPromise, productsPromise])
+    if (skeletonSettled.status === 'rejected') throw skeletonSettled.reason
+    const skeleton = skeletonSettled.value
+
+    // 상품 단계 실패는 계획 전체를 죽이지 않는다 — 상품 없는 계획을 정직하게 반환하고 로그만 남긴다
+    let productSections: PlanSectionWire[] = []
+    let productsMeta: LlmMeta | null = null
+    if (productsSettled.status === 'fulfilled') {
+      productsMeta = productsSettled.value.meta
+      productSections = productsSettled.value.content.sections
+        .map((s, i) => this.resolveProductsSection(s, i))
+        .filter((s): s is PlanSectionWire => s !== null)
+    } else {
+      this.logger.warn(
+        `계획 상품 생성 실패 — 상품 없이 계획 반환: ${(productsSettled.reason as Error)?.message ?? productsSettled.reason}`,
+      )
+    }
+
+    const sections = mergePlanSections(skeleton.content.sections, productSections)
+    if (!sections.length) {
+      sections.push({ kind: 'guide', title: '준비된 안내', body: skeleton.content.summary })
+    }
+    const page: PlanPageWire = { headline: skeleton.content.headline, summary: skeleton.content.summary, sections }
 
     await this.persist(
       'plan',
@@ -138,16 +207,19 @@ export class ThreadsService {
         stage: 'answers',
         payload: { answers, profile: profile ?? null },
       }),
-      this.core.upsertStep(threadId, SEQ.plan, { stage: 'plan', payload: { page }, llmMeta: meta }),
+      this.core.upsertStep(threadId, SEQ.plan, {
+        stage: 'plan',
+        payload: { page },
+        llmMeta: combineMeta(skeleton.meta, productsMeta),
+      }),
       this.core.updateThread(threadId, { status: 'planning' }),
     )
     return page
   }
 
-  /** 섹션 하나의 그라운딩 검증 — 카탈로그 밖 id는 버리고, 웹 상품은 URL 검증 통과분만 채택.
-   * 상품이 하나도 안 남은 products 섹션은 null(드롭). 결정적이라 스트림 조각과 최종 결과가 일치한다 (§4-3) */
-  private resolveSection(s: PlanSectionGen, sectionIndex: number): PlanSectionWire | null {
-    if (s.kind !== 'products') return s
+  /** 상품 섹션 그라운딩 검증 — 카탈로그 밖 id는 버리고, 웹 상품은 URL(http/https+PDP) 검증 통과분만 채택.
+   * 상품이 하나도 안 남으면 null(드롭). 결정적이라 스트림 조각과 최종 결과가 일치한다 (§4-3) */
+  private resolveProductsSection(s: ProductsSectionGen, sectionIndex: number): PlanSectionWire | null {
     const products: CatalogProduct[] = s.productIds
       .map((id) => CATALOG_BY_ID.get(id))
       .filter((p): p is NonNullable<ReturnType<typeof CATALOG_BY_ID.get>> => Boolean(p))
@@ -175,19 +247,6 @@ export class ThreadsService {
       })
     })
     return products.length ? { kind: 'products', title: s.title, reason: s.reason, products } : null
-  }
-
-  /** 전체 계획 그라운딩 — 섹션별 resolveSection을 적용하고, 전부 드롭되면 안내로 대체한다 */
-  private resolvePlan(gen: PlanGen): PlanPageWire {
-    const sections: PlanSectionWire[] = []
-    gen.sections.forEach((s, sectionIndex) => {
-      const section = this.resolveSection(s, sectionIndex)
-      if (section) sections.push(section)
-    })
-    if (!sections.length) {
-      sections.push({ kind: 'guide', title: '준비된 안내', body: gen.summary })
-    }
-    return { headline: gen.headline, summary: gen.summary, sections }
   }
 
   /** 담기/완료 등 행동 기록 — 다음 빈 seq에 기록, complete면 상태 갱신 */
@@ -237,6 +296,23 @@ export class ThreadsService {
       }
     }
   }
+}
+
+/** 2단계 메타 결합 — usage는 합산, latency는 병렬이라 max. 단계별 소요는 phases로 남긴다 (admin 진단용) */
+function combineMeta(skeleton: LlmMeta, products: LlmMeta | null): LlmMeta {
+  const sum = (a?: number, b?: number) => (a == null && b == null ? undefined : (a ?? 0) + (b ?? 0))
+  return {
+    model: products?.model ?? skeleton.model,
+    promptVersion: skeleton.promptVersion,
+    usage: {
+      inputTokens: sum(skeleton.usage?.inputTokens, products?.usage?.inputTokens),
+      outputTokens: sum(skeleton.usage?.outputTokens, products?.usage?.outputTokens),
+      cacheReadTokens: sum(skeleton.usage?.cacheReadTokens, products?.usage?.cacheReadTokens),
+      webSearchRequests: products?.usage?.webSearchRequests,
+    },
+    latencyMs: Math.max(skeleton.latencyMs ?? 0, products?.latencyMs ?? 0),
+    phases: { skeletonMs: skeleton.latencyMs ?? null, productsMs: products?.latencyMs ?? null },
+  } as LlmMeta
 }
 
 function parseHttpUrl(raw: string): URL | null {

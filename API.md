@@ -37,7 +37,7 @@ Base: `https://ddak-bff.vercel.app` · 사용자 식별: **`x-device-id` 헤더*
 |---|---|---|---|---|
 | POST | `/api/threads` | 쓰레드 시작 — 생성 + 탐색 스텝 기록 | `StartThreadBody` `{ chipId?\|query, title?, profile? }` | `{ threadId }` |
 | POST | `/api/threads/:id/survey` | **설문 페이지 생성 (LLM #1**, effort medium**)** | `{ profile? }` | **SSE** → `result.page: SurveyPageWire` |
-| POST | `/api/threads/:id/plan` | **응답 제출 → 계획 생성 (LLM #2**, effort high, 카탈로그 그라운딩 + 웹 검색(`web_search` 서버 도구, 최대 3회)**)** | `{ answers: [{questionId, choices[]}], profile? }` | **SSE** → `result.page: PlanPageWire` |
+| POST | `/api/threads/:id/plan` | **응답 제출 → 계획 생성 (LLM #2 — 2단계 병렬**: 뼈대(검색 없음·medium, 수 초 스트리밍) ∥ 상품(카탈로그+웹 검색 그라운딩·high) — 상품 섹션이 뼈대의 자리 인덱스로 끼어든다, DESIGN §9-1**)** | `{ answers: [{questionId, choices[]}], profile? }` | **SSE** → `result.page: PlanPageWire` |
 | POST | `/api/threads/:id/events` | 담기/완료 행동 기록 (`complete`면 status=done) | `{ type, data? }` | `{ ok: true }` |
 | GET | `/api/threads/:id` | 이어보기 — 단계별 페이지 복원 | — | `{ threadId, title, status, source, survey, answers, plan, updatedAt }` |
 | GET | `/api/threads?cursor=&limit=` | 쓰레드 목록 (히스토리 패널) | — | `ThreadListPage` |

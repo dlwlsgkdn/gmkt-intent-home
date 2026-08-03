@@ -52,6 +52,7 @@ export function livePlanItems(page) {
   })
   let stepNo = 0
   ;(page.sections || []).forEach((section, i) => {
+    if (!section) return // 부분 스트리밍의 빈 슬롯(아직 안 온 상품 자리) — 인덱스는 보존된다
     const base = `live-plan-s${i}`
     if (section.kind === 'guide') {
       stepNo += 1

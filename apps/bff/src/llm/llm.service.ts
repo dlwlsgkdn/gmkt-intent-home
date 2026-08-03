@@ -1,10 +1,19 @@
 import { Injectable, Logger } from '@nestjs/common'
 import Anthropic from '@anthropic-ai/sdk'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
+import type { z } from 'zod'
 import type { AdminModelOption, Answer, LlmMeta, Profile, SurveyPageWire } from '@ddak/schema'
 import { CoreClientService } from '../core-client.service'
-import { PlanGen, SurveyGen } from './gen-schemas'
-import { PLAN_SYSTEM, PROMPT_VERSION, SURVEY_SYSTEM, buildPlanRequest, buildSurveyRequest } from './prompts'
+import { PlanProductsGen, PlanSkeletonGen, SurveyGen } from './gen-schemas'
+import {
+  PLAN_PRODUCTS_SYSTEM,
+  PLAN_SKELETON_SYSTEM,
+  PROMPT_VERSION,
+  SURVEY_SYSTEM,
+  buildPlanProductsRequest,
+  buildPlanSkeletonRequest,
+  buildSurveyRequest,
+} from './prompts'
 import { StructuredStreamParser } from './stream-parse'
 
 export const DEFAULT_MODEL = 'claude-opus-5'
@@ -117,23 +126,40 @@ export class LlmService {
     })
   }
 
-  async generatePlan(
+  /** 계획 1단계 — 뼈대 (검색 없음·medium): 제목·요약·안내·순서 + 상품 자리. 수 초 안에 스트리밍된다 */
+  async generatePlanSkeleton(
     intent: string,
     survey: SurveyPageWire,
     answers: Answer[],
     profile?: Profile,
     stream?: LlmStreamHandlers,
-  ): Promise<GenResult<PlanGen>> {
-    return this.generate('계획 생성', PlanGen, {
-      system: PLAN_SYSTEM,
-      effort: 'high' as const,
-      user: buildPlanRequest(intent, survey, answers, profile),
-      webSearch: true, // 상품 추천은 카탈로그 + 웹 검색을 모두 살핀다 (§4-3)
+  ): Promise<GenResult<PlanSkeletonGen>> {
+    return this.generate('계획 뼈대 생성', PlanSkeletonGen, {
+      system: PLAN_SKELETON_SYSTEM,
+      effort: 'medium' as const, // 속도가 목적 — 텍스트 뼈대는 medium으로 충분
+      user: buildPlanSkeletonRequest(intent, survey, answers, profile),
       stream,
     })
   }
 
-  private async generate<S extends typeof SurveyGen | typeof PlanGen>(
+  /** 계획 2단계 — 상품 (검색 포함·high): 카탈로그+웹 그라운딩 상품 섹션만. 뼈대와 병렬로 돈다 (§4-3·§9-1) */
+  async generatePlanProducts(
+    intent: string,
+    survey: SurveyPageWire,
+    answers: Answer[],
+    profile?: Profile,
+    stream?: LlmStreamHandlers,
+  ): Promise<GenResult<PlanProductsGen>> {
+    return this.generate('계획 상품 생성', PlanProductsGen, {
+      system: PLAN_PRODUCTS_SYSTEM,
+      effort: 'high' as const,
+      user: buildPlanProductsRequest(intent, survey, answers, profile),
+      webSearch: true,
+      stream,
+    })
+  }
+
+  private async generate<S extends z.ZodTypeAny>(
     label: string,
     schema: S,
     req: { system: string; effort: 'medium' | 'high'; user: string; webSearch?: boolean; stream?: LlmStreamHandlers },
@@ -230,7 +256,7 @@ export class LlmService {
 
   /** 구조화 출력 텍스트 → 스키마 검증. JSON은 보통 마지막 텍스트 블록이지만,
    * 도구 사용으로 블록이 쪼개진 경우를 대비해 전체 연결로 한 번 더 시도한다 */
-  private parseOutput<S extends typeof SurveyGen | typeof PlanGen>(
+  private parseOutput<S extends z.ZodTypeAny>(
     schema: S,
     response: Anthropic.Message,
   ): S['_output'] | null {

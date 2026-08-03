@@ -356,7 +356,9 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
       const items = livePlanItems({
         headline,
         summary: (partial && partial.summary) || '',
-        sections: ((partial && partial.sections) || []).filter(Boolean),
+        // 희소 배열 그대로 — 2단계 생성에서 상품 섹션이 뼈대 섹션 "사이"(자리 인덱스)로
+        // 나중에 끼어든다. forEach는 빈 슬롯을 건너뛰고 인덱스를 보존하므로 id도 안정적이다
+        sections: (partial && partial.sections) || [],
       })
       return headline ? items : items.filter((it) => it.id !== 'live-plan-title')
     }
