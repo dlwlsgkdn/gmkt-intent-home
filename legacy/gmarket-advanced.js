@@ -1462,6 +1462,18 @@ function ensurePlanChatSessionFields(session) {
     return session;
 }
 
+/* 쓰레드별로 확정된 계획 상품 구성(단계별 노출 상품 인덱스). signature = 생성 당시 설문 답 */
+function normalizePlanProducts(planProducts) {
+    if (!planProducts || typeof planProducts !== "object" || Array.isArray(planProducts)) return null;
+    if (typeof planProducts.signature !== "string" || !Array.isArray(planProducts.steps)) return null;
+    return {
+        signature: planProducts.signature,
+        steps: planProducts.steps.map((indices) => Array.isArray(indices)
+            ? indices.filter((idx) => Number.isInteger(idx) && idx >= 0)
+            : [])
+    };
+}
+
 function normalizeCartData(cartData) {
     if (!cartData || typeof cartData !== "object" || Array.isArray(cartData)) {
         return {};
@@ -1487,6 +1499,7 @@ function normalizeCartData(cartData) {
             orderMeta: value.orderMeta || null,
             planChatHistory: normalizePlanChatHistory(value.planChatHistory),
             planAdjustments: normalizePlanAdjustments(value.planAdjustments),
+            planProducts: normalizePlanProducts(value.planProducts),
             createdAt: value.createdAt || new Date().toISOString(),
             updatedAt: value.updatedAt || new Date().toISOString()
         };
@@ -1511,6 +1524,7 @@ function createCartSession(intentKey) {
             orderMeta: null,
             planChatHistory: [],
             planAdjustments: { steps: {}, globalNotes: [] },
+            planProducts: null,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         }
@@ -4385,7 +4399,7 @@ window.generatePlan = function generatePlan() {
     }
 
     state.isSurveyReviewMode = false;
-    ensureSurveyResultSession();
+    const resultSession = ensureSurveyResultSession();
 
     saveSearchHistory();
     const showGeneratedPlan = () => {
@@ -4404,6 +4418,16 @@ window.generatePlan = function generatePlan() {
             showToast("브리프를 여는 중 문제가 생겼어요. 다시 시도해주세요.");
         }
     };
+
+    /* 같은 설문 답으로 이미 생성해 둔 계획이면 "분석 중" 연출 없이 그대로 다시 연다 */
+    const alreadyGenerated = Boolean(
+        resultSession?.planProducts &&
+        resultSession.planProducts.signature === getPlanChoiceSignature(resultSession.choices)
+    );
+    if (alreadyGenerated) {
+        showGeneratedPlan();
+        return;
+    }
 
     withLoading("\"딱\" 맞는 최적의 상품을 분석 중...", 900, () => {
         showGeneratedPlan();
@@ -6008,6 +6032,101 @@ window.updateBeforeAfterSlider = function updateBeforeAfterSlider(input) {
 
 /* ─── Solution rendering ────────────────────────────────────── */
 
+/* 단계별 노출 상품을 랜덤 추첨한다 — 계획 "생성" 시 한 번만 호출될 것.
+   담은 상품·지마켓 상품·외부 상품이 각각 최소 1개 보이도록 보정한다. */
+function samplePlanStepProductIndices(step, selectedState) {
+    const maxVisibleCount = Math.min(7, step.products.length);
+    const minVisibleCount = Math.min(2, maxVisibleCount);
+    const visibleCount = maxVisibleCount <= minVisibleCount
+        ? maxVisibleCount
+        : Math.floor(Math.random() * (maxVisibleCount - minVisibleCount + 1)) + minVisibleCount;
+    const shuffledProducts = [...step.products]
+        .map((product, originalIndex) => ({ product, originalIndex, sortKey: Math.random() }))
+        .sort((a, b) => a.sortKey - b.sortKey);
+    let visibleProducts = shuffledProducts.slice(0, visibleCount);
+
+    if (
+        selectedState &&
+        !visibleProducts.some((entry) => entry.originalIndex === selectedState.productIdx)
+    ) {
+        const selectedEntry = shuffledProducts.find((entry) => entry.originalIndex === selectedState.productIdx);
+        if (selectedEntry) {
+            visibleProducts = [...visibleProducts.slice(0, Math.max(visibleProducts.length - 1, 0)), selectedEntry];
+        }
+    }
+
+    const gmarketEntry = shuffledProducts.find((entry) => canAddProductToThreadCart(entry.product));
+    if (
+        gmarketEntry &&
+        !visibleProducts.some((entry) => canAddProductToThreadCart(entry.product))
+    ) {
+        visibleProducts = [...visibleProducts.slice(0, Math.max(visibleProducts.length - 1, 0)), gmarketEntry];
+    }
+
+    const externalEntry = shuffledProducts.find((entry) => !canAddProductToThreadCart(entry.product));
+    if (
+        visibleProducts.length > 1 &&
+        externalEntry &&
+        !visibleProducts.some((entry) => !canAddProductToThreadCart(entry.product))
+    ) {
+        const replaceIndex = visibleProducts.findIndex((entry) => entry.originalIndex !== selectedState?.productIdx);
+        const nextProducts = [...visibleProducts];
+        nextProducts[replaceIndex >= 0 ? replaceIndex : nextProducts.length - 1] = externalEntry;
+        visibleProducts = nextProducts;
+    }
+
+    return visibleProducts.map((entry) => entry.originalIndex);
+}
+
+function getPlanChoiceSignature(choices) {
+    return JSON.stringify(choices || {});
+}
+
+function clonePlanProducts(planProducts) {
+    return {
+        signature: planProducts.signature,
+        steps: planProducts.steps.map((indices) => [...indices])
+    };
+}
+
+/* 계획 상품 구성은 쓰레드(세션)당 한 번만 추첨해 재사용한다 —
+   재렌더(스테퍼 이동·쓰레드 복귀·계획 챗)마다 다시 뽑으면 매번 계획이
+   새로 생성된 것처럼 보인다. 설문 답이 바뀌면(서명 불일치) 그때만 다시 뽑는다.
+   세션이 아직 없는 진입(딥링크)은 state 캐시가 같은 역할을 하고,
+   나중에 세션이 생기면 같은 서명의 캐시를 세션으로 승계한다. */
+function getPlanProductPresentation(key, data) {
+    const session = getActivePlanSession(key);
+    const signature = getPlanChoiceSignature(session ? session.choices : state.choices);
+    const isReusable = (candidate) => Boolean(candidate)
+        && candidate.signature === signature
+        && Array.isArray(candidate.steps)
+        && candidate.steps.length === data.steps.length;
+
+    if (isReusable(session?.planProducts)) return session.planProducts;
+
+    if (!state.planProductCache) state.planProductCache = {};
+    const cached = state.planProductCache[key];
+    if (isReusable(cached)) {
+        if (session) {
+            session.planProducts = clonePlanProducts(cached);
+            persistCart();
+            return session.planProducts;
+        }
+        return cached;
+    }
+
+    const presentation = {
+        signature,
+        steps: data.steps.map((step, stepIndex) => samplePlanStepProductIndices(step, getSessionSelectionState(key, stepIndex)))
+    };
+    state.planProductCache[key] = clonePlanProducts(presentation);
+    if (session) {
+        session.planProducts = presentation;
+        persistCart();
+    }
+    return presentation;
+}
+
 function renderSolution(key, rawQuery) {
     ensureBeautyScenarioSolutionData();
     const scenario = getBeautyScenario(key);
@@ -6048,50 +6167,28 @@ function renderSolution(key, rawQuery) {
         planContainer.insertAdjacentHTML("beforeend", globalNotesHtml);
     }
 
+    const planProducts = getPlanProductPresentation(key, data);
+
     data.steps.forEach((step, stepIndex) => {
         const displayStep = getPlanStepPresentation(key, stepIndex, step);
         const stepEl = document.createElement("div");
         stepEl.className = "relative pl-8 md:pl-12 border-l-2 border-slate-200 pb-4 text-left font-bold";
         const selectedState = getSessionSelectionState(key, stepIndex);
-        const maxVisibleCount = Math.min(7, step.products.length);
-        const minVisibleCount = Math.min(2, maxVisibleCount);
-        const visibleCount = maxVisibleCount <= minVisibleCount
-            ? maxVisibleCount
-            : Math.floor(Math.random() * (maxVisibleCount - minVisibleCount + 1)) + minVisibleCount;
-        const shuffledProducts = [...step.products]
-            .map((product, originalIndex) => ({ product, originalIndex, sortKey: Math.random() }))
-            .sort((a, b) => a.sortKey - b.sortKey);
-        let visibleProducts = shuffledProducts.slice(0, visibleCount);
-
+        let visibleIndices = (planProducts.steps[stepIndex] || []).filter((originalIndex) => step.products[originalIndex]);
+        if (!visibleIndices.length) {
+            visibleIndices = samplePlanStepProductIndices(step, selectedState);
+            planProducts.steps[stepIndex] = visibleIndices;
+        }
+        /* 이 구성이 만들어진 뒤 다른 경로로 담긴 상품(구버전 세션 등)은 노출을 보장 */
         if (
             selectedState &&
-            !visibleProducts.some((entry) => entry.originalIndex === selectedState.productIdx)
+            step.products[selectedState.productIdx] &&
+            !visibleIndices.includes(selectedState.productIdx)
         ) {
-            const selectedEntry = shuffledProducts.find((entry) => entry.originalIndex === selectedState.productIdx);
-            if (selectedEntry) {
-                visibleProducts = [...visibleProducts.slice(0, Math.max(visibleProducts.length - 1, 0)), selectedEntry];
-            }
+            visibleIndices = [...visibleIndices.slice(0, Math.max(visibleIndices.length - 1, 0)), selectedState.productIdx];
+            planProducts.steps[stepIndex] = visibleIndices;
         }
-
-        const gmarketEntry = shuffledProducts.find((entry) => canAddProductToThreadCart(entry.product));
-        if (
-            gmarketEntry &&
-            !visibleProducts.some((entry) => canAddProductToThreadCart(entry.product))
-        ) {
-            visibleProducts = [...visibleProducts.slice(0, Math.max(visibleProducts.length - 1, 0)), gmarketEntry];
-        }
-
-        const externalEntry = shuffledProducts.find((entry) => !canAddProductToThreadCart(entry.product));
-        if (
-            visibleProducts.length > 1 &&
-            externalEntry &&
-            !visibleProducts.some((entry) => !canAddProductToThreadCart(entry.product))
-        ) {
-            const replaceIndex = visibleProducts.findIndex((entry) => entry.originalIndex !== selectedState?.productIdx);
-            const nextProducts = [...visibleProducts];
-            nextProducts[replaceIndex >= 0 ? replaceIndex : nextProducts.length - 1] = externalEntry;
-            visibleProducts = nextProducts;
-        }
+        const visibleProducts = visibleIndices.map((originalIndex) => ({ product: step.products[originalIndex], originalIndex }));
 
         const essentialBadge = step.essential
             ? `<span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-600 uppercase tracking-wide">필수</span>`
