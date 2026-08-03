@@ -79,7 +79,8 @@ PlanPageWire   = { headline, summary, sections: [
                    { kind: 'steps',    title, steps[] } ] }
 CatalogProduct = { id, name, brand, price, tags[], url?, mall? }
 // url·mall = 웹 검색으로 찾은 외부몰 상품 (id는 `web-*`, mall이 있으면 FE가 외부몰 태그·담기불가로 렌더,
-// url은 상세보기 사이드 패널이 iframe으로 연다). 데모 카탈로그 상품은 둘 다 없음
+// url은 상세보기 사이드 패널이 iframe으로 연다). url은 상품 상세 페이지(PDP)만 — BFF가 검색/목록
+// 페이지로 보이는 URL(/search 경로·검색어 쿼리 키)을 드롭한다. 데모 카탈로그 상품은 둘 다 없음
 ```
 
 ## 1-1. BFF — admin API (스튜디오 #admin 전용)

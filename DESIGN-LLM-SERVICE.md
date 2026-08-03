@@ -208,8 +208,9 @@ const page = response.parsed_output
    프롬프트 팩에 포함시켜 대체
 5. **웹 검색 병행 (2026-08)**: 계획 생성에 `web_search` 서버 도구(최대 3회)를 붙여
    카탈로그가 못 채우는 상품은 웹에서 찾는다. 생성 스키마의 `webProducts`로 분리해 받고
-   (name·brand·price·mall·url), BFF가 **url http(s) 검증** 통과분만 `web-*` id로 wire
-   products에 병합한다 — url을 지어낸 상품은 드롭. 카탈로그 id 검증(3)은 그대로.
+   (name·brand·price·mall·url), BFF가 **url 검증(http/https + PDP만 — /search·category
+   경로나 검색어 쿼리 키가 보이면 검색/목록 페이지로 판정해 드롭)** 통과분만 `web-*` id로
+   wire products에 병합한다 — url을 지어낸 상품은 드롭. 카탈로그 id 검증(3)은 그대로.
    서버 도구 루프가 `pause_turn`으로 멈추면 어시스턴트 턴을 이어붙여 최대 3회 재개한다
 
 ### 4-4. 검증 파이프라인

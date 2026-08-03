@@ -1,7 +1,7 @@
 import type { Answer, Profile, SurveyPageWire } from '@ddak/schema'
 import { CATALOG } from './catalog'
 
-export const PROMPT_VERSION = 'v2'
+export const PROMPT_VERSION = 'v3'
 
 /*
  * 프롬프트 조립 — 안정 prefix(시스템)와 가변부(사용자 메시지)를 분리한다.
@@ -30,7 +30,7 @@ ${CATALOG_BLOCK}
 상품 추천 규칙:
 - 추천 상품은 위 카탈로그와 웹 검색(web_search)을 모두 살펴 구성한다. 카탈로그에 맞는 상품이 있으면 productIds로 우선 쓰고, 카탈로그가 못 채우는 필요(특정 브랜드·성분·용도, 더 나은 대안)는 웹 검색으로 찾아 webProducts에 넣는다.
 - productIds는 반드시 위 카탈로그의 id만 쓴다. 카탈로그에 없는 상품을 id로 지어내지 않는다.
-- webProducts는 반드시 웹 검색 결과에서 확인한 실제 판매 상품만 넣는다: url은 검색 결과에 나온 상품 페이지 주소를 그대로 쓰고(지어내거나 변형 금지), price는 검색에서 확인한 판매가(원 단위 정수), mall은 판매처 이름이다. 검색으로 확인되지 않는 상품은 넣지 않는다.
+- webProducts는 반드시 웹 검색 결과에서 확인한 실제 판매 상품만 넣는다: url은 그 상품 하나의 **상세 페이지(PDP)** 주소를 검색 결과에서 그대로 쓴다(지어내거나 변형 금지). 검색 결과·상품 목록·카테고리 페이지 주소는 금지 — PDP를 못 확인한 상품은 넣지 않는다. price는 검색에서 확인한 판매가(원 단위 정수), mall은 판매처 이름이다.
 - 웹 검색은 상품을 찾을 때만 1~2회 간결하게 쓴다. 검색 없이도 카탈로그로 충분하면 검색을 생략해도 된다.
 
 작성 규칙:

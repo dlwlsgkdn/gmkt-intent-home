@@ -155,8 +155,13 @@ export class ThreadsService {
       this.logger.warn(`카탈로그 밖 상품 id ${s.productIds.length - products.length}건 드롭`)
     }
     s.webProducts.forEach((w, webIndex) => {
-      if (!isHttpUrl(w.url)) {
+      const url = parseHttpUrl(w.url)
+      if (!url) {
         this.logger.warn(`웹 상품 URL 검증 실패로 드롭: ${w.name} (${w.url})`)
+        return
+      }
+      if (isSearchLikeUrl(url)) {
+        this.logger.warn(`웹 상품 URL이 검색/목록 페이지로 보여 드롭 (PDP만 허용): ${w.name} (${w.url})`)
         return
       }
       products.push({
@@ -234,12 +239,24 @@ export class ThreadsService {
   }
 }
 
-function isHttpUrl(raw: string): boolean {
+function parseHttpUrl(raw: string): URL | null {
   try {
-    return ['http:', 'https:'].includes(new URL(raw).protocol)
+    const url = new URL(raw)
+    return ['http:', 'https:'].includes(url.protocol) ? url : null
   } catch {
-    return false
+    return null
   }
+}
+
+/** 검색 결과·목록 페이지로 보이는 URL 판정 — 상세보기는 PDP만 허용한다 (프롬프트 지시의 서버측 가드).
+ * 검색어 쿼리 키나 /search 경로가 있으면 검색 페이지로 본다 — PDP는 보통 상품 번호 키(goodsNo 등)를 쓴다 */
+const SEARCH_QUERY_KEYS = new Set(['q', 'query', 'keyword', 'kwd', 'searchterm', 'searchkeyword', 'searchword', 'sq', 'k'])
+function isSearchLikeUrl(url: URL): boolean {
+  if (/\/(search|srchall|category|display)\b/i.test(url.pathname)) return true
+  for (const key of url.searchParams.keys()) {
+    if (SEARCH_QUERY_KEYS.has(key.toLowerCase())) return true
+  }
+  return false
 }
 
 function intentOf(thread: ThreadWithSteps): string {

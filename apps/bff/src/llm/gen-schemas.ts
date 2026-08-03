@@ -39,7 +39,7 @@ export const PlanSectionGen = z.discriminatedUnion('kind', [
           brand: z.string().describe('브랜드'),
           price: z.number().int().describe('판매가 (원 단위 정수) — 검색 결과에서 확인한 값'),
           mall: z.string().describe('판매처 이름 (예: 올리브영, 쿠팡)'),
-          url: z.string().describe('상품 페이지 URL — 검색 결과의 주소 그대로, 지어내지 말 것'),
+          url: z.string().describe('상품 상세 페이지(PDP) URL — 검색 결과의 주소 그대로. 검색 결과·목록 페이지 금지'),
           tags: z.array(z.string()).max(5).describe('특징 태그'),
         }),
       )
