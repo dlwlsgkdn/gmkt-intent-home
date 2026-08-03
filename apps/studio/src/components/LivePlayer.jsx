@@ -345,20 +345,30 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
 
   /* 생성 중 부분 페이지 투영 — 최종과 같은 livePage 투영을 그대로 쓴다 (아이템 id가 인덱스
      기반이라 result 확정 때 React가 기존 컴포넌트를 재사용한다). 서버가 검증 실패·드롭으로
-     건너뛴 인덱스는 빈 슬롯이므로 걸러낸다 */
+     건너뛴 인덱스는 빈 슬롯이므로 걸러낸다.
+     선(先)렌더: 클라이언트가 이미 아는 컴포넌트는 partial 도착 전(검색·사고 구간)에도 그린다 —
+     계획은 설문 요약 패널(답변·프로필은 FE 소유), 설문은 프로필 패널. LLM 산출물인
+     제목/인트로는 도착 전엔 감춰서 빈 껍데기·기본 문구가 잠깐 보이는 일을 막는다 */
   const partialAllItems = useMemo(() => {
-    if (!loading || !partial) return []
+    if (!loading) return []
     if (loading.step === 'plan') {
-      return livePlanItems({
-        headline: partial.headline || '',
-        summary: partial.summary || '',
-        sections: (partial.sections || []).filter(Boolean),
+      const headline = (partial && partial.headline) || ''
+      const items = livePlanItems({
+        headline,
+        summary: (partial && partial.summary) || '',
+        sections: ((partial && partial.sections) || []).filter(Boolean),
       })
+      return headline ? items : items.filter((it) => it.id !== 'live-plan-title')
     }
-    return liveSurveyItems({
-      intro: partial.intro || '',
-      questions: (partial.questions || []).filter(Boolean),
-    })
+    if (loading.step === 'survey') {
+      const intro = (partial && partial.intro) || ''
+      const items = liveSurveyItems({
+        intro,
+        questions: ((partial && partial.questions) || []).filter(Boolean),
+      })
+      return intro ? items : items.filter((it) => it.id !== 'live-survey-intro')
+    }
+    return [] // step 'start'(쓰레드 시작·이어보기 로드)는 그릴 재료가 없다 — 전체 스켈레톤
   }, [loading, partial])
   const partialItems = partialAllItems.filter((it) => !it.parentId)
 

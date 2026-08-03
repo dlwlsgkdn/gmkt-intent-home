@@ -1,7 +1,7 @@
 import type { Answer, Profile, SurveyPageWire } from '@ddak/schema'
 import { CATALOG } from './catalog'
 
-export const PROMPT_VERSION = 'v3'
+export const PROMPT_VERSION = 'v4'
 
 /*
  * 프롬프트 조립 — 안정 prefix(시스템)와 가변부(사용자 메시지)를 분리한다.
@@ -32,6 +32,11 @@ ${CATALOG_BLOCK}
 - productIds는 반드시 위 카탈로그의 id만 쓴다. 카탈로그에 없는 상품을 id로 지어내지 않는다.
 - webProducts는 반드시 웹 검색 결과에서 확인한 실제 판매 상품만 넣는다: url은 그 상품 하나의 **상세 페이지(PDP)** 주소를 검색 결과에서 그대로 쓴다(지어내거나 변형 금지). 검색 결과·상품 목록·카테고리 페이지 주소는 금지 — PDP를 못 확인한 상품은 넣지 않는다. price는 검색에서 확인한 판매가(원 단위 정수), mall은 판매처 이름이다.
 - 웹 검색은 상품을 찾을 때만 1~2회 간결하게 쓴다. 검색 없이도 카탈로그로 충분하면 검색을 생략해도 된다.
+
+작성 순서 (응답이 실시간 스트리밍되므로 사용자가 먼저 볼 수 있는 것부터 쓴다):
+- 검색보다 먼저 headline·summary와 첫 안내(guide) 섹션을 작성한다 — 이 부분은 답변만으로 쓸 수 있다.
+- 그다음 상품 확인이 필요한 시점에 웹 검색을 실행하고, products 섹션과 나머지를 이어서 완성한다.
+- 여러 검색이 필요하면 순차로 나누지 말고 한 번에 병렬로 요청한다.
 
 작성 규칙:
 - 사용자의 답변을 근거로 추천 이유를 구체적으로 쓴다 ("지성 피부를 고르셨으니…").
