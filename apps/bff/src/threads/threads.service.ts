@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common'
 import type {
   Answer,
+  CatalogProduct,
   ThreadEventBody,
   PlanPageWire,
   PlanSectionWire,
@@ -87,22 +88,39 @@ export class ThreadsService {
     return page
   }
 
-  /** 상품 그라운딩 검증 — 카탈로그 밖 id는 버리고, 빈 상품 섹션은 드롭한다 (§4-3) */
+  /** 상품 그라운딩 검증 — 카탈로그 밖 id는 버리고, 웹 상품은 URL 검증 통과분만 채택하고,
+   * 빈 상품 섹션은 드롭한다 (§4-3). 웹 상품은 검색 결과 기반이라 상품명·가격을 그대로 싣되
+   * url이 http(s)가 아니면 지어낸 것으로 보고 버린다 */
   private resolvePlan(gen: PlanGen): PlanPageWire {
     const sections: PlanSectionWire[] = []
-    for (const s of gen.sections) {
+    gen.sections.forEach((s, sectionIndex) => {
       if (s.kind !== 'products') {
         sections.push(s)
-        continue
+        return
       }
-      const products = s.productIds
+      const products: CatalogProduct[] = s.productIds
         .map((id) => CATALOG_BY_ID.get(id))
-        .filter((p): p is NonNullable<typeof p> => Boolean(p))
+        .filter((p): p is NonNullable<ReturnType<typeof CATALOG_BY_ID.get>> => Boolean(p))
       if (products.length < s.productIds.length) {
         this.logger.warn(`카탈로그 밖 상품 id ${s.productIds.length - products.length}건 드롭`)
       }
+      s.webProducts.forEach((w, webIndex) => {
+        if (!isHttpUrl(w.url)) {
+          this.logger.warn(`웹 상품 URL 검증 실패로 드롭: ${w.name} (${w.url})`)
+          return
+        }
+        products.push({
+          id: `web-${sectionIndex}-${webIndex}`,
+          name: w.name,
+          brand: w.brand,
+          price: w.price,
+          tags: w.tags,
+          url: w.url,
+          mall: w.mall.trim() || '외부몰',
+        })
+      })
       if (products.length) sections.push({ kind: 'products', title: s.title, reason: s.reason, products })
-    }
+    })
     if (!sections.length) {
       sections.push({ kind: 'guide', title: '준비된 안내', body: gen.summary })
     }
@@ -155,6 +173,14 @@ export class ThreadsService {
         this.logger.error(`${label} 기록 실패: ${(r.reason as Error)?.message ?? r.reason}`)
       }
     }
+  }
+}
+
+function isHttpUrl(raw: string): boolean {
+  try {
+    return ['http:', 'https:'].includes(new URL(raw).protocol)
+  } catch {
+    return false
   }
 }
 

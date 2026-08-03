@@ -101,7 +101,7 @@ export class ThreadsController {
   @Post(':id/plan')
   @ApiOperation({
     summary: '응답 제출 → 계획 페이지 생성 (LLM #2, SSE)',
-    description: `카탈로그 그라운딩 — 상품 id는 허용 목록 검증을 거친다. result.page = PlanPageWire. ${SSE_DESC}`,
+    description: `카탈로그 그라운딩(상품 id 허용 목록 검증) + 웹 검색 상품(URL 검증 통과분만). result.page = PlanPageWire. ${SSE_DESC}`,
   })
   @ApiParam(THREAD_ID_PARAM)
   @ApiBody({ schema: toOpenApi(PlanRequestBody) })
@@ -113,7 +113,7 @@ export class ThreadsController {
     @Res() res: SseRes,
   ) {
     openSse(res)
-    sseSend(res, 'status', { message: '답변에 맞는 계획을 세우고 있어요…' })
+    sseSend(res, 'status', { message: '카탈로그와 웹을 살펴 계획을 세우고 있어요…' })
     try {
       const page = await this.threads.generatePlan(id, body.answers, body.profile)
       sseSend(res, 'result', { page })

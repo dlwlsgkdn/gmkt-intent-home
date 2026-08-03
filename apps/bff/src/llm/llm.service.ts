@@ -22,6 +22,13 @@ export const LLM_MODEL_SETTING_KEY = 'llm-model'
 /** 설정 조회 캐시 TTL — 관리 페이지 변경이 새 생성에 반영되는 최대 지연 */
 const MODEL_CACHE_MS = 30_000
 
+/** 동적 필터링 web_search_20260209 미지원 모델 — 기본 변형(20250305)으로 호출한다 */
+const WEB_SEARCH_BASIC_MODELS = new Set(['claude-haiku-4-5'])
+/** 생성 1회당 웹 검색 상한 — 상품 확인용 소수 검색만 허용 (비용·지연 가드) */
+const WEB_SEARCH_MAX_USES = 3
+/** 서버 도구 루프가 pause_turn으로 멈췄을 때 이어붙이는 최대 횟수 */
+const MAX_CONTINUATIONS = 3
+
 export type GenResult<T> = { content: T; meta: LlmMeta }
 
 /** LLM 생성 실패 — 컨트롤러가 SSE error 이벤트(실패 안내)로 변환한다 */
@@ -108,30 +115,47 @@ export class LlmService {
       system: PLAN_SYSTEM,
       effort: 'high' as const,
       user: buildPlanRequest(intent, survey, answers, profile),
+      webSearch: true, // 상품 추천은 카탈로그 + 웹 검색을 모두 살핀다 (§4-3)
     })
   }
 
   private async generate<S extends typeof SurveyGen | typeof PlanGen>(
     label: string,
     schema: S,
-    req: { system: string; effort: 'medium' | 'high'; user: string },
+    req: { system: string; effort: 'medium' | 'high'; user: string; webSearch?: boolean },
   ): Promise<GenResult<S['_output']>> {
     const client = this.requireClient()
     const model = await this.resolveModel()
     // effort 미지원 모델(haiku)은 effort를 빼고 호출한다 — 넣으면 400
     const supportsEffort = MODEL_OPTIONS.find((option) => option.id === model)?.supportsEffort !== false
+    // 웹 검색은 서버 도구 — 선언만 하면 검색·결과 소비를 API가 서버 쪽 루프로 처리한다.
+    // 구세대 모델(haiku)은 동적 필터링 변형(20260209)을 지원하지 않아 기본 변형으로 선언한다
+    const webSearchTool = WEB_SEARCH_BASIC_MODELS.has(model)
+      ? { type: 'web_search_20250305' as const, name: 'web_search' as const, max_uses: WEB_SEARCH_MAX_USES }
+      : { type: 'web_search_20260209' as const, name: 'web_search' as const, max_uses: WEB_SEARCH_MAX_USES }
     const started = Date.now()
     let response: Awaited<ReturnType<typeof client.messages.parse>>
     try {
-      response = await client.messages.parse({
-        model,
-        max_tokens: 16000,
-        system: [{ type: 'text', text: req.system, cache_control: { type: 'ephemeral', ttl: '1h' } }],
-        output_config: supportsEffort
-          ? { effort: req.effort, format: zodOutputFormat(schema) }
-          : { format: zodOutputFormat(schema) },
-        messages: [{ role: 'user', content: req.user }],
-      })
+      const messages: Anthropic.MessageParam[] = [{ role: 'user', content: req.user }]
+      const call = () =>
+        client.messages.parse({
+          model,
+          max_tokens: 16000,
+          system: [{ type: 'text', text: req.system, cache_control: { type: 'ephemeral', ttl: '1h' } }],
+          output_config: supportsEffort
+            ? { effort: req.effort, format: zodOutputFormat(schema) }
+            : { format: zodOutputFormat(schema) },
+          ...(req.webSearch ? { tools: [webSearchTool] } : {}),
+          messages,
+        })
+      response = await call()
+      // 서버 도구 루프가 반복 상한에 걸리면 pause_turn으로 멈춘다 — 어시스턴트 턴을
+      // 그대로 이어붙여 재요청하면 서버가 이어서 진행한다 (추가 사용자 메시지 금지)
+      for (let i = 0; i < MAX_CONTINUATIONS && response.stop_reason === 'pause_turn'; i++) {
+        this.logger.log(`${label} pause_turn — 이어서 진행 (${i + 1}/${MAX_CONTINUATIONS})`)
+        messages.push({ role: 'assistant', content: response.content })
+        response = await call()
+      }
     } catch (e) {
       // 인증 실패 = 키 미설정/무효. SDK는 자격증명 부재를 호출 시점에 일반 AnthropicError
       // ("Could not resolve authentication method")로 던지므로 그 경우까지 함께 매핑한다
@@ -169,6 +193,7 @@ export class LlmService {
   }
 
   private meta(started: number, response: Anthropic.Message): LlmMeta {
+    const webSearchRequests = response.usage.server_tool_use?.web_search_requests
     return {
       model: response.model,
       promptVersion: PROMPT_VERSION,
@@ -176,6 +201,7 @@ export class LlmService {
         inputTokens: response.usage.input_tokens,
         outputTokens: response.usage.output_tokens,
         cacheReadTokens: response.usage.cache_read_input_tokens ?? undefined,
+        webSearchRequests: webSearchRequests || undefined,
       },
       latencyMs: Date.now() - started,
     }

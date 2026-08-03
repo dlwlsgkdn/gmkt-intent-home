@@ -40,6 +40,8 @@ export const LlmMeta = z.looseObject({
       inputTokens: z.number().optional(),
       outputTokens: z.number().optional(),
       cacheReadTokens: z.number().optional(),
+      /** 이 생성에서 실행된 웹 검색 횟수 (계획 생성 전용 — 검색 미사용이면 없음) */
+      webSearchRequests: z.number().optional(),
     })
     .optional(),
   latencyMs: z.number().optional(),

@@ -37,7 +37,7 @@ Base: `https://ddak-bff.vercel.app` · 사용자 식별: **`x-device-id` 헤더*
 |---|---|---|---|---|
 | POST | `/api/threads` | 쓰레드 시작 — 생성 + 탐색 스텝 기록 | `StartThreadBody` `{ chipId?\|query, title?, profile? }` | `{ threadId }` |
 | POST | `/api/threads/:id/survey` | **설문 페이지 생성 (LLM #1**, effort medium**)** | `{ profile? }` | **SSE** → `result.page: SurveyPageWire` |
-| POST | `/api/threads/:id/plan` | **응답 제출 → 계획 생성 (LLM #2**, effort high, 카탈로그 그라운딩**)** | `{ answers: [{questionId, choices[]}], profile? }` | **SSE** → `result.page: PlanPageWire` |
+| POST | `/api/threads/:id/plan` | **응답 제출 → 계획 생성 (LLM #2**, effort high, 카탈로그 그라운딩 + 웹 검색(`web_search` 서버 도구, 최대 3회)**)** | `{ answers: [{questionId, choices[]}], profile? }` | **SSE** → `result.page: PlanPageWire` |
 | POST | `/api/threads/:id/events` | 담기/완료 행동 기록 (`complete`면 status=done) | `{ type, data? }` | `{ ok: true }` |
 | GET | `/api/threads/:id` | 이어보기 — 단계별 페이지 복원 | — | `{ threadId, title, status, source, survey, answers, plan, updatedAt }` |
 | GET | `/api/threads?cursor=&limit=` | 쓰레드 목록 (히스토리 패널) | — | `ThreadListPage` |
@@ -68,8 +68,11 @@ event: error    → { code, message, retryable }                   (실패 안�
 SurveyPageWire = { intro, questions: [{ id, question, options[2..6], multi }] }
 PlanPageWire   = { headline, summary, sections: [
                    { kind: 'guide',    title, body } |
-                   { kind: 'products', title, reason, products: CatalogProduct[] } |  // 카탈로그 검증 통과분만
+                   { kind: 'products', title, reason, products: CatalogProduct[] } |  // 카탈로그 id 검증 + 웹 상품 URL 검증 통과분만
                    { kind: 'steps',    title, steps[] } ] }
+CatalogProduct = { id, name, brand, price, tags[], url?, mall? }
+// url·mall = 웹 검색으로 찾은 외부몰 상품 (id는 `web-*`, mall이 있으면 FE가 외부몰 태그·담기불가로 렌더,
+// url은 상세보기 사이드 패널이 iframe으로 연다). 데모 카탈로그 상품은 둘 다 없음
 ```
 
 ## 1-1. BFF — admin API (스튜디오 #admin 전용)

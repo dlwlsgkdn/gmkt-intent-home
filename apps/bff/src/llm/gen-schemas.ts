@@ -35,7 +35,21 @@ export const PlanGen = z.object({
           kind: z.literal('products'),
           title: z.string(),
           reason: z.string().describe('이 상품들을 고른 이유 한두 문장'),
-          productIds: z.array(z.string()).min(1).max(4).describe('카탈로그의 상품 id만 사용'),
+          productIds: z.array(z.string()).max(4).describe('카탈로그에서 고른 상품 id (없으면 빈 배열)'),
+          // 웹 검색 그라운딩: 검색 결과에서 확인한 상품만 — url은 BFF가 http(s) 검증 후 채택한다
+          webProducts: z
+            .array(
+              z.object({
+                name: z.string().describe('상품명 — 검색 결과에 나온 실제 상품명'),
+                brand: z.string().describe('브랜드'),
+                price: z.number().int().describe('판매가 (원 단위 정수) — 검색 결과에서 확인한 값'),
+                mall: z.string().describe('판매처 이름 (예: 올리브영, 쿠팡)'),
+                url: z.string().describe('상품 페이지 URL — 검색 결과의 주소 그대로, 지어내지 말 것'),
+                tags: z.array(z.string()).max(5).describe('특징 태그'),
+              }),
+            )
+            .max(4)
+            .describe('웹 검색으로 찾은 상품 (없으면 빈 배열)'),
         }),
         z.object({
           kind: z.literal('steps'),

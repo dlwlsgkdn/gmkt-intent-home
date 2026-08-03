@@ -70,6 +70,10 @@ export const CatalogProduct = z.object({
   brand: z.string(),
   price: z.number().int(),
   tags: z.array(z.string()),
+  /** 상품 페이지 URL — 웹 검색 상품은 BFF 검증(http/https)을 거쳐 채워진다. FE 상세보기 패널이 연다 */
+  url: z.string().optional(),
+  /** 판매처 이름 (올리브영 등) — 웹 검색 상품 전용. 없으면 지마켓(데모 카탈로그) 상품 */
+  mall: z.string().optional(),
 })
 export type CatalogProduct = z.infer<typeof CatalogProduct>
 

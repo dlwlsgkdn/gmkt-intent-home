@@ -9,7 +9,7 @@
 ```
 apps/studio/       ← 스튜디오 소스 (React 18 + Vite 5). 빌드 산출물은 apps/studio/dist (커밋 안 함)
 apps/core/         ← NestJS backend core — 쓰레드 저장·조회 (Drizzle+Neon). 실행·배포는 apps/core/README.md
-apps/bff/          ← (예정) BFF — LLM·core 오케스트레이션. DESIGN-LLM-SERVICE.md §4 참고
+apps/bff/          ← NestJS BFF — LLM(설문·계획 생성, 계획은 웹 검색 병행)·core 오케스트레이션. DESIGN-LLM-SERVICE.md §4, API.md §1 참고
 packages/schema/   ← @ddak/schema — 쓰레드 도메인·internal API zod 계약 (install 시 prepare로 dist 빌드)
 api/               ← 스튜디오 동기화 서버리스 (Vercel 함수, 루트 고정)
 middleware.js      ← 스튜디오 엣지 미들웨어 (루트 고정) — /api/bff/* 를 BFF로 rewrite + BFF_SERVICE_TOKEN 주입 (FE는 bff URL을 직접 안 부름. 스튜디오 프로젝트 환경변수 BFF_URL·BFF_SERVICE_TOKEN 필요)
@@ -65,7 +65,7 @@ npm run db:migrate --workspace=apps/core    # 마이그레이션 SQL 순서 적�
   - LIBRARY를 알아야 하는 renderItem/ChildShell/childrenOf/libraryForStage는 배럴(registry.jsx)에 남는다 — 순환 참조 방지
 - `lib/liveApi.js` — **라이브 생성 체험 클라이언트** (BFF threads API, API.md §1): 디바이스 id(`ddak-device-id`)·쓰레드 시작·SSE 소비(fetch 스트림 — POST라 EventSource 불가)·행동 기록·이어보기. FE는 same-origin `/api/bff/*`만 부른다 (배포 = 루트 middleware.js, 로컬 = vite 프록시 → 8788)
 - `lib/adminApi.js` · `lib/adminReport.jsx` · `components/AdminView.jsx` — **thread 관리 페이지** (API.md §1-1). 진입은 `#admin` 해시뿐(유저 UI에 링크 없음), `x-admin-token` 헤더 인증 — 입력 토큰은 localStorage(`ddak-admin-token`) 보관, 401이면 폐기 후 게이트 복귀. 쓰레드 전체 목록(archived 포함)·개별 라이프사이클 로그를 **마크다운 문서로 시각화**(adminReport가 ThreadWithSteps→마크다운 생성 + 같은 서브셋만 아는 미니 렌더러 — 복사 버튼이 원문을 그대로 쓰므로 둘을 같이 유지), 보관 처리(= core `status=archived`, 사용자 목록에서만 숨김), LLM 모델 조회·변경(카탈로그는 BFF `llm.service.ts` `MODEL_OPTIONS` 소유, 저장은 core 설정 KV `llm-model`, 생성 시 30s 캐시로 조회 — haiku처럼 effort 미지원 모델은 BFF가 effort를 빼고 호출). 스타일은 `styles/admin.css`(배럴 끝 @import)
-- `lib/livePage.js` — 라이브 와이어 페이지 → 스튜디오 아이템 투영: question→surveyQuestion(아이템 id = 와이어 질문 id — answers 왕복에 재매핑 없음), guide→planStep, products→hscroll+productCard(이모지 목업), steps→checklist. 새 렌더 계층을 만들지 않는다
+- `lib/livePage.js` — 라이브 와이어 페이지 → 스튜디오 아이템 투영: question→surveyQuestion(아이템 id = 와이어 질문 id — answers 왕복에 재매핑 없음), guide→planStep, products→hscroll+productCard(이모지 목업 — `mall` 있는 상품은 웹 검색으로 찾은 외부몰 상품이라 external+담기불가로, `url`은 상세보기 사이드 패널로 투영), steps→checklist. 새 렌더 계층을 만들지 않는다
 - `lib/richtext.jsx` — 인라인 리치텍스트 엔진: `{{옵션|텍스트}}`/`[[키워드]]` 마크업 ↔ contentEditable 변환, 서식 적용/병합, InlineEditor, FONT_OPTIONS/TEXT_COLORS
 - `lib/templates.js` — 새 시나리오 템플릿 (빈/뷰티 브리프/선물 추천)
 - `lib/prompt/` — **AI 왕복 계층**. 스튜디오는 LLM API를 호출하지 않는다: 모든 AI 기능이 "프롬프트 복사 → 쓰던 AI에 붙여넣기 → 결과 가져오기" 한 가지 왕복이다
