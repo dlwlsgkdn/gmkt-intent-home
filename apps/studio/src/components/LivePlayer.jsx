@@ -14,6 +14,19 @@ import ThreadPanel from './ThreadPanel.jsx'
  * 렌더 계층은 Player와 동일: 와이어 페이지를 livePage.js로 아이템에 투영해 레지스트리 재사용.
  */
 
+/* 답변 맵 → 와이어 형식. 계획 스냅샷 키(planKey)와 생성 요청 본문이 반드시 같은 코드로
+   만들어져야 한다 — 서버가 돌려준 answers 원문으로 키를 만들면 직렬화 차이 때문에
+   무변경 답변이 "바뀜"으로 오판돼 이어보기 후 단계 이동만 해도 계획을 다시 생성한다 */
+function wireFromAnswers(questions, answersMap) {
+  return questions
+    .map((q) => {
+      const a = answersMap[q.id]
+      const choices = Array.isArray(a) ? a.filter(Boolean) : a != null && String(a).length > 0 ? [a] : []
+      return { questionId: q.id, choices }
+    })
+    .filter((entry) => entry.choices.length > 0)
+}
+
 /* 생성 대기 스켈레톤 — 라이브 전용 연출. 시나리오 체험과 "다르게 느껴지는" 것이 목적이다 */
 function LiveSkeleton({ message }) {
   return (
@@ -70,6 +83,8 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const [completed, setCompleted] = useState(false)
   const [keyword, setKeyword] = useState(null)
   const [threadOrigin, setThreadOrigin] = useState(null)
+  const [reselecting, setReselecting] = useState(false) // "설문 다시 선택" 확인 후 잠금 해제 상태 — 새 계획 생성 시 다시 잠김
+  const [reselectConfirm, setReselectConfirm] = useState(false) // 재선택 확인 다이얼로그
   /* 이어보기면 워크스페이스 기록의 시작 시각을 보존한다 (Player와 같은 규칙) */
   const startedAtRef = useRef(
     (resumeThreadId && (api.threads || []).find((t) => t.id === resumeThreadId)?.startedAt) || new Date().toISOString()
@@ -82,13 +97,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const profileWire = () => includedProfile.map((it) => ({ label: it.label, value: String(it.value || '') }))
 
   const questions = (surveyPage && surveyPage.questions) || []
-  const answersWire = () => questions
-    .map((q) => {
-      const a = answers[q.id]
-      const choices = Array.isArray(a) ? a.filter(Boolean) : a != null && String(a).length > 0 ? [a] : []
-      return { questionId: q.id, choices }
-    })
-    .filter((entry) => entry.choices.length > 0)
+  const answersWire = () => wireFromAnswers(questions, answers)
 
   const generateSurvey = (id) => {
     setError(null)
@@ -123,6 +132,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         if (cancelledRef.current) return
         setPlanPage(page)
         setPlanKey(JSON.stringify(wire))
+        setReselecting(false) // 새 계획이 만들어졌으니 설문을 다시 잠근다
         setLoading(null)
         setStageKey('plan')
         window.scrollTo(0, 0)
@@ -154,7 +164,8 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
               map[entry.questionId] = q && q.multi ? entry.choices : entry.choices[0]
             }
             setAnswers(map)
-            if (t.plan) setPlanKey(JSON.stringify(t.answers))
+            /* 키는 서버 원문이 아니라 로컬 재구성과 같은 경로로 — 위 wireFromAnswers 주석 참고 */
+            if (t.plan) setPlanKey(JSON.stringify(wireFromAnswers(t.survey.questions, map)))
           }
           if (t.plan) setPlanPage(t.plan)
           setCompleted(t.status === 'done')
@@ -256,7 +267,17 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     },
   }
 
-  const surveyItems = useMemo(() => (surveyPage ? liveSurveyItems(surveyPage) : []), [surveyPage])
+  /* 계획이 만들어진 설문은 잠근다 — 재선택은 확인 다이얼로그를 거쳐서만 */
+  const surveyLocked = !!planPage && !reselecting
+  const surveyItems = useMemo(
+    () =>
+      surveyPage
+        ? liveSurveyItems(surveyPage).map((it) =>
+            it.type === 'surveyQuestion' ? { ...it, props: { ...it.props, locked: surveyLocked } } : it
+          )
+        : [],
+    [surveyPage, surveyLocked]
+  )
   const planItems = useMemo(() => (planPage ? livePlanItems(planPage) : []), [planPage])
   const allItems = stageKey === 'plan' ? planItems : surveyItems
   const items = allItems.filter((it) => !it.parentId)
@@ -266,9 +287,11 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const answeredCount = questions.filter((q) => answers[q.id] != null && String(answers[q.id]).length > 0).length
   const planStale = planPage && planKey !== JSON.stringify(answersWire())
 
-  /* 설문 → 계획: 답이 그대로면 만든 계획을 다시 보여주고, 바뀌었으면 재생성한다 */
-  const goPlan = () => {
-    if (planPage && !planStale) {
+  /* 설문 → 계획: 이미 만든 계획이 있으면 다시 생성하지 않고 그대로 연다.
+     답이 바뀐 상태의 재생성은 명시적 요청(설문 하단 확인 버튼·계획 화면 안내 바)으로만 —
+     스테퍼 이동(regenerate 없음)은 어떤 경우에도 LLM을 다시 부르지 않는다 */
+  const goPlan = (opts = {}) => {
+    if (planPage && !(planStale && opts.regenerate)) {
       setStageKey('plan')
       window.scrollTo(0, 0)
       return
@@ -326,7 +349,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         ))}
       </nav>
 
-      <section className="sb-player min-h-screen relative z-10">
+      <section className="sb-player sb-player--live min-h-screen relative z-10">
         <div className="sb-phone sb-phone--player" style={{ width: viewer.w }}>
           <div className="sb-player__head">
             <div className="sb-player__head-row">
@@ -375,6 +398,14 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
                   </button>
                 </div>
               )}
+              {stageKey === 'survey' && surveyLocked && (
+                <div className="sb-live-stale">
+                  <span>계획을 만든 설문이라 답변이 잠겨 있어요.</span>
+                  <button type="button" className="sb-btn sb-btn--ai sb-btn--tiny" onClick={() => setReselectConfirm(true)}>
+                    설문 다시 선택
+                  </button>
+                </div>
+              )}
               <div className="sb-player__stack">
                 {items.map((it) => (
                   <div key={it.id} className="sb-player__item">
@@ -397,8 +428,13 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
                     체험 완료
                   </button>
                 ) : (
-                  <button type="button" className="clean-plan-submit" onClick={goPlan} disabled={!surveyPage}>
-                    맞춤 계획 확인하기
+                  <button
+                    type="button"
+                    className="clean-plan-submit"
+                    onClick={() => goPlan({ regenerate: true })}
+                    disabled={!surveyPage}
+                  >
+                    {planPage && planStale ? '✦ 바뀐 답변으로 계획 다시 생성' : '맞춤 계획 확인하기'}
                   </button>
                 )}
               </div>
@@ -410,6 +446,43 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
       </section>
 
       <ThreadPanel api={api} open={!!threadOrigin} origin={threadOrigin || 'right'} onClose={() => setThreadOrigin(null)} />
+
+      {/* 설문 재선택 확인 — 잠금 해제는 이 다이얼로그를 거쳐서만 */}
+      {reselectConfirm && (
+        <div
+          className="sb-llm-modal"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setReselectConfirm(false)
+          }}
+        >
+          <section className="sb-llm-dialog sb-json-dialog" role="dialog" aria-modal="true" aria-labelledby="sb-live-reselect-title">
+            <div className="sb-json-dialog__body">
+              <div className="sb-json-dialog__head">
+                <h2 id="sb-live-reselect-title" className="sb-json-dialog__title">설문을 다시 선택할까요?</h2>
+                <button type="button" className="sb-icon-btn" onClick={() => setReselectConfirm(false)} aria-label="닫기">×</button>
+              </div>
+              <p className="sb-json-dialog__note">
+                잠금을 풀고 답변을 바꿀 수 있어요. 지금 계획은 그대로 유지되고,
+                바뀐 답변으로 새 계획을 만들려면 "✦ 계획 다시 생성"을 눌러야 해요.
+              </p>
+              <div className="sb-live-reselect__actions">
+                <button type="button" className="sb-btn sb-btn--ghost" onClick={() => setReselectConfirm(false)}>취소</button>
+                <button
+                  type="button"
+                  className="sb-btn sb-btn--primary"
+                  onClick={() => {
+                    setReselecting(true)
+                    setReselectConfirm(false)
+                  }}
+                >
+                  다시 선택하기
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
 
       {/* 키워드 설명 모달 (Player와 동일한 원본 스타일) */}
       {keyword && (

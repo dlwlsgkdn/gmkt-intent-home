@@ -619,3 +619,19 @@
   font-size: var(--sb-t-micro);
   color: var(--sb-ink-2);
 }
+
+/* 계획 생성 후 설문 잠금 — 라이브 전용: 잠긴 선택지는 선택된 답만 또렷하게 남긴다 */
+.sb-player--live .sb-survey-option[aria-disabled='true'] {
+  cursor: default;
+}
+.sb-player--live .sb-survey-option[aria-disabled='true']:not(.active-card) {
+  opacity: 0.46;
+}
+
+/* 설문 재선택 확인 다이얼로그의 버튼 행 */
+.sb-live-reselect__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
