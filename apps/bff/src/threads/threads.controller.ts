@@ -106,7 +106,7 @@ export class ThreadsController {
   @Post(':id/plan')
   @ApiOperation({
     summary: '응답 제출 → 계획 페이지 생성 (LLM #2, SSE)',
-    description: `카탈로그 그라운딩(상품 id 허용 목록 검증) + 웹 검색 상품(URL 검증 통과분만). result.page = PlanPageWire. ${SSE_DESC}`,
+    description: `카탈로그 그라운딩(상품 id 허용 목록 검증) + 웹 검색 상품(URL 검증 통과분만). body.feedback(stage=plan)이 있으면 피드백 반영 재생성 — 직전 계획·피드백을 프롬프트에 실어 지적된 상품을 웹 검색 대안으로 교체한다. result.page = PlanPageWire. ${SSE_DESC}`,
   })
   @ApiParam(THREAD_ID_PARAM)
   @ApiBody({ schema: toOpenApi(PlanRequestBody) })
@@ -118,13 +118,21 @@ export class ThreadsController {
     @Res() res: SseRes,
   ) {
     openSse(res)
-    sseSend(res, 'status', { message: '카탈로그와 웹을 살펴 계획을 세우고 있어요…' })
+    sseSend(res, 'status', {
+      message: body.feedback ? '피드백을 반영해 계획을 다시 세우고 있어요…' : '카탈로그와 웹을 살펴 계획을 세우고 있어요…',
+    })
     try {
-      const page = await this.threads.generatePlan(id, body.answers, body.profile, {
-        onHead: (patch) => sseSend(res, 'head', patch),
-        onSection: (section, index) => sseSend(res, 'section', { index, section }),
-        onSearch: (query) => sseSend(res, 'status', { message: `웹에서 "${query}" 검색 중…` }),
-      })
+      const page = await this.threads.generatePlan(
+        id,
+        body.answers,
+        body.profile,
+        {
+          onHead: (patch) => sseSend(res, 'head', patch),
+          onSection: (section, index) => sseSend(res, 'section', { index, section }),
+          onSearch: (query) => sseSend(res, 'status', { message: `웹에서 "${query}" 검색 중…` }),
+        },
+        body.feedback,
+      )
       sseSend(res, 'result', { page })
     } catch (e) {
       this.sendFailure(res, '계획 생성', e)

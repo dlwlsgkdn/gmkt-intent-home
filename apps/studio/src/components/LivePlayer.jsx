@@ -173,7 +173,9 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     })
   }
 
-  const generatePlan = () => {
+  /* opts.feedback(ThreadStageFeedback, stage='plan')이 있으면 피드백 반영 재생성 —
+     BFF가 직전 계획·피드백을 프롬프트에 실어 지적된 상품을 웹 검색 대안으로 교체한다 */
+  const generatePlan = (opts = {}) => {
     const wire = answersWire()
     if (wire.length === 0) {
       api.showToast('질문에 하나 이상 답해주세요.')
@@ -181,9 +183,16 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     }
     setError(null)
     setPartial(null)
-    setLoading({ step: 'plan', message: '카탈로그와 웹을 살펴 계획을 세우고 있어요…' })
+    setLoading({
+      step: 'plan',
+      message: opts.feedback ? '피드백을 반영해 계획을 다시 세우고 있어요…' : '카탈로그와 웹을 살펴 계획을 세우고 있어요…',
+    })
     window.scrollTo(0, 0) // 스트리밍이 위에서부터 채워지므로 시작 시점에 올려 둔다
-    streamLivePlan(threadId, { answers: wire, profile: profileWire() }, {
+    streamLivePlan(threadId, {
+      answers: wire,
+      profile: profileWire(),
+      ...(opts.feedback ? { feedback: opts.feedback } : {}),
+    }, {
       onStatus: (message) => { if (!cancelledRef.current) setLoading((prev) => ({ ...(prev || { step: 'plan' }), message })) },
       /* 부분 스트리밍 — 머리(제목·요약)부터, 섹션은 자라는 채로 같은 index에 반복 도착한다 */
       onHead: (patch) => {
@@ -443,16 +452,16 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     stageFeedbackSignature(stageFb) !== (fbSavedRef.current[stageKey] ?? stageFeedbackSignature(emptyStageFeedback()))
   const fbAvailable = !loading && !error && (stageKey === 'plan' ? !!planPage : !!surveyPage)
 
-  const submitFeedback = async () => {
-    if (!threadId || fbSending) return
+  const submitFeedback = async ({ quiet = false } = {}) => {
+    if (!threadId || fbSending) return false
     if (!fbHasContent) {
       api.showToast('별점을 남기거나 코멘트를 적어주세요.')
-      return
+      return false
     }
     setFbSending(true)
     try {
       await sendLiveFeedback(threadId, fbPayload)
-      if (cancelledRef.current) return
+      if (cancelledRef.current) return false
       fbSavedRef.current[stageKey] = stageFeedbackSignature(stageFb)
       /* 워크스페이스 쓰레드 기록에 평가 마커 — "평가한 쓰레드" 패널 필터·배지의 원천 */
       setFbMeta((prev) => ({
@@ -460,13 +469,33 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         [stageKey]: { score: fbPayload.review.score },
         at: new Date().toISOString(),
       }))
-      api.showToast('피드백을 남겼어요. 소중한 평가 고마워요! 🙏')
+      if (!quiet) api.showToast('피드백을 남겼어요. 소중한 평가 고마워요! 🙏')
+      return true
     } catch (e) {
-      if (cancelledRef.current) return
+      if (cancelledRef.current) return false
       api.showToast(`피드백 저장에 실패했어요 — ${e.message}`)
+      return false
     } finally {
       if (!cancelledRef.current) setFbSending(false)
     }
+  }
+
+  /* 피드백 반영 재생성 — 계획 단계 전용: 미전송분이 있으면 먼저 저장(제출 로그 유지)하고,
+     같은 피드백을 계획 생성 요청에 실어 보낸다. 새 계획이 오면 기존 규칙대로 로컬 계획
+     평가는 비워진다(대상 소멸) — 반영된 피드백은 서버 제출 로그에 남아 있다 */
+  const regenerateWithFeedback = async () => {
+    if (stageKey !== 'plan' || loading) return
+    if (!fbHasContent) {
+      api.showToast('반영할 피드백을 먼저 남겨주세요.')
+      return
+    }
+    const payload = fbPayload
+    if (fbDirty) {
+      const saved = await submitFeedback({ quiet: true })
+      if (!saved) return
+    }
+    setFbMode(false)
+    generatePlan({ feedback: payload })
   }
 
   /* ── 말풍선 배치 — 평가 스튜디오와 같은 문법: 앵커(페이지 아이템)의 실제 렌더 높이에
@@ -653,7 +682,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
               {stageKey === 'plan' && planStale && (
                 <div className="sb-live-stale">
                   <span>설문 답변이 바뀌었어요. 이 계획은 이전 답변 기준이에요.</span>
-                  <button type="button" className="sb-btn sb-btn--ai sb-btn--tiny" onClick={generatePlan}>
+                  <button type="button" className="sb-btn sb-btn--ai sb-btn--tiny" onClick={() => generatePlan()}>
                     ✦ 계획 다시 생성
                   </button>
                 </div>
@@ -748,6 +777,17 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
                   >
                     {fbSending ? '저장 중…' : '피드백 저장'}
                   </button>
+                  {stageKey === 'plan' && (
+                    <button
+                      type="button"
+                      className="sb-btn sb-btn--ai sb-btn--tiny"
+                      title="피드백을 저장하고, 반영한 새 계획을 생성해요 — 지적한 상품은 웹 검색으로 다른 상품을 찾아요"
+                      disabled={fbSending || !fbHasContent}
+                      onClick={(event) => { event.stopPropagation(); regenerateWithFeedback() }}
+                    >
+                      ✦ 반영해 다시 생성
+                    </button>
+                  )}
                 </div>
               }
             />

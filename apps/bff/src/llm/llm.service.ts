@@ -13,6 +13,7 @@ import {
   buildPlanProductsRequest,
   buildPlanSkeletonRequest,
   buildSurveyRequest,
+  type PlanRevisionContext,
 } from './prompts'
 import { StructuredStreamParser } from './stream-parse'
 
@@ -129,34 +130,38 @@ export class LlmService {
     })
   }
 
-  /** 계획 1단계 — 뼈대 (검색 없음·medium): 제목·요약·안내·순서 + 상품 자리. 수 초 안에 스트리밍된다 */
+  /** 계획 1단계 — 뼈대 (검색 없음·medium): 제목·요약·안내·순서 + 상품 자리. 수 초 안에 스트리밍된다.
+   * revision이 있으면 피드백 반영 재생성 — 직전 계획+피드백이 사용자 메시지에 실린다 */
   async generatePlanSkeleton(
     intent: string,
     survey: SurveyPageWire,
     answers: Answer[],
     profile?: Profile,
     stream?: LlmStreamHandlers,
+    revision?: PlanRevisionContext,
   ): Promise<GenResult<PlanSkeletonGen>> {
     return this.generate('계획 뼈대 생성', PlanSkeletonGen, {
       system: PLAN_SKELETON_SYSTEM,
       effort: 'medium' as const, // 속도가 목적 — 텍스트 뼈대는 medium으로 충분
-      user: buildPlanSkeletonRequest(intent, survey, answers, profile),
+      user: buildPlanSkeletonRequest(intent, survey, answers, profile, revision),
       stream,
     })
   }
 
-  /** 계획 2단계 — 상품 (검색 포함·high): 카탈로그+웹 그라운딩 상품 섹션만. 뼈대와 병렬로 돈다 (§4-3·§9-1) */
+  /** 계획 2단계 — 상품 (검색 포함·high): 카탈로그+웹 그라운딩 상품 섹션만. 뼈대와 병렬로 돈다 (§4-3·§9-1).
+   * revision이 있으면 지적된 상품을 빼고 웹 검색으로 대안을 찾는 재생성이 된다 */
   async generatePlanProducts(
     intent: string,
     survey: SurveyPageWire,
     answers: Answer[],
     profile?: Profile,
     stream?: LlmStreamHandlers,
+    revision?: PlanRevisionContext,
   ): Promise<GenResult<PlanProductsGen>> {
     return this.generate('계획 상품 생성', PlanProductsGen, {
       system: PLAN_PRODUCTS_SYSTEM,
       effort: 'high' as const,
-      user: buildPlanProductsRequest(intent, survey, answers, profile),
+      user: buildPlanProductsRequest(intent, survey, answers, profile, revision),
       webSearch: true,
       stream,
     })

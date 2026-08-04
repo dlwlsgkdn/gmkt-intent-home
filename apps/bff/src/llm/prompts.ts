@@ -1,7 +1,7 @@
-import type { Answer, Profile, SurveyPageWire } from '@ddak/schema'
+import type { Answer, PlanPageWire, Profile, SurveyPageWire, ThreadStageFeedback } from '@ddak/schema'
 import { CATALOG } from './catalog'
 
-export const PROMPT_VERSION = 'v8'
+export const PROMPT_VERSION = 'v11'
 
 /*
  * 프롬프트 조립 — 안정 prefix(시스템)와 가변부(사용자 메시지)를 분리한다.
@@ -41,7 +41,8 @@ ${CATALOG_BLOCK}
 
 상품 추천 규칙:
 - 추천 상품은 **웹 검색(web_search)으로 외부몰에서 찾는 것이 기본**이다. 그중에서도 **올리브영을 최우선**으로 살핀다: 검색어에 "올리브영"을 넣어 올리브영에서 판매 중인 상품부터 확보하고, 올리브영에 맞는 상품이 없는 필요만 다른 몰(쿠팡·무신사 뷰티·화해·백화점몰 등)로 보완한다. 한 섹션에 올리브영 상품이 여러 개여도 좋다. 단, 올리브영을 우선하려고 덜 맞는 상품을 고르지는 않는다 — 적합성이 언제나 우선이다.
-- 카탈로그(지마켓)는 보조 수단이다: 웹 검색이 자리를 못 채우거나 검색으로 적합한 상품을 확인하지 못했을 때 productIds로 채운다.
+- 올리브영 상품 PDP는 \`www.oliveyoung.co.kr/store/goods/getGoodsDetail.do?goodsNo=…\` 형태다. 검색 결과에서 이 형태의 주소가 보이면 그대로 url로 쓴다. 특정 상품명으로 좁혀 재검색하기보다 "올리브영 <제품 유형> 추천"처럼 넓게 검색해 결과에 실린 PDP 주소를 그대로 쓰는 편이 성공률이 높다.
+- 카탈로그(지마켓)는 보조 수단이다: **섹션당 productIds는 최대 1개**만 쓰고, 그마저도 웹 검색으로 적합한 상품을 확인하지 못한 자리를 채울 때만 쓴다. 섹션 상품의 다수는 반드시 외부몰(webProducts)이어야 한다 — 웹 검색을 생략하고 카탈로그만으로 섹션을 채우는 것은 금지다.
 - productIds는 반드시 위 카탈로그의 id만 쓴다. 카탈로그에 없는 상품을 id로 지어내지 않는다.
 - webProducts는 반드시 웹 검색 결과에서 확인한 실제 판매 상품만 넣는다: url은 그 상품 하나의 **상세 페이지(PDP)** 주소를 검색 결과에서 그대로 쓴다(지어내거나 변형 금지). 검색 결과·상품 목록·카테고리 페이지 주소는 금지 — PDP를 못 확인한 상품은 넣지 않는다. price는 검색에서 확인한 판매가(원 단위 정수), mall은 판매처 이름이다. imageUrl은 검색 결과에서 확인한 상품 썸네일 이미지 주소만 그대로 쓴다 — 못 확인했으면 빈 문자열(지어내기 금지).
 - 웹 검색은 2~3회 간결하게 쓴다(올리브영 검색을 먼저, 보완 검색은 필요할 때만). 여러 검색이 필요하면 순차로 나누지 말고 한 번에 병렬로 요청한다.
@@ -77,15 +78,59 @@ ${profileBlock(profile)}
 ${qa}`
 }
 
+/* ── 피드백 반영 재생성 — 직전 계획 + 사용자 피드백을 가변부(사용자 메시지)에 싣는다.
+   시스템 프롬프트는 그대로라 캐시가 유지되고, 일반 생성 요청과도 형식이 같다. */
+
+export type PlanRevisionContext = { feedback: ThreadStageFeedback; prevPlan: PlanPageWire | null }
+
+/** 직전 계획 요약 — 피드백의 대상을 LLM이 알 수 있게 섹션·상품을 한 줄씩 적는다 */
+function prevPlanBlock(prevPlan: PlanPageWire | null): string {
+  if (!prevPlan) return ''
+  const lines = prevPlan.sections.map((s, i) => {
+    if (s.kind === 'products') {
+      const names = s.products.map((p) => `${p.brand} ${p.name} (${p.mall ?? '지마켓'})`).join(', ')
+      return `${i + 1}. [상품] ${s.title}: ${names}`
+    }
+    if (s.kind === 'steps') return `${i + 1}. [순서] ${s.title}`
+    return `${i + 1}. [안내] ${s.title}`
+  })
+  return `직전 계획 (피드백의 대상):
+- 제목: ${prevPlan.headline}
+${lines.join('\n')}`
+}
+
+function feedbackBlock(revision: PlanRevisionContext): string {
+  const { feedback } = revision
+  const lines: string[] = []
+  const scored = (score: number | null) => (score == null ? '' : ` (별점 ${score}/5)`)
+  if (feedback.review.score != null || feedback.review.feedback) {
+    lines.push(`- [페이지 전체]${scored(feedback.review.score)} ${feedback.review.feedback || '(코멘트 없음)'}`)
+  }
+  feedback.components.forEach((c) => {
+    lines.push(`- [${c.label}]${scored(c.score)} ${c.feedback || '(코멘트 없음)'}`)
+  })
+  const prev = prevPlanBlock(revision.prevPlan)
+  return `${prev ? `${prev}\n\n` : ''}직전 계획에 대한 사용자 피드백:
+${lines.join('\n')}`
+}
+
 export function buildPlanSkeletonRequest(
   intent: string,
   survey: SurveyPageWire,
   answers: Answer[],
   profile?: Profile,
+  revision?: PlanRevisionContext,
 ): string {
-  return `${planContext(intent, survey, answers, profile)}
+  if (!revision) {
+    return `${planContext(intent, survey, answers, profile)}
 
 이 응답에 맞는 쇼핑 계획 페이지의 뼈대를 만들어 주세요.`
+  }
+  return `${planContext(intent, survey, answers, profile)}
+
+${feedbackBlock(revision)}
+
+피드백을 반영해 쇼핑 계획 페이지의 뼈대를 다시 만들어 주세요. 안내·순서·섹션 구성에 대한 피드백을 고치고, 지적이 없던 부분의 구성은 유지합니다. 상품 자체에 대한 피드백은 상품 단계가 반영하니, 너는 상품 섹션의 제목·reason에 반영할 것만 손봅니다.`
 }
 
 export function buildPlanProductsRequest(
@@ -93,8 +138,20 @@ export function buildPlanProductsRequest(
   survey: SurveyPageWire,
   answers: Answer[],
   profile?: Profile,
+  revision?: PlanRevisionContext,
 ): string {
-  return `${planContext(intent, survey, answers, profile)}
+  if (!revision) {
+    return `${planContext(intent, survey, answers, profile)}
 
 이 응답에 맞는 추천 상품 섹션을 만들어 주세요.`
+  }
+  return `${planContext(intent, survey, answers, profile)}
+
+${feedbackBlock(revision)}
+
+피드백을 반영해 추천 상품 섹션을 다시 만들어 주세요:
+- 부정적으로 평가되거나 교체를 요청받은 상품은 다시 추천하지 않는다. 대안은 웹 검색으로 새로 찾는다 (다른 상품·브랜드를 원하면 카탈로그 밖이어도 webProducts로 추천할 수 있다).
+- "카탈로그에 없는/다른 상품"을 원하는 피드백이면 직전 계획의 상품과 겹치지 않게 웹 검색에서 새 상품을 고른다.
+- 긍정적으로 평가된 상품은 그대로 유지한다 (직전 계획과 같은 상품·가격·주소로).
+- 피드백이 특정 섹션만 지적하면 나머지 섹션은 직전 계획을 유지한다.`
 }

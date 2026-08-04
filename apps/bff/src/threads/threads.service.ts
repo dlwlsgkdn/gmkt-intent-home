@@ -127,18 +127,30 @@ export class ThreadsService {
   /** 응답 제출 → 계획 페이지 생성 (LLM #2, 2단계 병렬 — §9-1).
    * 뼈대(검색 없음, 수 초)가 제목·안내·순서와 상품 "자리"를 확정해 먼저 스트리밍되고,
    * 상품(검색 포함)이 병렬로 돌아 자리를 채운다. 상품 섹션 스트림은 뼈대 완료로 자리
-   * 인덱스가 확정된 뒤 내보낸다 — 실측상 뼈대가 항상 훨씬 먼저 끝나 체감 지연이 없다 */
+   * 인덱스가 확정된 뒤 내보낸다 — 실측상 뼈대가 항상 훨씬 먼저 끝나 체감 지연이 없다.
+   * feedback(stage='plan')이 오면 피드백 반영 재생성: 저장된 직전 계획과 피드백을 프롬프트에
+   * 실어, 지적된 상품은 빼고 웹 검색으로 대안을 찾는다 (카탈로그 밖 상품도 webProducts로) */
   async generatePlan(
     threadId: string,
     answers: Answer[],
     profile?: Profile,
     stream?: PlanStreamHandlers,
+    feedback?: ThreadStageFeedback,
   ): Promise<PlanPageWire> {
     const thread = await this.core.getThread(threadId)
     const surveyStep = thread.steps.find((s) => s.seq === SEQ.survey)
     if (!surveyStep) throw new BadRequestException('설문이 아직 생성되지 않았습니다')
     const survey = (surveyStep.payload as { page: SurveyPageWire }).page
     const intent = intentOf(thread)
+    // 피드백 반영 재생성 컨텍스트 — 직전 계획은 저장된 plan 스텝에서 (없어도 피드백만으로 진행)
+    const revision = feedback
+      ? {
+          feedback,
+          prevPlan:
+            (thread.steps.find((s) => s.seq === SEQ.plan)?.payload as { page?: PlanPageWire } | undefined)?.page ??
+            null,
+        }
+      : undefined
 
     const slotIndexes: number[] = []
     let skeletonLength: number | null = null // null = 뼈대 미완 — 상품 섹션은 대기열에 쌓인다
@@ -182,6 +194,7 @@ export class ThreadsService {
             // products 자리는 부분도 내보내지 않는다 — 상품 단계 결과가 차지할 인덱스
           },
         },
+        revision,
       )
       .then((result) => {
         // 자리 인덱스는 스트림 조각이 아니라 최종 검증본 기준으로 확정한다 (조각 파싱 누락 보정)
@@ -213,6 +226,7 @@ export class ThreadsService {
         },
         onSearch: stream.onSearch,
       },
+      revision,
     )
 
     const [skeletonSettled, productsSettled] = await Promise.allSettled([skeletonPromise, productsPromise])
@@ -259,12 +273,14 @@ export class ThreadsService {
    * 상세 페이지(url) 없는 상품은 카탈로그 상품이라도 추천하지 않는다 — 상세보기가 열리는 상품만 싣는다.
    * 상품이 하나도 안 남으면 null(드롭). 결정적이라 스트림 조각과 최종 결과가 일치한다 (§4-3) */
   private resolveProductsSection(s: ProductsSectionGen, sectionIndex: number): PlanSectionWire | null {
-    const products: CatalogProduct[] = s.productIds
+    const catalogProducts: CatalogProduct[] = s.productIds
       .map((id) => CATALOG_BY_ID.get(id))
       .filter((p): p is NonNullable<ReturnType<typeof CATALOG_BY_ID.get>> => Boolean(p && p.url))
-    if (products.length < s.productIds.length) {
-      this.logger.warn(`카탈로그 밖이거나 PDP url 없는 상품 id ${s.productIds.length - products.length}건 드롭`)
+    if (catalogProducts.length < s.productIds.length) {
+      this.logger.warn(`카탈로그 밖이거나 PDP url 없는 상품 id ${s.productIds.length - catalogProducts.length}건 드롭`)
     }
+    // 외부몰 우선 정책: 웹 상품(올리브영 등)을 앞에 싣고 카탈로그(지마켓)는 뒤에 보조로 붙인다
+    const products: CatalogProduct[] = []
     s.webProducts.forEach((w, webIndex) => {
       const url = parseHttpUrl(w.url)
       if (!url) {
@@ -288,6 +304,7 @@ export class ThreadsService {
         ...(imageUrl ? { imageUrl } : {}),
       })
     })
+    products.push(...catalogProducts)
     return products.length ? { kind: 'products', title: s.title, reason: s.reason, products } : null
   }
 

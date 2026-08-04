@@ -35,19 +35,6 @@ export const Answer = z.object({
 })
 export type Answer = z.infer<typeof Answer>
 
-export const PlanRequestBody = z.object({
-  answers: z.array(Answer).min(1),
-  profile: Profile.optional(),
-})
-export type PlanRequestBody = z.infer<typeof PlanRequestBody>
-
-export const ThreadEventBody = z.object({
-  /** cartAdd | cartRemove | complete | restart | feedback 등 — FE 정의 이벤트 이름 */
-  type: z.string().min(1),
-  data: z.record(z.string(), z.unknown()).optional(),
-})
-export type ThreadEventBody = z.infer<typeof ThreadEventBody>
-
 /* ── 피드백 (사용자 평가) ─────────────────────────────────────────────────
  * 스튜디오 평가 스튜디오와 같은 문법: 별점 0~5 + 코멘트, null = 미평가 (0점과 구분).
  * 저장은 action 스텝(type='feedback')의 data — 제출 1회 = 스텝 1개(append)라 수정
@@ -75,6 +62,22 @@ export const ThreadStageFeedback = z.object({
   at: z.string().optional(),
 })
 export type ThreadStageFeedback = z.infer<typeof ThreadStageFeedback>
+
+export const PlanRequestBody = z.object({
+  answers: z.array(Answer).min(1),
+  profile: Profile.optional(),
+  /** 재생성에 반영할 계획 피드백(stage='plan') — 있으면 BFF가 직전 계획과 함께 프롬프트에 실어,
+   * 지적된 상품을 빼고 웹 검색으로 대안을 찾는 등 피드백 반영 재생성이 된다. 없으면 일반 생성 */
+  feedback: ThreadStageFeedback.optional(),
+})
+export type PlanRequestBody = z.infer<typeof PlanRequestBody>
+
+export const ThreadEventBody = z.object({
+  /** cartAdd | cartRemove | complete | restart | feedback 등 — FE 정의 이벤트 이름 */
+  type: z.string().min(1),
+  data: z.record(z.string(), z.unknown()).optional(),
+})
+export type ThreadEventBody = z.infer<typeof ThreadEventBody>
 
 /* ── 와이어 페이지 (BFF → FE) ────────────────────────────────────────── */
 
