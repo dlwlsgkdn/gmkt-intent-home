@@ -88,11 +88,37 @@ export default function EvaluationPanel({
     [activeCase]
   )
 
-  const pageCtx = useMemo(() => {
-    const safeSummary = {
-      profile: Array.isArray(summaryPreview?.profile) ? summaryPreview.profile : [],
-      questions: Array.isArray(summaryPreview?.questions) ? summaryPreview.questions : [],
+  /* 케이스별 설문 요약 — 이 케이스의 조건(선택지)을 실제 고른 답처럼 보여준다.
+     빌더의 일반 미리보기(전 질문 '아무거나')를 그대로 쓰면 어떤 케이스를 보는지
+     요약 패널에서 드러나지 않는다. 조건이 없는 질문만 '아무거나'로 남긴다.
+     질문 문구는 props 원문 그대로 — surveySummary의 숨김 질문 매칭이 문구 기준이다 */
+  const caseSummaryPreview = useMemo(() => {
+    const byQuestion = new Map()
+    for (const condition of activeCase?.conditions || []) {
+      if (!condition.questionId) continue
+      const values = (condition.values || []).filter(Boolean)
+      let text = null
+      if (condition.operator === 'includesAny' || condition.operator === 'includesAll') {
+        text = values.join(', ') || null
+      } else if (condition.operator === 'excludesAny') {
+        text = values.length > 0 ? `${values.join(', ')} 제외` : null
+      } else if (condition.operator === 'unanswered') {
+        text = '선택 안 함'
+      } // 'answered'는 특정 답이 없다 — '아무거나' 유지
+      if (!text) continue
+      const prev = byQuestion.get(condition.questionId)
+      byQuestion.set(condition.questionId, prev ? `${prev} · ${text}` : text)
     }
+    return {
+      profile: Array.isArray(summaryPreview?.profile) ? summaryPreview.profile : [],
+      questions: (scenario?.stages?.survey || [])
+        .filter((item) => item.type === 'surveyQuestion')
+        .map((question) => ({ q: question.props.question, a: byQuestion.get(question.id) || '아무거나' })),
+    }
+  }, [activeCase, scenario, summaryPreview])
+
+  const pageCtx = useMemo(() => {
+    const safeSummary = caseSummaryPreview
     return {
       mode: 'canvas',
       canvasView: 'preview',
@@ -110,7 +136,7 @@ export default function EvaluationPanel({
         addToCart: () => {}, openExternal: () => {}, openProduct: () => {}, showKeyword: () => {}, complete: () => {},
       },
     }
-  }, [activeCase, profile, summaryPreview])
+  }, [activeCase, profile, caseSummaryPreview])
 
   /* ── 말풍선 배치: 앵커의 실제 렌더 높이에 맞추고, 겹치면 아래로 밀어 쌓는다 ── */
   const layoutBubbles = () => {
