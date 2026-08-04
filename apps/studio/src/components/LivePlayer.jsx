@@ -1,11 +1,20 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { DEVICE_PRESETS, STAGES } from '../lib/store.js'
 import { renderItem } from '../lib/registry.jsx'
-import { fetchLiveThread, recordLiveEvent, startLiveThread, streamLivePlan, streamLiveSurvey } from '../lib/liveApi.js'
+import { fetchLiveThread, recordLiveEvent, sendLiveFeedback, startLiveThread, streamLivePlan, streamLiveSurvey } from '../lib/liveApi.js'
 import { livePlanItems, liveSurveyItems } from '../lib/livePage.js'
 import { BgBlobs, FloatingBar, ViewerDeviceControl } from './Frame.jsx'
 import ThreadPanel from './ThreadPanel.jsx'
 import ProductDetailPanel from './ProductDetailPanel.jsx'
+import LiveFeedbackBubble, {
+  buildLiveFeedbackPayload,
+  emptyStageFeedback,
+  hasLiveFeedbackContent,
+  isLiveFeedbackTarget,
+  liveFeedbackLabel,
+  stageFeedbackFromWire,
+  stageFeedbackSignature,
+} from './LiveFeedback.jsx'
 
 /*
  * 라이브 생성 체험 — 스튜디오 시나리오가 아니라 BFF(LLM)가 설문·계획을 실시간 생성한다.
@@ -104,6 +113,12 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const [threadOrigin, setThreadOrigin] = useState(null)
   const [reselecting, setReselecting] = useState(false) // "설문 다시 선택" 확인 후 잠금 해제 상태 — 새 계획 생성 시 다시 잠김
   const [reselectConfirm, setReselectConfirm] = useState(false) // 재선택 확인 다이얼로그
+  /* 피드백(평가) — 단계별 { review, components }. 서버에는 action 스텝(type='feedback')으로
+     남고("피드백 저장" 1회 = 제출 1회), 이어보기는 단계별 최신 제출을 복원한다 */
+  const [fbMode, setFbMode] = useState(false)
+  const [feedback, setFeedback] = useState({ survey: emptyStageFeedback(), plan: emptyStageFeedback() })
+  const [fbSending, setFbSending] = useState(false)
+  const fbSavedRef = useRef({ survey: null, plan: null }) // 마지막 저장(또는 복원) 시그니처 — 미전송 감지
   /* 이어보기면 워크스페이스 기록의 시작 시각을 보존한다 (Player와 같은 규칙) */
   const startedAtRef = useRef(
     (resumeThreadId && (api.threads || []).find((t) => t.id === resumeThreadId)?.startedAt) || new Date().toISOString()
@@ -181,6 +196,10 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         setPlanPage(page)
         setPlanKey(JSON.stringify(wire))
         setReselecting(false) // 새 계획이 만들어졌으니 설문을 다시 잠근다
+        // 계획이 새로 만들어지면 이전 계획의 컴포넌트 평가는 대상이 사라진 것 — 로컬만 비운다
+        // (서버의 이전 제출은 로그로 남고, 다음 저장이 최신 유효본이 된다)
+        setFeedback((prev) => ({ ...prev, plan: emptyStageFeedback() }))
+        fbSavedRef.current.plan = null
         setPartial(null)
         setLoading(null)
         setStageKey('plan')
@@ -218,6 +237,17 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
             if (t.plan) setPlanKey(JSON.stringify(wireFromAnswers(t.survey.questions, map)))
           }
           if (t.plan) setPlanPage(t.plan)
+          if (t.feedback) {
+            const restored = {
+              survey: stageFeedbackFromWire(t.feedback.survey),
+              plan: stageFeedbackFromWire(t.feedback.plan),
+            }
+            setFeedback(restored)
+            fbSavedRef.current = {
+              survey: t.feedback.survey ? stageFeedbackSignature(restored.survey) : null,
+              plan: t.feedback.plan ? stageFeedbackSignature(restored.plan) : null,
+            }
+          }
           setCompleted(t.status === 'done')
           setLoading(null)
           setStageKey(t.plan ? 'plan' : 'survey')
@@ -381,6 +411,42 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const answeredCount = questions.filter((q) => answers[q.id] != null && String(answers[q.id]).length > 0).length
   const planStale = planPage && planKey !== JSON.stringify(answersWire())
 
+  /* 피드백(평가) — 현재 단계의 상태와 미전송 여부. 저장은 명시적 버튼 한 번 = 제출 한 번 */
+  const stageFb = feedback[stageKey] || emptyStageFeedback()
+  const patchStageFb = (updater) =>
+    setFeedback((prev) => ({ ...prev, [stageKey]: updater(prev[stageKey] || emptyStageFeedback()) }))
+  const setComponentFb = (id, patch) =>
+    patchStageFb((st) => ({
+      ...st,
+      components: { ...st.components, [id]: { ...(st.components[id] || { score: null, feedback: '' }), ...patch } },
+    }))
+  const setReviewFb = (patch) => patchStageFb((st) => ({ ...st, review: { ...st.review, ...patch } }))
+  const fbPayload = buildLiveFeedbackPayload(stageKey, stageFb, allItems)
+  const fbHasContent = hasLiveFeedbackContent(fbPayload)
+  const fbDirty =
+    stageFeedbackSignature(stageFb) !== (fbSavedRef.current[stageKey] ?? stageFeedbackSignature(emptyStageFeedback()))
+  const fbAvailable = !loading && !error && (stageKey === 'plan' ? !!planPage : !!surveyPage)
+
+  const submitFeedback = async () => {
+    if (!threadId || fbSending) return
+    if (!fbHasContent) {
+      api.showToast('별점을 남기거나 코멘트를 적어주세요.')
+      return
+    }
+    setFbSending(true)
+    try {
+      await sendLiveFeedback(threadId, fbPayload)
+      if (cancelledRef.current) return
+      fbSavedRef.current[stageKey] = stageFeedbackSignature(stageFb)
+      api.showToast('피드백을 남겼어요. 소중한 평가 고마워요! 🙏')
+    } catch (e) {
+      if (cancelledRef.current) return
+      api.showToast(`피드백 저장에 실패했어요 — ${e.message}`)
+    } finally {
+      if (!cancelledRef.current) setFbSending(false)
+    }
+  }
+
   /* 설문 → 계획: 이미 만든 계획이 있으면 다시 생성하지 않고 그대로 연다.
      답이 바뀐 상태의 재생성은 명시적 요청(설문 하단 확인 버튼·계획 화면 안내 바)으로만 —
      스테퍼 이동(regenerate 없음)은 어떤 경우에도 LLM을 다시 부르지 않는다 */
@@ -452,15 +518,26 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
                 <span className="sb-live-eyebrow__spark" aria-hidden="true">✦</span>
                 AI 실시간 생성{loading ? ' · 생성 중' : ''}
               </p>
-              <button
-                type="button"
-                className="sb-player-restart"
-                title="같은 검색어로 새 쓰레드를 시작해 처음부터 다시 생성해요"
-                disabled={!liveQuery || !!loading}
-                onClick={() => api.playLive(liveQuery)}
-              >
-                ↺ 새로 생성
-              </button>
+              <div className="sb-player__head-actions">
+                <button
+                  type="button"
+                  className={'sb-player-restart sb-live-fb-toggle' + (fbMode ? ' is-on' : '')}
+                  title="생성된 페이지에 별점과 코멘트를 남겨요 — 저장하면 쓰레드 기록에 함께 남아요"
+                  disabled={!fbAvailable}
+                  onClick={() => setFbMode((v) => !v)}
+                >
+                  💬 평가{fbMode ? ' 닫기' : ''}
+                </button>
+                <button
+                  type="button"
+                  className="sb-player-restart"
+                  title="같은 검색어로 새 쓰레드를 시작해 처음부터 다시 생성해요"
+                  disabled={!liveQuery || !!loading}
+                  onClick={() => api.playLive(liveQuery)}
+                >
+                  ↺ 새로 생성
+                </button>
+              </div>
             </div>
             <h2>{liveQuery || 'AI 실시간 생성 체험'}</h2>
             {stageKey === 'survey' && questions.length > 0 && !loading && !error && (
@@ -518,9 +595,38 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
                 {items.map((it) => (
                   <div key={it.id} className="sb-player__item">
                     {renderItem(it, { mode: 'player', player: playerApi, profile: api.profile, allItems })}
+                    {fbMode && isLiveFeedbackTarget(it) && (
+                      <LiveFeedbackBubble
+                        label={liveFeedbackLabel(it)}
+                        value={stageFb.components[it.id]}
+                        onChange={(patch) => setComponentFb(it.id, patch)}
+                      />
+                    )}
                   </div>
                 ))}
               </div>
+              {fbMode && (
+                <div className="sb-live-fb-panel">
+                  <LiveFeedbackBubble overall label="페이지 전체" value={stageFb.review} onChange={setReviewFb} />
+                  <div className="sb-live-fb-panel__actions">
+                    <span className="sb-live-fb-panel__hint">
+                      {!fbHasContent
+                        ? '컴포넌트마다 별점·코멘트를 남길 수 있어요'
+                        : fbDirty
+                          ? '아직 저장하지 않은 평가가 있어요'
+                          : '평가가 쓰레드 기록에 저장됐어요'}
+                    </span>
+                    <button
+                      type="button"
+                      className="sb-btn sb-btn--primary sb-btn--small"
+                      disabled={fbSending || !fbDirty}
+                      onClick={submitFeedback}
+                    >
+                      {fbSending ? '저장 중…' : '피드백 저장'}
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="clean-survey-nav sb-player__nav">
                 {stageKey === 'plan' ? (
                   <button type="button" className="clean-survey-nav-btn clean-survey-nav-btn--ghost" onClick={() => goStage(0)}>

@@ -644,6 +644,72 @@
   margin-top: 16px;
 }
 
+/* ── 라이브 피드백(평가) — 생성 컴포넌트마다 별점+코멘트 말풍선, 하단에 페이지 전체
+   평가와 저장 버튼. 별점 문법(.sb-stars — 미평가/0점 배지)은 평가 스튜디오와 공유 ── */
+.sb-player__head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.sb-live-fb-toggle.is-on {
+  border-color: var(--sb-info);
+  background: var(--sb-info-soft);
+  color: var(--sb-info);
+}
+.sb-live-fb {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--sb-line);
+  border-radius: var(--sb-r-lg);
+  background: var(--sb-surface);
+  box-shadow: var(--sb-shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sb-live-fb__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.sb-live-fb__label {
+  font-size: var(--sb-t-micro);
+  color: var(--sb-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sb-live-fb textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 7px 9px;
+  border: 1px solid var(--sb-line);
+  border-radius: var(--sb-r-sm);
+  background: var(--sb-surface);
+  font-size: var(--sb-t-micro);
+  color: var(--sb-ink);
+  font-family: inherit;
+}
+.sb-live-fb--overall { border-color: var(--sb-info); }
+.sb-live-fb-panel {
+  margin: 14px 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sb-live-fb-panel__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.sb-live-fb-panel__hint {
+  font-size: var(--sb-t-micro);
+  color: var(--sb-subtle);
+}
+
 /* ── 상품 상세보기 사이드 패널 — 추천 상품 카드 "상세보기"가 외부몰 상품 페이지를
    iframe으로 연다. 데스크톱 = 우측 사이드 패널, 모바일(640px 이하) = 전체화면 ── */
 .sb-product-detail {

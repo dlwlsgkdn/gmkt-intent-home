@@ -42,11 +42,39 @@ export const PlanRequestBody = z.object({
 export type PlanRequestBody = z.infer<typeof PlanRequestBody>
 
 export const ThreadEventBody = z.object({
-  /** cartAdd | cartRemove | complete | restart 등 — FE 정의 이벤트 이름 */
+  /** cartAdd | cartRemove | complete | restart | feedback 등 — FE 정의 이벤트 이름 */
   type: z.string().min(1),
   data: z.record(z.string(), z.unknown()).optional(),
 })
 export type ThreadEventBody = z.infer<typeof ThreadEventBody>
+
+/* ── 피드백 (사용자 평가) ─────────────────────────────────────────────────
+ * 스튜디오 평가 스튜디오와 같은 문법: 별점 0~5 + 코멘트, null = 미평가 (0점과 구분).
+ * 저장은 action 스텝(type='feedback')의 data — 제출 1회 = 스텝 1개(append)라 수정
+ * 이력이 로그로 남고, 이어보기·관리 페이지는 단계별 최신 제출을 유효본으로 본다. */
+
+export const FeedbackScore = z.number().int().min(0).max(5)
+
+export const ThreadFeedbackComponent = z.object({
+  /** livePage 투영 아이템 id — 설문 질문은 와이어 질문 id 그대로 */
+  id: z.string(),
+  /** 사람이 읽을 라벨(질문 문구·섹션 제목) — 관리 페이지 문서화용. 페이지가 재생성돼도 해석 가능하게 함께 저장 */
+  label: z.string(),
+  score: FeedbackScore.nullable(),
+  feedback: z.string(),
+})
+export type ThreadFeedbackComponent = z.infer<typeof ThreadFeedbackComponent>
+
+export const ThreadStageFeedback = z.object({
+  stage: z.enum(['survey', 'plan']),
+  /** 페이지 전체 평가 */
+  review: z.object({ score: FeedbackScore.nullable(), feedback: z.string() }),
+  /** 컴포넌트별 평가 — 별점이나 코멘트가 있는 항목만 실어 보낸다 */
+  components: z.array(ThreadFeedbackComponent),
+  /** 기록 시각 (이어보기 응답에서 action 스텝의 at으로 채워진다) */
+  at: z.string().optional(),
+})
+export type ThreadStageFeedback = z.infer<typeof ThreadStageFeedback>
 
 /* ── 와이어 페이지 (BFF → FE) ────────────────────────────────────────── */
 
@@ -111,6 +139,11 @@ export const ThreadResumeWire = z.object({
   survey: SurveyPageWire.nullable(),
   answers: z.array(Answer).nullable(),
   plan: PlanPageWire.nullable(),
+  /** 단계별 최신 피드백 — action 스텝(type='feedback')에서 파생. 없으면 null (구 BFF 응답엔 필드 자체가 없다) */
+  feedback: z
+    .object({ survey: ThreadStageFeedback.nullable(), plan: ThreadStageFeedback.nullable() })
+    .nullable()
+    .optional(),
   updatedAt: z.string(),
 })
 export type ThreadResumeWire = z.infer<typeof ThreadResumeWire>

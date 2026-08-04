@@ -75,8 +75,26 @@ function stepSummary(step, surveyPage) {
       }
     }
   } else if (step.stage === 'action') {
-    lines.push(`- 행동: **${p.type || '?'}**${p.data ? ` · ${JSON.stringify(p.data)}` : ''}`)
+    if (p.type === 'feedback' && p.data && typeof p.data === 'object') {
+      lines.push(...feedbackSummary(p.data))
+    } else {
+      lines.push(`- 행동: **${p.type || '?'}**${p.data ? ` · ${JSON.stringify(p.data)}` : ''}`)
+    }
     if (p.at) lines.push(`- 시각: ${fmtTime(p.at)}`)
+  }
+  return lines
+}
+
+/** 피드백 제출(action type='feedback')을 별점·코멘트로 문서화 — 같은 단계의 뒤 스텝이 최신 유효본 */
+function feedbackSummary(data) {
+  const star = (score) =>
+    score == null ? '미평가' : score === 0 ? '0점(사용 불가)' : `${'★'.repeat(score)} ${score}점`
+  const line = (label, entry) =>
+    `${label}: ${star(entry.score)}${entry.feedback ? ` — "${entry.feedback}"` : ''}`
+  const lines = [`- 행동: **feedback** · ${data.stage === 'plan' ? '계획' : '설문'} 페이지 평가`]
+  if (data.review) lines.push(`- ${line('전체', data.review)}`)
+  for (const c of data.components || []) {
+    lines.push(`  - ${line(c.label || c.id, c)}`)
   }
   return lines
 }

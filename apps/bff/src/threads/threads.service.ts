@@ -13,6 +13,7 @@ import type {
   ThreadSource,
   ThreadWithSteps,
 } from '@ddak/schema'
+import { ThreadStageFeedback } from '@ddak/schema'
 import { CoreClientService } from '../core-client.service'
 import { LlmService } from '../llm/llm.service'
 import { CATALOG_BY_ID } from '../llm/catalog'
@@ -316,6 +317,7 @@ export class ThreadsService {
       survey: (step(SEQ.survey)?.payload as { page?: SurveyPageWire } | undefined)?.page ?? null,
       answers: (step(SEQ.answers)?.payload as { answers?: Answer[] } | undefined)?.answers ?? null,
       plan: (step(SEQ.plan)?.payload as { page?: PlanPageWire } | undefined)?.page ?? null,
+      feedback: latestFeedback(thread),
       updatedAt: thread.updatedAt,
     }
   }
@@ -374,6 +376,24 @@ function isSearchLikeUrl(url: URL): boolean {
     if (SEARCH_QUERY_KEYS.has(key.toLowerCase())) return true
   }
   return false
+}
+
+/** 단계별 최신 피드백 파생 — action 스텝(type='feedback')은 append 로그라 seq 순회의
+ * 마지막 유효 제출이 유효본이다. 형태가 어긋난 옛 기록은 조용히 건너뛴다 */
+function latestFeedback(thread: ThreadWithSteps) {
+  const feedback: { survey: ThreadStageFeedback | null; plan: ThreadStageFeedback | null } = {
+    survey: null,
+    plan: null,
+  }
+  for (const step of thread.steps) {
+    if (step.stage !== 'action') continue
+    const p = step.payload as { type?: string; data?: unknown; at?: string }
+    if (p.type !== 'feedback') continue
+    const parsed = ThreadStageFeedback.safeParse(p.data)
+    if (!parsed.success) continue
+    feedback[parsed.data.stage] = { ...parsed.data, at: p.at ?? parsed.data.at }
+  }
+  return feedback.survey || feedback.plan ? feedback : null
 }
 
 function intentOf(thread: ThreadWithSteps): string {

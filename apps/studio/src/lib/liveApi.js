@@ -97,6 +97,23 @@ export function recordLiveEvent(threadId, type, data) {
   }).catch(() => {})
 }
 
+/* 피드백(평가) 제출 — 같은 events 경로에 type='feedback'으로 남기되, 행동 기록과 달리
+   결과를 기다린다: 사용자가 공들여 쓴 평가라 성공/실패를 정직하게 알려야 한다 */
+export async function sendLiveFeedback(threadId, data) {
+  let res
+  try {
+    res = await fetch(`${BASE}/threads/${encodeURIComponent(threadId)}/events`, {
+      method: 'POST',
+      headers: headers(true),
+      body: JSON.stringify({ type: 'feedback', data }),
+    })
+  } catch {
+    throw networkError()
+  }
+  if (!res.ok) throw await toLiveError(res)
+  return res.json()
+}
+
 /* SSE 소비 — event/data 블록을 빈 줄 기준으로 잘라 핸들러에 배분한다.
    status(진행 문구) 외에 부분 스트리밍 이벤트(head 머리 필드, question/section 컴포넌트)를
    지원한다 — 자라는 중인 텍스트가 같은 키/index로 반복 도착하므로(토큰 단위 미리보기)
