@@ -1,6 +1,7 @@
 import { fetchRemoteIndex, saveRemoteStateNow } from '../../lib/remote.js'
 import {
   accountKey,
+  isEmptyScenarioContent,
   parseAccountKey,
   scenarioKey,
   splitAccount,
@@ -36,7 +37,8 @@ export function createPushOps(ctx) {
       const contentEntry = rowsRef.current.get(scenarioKey(account.id, scenario.id))
       if (contentEntry
         ? (contentEntry.base.stages !== scenario.stages || contentEntry.base.planCases !== scenario.planCases)
-        : !serverIndexRef.current.has(scenarioKey(account.id, scenario.id))) return true
+        : (!serverIndexRef.current.has(scenarioKey(account.id, scenario.id))
+          && !isEmptyScenarioContent(scenario))) return true
       const versionsEntry = rowsRef.current.get(versionsKey(account.id, scenario.id))
       if (versionsEntry ? versionsEntry.base !== scenario.versions
         : (!serverIndexRef.current.has(versionsKey(account.id, scenario.id)) && (scenario.versions || []).length > 0)) return true
@@ -107,7 +109,11 @@ export function createPushOps(ctx) {
           const dirty = entry
             ? (entry.base.stages !== scenario.stages || entry.base.planCases !== scenario.planCases)
             : true
-          if (dirty || !serverKeys.has(contentKey)) {
+          /* 기준선 없는 새 행이 빈 스켈레톤이면 올리지 않는다 — 셸만 받은 시나리오
+             (콘텐츠 행이 아직 서버에 안 올라온 것)를 빈 값으로 확정시키지 않게.
+             내용이 생기면 그때 새 행으로 전송된다 */
+          const emptyNewRow = !entry && !serverKeys.has(contentKey) && isEmptyScenarioContent(scenario)
+          if (!emptyNewRow && (dirty || !serverKeys.has(contentKey))) {
             writes.push([contentKey, contentBySid[scenario.id], () =>
               rowsRef.current.set(contentKey, { loaded: true, base: { stages: scenario.stages, planCases: scenario.planCases } })])
           }

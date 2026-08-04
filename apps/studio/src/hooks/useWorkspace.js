@@ -14,6 +14,7 @@ import {
   uid,
 } from '../lib/store.js'
 import { installStarterCopy, starterSnapshot } from '../lib/scenarioOps.js'
+import { isEmptyScenarioContent } from '../lib/accountRows.js'
 import { useRemoteSync } from './remote/useRemoteSync.js'
 
 /*
@@ -90,6 +91,12 @@ export function useWorkspace({ showToast, onReset }) {
     const account = accounts.find((candidate) => candidate.id === activeAccountId) || accounts[0]
     const scenario = account?.scenarios.find((candidate) => candidate.id === scenarioId)
     if (!scenario) return
+    /* 콘텐츠가 빈 시나리오는 스냅샷을 뜨지 않는다 — 서버 콘텐츠 행이 유실·미로드된
+       시나리오를 지정하면 빈 스냅샷이 라이브러리를 덮는 사고가 있었다 (2026-08-04) */
+    if (isEmptyScenarioContent(scenario)) {
+      showToast(`"${scenario.title}"의 내용이 비어 있어 기본 시나리오로 올리지 않았어요. 시나리오를 열어 내용을 확인한 뒤 다시 지정해주세요.`)
+      return
+    }
     const existing = starters.entries.find((entry) =>
       entry.sourceAccountId === account.id && entry.sourceScenarioId === scenarioId)
     const id = existing ? existing.id : uid()

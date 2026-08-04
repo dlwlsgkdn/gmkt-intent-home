@@ -53,6 +53,16 @@ export const scenarioContent = (scenario) => ({
   planCases: Array.isArray(scenario.planCases) ? scenario.planCases : [],
 })
 
+/* 빈 스켈레톤 판정 — 스테이지에 아이템이 하나도 없고 케이스에도 내용(아이템·조건)이 없다.
+   셸만 받아 assembleAccount가 빈 값으로 채운 시나리오를 push가 "서버에 없는 새 행"으로
+   올려 굳히는 사고(실제 콘텐츠 행이 아직 안 올라온 시나리오를 빈 값으로 확정)를 막는 기준 */
+export const isEmptyScenarioContent = (scenario) => {
+  const stages = scenario?.stages && typeof scenario.stages === 'object' ? scenario.stages : {}
+  if (Object.values(stages).some((items) => Array.isArray(items) && items.length > 0)) return false
+  const cases = Array.isArray(scenario?.planCases) ? scenario.planCases : []
+  return cases.every((c) => !(c?.items?.length) && !(c?.conditions?.length))
+}
+
 /* 계정 → 서버 행들. contentBySid는 모든 시나리오, versionsBySid는 스냅샷이 있는 시나리오만 */
 export function splitAccount(account) {
   const shellBody = { ...account }
