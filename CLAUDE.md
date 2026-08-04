@@ -11,7 +11,7 @@ apps/studio/       ← 스튜디오 소스 (React 18 + Vite 5). 빌드 산출물
 apps/core/         ← NestJS backend core — 쓰레드 저장·조회 (Drizzle+Neon). 실행·배포는 apps/core/README.md
 apps/bff/          ← NestJS BFF — LLM(설문·계획 생성, 계획은 웹 검색 병행)·core 오케스트레이션. DESIGN-LLM-SERVICE.md §4, API.md §1 참고
 packages/schema/   ← @ddak/schema — 쓰레드 도메인·internal API zod 계약 (install 시 prepare로 dist 빌드)
-api/               ← 스튜디오 동기화 서버리스 (Vercel 함수, 루트 고정)
+api/               ← 스튜디오 서버리스 (Vercel 함수, 루트 고정) — state.js(동기화)·pdp.js(지마켓 PDP iframe 프록시)
 middleware.js      ← 스튜디오 엣지 미들웨어 (루트 고정) — /api/bff/* 를 BFF로 rewrite + BFF_SERVICE_TOKEN 주입 (FE는 bff URL을 직접 안 부름. 스튜디오 프로젝트 환경변수 BFF_URL·BFF_SERVICE_TOKEN 필요)
 legacy/            ← 옛 HTML 프로토타입 원본 (빌드 시 apps/studio/dist/legacy 로 복사됨)
 ```
@@ -90,7 +90,7 @@ npm run db:migrate --workspace=apps/core    # 마이그레이션 SQL 순서 적�
 - `components/ui/Dropdown.jsx` — 드롭다운 공용 래퍼 (버튼은 호출부, 메뉴/백드롭 담당)
 - `components/Frame.jsx` — 공통 프레임 조각: BgBlobs, FloatingBar(하단, 햄버거=쓰레드 패널, 버튼 위치→패널 방향), ViewerDeviceControl(기기 폭), ProfileControl(프로필 전환/추가/삭제), StudioFab
 - `components/ThreadPanel.jsx` — 쇼핑 쓰레드 히스토리 패널 (원본 history-sidebar 룩, 좌/우/중앙 등장, 아코디언 카드, 이어보기/삭제)
-- `components/ProductDetailPanel.jsx` — 상품 상세보기 사이드 패널: productCard "상세보기"가 외부몰 상품 페이지를 iframe으로 연다 (데스크톱 = 우측 패널, 모바일 640px 이하 = 전체화면 — viewer.css). Player/LivePlayer가 `ctx.player.openProduct({name, mall, url})`로 열고, url 없으면 토스트 폴백. 외부몰이 iframe을 차단할 수 있어 "새 탭에서 열기"와 하단 안내를 상시 둔다. productCard의 `url`은 사실 필드라 AI 왕복 제외 목록(NON_LLM_EDITABLE 등)에 이미 포함돼 있다
+- `components/ProductDetailPanel.jsx` — 상품 상세보기 사이드 패널: productCard "상세보기"가 외부몰 상품 페이지를 iframe으로 연다 (데스크톱 = 우측 패널, 모바일 640px 이하 = 전체화면 — viewer.css). Player/LivePlayer가 `ctx.player.openProduct({name, mall, url})`로 열고, url 없으면 토스트 폴백. **지마켓 PDP는 프록시(`api/pdp.js` — 모바일 UA로 대신 받아 base 주입) 경유**: 데스크톱 iframe UA로는 item.gmarket(X-Frame-Options: SAMEORIGIN)으로 넘어가 항상 비어 보였기 때문. 다른 외부몰은 원본 그대로 시도하고 차단될 수 있어 "새 탭에서 열기"(항상 원본 URL)와 하단 안내를 상시 둔다. productCard의 `url`은 사실 필드라 AI 왕복 제외 목록(NON_LLM_EDITABLE 등)에 이미 포함돼 있다
 - `components/StarterPanel.jsx` — 기본 시나리오 패널 (전역 라이브러리 목록·내리기 — 진입은 드로어 하단 도구 행의 ⭐ 버튼, 지정은 시나리오 행)
 - `components/Player.jsx` — 시나리오 실행(설문→계획 스테퍼). 기기 폭 반영, hidden 아이템 제외, 다시 시작, 응답/프로필 제외 상태를 ctx.player로 공급, **쓰레드 자동 기록**(체험 1회 = 쓰레드 1개)
 - `components/LivePlayer.jsx` — **라이브 생성 체험** (설문→계획을 BFF의 LLM이 실시간 생성). 진입은 홈 자유 검색(칩 = 시나리오 체험 — 매칭 겹치면 선택 시트로 명시 선택), `✦ AI 실시간 생성` 배지 상시, **토큰 단위 부분 스트리밍**(SSE head/question/section — 자라는 중인 컴포넌트가 같은 index로 반복 도착해 텍스트가 토큰 단위로 자라며 렌더 + 진행 꼬리 스켈레톤. BFF stream-parse가 미완성 원소를 복구 파싱해 ~120ms 스로틀로 재전송, 상품 섹션은 완성·그라운딩 통과분만. **클라이언트 소유 컴포넌트는 선렌더**: 계획은 설문 요약 패널, 설문은 프로필 패널을 생성 시작 즉시 그리고, LLM 산출물인 제목/인트로는 도착 전까지 감춘다. `partial` 상태는 미리보기일 뿐 확정·기록은 언제나 result — planKey·설문 잠금도 result 시점), 실패는 정직한 안내(retryable 재시도 + 발행 칩 폴백은 사용자 클릭으로만 — 부분 도착분도 버린다), 답변 변경 시 계획은 자동 재생성하지 않고 안내 바의 버튼으로만. **이미 만든 계획은 어떤 단계 이동으로도 재생성하지 않는다**: 스테퍼는 항상 만든 계획을 그대로 열고, 재생성은 명시적 버튼(계획 stale 바·설문 하단 CTA)뿐. 계획 스냅샷 키(planKey)는 서버가 돌려준 answers 원문이 아니라 로컬 재구성과 같은 경로(`wireFromAnswers`)로 만든다 — 직렬화 차이로 무변경 답변이 "바뀜"으로 오판되면 이어보기 후 이동만 해도 LLM을 다시 부른다. **계획이 만들어진 설문은 잠긴다**(surveyQuestion locked, 선택된 답만 또렷): 해제는 "설문 다시 선택" 확인 다이얼로그를 거쳐서만, 새 계획이 생성되면 다시 잠긴다. 워크스페이스 쓰레드에 `live: true`로 upsert — ThreadPanel이 ✦ 배지로 구분하고 이어보기는 `GET /api/bff/threads/:id` 복원. 렌더는 livePage 투영 + 레지스트리 재사용
