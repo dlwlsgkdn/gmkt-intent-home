@@ -2,6 +2,25 @@ import React from 'react'
 import { splitList, splitTextList } from '../store.js'
 import { Img, kText, youtubeThumbnail } from './support.jsx'
 
+/* 상품 카드 썸네일 — 이미지가 있으면 실제 썸네일, 없거나 로드 실패면 이모지 목업 블록.
+   외부몰 이미지는 핫링크 차단으로 깨질 수 있어 무관한 스톡 이미지(FALLBACK_IMG) 대신
+   목업으로 정직하게 강등한다. 이모지도 이미지도 없으면 기존 Img(플레이스홀더) 유지 */
+function ProductThumb({ p, ctx }) {
+  const [failed, setFailed] = React.useState(false)
+  const mock = (emoji) => (
+    <div className="sb-product-card2__mock" style={{ background: p.gradient || undefined }} aria-label={p.name}>
+      {p.brand ? <span>{kText(p.brand, ctx, 'brand')}</span> : null}
+      <b aria-hidden="true">{emoji}</b>
+    </div>
+  )
+  if (p.emoji) return mock(p.emoji)
+  if (p.imageUrl && failed) return mock('🧴')
+  if (p.imageUrl) {
+    return <img src={p.imageUrl} alt={p.name} draggable={false} onError={() => setFailed(true)} />
+  }
+  return <Img src={p.imageUrl} alt={p.name} />
+}
+
 /* 계획 단계 컴포넌트 — 요약·타이틀·단계 카드·상품/미디어 카드·체크리스트·CTA */
 export const PLAN_COMPONENTS = {
   surveySummary: {
@@ -162,14 +181,7 @@ export const PLAN_COMPONENTS = {
               <span className="text-[10px] font-bold text-slate-400 mr-1.5 uppercase tracking-tighter">Match</span>
               <span className="text-xs font-bold text-gmarket-blue">{score}%</span>
             </span>
-            {p.emoji ? (
-              <div className="sb-product-card2__mock" style={{ background: p.gradient || undefined }} aria-label={p.name}>
-                {p.brand ? <span>{kText(p.brand, ctx, 'brand')}</span> : null}
-                <b aria-hidden="true">{p.emoji}</b>
-              </div>
-            ) : (
-              <Img src={p.imageUrl} alt={p.name} />
-            )}
+            <ProductThumb p={p} ctx={ctx} />
           </div>
           <div className="sb-media-card__body sb-product-card2__body">
             <div className="sb-media-card__tags">

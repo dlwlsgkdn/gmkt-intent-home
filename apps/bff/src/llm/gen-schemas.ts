@@ -52,6 +52,9 @@ export const ProductsSectionGen = z.object({
         price: z.number().int().describe('판매가 (원 단위 정수) — 검색 결과에서 확인한 값'),
         mall: z.string().describe('판매처 이름 (예: 올리브영, 쿠팡)'),
         url: z.string().describe('상품 상세 페이지(PDP) URL — 검색 결과의 주소 그대로. 검색 결과·목록 페이지 금지'),
+        imageUrl: z
+          .string()
+          .describe('상품 썸네일 이미지 URL — 검색 결과에서 확인한 경우만, 없으면 빈 문자열 (지어내기 금지)'),
         tags: z.array(z.string()).max(5).describe('특징 태그'),
       }),
     )
@@ -81,3 +84,23 @@ export const PlanProductsGen = z.object({
   sections: z.array(ProductsSectionGen).min(1).max(2).describe('추천 상품 섹션 1~2개'),
 })
 export type PlanProductsGen = z.infer<typeof PlanProductsGen>
+
+/*
+ * 부분 스트리밍(토큰 단위 미리보기)용 느슨한 스키마 — 자라는 중(미완성)인 원소라
+ * 필수·개수 제약을 걷어낸다. 확정 검증은 언제나 위의 본 스키마가 맡는다 (threads.service).
+ * kind만 필수: 종류를 알아야 wire 섹션으로 투영할 수 있다 (kind 도착 전 조각은 스킵).
+ */
+export const SurveyQuestionPartialGen = z.object({
+  question: z.string().optional(),
+  options: z.array(z.string()).optional(),
+  multi: z.boolean().optional(),
+})
+export type SurveyQuestionPartialGen = z.infer<typeof SurveyQuestionPartialGen>
+
+export const PlanSectionPartialGen = z.object({
+  kind: z.enum(['guide', 'steps', 'products']),
+  title: z.string().optional(),
+  body: z.string().optional(),
+  steps: z.array(z.string()).optional(),
+})
+export type PlanSectionPartialGen = z.infer<typeof PlanSectionPartialGen>

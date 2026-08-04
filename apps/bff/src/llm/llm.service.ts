@@ -42,12 +42,15 @@ const MAX_CONTINUATIONS = 3
 export type GenResult<T> = { content: T; meta: LlmMeta }
 
 /** 부분 스트리밍 핸들러 — 원소는 원시 JSON 조각으로 전달되고, 검증·투영은 호출자(threads.service) 몫.
+ * *Partial은 자라는 중인 값의 토큰 단위 미리보기(같은 키/인덱스 반복 호출 — 완성 시 onHead/onElement가 최종본).
  * onSearch는 웹 검색 서버 도구의 실행을 알린다 (진행 문구용) */
 export type LlmStreamHandlers = {
   arrayKey: string
   headKeys?: string[]
   onHead?: (key: string, value: string) => void
   onElement?: (element: unknown, index: number) => void
+  onHeadPartial?: (key: string, value: string) => void
+  onElementPartial?: (element: unknown, index: number) => void
   onSearch?: (query: string) => void
 }
 
@@ -181,6 +184,8 @@ export class LlmService {
           headKeys: req.stream.headKeys,
           onHead: req.stream.onHead,
           onElement: req.stream.onElement,
+          onHeadPartial: req.stream.onHeadPartial,
+          onElementPartial: req.stream.onElementPartial,
         })
       : null
     const started = Date.now()

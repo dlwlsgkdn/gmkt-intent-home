@@ -98,8 +98,10 @@ export function recordLiveEvent(threadId, type, data) {
 }
 
 /* SSE 소비 — event/data 블록을 빈 줄 기준으로 잘라 핸들러에 배분한다.
-   status(진행 문구) 외에 부분 스트리밍 이벤트(head 머리 필드, question/section 완성 컴포넌트)를
-   지원한다 — 없는 핸들러는 무시하므로 구버전 BFF/FE 조합에서도 안전하다.
+   status(진행 문구) 외에 부분 스트리밍 이벤트(head 머리 필드, question/section 컴포넌트)를
+   지원한다 — 자라는 중인 텍스트가 같은 키/index로 반복 도착하므로(토큰 단위 미리보기)
+   핸들러는 슬롯을 덮어쓰면 된다. 완성 시 검증 통과한 최종본이 같은 index로 재도착한다.
+   없는 핸들러는 무시하므로 구버전 BFF/FE 조합에서도 안전하다.
    result·error 없이 스트림이 끝나면(중간 끊김) internal 오류로 정직하게 알린다 */
 async function consumeSse(res, handlers) {
   const reader = res.body.getReader()

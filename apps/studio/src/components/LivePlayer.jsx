@@ -124,7 +124,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     setLoading({ step: 'survey', message: '질문을 구성하고 있어요…' })
     streamLiveSurvey(id, { profile: profileWire() }, {
       onStatus: (message) => { if (!cancelledRef.current) setLoading((prev) => ({ ...(prev || { step: 'survey' }), message })) },
-      /* 부분 스트리밍 — 완성된 질문부터 스켈레톤 자리를 실제 컴포넌트로 채운다 */
+      /* 부분 스트리밍 — 자라는 질문이 같은 index로 반복 도착한다 (토큰 단위 미리보기 → 완성본) */
       onHead: (head) => {
         if (!cancelledRef.current) setPartial((prev) => ({ questions: [], ...(prev || {}), ...head }))
       },
@@ -164,7 +164,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     window.scrollTo(0, 0) // 스트리밍이 위에서부터 채워지므로 시작 시점에 올려 둔다
     streamLivePlan(threadId, { answers: wire, profile: profileWire() }, {
       onStatus: (message) => { if (!cancelledRef.current) setLoading((prev) => ({ ...(prev || { step: 'plan' }), message })) },
-      /* 부분 스트리밍 — 머리(제목·요약)부터, 그다음 완성된 섹션 순서로 채운다 */
+      /* 부분 스트리밍 — 머리(제목·요약)부터, 섹션은 자라는 채로 같은 index에 반복 도착한다 */
       onHead: (patch) => {
         if (!cancelledRef.current) setPartial((prev) => ({ sections: [], ...(prev || {}), ...patch }))
       },

@@ -43,20 +43,22 @@ Base: `https://ddak-bff.vercel.app` · 사용자 식별: **`x-device-id` 헤더*
 | GET | `/api/threads?cursor=&limit=` | 쓰레드 목록 (히스토리 패널) | — | `ThreadListPage` |
 | GET | `/healthz` | 상태 — `llm: configured\|not_configured`, `core` | — | 상태 JSON |
 
-**SSE 프레임** (`Content-Type: text/event-stream`) — 컴포넌트 단위 부분 스트리밍:
+**SSE 프레임** (`Content-Type: text/event-stream`) — 토큰 단위 부분 스트리밍:
 
 ```
 event: status   → { message: "질문을 구성하고 있어요…" }         (진행 표시 — 웹 검색 중엔 검색어 문구)
-event: head     → { intro } | { headline } | { summary }         (머리 필드 — 완성 즉시, 필드별 개별 발송)
-event: question → { index, question: SurveyQuestionWire }        (설문 — 질문 하나 완성 즉시)
-event: section  → { index, section: PlanSectionWire }            (계획 — 섹션 하나 완성·그라운딩 통과 즉시)
+event: head     → { intro } | { headline } | { summary }         (머리 필드 — 자라는 값 반복 발송 + 완성본)
+event: question → { index, question: SurveyQuestionWire }        (설문 — 자라는 질문을 같은 index로 반복 발송)
+event: section  → { index, section: PlanSectionWire }            (계획 — 자라는 섹션을 같은 index로 반복 발송)
 event: result   → { page: SurveyPageWire | PlanPageWire }        (완성 페이지 — 권위·저장 기준, 종료)
 event: error    → { code, message, retryable }                   (실패 안내 — 종료)
 ```
 
-부분 이벤트(head/question/section)는 **미리보기**다: 검증·그라운딩을 통과한 wire 형태로만 나가고
-(드롭된 원소는 index가 건너뛴다), 확정은 언제나 `result`의 전체 페이지다. 모르는 이벤트는 무시해도
-안전하다 — 구버전 FE ↔ 신버전 BFF 조합에서도 스켈레톤→result 동작으로 자연 강등된다.
+부분 이벤트(head/question/section)는 **미리보기**다: 컴포넌트 안 텍스트가 토큰 단위로 자라며
+같은 키/index로 반복 전송되고(FE는 슬롯 덮어쓰기 — 스로틀 ~120ms), 원소가 완성되면 검증·그라운딩을
+통과한 최종본이 같은 index로 한 번 더 나간다(검증 실패로 드롭된 원소는 index가 건너뛴다 — 상품
+섹션은 부분 전송 없이 완성·그라운딩 통과분만). 확정은 언제나 `result`의 전체 페이지다. 모르는
+이벤트는 무시해도 안전하다 — 구버전 FE ↔ 신버전 BFF 조합에서도 스켈레톤→result 동작으로 자연 강등된다.
 
 **실패 안내 정책**: LLM 실패 시 가짜 맞춤 콘텐츠(템플릿)로 대체하지 않고 `error` 이벤트로 정직하게
 알린다. FE는 `retryable`이면 "다시 시도"를, 아니면 안내 문구를 보여준다. (캐시 재서빙·칩→스튜디오
@@ -77,11 +79,13 @@ PlanPageWire   = { headline, summary, sections: [
                    { kind: 'guide',    title, body } |
                    { kind: 'products', title, reason, products: CatalogProduct[] } |  // 카탈로그 id 검증 + 웹 상품 URL 검증 통과분만
                    { kind: 'steps',    title, steps[] } ] }
-CatalogProduct = { id, name, brand, price, tags[], url?, mall? }
+CatalogProduct = { id, name, brand, price, tags[], url?, mall?, imageUrl? }
 // url·mall = 웹 검색으로 찾은 외부몰 상품 (id는 `web-*`, mall이 있으면 FE가 외부몰 태그·담기불가로 렌더,
 // url은 상세보기 사이드 패널이 iframe으로 연다). url은 상품 상세 페이지(PDP)만 — BFF가 검색/목록
 // 페이지로 보이는 URL(/search 경로·검색어 쿼리 키)을 드롭한다. 카탈로그(지마켓) 상품은 url(지마켓
-// PDP)만 있고 mall이 없다. url 없는 상품은 카탈로그라도 추천에서 제외된다
+// PDP)만 있고 mall이 없다. url 없는 상품은 카탈로그라도 추천에서 제외된다.
+// imageUrl = 상품 썸네일 — 카탈로그는 검증된 지마켓 gdimg, 웹 상품은 검색에서 확인된 주소의
+// http(s) 검증 통과분만. 없거나 로드 실패면 FE가 이모지 목업 블록으로 렌더한다
 ```
 
 ## 1-1. BFF — admin API (스튜디오 #admin 전용)

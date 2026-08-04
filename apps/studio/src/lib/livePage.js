@@ -86,13 +86,13 @@ export function livePlanItems(page) {
             was: '',
             score: '',
             summary: '',
-            emoji: '🧴', // 카탈로그·웹 상품 모두 이미지가 없어 목업 블록으로 렌더
+            emoji: product.imageUrl ? '' : '🧴', // 썸네일 없는 상품만 이모지 목업 블록으로 렌더
             gradient: '',
             // mall 있음 = 웹 검색으로 찾은 외부몰 상품 (외부몰 태그·담기불가), 없음 = 데모 카탈로그(지마켓)
             external: !!product.mall,
             mall: product.mall || '',
             url: product.url || '', // 상세보기 사이드 패널이 iframe으로 연다
-            imageUrl: '',
+            imageUrl: product.imageUrl || '', // 카탈로그(지마켓 gdimg)·웹 검색 상품의 실제 썸네일
           },
         })
       })

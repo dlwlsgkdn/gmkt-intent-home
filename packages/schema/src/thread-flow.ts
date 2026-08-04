@@ -74,6 +74,8 @@ export const CatalogProduct = z.object({
   url: z.string().optional(),
   /** 판매처 이름 (올리브영 등) — 웹 검색 상품 전용. 없으면 지마켓(데모 카탈로그) 상품 */
   mall: z.string().optional(),
+  /** 상품 썸네일 URL — 카탈로그는 검증된 지마켓 이미지, 웹 상품은 BFF url 검증 통과분만. 없으면 FE가 이모지 목업으로 렌더 */
+  imageUrl: z.string().optional(),
 })
 export type CatalogProduct = z.infer<typeof CatalogProduct>
 

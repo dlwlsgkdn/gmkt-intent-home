@@ -31,7 +31,8 @@ import { openSse, sseClose, sseSend, type SseRes } from './sse'
 
 const SSE_DESC =
   'SSE 스트림(text/event-stream)으로 응답한다: `event: status`(진행 문구) → 부분 스트리밍(`head` 머리 필드, ' +
-  '`question`/`section` 완성 컴포넌트 — 미리보기, 구버전 FE는 무시 가능) → `event: result`(완성 페이지 — 권위) 또는 ' +
+  '`question`/`section` 컴포넌트 — 자라는 중인 텍스트가 같은 index로 반복 전송되는 토큰 단위 미리보기, ' +
+  '완성 시 검증 통과한 최종본이 같은 index로 재전송. 구버전 FE는 무시 가능) → `event: result`(완성 페이지 — 권위) 또는 ' +
   '`event: error`(실패 안내 `{ code, message, retryable }` — llm_not_configured|llm_refused|llm_failed|internal).'
 
 const DEVICE_HEADER = {

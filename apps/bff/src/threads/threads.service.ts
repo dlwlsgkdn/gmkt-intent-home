@@ -16,15 +16,23 @@ import type {
 import { CoreClientService } from '../core-client.service'
 import { LlmService } from '../llm/llm.service'
 import { CATALOG_BY_ID } from '../llm/catalog'
-import { PlanSkeletonSectionGen, ProductsSectionGen, SurveyQuestionGen } from '../llm/gen-schemas'
+import {
+  PlanSectionPartialGen,
+  PlanSkeletonSectionGen,
+  ProductsSectionGen,
+  SurveyQuestionGen,
+  SurveyQuestionPartialGen,
+} from '../llm/gen-schemas'
 import { mergePlanSections, productSectionIndex } from './plan-merge'
 
 /** 스텝 순번 — (thread, seq)가 멱등 키라 단계별 고정 순번을 쓴다 */
 const SEQ = { explore: 1, survey: 2, answers: 3, plan: 4, actionBase: 5 } as const
 
 /*
- * 부분 스트리밍 핸들러 — 생성 중 완성되는 컴포넌트를 SSE로 미리 내보내기 위한 콜백.
- * 원소는 여기서 단독 검증·그라운딩을 거친 "확정 wire 형태"로만 나간다 — FE가 그대로 렌더한다.
+ * 부분 스트리밍 핸들러 — 생성 중인 컴포넌트를 SSE로 미리 내보내기 위한 콜백.
+ * 원소는 여기서 단독 검증·그라운딩을 거친 wire 형태로만 나간다 — FE가 그대로 렌더한다.
+ * 텍스트는 토큰 단위로 스트리밍된다: 자라는 중인 질문/섹션이 같은 index로 반복 전송되고
+ * (FE는 슬롯 덮어쓰기), 완성 시점에 검증 통과한 최종본이 같은 index로 한 번 더 나간다.
  * 어디까지나 미리보기: 최종 result(전체 검증)가 언제나 권위이고, 저장도 result 기준이다.
  */
 export type SurveyStreamHandlers = {
@@ -80,9 +88,26 @@ export class ThreadsService {
         onHead: (key, value) => {
           if (key === 'intro') stream.onIntro?.(value)
         },
+        onHeadPartial: (key, value) => {
+          if (key === 'intro') stream.onIntro?.(value)
+        },
         onElement: (element, index) => {
           const parsed = SurveyQuestionGen.safeParse(element)
           if (parsed.success) stream.onQuestion?.({ id: `q${index + 1}`, ...parsed.data }, index)
+        },
+        // 자라는 중인 질문 — 문구가 나오기 시작하면 토큰 단위로 같은 index에 재전송한다
+        onElementPartial: (element, index) => {
+          const parsed = SurveyQuestionPartialGen.safeParse(element)
+          if (!parsed.success || !parsed.data.question) return
+          stream.onQuestion?.(
+            {
+              id: `q${index + 1}`,
+              question: parsed.data.question,
+              options: parsed.data.options ?? [],
+              multi: parsed.data.multi ?? false,
+            },
+            index,
+          )
         },
       },
     )
@@ -137,11 +162,23 @@ export class ThreadsService {
           arrayKey: 'sections',
           headKeys: ['headline', 'summary'],
           onHead: (key, value) => stream.onHead?.({ [key]: value }),
+          onHeadPartial: (key, value) => stream.onHead?.({ [key]: value }),
           onElement: (element, index) => {
             const parsed = PlanSkeletonSectionGen.safeParse(element)
             if (!parsed.success) return
             // 상품 자리는 내보내지 않는다 — 상품 단계 결과가 이 인덱스를 차지한다
             if (parsed.data.kind !== 'products') stream.onSection?.(parsed.data, index)
+          },
+          // 자라는 중인 섹션 — 제목이 나오기 시작하면 토큰 단위로 같은 index에 재전송한다
+          onElementPartial: (element, index) => {
+            const parsed = PlanSectionPartialGen.safeParse(element)
+            if (!parsed.success) return
+            const s = parsed.data
+            if (!s.title) return
+            if (s.kind === 'guide') stream.onSection?.({ kind: 'guide', title: s.title, body: s.body ?? '' }, index)
+            else if (s.kind === 'steps')
+              stream.onSection?.({ kind: 'steps', title: s.title, steps: (s.steps ?? []).filter(Boolean) }, index)
+            // products 자리는 부분도 내보내지 않는다 — 상품 단계 결과가 차지할 인덱스
           },
         },
       )
@@ -237,6 +274,8 @@ export class ThreadsService {
         this.logger.warn(`웹 상품 URL이 검색/목록 페이지로 보여 드롭 (PDP만 허용): ${w.name} (${w.url})`)
         return
       }
+      // 썸네일도 http(s) 검증 통과분만 — 실패해도 상품은 싣는다 (FE가 이모지 목업 폴백)
+      const imageUrl = parseHttpUrl(w.imageUrl) ? w.imageUrl : undefined
       products.push({
         id: `web-${sectionIndex}-${webIndex}`,
         name: w.name,
@@ -245,6 +284,7 @@ export class ThreadsService {
         tags: w.tags,
         url: w.url,
         mall: w.mall.trim() || '외부몰',
+        ...(imageUrl ? { imageUrl } : {}),
       })
     })
     return products.length ? { kind: 'products', title: s.title, reason: s.reason, products } : null
