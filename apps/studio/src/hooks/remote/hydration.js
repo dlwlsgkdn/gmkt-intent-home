@@ -26,6 +26,9 @@ import { DEFAULT_PROFILE, isDefaultScenario, normalizeAccountsState } from '../.
  * 하이드레이션 가드 (빠지면 "다른 기기에서 열었더니 작업이 사라졌다"가 된다):
  *   · 부트 실패 시 이번 세션은 서버 저장을 막는다 — 훅의 catch가 remoteFailed를 세운다.
  *   · 빈 브라우저가 기본 데이터로 서버를 시드해 둔 경우, 사용자 데이터를 가진 로컬을 지킨다.
+ *   · 그 외에 계정 목록은 서버(DB)가 원천이다 — 접속 시점 로컬 캐시 계정 중 서버에 없는
+ *     것은 정리하고 토스트로 알린다(이 세션에서 만든 계정은 제외). 다른 기기에서 지운
+ *     프로필이 옛 캐시로 부활해 서버에 다시 업로드되는 것을 막는다.
  */
 
 const accountHasWork = (account) =>
@@ -67,7 +70,7 @@ export async function runHydration({ ctx, adoption, starterSync, syncRow, accoun
     init, stateRef, setAccounts, setActiveAccountId,
     rowsRef, metaBaselineRef, serverIndexRef, localAuthorityRef,
     initialByIdRef, legacyQueueRef, bootDeferredRef,
-    setBootReady, setHomeSynced,
+    setBootReady, setHomeSynced, showToast,
   } = ctx
   const { adoptKeywords, adoptBodyRow, adoptFullAccounts } = adoption
 
@@ -147,22 +150,27 @@ export async function runHydration({ ctx, adoption, starterSync, syncRow, accoun
         setActiveAccountId((prev) => {
           if (slimIds.includes(prev)) return prev
           const current = stateRef.current.accounts.find((account) => account.id === prev)
-          /* 로컬에 살아남는 계정이면 활성 유지 — 아래 정리 필터와 같은 기준. 이번 세션에
-             만든 계정뿐 아니라, 지난 세션에 만들었지만 업로드가 끝나기 전에 새로고침해
-             서버에 아직 없는 계정(작업 있음)도 부트 계정에 활성을 뺏기면 안 된다 */
-          if (current && (current !== initialByIdRef.current.get(prev) || accountHasWork(current))) return prev
+          /* 아래 정리 필터와 같은 기준 — 이 세션에서 만든 계정만 활성을 지킨다.
+             서버에 없는 캐시 계정은 곧 정리되므로 활성도 부트 계정으로 옮긴다 */
+          if (current && current !== initialByIdRef.current.get(prev)) return prev
           return bootAccount.id
         })
-        /* 한 번도 동기화된 적 없는 로컬 기본 계정 정리 — 빈 브라우저가 접속하며 시드한
-           기본 계정이 서버 계정 목록에 얹혀 같은 이름의 프로필로 중복 업로드되는 것을
-           막는다(구 통짜 경로의 adoptFullAccounts와 같은 규칙). 손댔거나 실제 작업이
-           있는 계정은 서버에 없어도 남긴다 — 미저장으로 남아 업로드된다 */
+        /* 계정 목록은 서버가 원천 — 접속 시점 로컬 캐시 계정 중 서버에 없는 것은 정리한다
+           (이 세션에서 만든 계정은 참조가 다르므로 남는다). 빈 브라우저의 시드 기본 계정
+           중복 업로드와, 다른 기기에서 지운 프로필이 옛 캐시로 부활하는 것 둘 다 막는다.
+           정리는 조용히 하지 않는다 — 뭘 지웠는지 토스트로 알린다 */
+        const dropped = stateRef.current.accounts.filter((account) =>
+          !slimIds.includes(account.id) && account === initialByIdRef.current.get(account.id))
         setAccounts((prev) => {
           const next = prev.filter((account) => slimIds.includes(account.id)
-            || account !== initialByIdRef.current.get(account.id)
-            || accountHasWork(account))
+            || account !== initialByIdRef.current.get(account.id))
           return next.length === prev.length || next.length === 0 ? prev : next
         })
+        if (dropped.length > 0 && dropped.length < stateRef.current.accounts.length) {
+          const names = dropped.map((account) => `"${account.profile?.name || '이름 없음'}"`)
+          const label = names.length <= 2 ? names.join('·') : `${names.slice(0, 2).join('·')} 외 ${names.length - 2}개`
+          showToast(`서버에 없는 로컬 프로필 ${label}을(를) 정리했어요. (서버 기준 동기화)`)
+        }
       }
     }
     setBootReady(true)
