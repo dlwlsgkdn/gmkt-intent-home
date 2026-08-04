@@ -9,16 +9,29 @@ function phaseLabel(t) {
     : '설문 작성 중'
 }
 
+/* 라이브 쓰레드에 남긴 평가 마커(t.feedback = { at, survey?: {score}, plan?: {score} }) 요약 줄 */
+function feedbackLabel(fb) {
+  const part = (label, stage) =>
+    stage ? `${label} ${stage.score != null ? `★${stage.score}` : '💬'}` : null
+  return [part('설문', fb.survey), part('계획', fb.plan)].filter(Boolean).join(' · ')
+}
+
 /* 쇼핑 쓰레드 히스토리 패널 — 원본 clean-home의 history-sidebar 룩 재사용.
    여는 버튼 위치(origin)에 맞는 방향(좌/우/중앙)에서 등장한다. */
 export default function ThreadPanel({ api, open, origin = 'right', onClose }) {
   /* 아코디언: 패널을 열 때마다 가장 최근 쓰레드를 펼친다 */
   const [expandedId, setExpandedId] = useState(null)
+  /* 평가한 쓰레드만 모아보기 — 라이브 체험에서 피드백을 저장한 쓰레드(t.feedback) 필터 */
+  const [fbOnly, setFbOnly] = useState(false)
   useEffect(() => {
     if (open) setExpandedId(api.threads[0] ? api.threads[0].id : null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
   if (!open) return null
+
+  const fbCount = api.threads.filter((t) => t.feedback).length
+  /* 평가 쓰레드가 하나도 없어지면(삭제 등) 필터를 무시하고 전체를 보여준다 — 빈 화면 잠금 방지 */
+  const threads = fbOnly && fbCount > 0 ? api.threads.filter((t) => t.feedback) : api.threads
 
   /* 쓰레드 이동: 새 쓰레드를 만들지 않고 기존 쓰레드를 이어서, 마지막 단계의 맨 위에서 연다.
      라이브 쓰레드는 서버(BFF) 기록에서 생성된 설문·답변·계획을 복원한다 */
@@ -85,19 +98,33 @@ export default function ThreadPanel({ api, open, origin = 'right', onClose }) {
               ) : (
                 <>
                   <div className="flex items-center justify-between mb-2.5 px-1">
-                    <span className="text-[11px] text-slate-400 font-normal">최근 쓰레드 {api.threads.length}개</span>
-                    <button
-                      type="button"
-                      className="history-clear-btn text-[11px] text-slate-400 font-normal transition-colors hover:text-slate-600"
-                      onClick={() => {
-                        if (window.confirm('쓰레드 히스토리를 모두 지울까요?')) api.clearThreads()
-                      }}
-                    >
-                      전체 지우기
-                    </button>
+                    <span className="text-[11px] text-slate-400 font-normal">
+                      {fbOnly ? `평가한 쓰레드 ${threads.length}개` : `최근 쓰레드 ${api.threads.length}개`}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {fbCount > 0 && (
+                        <button
+                          type="button"
+                          className={'sb-thread-fb-filter' + (fbOnly ? ' is-on' : '')}
+                          title="라이브 체험에서 피드백을 저장한 쓰레드만 모아봐요"
+                          onClick={() => setFbOnly((v) => !v)}
+                        >
+                          💬 평가한 쓰레드
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="history-clear-btn text-[11px] text-slate-400 font-normal transition-colors hover:text-slate-600"
+                        onClick={() => {
+                          if (window.confirm('쓰레드 히스토리를 모두 지울까요?')) api.clearThreads()
+                        }}
+                      >
+                        전체 지우기
+                      </button>
+                    </div>
                   </div>
 
-                  {api.threads.map((t) => {
+                  {threads.map((t) => {
                     const isExpanded = expandedId === t.id
                     const cart = t.cart || []
                     return (
@@ -116,11 +143,18 @@ export default function ThreadPanel({ api, open, origin = 'right', onClose }) {
                           }}
                         >
                           <div className="flex items-center justify-between">
-                            {t.live ? (
-                              <span className="sb-thread-live-badge">✦ AI 실시간 생성</span>
-                            ) : (
-                              <span className="text-[11px] font-bold text-gmarket-blue uppercase tracking-[0.16em]">#{t.chip}</span>
-                            )}
+                            <span className="flex items-center gap-2 min-w-0">
+                              {t.live ? (
+                                <span className="sb-thread-live-badge">✦ AI 실시간 생성</span>
+                              ) : (
+                                <span className="text-[11px] font-bold text-gmarket-blue uppercase tracking-[0.16em]">#{t.chip}</span>
+                              )}
+                              {t.feedback && (
+                                <span className="sb-thread-fb-badge" title={`남긴 평가 — ${feedbackLabel(t.feedback)}`}>
+                                  💬 {feedbackLabel(t.feedback)}
+                                </span>
+                              )}
+                            </span>
                             <div className="flex items-center gap-2">
                               <span className="purpose-cart-count text-[10px] text-slate-400 font-bold">{timeAgo(t.updatedAt || t.startedAt)}</span>
                               <span className={'purpose-cart-chevron' + (isExpanded ? ' is-expanded' : '')} aria-hidden="true">

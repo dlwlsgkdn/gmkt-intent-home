@@ -74,14 +74,30 @@ export function hasLiveFeedbackContent(payload) {
   return payload.review.score != null || payload.review.feedback !== '' || payload.components.length > 0
 }
 
-/* 말풍선 하나 — value = { score, feedback }, onChange(patch)로 부분 갱신 */
-export default function LiveFeedbackBubble({ label, value, onChange, overall = false }) {
+/* 말풍선 하나 — value = { score, feedback }, onChange(patch)로 부분 갱신.
+   평가 스튜디오의 .sb-bubble 문법을 그대로 쓴다: 레일 안 절대 배치 + 페이지로 뻗는
+   점선 연결선(::before), 좁은 화면에선 일반 흐름(evaluation.css 미디어 규칙 공유).
+   위치(top)는 LivePlayer의 layoutFbBubbles가 앵커의 실제 렌더 높이로 잡아 준다. */
+export default function LiveFeedbackBubble({
+  bubbleRef,
+  label,
+  value,
+  onChange,
+  overall = false,
+  active = false,
+  onActivate,
+  foot = null,
+}) {
   const score = value ? value.score : null
   const feedback = (value && value.feedback) || ''
   return (
-    <div className={'sb-live-fb' + (overall ? ' sb-live-fb--overall' : '')}>
-      <div className="sb-live-fb__head">
-        <span className="sb-live-fb__label">{overall ? '💬 페이지 전체' : `💬 ${label}`}</span>
+    <div
+      ref={bubbleRef}
+      className={'sb-bubble sb-live-bubble' + (overall ? ' sb-bubble--case' : '') + (active ? ' is-active' : '')}
+      onClick={onActivate}
+    >
+      <div className="sb-bubble__head">
+        <span className="sb-bubble__label">{overall ? '💬 페이지 전체' : `💬 ${label}`}</span>
         <StarRating value={score == null ? null : score} label={label} onChange={(s) => onChange({ score: s })} />
       </div>
       <textarea
@@ -89,7 +105,9 @@ export default function LiveFeedbackBubble({ label, value, onChange, overall = f
         value={feedback}
         placeholder={overall ? '페이지 전체 피드백 — 예: 질문이 너무 많아요, 순서를 바꿔주세요' : '피드백 — 오류·누락·더 좋은 대안'}
         onChange={(event) => onChange({ feedback: event.target.value })}
+        onClick={(event) => event.stopPropagation()}
       />
+      {foot}
     </div>
   )
 }

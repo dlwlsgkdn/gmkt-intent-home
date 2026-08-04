@@ -118,7 +118,13 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const [fbMode, setFbMode] = useState(false)
   const [feedback, setFeedback] = useState({ survey: emptyStageFeedback(), plan: emptyStageFeedback() })
   const [fbSending, setFbSending] = useState(false)
+  const [fbActiveId, setFbActiveId] = useState(null) // 선택된 말풍선 — '__overall__' | 아이템 id
+  const [fbMeta, setFbMeta] = useState(null) // 워크스페이스 쓰레드 기록용 마커 { at, survey?: {score}, plan?: {score} }
   const fbSavedRef = useRef({ survey: null, plan: null }) // 마지막 저장(또는 복원) 시그니처 — 미전송 감지
+  const phoneRef = useRef(null)
+  const fbRailRef = useRef(null)
+  const fbAnchorRefs = useRef({}) // 최상위 아이템 id → 페이지의 래퍼 엘리먼트
+  const fbBubbleRefs = useRef({}) // 말풍선 id → 엘리먼트
   /* 이어보기면 워크스페이스 기록의 시작 시각을 보존한다 (Player와 같은 규칙) */
   const startedAtRef = useRef(
     (resumeThreadId && (api.threads || []).find((t) => t.id === resumeThreadId)?.startedAt) || new Date().toISOString()
@@ -247,6 +253,14 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
               survey: t.feedback.survey ? stageFeedbackSignature(restored.survey) : null,
               plan: t.feedback.plan ? stageFeedbackSignature(restored.plan) : null,
             }
+            /* 쓰레드 기록 마커도 복원 — "평가한 쓰레드" 패널 필터의 원천 */
+            const meta = {}
+            if (t.feedback.survey) meta.survey = { score: t.feedback.survey.review?.score ?? null }
+            if (t.feedback.plan) meta.plan = { score: t.feedback.plan.review?.score ?? null }
+            if (Object.keys(meta).length > 0) {
+              meta.at = t.feedback.plan?.at || t.feedback.survey?.at || null
+              setFbMeta(meta)
+            }
           }
           setCompleted(t.status === 'done')
           setLoading(null)
@@ -294,9 +308,11 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
       cart,
       status: completed ? 'completed' : 'ongoing',
       startedAt: startedAtRef.current,
+      // 평가 마커 — 키 자체를 빼서(undefined 덮어쓰기 방지) 없던 기록의 마커를 지우지 않는다
+      ...(fbMeta ? { feedback: fbMeta } : {}),
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [threadId, stageKey, answers, excludedProfile, cart, completed])
+  }, [threadId, stageKey, answers, excludedProfile, cart, completed, fbMeta])
 
   const answerText = (q) => {
     const a = answers[q.id]
@@ -438,6 +454,12 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
       await sendLiveFeedback(threadId, fbPayload)
       if (cancelledRef.current) return
       fbSavedRef.current[stageKey] = stageFeedbackSignature(stageFb)
+      /* 워크스페이스 쓰레드 기록에 평가 마커 — "평가한 쓰레드" 패널 필터·배지의 원천 */
+      setFbMeta((prev) => ({
+        ...(prev || {}),
+        [stageKey]: { score: fbPayload.review.score },
+        at: new Date().toISOString(),
+      }))
       api.showToast('피드백을 남겼어요. 소중한 평가 고마워요! 🙏')
     } catch (e) {
       if (cancelledRef.current) return
@@ -446,6 +468,58 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
       if (!cancelledRef.current) setFbSending(false)
     }
   }
+
+  /* ── 말풍선 배치 — 평가 스튜디오와 같은 문법: 앵커(페이지 아이템)의 실제 렌더 높이에
+     맞추고 겹치면 아래로 밀어 쌓는다. 전체 평가 말풍선이 맨 위. 좁은 화면(1100px 이하)은
+     CSS가 일반 흐름으로 전환하므로 인라인 top을 걷어낸다. rAF만 쓰면 연속 렌더에서
+     계속 취소돼 한 번도 실행 안 될 수 있어 매 렌더 동기 실행 + 다음 프레임 보정 */
+  const fbTargets = fbAvailable ? items.filter(isLiveFeedbackTarget) : []
+  const layoutFbBubbles = () => {
+    const page = phoneRef.current
+    const rail = fbRailRef.current
+    if (!page || !rail) return
+    const order = ['__overall__', ...fbTargets.map((it) => it.id)]
+    if (window.matchMedia('(max-width: 1100px)').matches) {
+      order.forEach((id) => {
+        const bubble = fbBubbleRefs.current[id]
+        if (bubble) bubble.style.top = ''
+      })
+      rail.style.height = ''
+      return
+    }
+    const pageTop = page.getBoundingClientRect().top
+    let cursor = 0
+    order.forEach((id) => {
+      const bubble = fbBubbleRefs.current[id]
+      if (!bubble) return
+      const anchor = id === '__overall__' ? null : fbAnchorRefs.current[id]
+      const top = Math.max(anchor ? anchor.getBoundingClientRect().top - pageTop : 0, cursor)
+      bubble.style.top = `${top}px`
+      cursor = top + bubble.offsetHeight + 12
+    })
+    rail.style.height = `${Math.max(page.offsetHeight, cursor)}px`
+  }
+  const fbLayoutRef = useRef(layoutFbBubbles)
+  fbLayoutRef.current = layoutFbBubbles
+  useEffect(() => {
+    if (!fbMode) return undefined
+    fbLayoutRef.current()
+    const raf = requestAnimationFrame(() => fbLayoutRef.current())
+    return () => cancelAnimationFrame(raf)
+  })
+  useEffect(() => {
+    if (!fbMode) return undefined
+    const page = phoneRef.current
+    if (!page) return undefined
+    const run = () => fbLayoutRef.current()
+    const observer = new ResizeObserver(run)
+    observer.observe(page)
+    window.addEventListener('resize', run)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', run)
+    }
+  }, [fbMode, stageKey])
 
   /* 설문 → 계획: 이미 만든 계획이 있으면 다시 생성하지 않고 그대로 연다.
      답이 바뀐 상태의 재생성은 명시적 요청(설문 하단 확인 버튼·계획 화면 안내 바)으로만 —
@@ -510,7 +584,8 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
       </nav>
 
       <section className="sb-player sb-player--live min-h-screen relative z-10">
-        <div className="sb-phone sb-phone--player" style={{ width: viewer.w }}>
+        <div className={'sb-live-annotate' + (fbMode && fbAvailable ? ' is-on' : '')}>
+        <div className="sb-phone sb-phone--player" ref={phoneRef} style={{ width: viewer.w }}>
           <div className="sb-player__head">
             <div className="sb-player__head-row">
               {/* 상시 모드 배지 — 이 체험이 실시간 생성임을 저니 내내 보여준다 */}
@@ -592,41 +667,28 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
                 </div>
               )}
               <div className="sb-player__stack">
-                {items.map((it) => (
-                  <div key={it.id} className="sb-player__item">
-                    {renderItem(it, { mode: 'player', player: playerApi, profile: api.profile, allItems })}
-                    {fbMode && isLiveFeedbackTarget(it) && (
-                      <LiveFeedbackBubble
-                        label={liveFeedbackLabel(it)}
-                        value={stageFb.components[it.id]}
-                        onChange={(patch) => setComponentFb(it.id, patch)}
-                      />
-                    )}
-                  </div>
-                ))}
-              </div>
-              {fbMode && (
-                <div className="sb-live-fb-panel">
-                  <LiveFeedbackBubble overall label="페이지 전체" value={stageFb.review} onChange={setReviewFb} />
-                  <div className="sb-live-fb-panel__actions">
-                    <span className="sb-live-fb-panel__hint">
-                      {!fbHasContent
-                        ? '컴포넌트마다 별점·코멘트를 남길 수 있어요'
-                        : fbDirty
-                          ? '아직 저장하지 않은 평가가 있어요'
-                          : '평가가 쓰레드 기록에 저장됐어요'}
-                    </span>
-                    <button
-                      type="button"
-                      className="sb-btn sb-btn--primary sb-btn--small"
-                      disabled={fbSending || !fbDirty}
-                      onClick={submitFeedback}
+                {items.map((it) => {
+                  const fbEntry = stageFb.components[it.id]
+                  const noted = !!fbEntry && (fbEntry.score != null || (fbEntry.feedback || '').trim())
+                  const isAnchor = fbMode && fbAvailable && isLiveFeedbackTarget(it)
+                  return (
+                    <div
+                      key={it.id}
+                      ref={(el) => { fbAnchorRefs.current[it.id] = el }}
+                      className={
+                        'sb-player__item'
+                        + (isAnchor
+                          ? ' sb-live-annotate__anchor'
+                            + (fbActiveId === it.id ? ' is-active' : '')
+                            + (noted ? ' is-noted' : '')
+                          : '')
+                      }
                     >
-                      {fbSending ? '저장 중…' : '피드백 저장'}
-                    </button>
-                  </div>
-                </div>
-              )}
+                      {renderItem(it, { mode: 'player', player: playerApi, profile: api.profile, allItems })}
+                    </div>
+                  )
+                })}
+              </div>
               <div className="clean-survey-nav sb-player__nav">
                 {stageKey === 'plan' ? (
                   <button type="button" className="clean-survey-nav-btn clean-survey-nav-btn--ghost" onClick={() => goStage(0)}>
@@ -656,6 +718,55 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
           )}
 
           {cart.length > 0 && !loading && <p className="sb-player__cart">🧺 담은 상품 {cart.length}개</p>}
+        </div>
+
+        {/* 평가 말풍선 레일 — 페이지 오른쪽, 점선으로 앵커와 연결 (평가 스튜디오와 같은 문법) */}
+        {fbMode && fbAvailable && (
+          <div className="sb-live-annotate__rail" ref={fbRailRef} aria-label="평가 말풍선">
+            <LiveFeedbackBubble
+              overall
+              bubbleRef={(el) => { fbBubbleRefs.current.__overall__ = el }}
+              active={fbActiveId === '__overall__'}
+              onActivate={() => setFbActiveId('__overall__')}
+              label="페이지 전체"
+              value={stageFb.review}
+              onChange={setReviewFb}
+              foot={
+                <div className="sb-live-bubble__actions">
+                  <span>
+                    {!fbHasContent
+                      ? '컴포넌트마다 별점·코멘트를 남길 수 있어요'
+                      : fbDirty
+                        ? '아직 저장하지 않은 평가가 있어요'
+                        : '평가가 쓰레드 기록에 저장됐어요'}
+                  </span>
+                  <button
+                    type="button"
+                    className="sb-btn sb-btn--primary sb-btn--tiny"
+                    disabled={fbSending || !fbDirty}
+                    onClick={(event) => { event.stopPropagation(); submitFeedback() }}
+                  >
+                    {fbSending ? '저장 중…' : '피드백 저장'}
+                  </button>
+                </div>
+              }
+            />
+            {fbTargets.map((it) => (
+              <LiveFeedbackBubble
+                key={it.id}
+                bubbleRef={(el) => { fbBubbleRefs.current[it.id] = el }}
+                active={fbActiveId === it.id}
+                onActivate={() => {
+                  setFbActiveId(it.id)
+                  fbAnchorRefs.current[it.id]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+                }}
+                label={liveFeedbackLabel(it)}
+                value={stageFb.components[it.id]}
+                onChange={(patch) => setComponentFb(it.id, patch)}
+              />
+            ))}
+          </div>
+        )}
         </div>
       </section>
 

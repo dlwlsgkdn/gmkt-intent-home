@@ -469,3 +469,31 @@
   letter-spacing: 0.08em;
   color: var(--sb-ai);
 }
+
+/* 평가를 남긴 쓰레드 배지 + 패널 상단 "평가한 쓰레드" 모아보기 필터 */
+.sb-thread-fb-badge {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: var(--sb-r-pill);
+  background: var(--sb-info-soft);
+  color: var(--sb-info);
+  font-size: var(--sb-t-micro);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.sb-thread-fb-filter {
+  padding: 3px 9px;
+  border: 1px solid var(--sb-line);
+  border-radius: var(--sb-r-pill);
+  background: var(--sb-surface);
+  color: var(--sb-muted);
+  font-size: var(--sb-t-micro);
+  font-weight: 400;
+  transition: all var(--sb-dur) var(--sb-ease);
+}
+.sb-thread-fb-filter:hover { border-color: var(--sb-info); color: var(--sb-info); }
+.sb-thread-fb-filter.is-on {
+  border-color: var(--sb-info);
+  background: var(--sb-info-soft);
+  color: var(--sb-info);
+}

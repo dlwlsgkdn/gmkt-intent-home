@@ -644,8 +644,9 @@
   margin-top: 16px;
 }
 
-/* ── 라이브 피드백(평가) — 생성 컴포넌트마다 별점+코멘트 말풍선, 하단에 페이지 전체
-   평가와 저장 버튼. 별점 문법(.sb-stars — 미평가/0점 배지)은 평가 스튜디오와 공유 ── */
+/* ── 라이브 피드백(평가) — 평가 스튜디오와 같은 주석 문법: 페이지 오른쪽 레일에
+   말풍선(.sb-bubble — 카드·점선 연결선·좁은 화면 흐름 전환은 evaluation.css 공유)을
+   앵커의 실제 렌더 높이에 맞춰 절대 배치한다 (LivePlayer layoutFbBubbles) ── */
 .sb-player__head-actions {
   display: flex;
   align-items: center;
@@ -657,57 +658,60 @@
   background: var(--sb-info-soft);
   color: var(--sb-info);
 }
-.sb-live-fb {
-  margin-top: 8px;
-  padding: 10px 12px;
-  border: 1px solid var(--sb-line);
-  border-radius: var(--sb-r-lg);
-  background: var(--sb-surface);
-  box-shadow: var(--sb-shadow-sm);
+.sb-live-annotate {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 30px; /* .sb-bubble::before 점선 연결선 길이(30px)와 맞춘다 */
 }
-.sb-live-fb__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+.sb-live-annotate .sb-phone { margin: 0; }
+.sb-live-annotate__rail {
+  position: relative;
+  flex: 0 1 330px;
+  min-width: 260px;
 }
-.sb-live-fb__label {
-  font-size: var(--sb-t-micro);
-  color: var(--sb-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.sb-live-fb textarea {
-  width: 100%;
-  resize: vertical;
-  padding: 7px 9px;
-  border: 1px solid var(--sb-line);
+/* 앵커(평가 대상 아이템) 표시 — 활성 외곽선 + 피드백 점 (평가 스튜디오 .sb-annotate__item 문법) */
+.sb-live-annotate__anchor {
+  position: relative;
   border-radius: var(--sb-r-sm);
-  background: var(--sb-surface);
-  font-size: var(--sb-t-micro);
-  color: var(--sb-ink);
-  font-family: inherit;
+  outline: 2px solid transparent;
+  outline-offset: 5px;
+  transition: outline-color var(--sb-dur) var(--sb-ease);
 }
-.sb-live-fb--overall { border-color: var(--sb-info); }
-.sb-live-fb-panel {
-  margin: 14px 0 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.sb-live-annotate__anchor.is-active { outline-color: var(--sb-info); }
+.sb-live-annotate__anchor.is-noted::after {
+  content: '';
+  position: absolute;
+  top: 8px;
+  right: -13px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sb-star);
 }
-.sb-live-fb-panel__actions {
+.sb-live-bubble__actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  margin-top: 8px;
 }
-.sb-live-fb-panel__hint {
+.sb-live-bubble__actions span {
   font-size: var(--sb-t-micro);
   color: var(--sb-subtle);
+}
+/* 좁은 화면: 레일을 페이지 아래 일반 흐름으로 (말풍선 static 전환은 evaluation.css 미디어 규칙) */
+@media (max-width: 1100px) {
+  .sb-live-annotate { flex-direction: column; align-items: stretch; gap: 14px; }
+  .sb-live-annotate__rail {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    min-width: 0;
+    flex: none;
+  }
+  .sb-live-annotate__anchor.is-noted::after { right: 4px; }
 }
 
 /* ── 상품 상세보기 사이드 패널 — 추천 상품 카드 "상세보기"가 외부몰 상품 페이지를
