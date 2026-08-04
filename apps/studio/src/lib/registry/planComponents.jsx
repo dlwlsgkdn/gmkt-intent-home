@@ -198,6 +198,9 @@ export const PLAN_COMPONENTS = {
                 </span>
               )}
             </div>
+            {p.brand ? (
+              <p className="text-[11px] font-medium text-slate-400 mb-0.5 sb-product-card2__brand">{kText(p.brand, ctx, 'brand')}</p>
+            ) : null}
             <h4 className="text-sm font-bold text-slate-800 mb-1.5 leading-tight sb-media-card__title">{kText(p.name, ctx, 'name')}</h4>
             <div className="flex items-baseline mb-3 text-left">
               <span className="text-lg font-bold text-gmarket-blue">{kText(p.price, ctx, 'price')}</span>
