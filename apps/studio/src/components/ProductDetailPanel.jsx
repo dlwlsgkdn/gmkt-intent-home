@@ -3,36 +3,40 @@ import React, { useEffect } from 'react'
 /*
  * 상품 상세보기 사이드 패널 — 추천 상품 카드의 "상세보기"가 외부몰 상품 페이지를
  * iframe으로 띄운다 (데스크톱 = 우측 사이드 패널, 모바일 = 전체화면. viewer.css).
- * 외부몰이 X-Frame-Options/CSP로 삽입을 차단하면 iframe 안이 비므로,
- * "새 탭에서 열기"를 헤더에 상시 두고 하단 안내로 폴백을 알린다.
- * 지마켓 PDP는 예외로 프록시(/api/pdp — 모바일 UA로 대신 받아 프레임 차단을 우회)를
- * 경유한다: 데스크톱 iframe의 UA로는 item.gmarket(X-Frame-Options)으로 넘어가 항상
- * 비어 보였기 때문. 새 탭 링크는 언제나 원본 URL이다.
+ * iframe에는 **모바일 PDP 원본 URL을 그대로** 싣는다 (2026-08 프록시 제거):
+ * 구 프록시(/api/pdp — 모바일 UA 대리 수신 + base 주입)는 본문은 받아와도 스크립트·
+ * 서브리소스가 깨져 실제로는 빈 화면이 대부분이었다. 모바일 PDP는 프레임 차단이 없거나
+ * 약해서(올리브영은 데스크톱 www도 X-Frame-Options 없음) 원본 직접 삽입이 가장 잘 뜬다.
+ * 한계: 데스크톱 브라우저의 iframe은 데스크톱 UA라, 몰이 데스크톱 페이지로 되돌리며
+ * 차단할 수 있다(지마켓 m.gmarket → item.gmarket X-Frame-Options: SAMEORIGIN) —
+ * 그 경우는 하단 안내 + "새 탭에서 열기"(항상 원본 URL) 폴백이 받는다.
  * product = { name, mall, url } | null (null이면 닫힘)
  */
 
-/* 프록시 오리진 — liveApi.js와 같은 규칙: vercel/localhost는 same-origin(로컬은 vite가
-   /api를 운영 배포로 프록시), GitHub Pages 등 교차 오리진은 스튜디오 도메인으로 */
-const SAME_ORIGIN =
-  typeof location !== 'undefined' &&
-  (/(^|\.)vercel\.app$/.test(location.hostname) ||
-    location.hostname === 'localhost' ||
-    location.hostname === '127.0.0.1')
-const PROXY_BASE = SAME_ORIGIN ? '' : 'https://ddak-scenario-studio.vercel.app'
-
-/* 지마켓 PDP만 프록시 경유 — 그 외 몰은 원본 그대로 시도한다 (차단 여부는 몰마다 다르다).
-   proxied면 문서가 우리 오리진으로 서빙되므로 반드시 sandbox(allow-same-origin 없이)로
-   불투명 오리진 격리한다 — 지마켓 스크립트가 스튜디오 localStorage/DOM에 닿지 않게 */
+/* 알려진 몰의 PDP를 모바일 URL로 정규화 — 상품 키만 뽑아 모바일 경로에 다시 매단다.
+   못 알아보는 URL은 원본 그대로 시도한다 (차단 여부는 몰마다 다르다) */
 function frameFor(rawUrl) {
   try {
     const url = new URL(rawUrl)
+    // 지마켓: item.gmarket.co.kr/Item?goodsCode=… ·구/신 모바일 경로 → m.gmarket.co.kr/vi/product/{code}
     if (/(^|\.)gmarket\.co\.kr$/.test(url.hostname)) {
-      return { src: `${PROXY_BASE}/api/pdp?url=${encodeURIComponent(url.href)}`, proxied: true }
+      const code =
+        url.searchParams.get('goodsCode') ||
+        url.searchParams.get('goodscode') ||
+        (url.pathname.match(/\/vi\/product\/(\d+)/) || [])[1]
+      if (code) return { src: `https://m.gmarket.co.kr/vi/product/${code}` }
+    }
+    // 올리브영: getGoodsDetail.do?goodsNo=… → m.oliveyoung.co.kr 모바일 경로
+    if (/(^|\.)oliveyoung\.co\.kr$/.test(url.hostname)) {
+      const goodsNo = url.searchParams.get('goodsNo')
+      if (goodsNo) {
+        return { src: `https://m.oliveyoung.co.kr/m/goods/getGoodsDetail.do?goodsNo=${encodeURIComponent(goodsNo)}` }
+      }
     }
   } catch {
     /* 형식 문제는 원본 그대로 — iframe이 알아서 실패를 보여준다 */
   }
-  return { src: rawUrl, proxied: false }
+  return { src: rawUrl }
 }
 export default function ProductDetailPanel({ product, onClose }) {
   useEffect(() => {
@@ -72,18 +76,12 @@ export default function ProductDetailPanel({ product, onClose }) {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
-        {(() => {
-          const frame = frameFor(product.url)
-          return (
-            <iframe
-              className="sb-product-detail__frame"
-              src={frame.src}
-              title={`${product.name} 상품 페이지`}
-              referrerPolicy="no-referrer"
-              sandbox={frame.proxied ? 'allow-scripts allow-popups allow-forms' : undefined}
-            />
-          )
-        })()}
+        <iframe
+          className="sb-product-detail__frame"
+          src={frameFor(product.url).src}
+          title={`${product.name} 상품 페이지`}
+          referrerPolicy="no-referrer"
+        />
         <p className="sb-product-detail__note">
           페이지가 비어 보이면 외부몰이 삽입(iframe)을 차단한 거예요 — "새 탭에서 열기"로 확인해주세요.
         </p>
