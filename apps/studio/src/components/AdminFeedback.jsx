@@ -68,6 +68,50 @@ function buildStats(items) {
   }
 }
 
+/** 쓰레드 단위 총점 집계 — latest(유효본) 제출의 페이지 전체+컴포넌트 별점을 전부 모아 평균.
+ * 평가 스튜디오 케이스 리더보드(evaluationLeaderboard)와 같은 문법: 평균 내림차순,
+ * 동률은 코멘트 수. 총 점수별 갯수는 평균을 반올림한 버킷(0~5)으로 센다 */
+function buildThreadBoard(items) {
+  const byThread = new Map()
+  for (const e of items.filter((entry) => entry.latest)) {
+    let t = byThread.get(e.threadId)
+    if (!t) {
+      t = { threadId: e.threadId, title: e.title, threadStatus: e.threadStatus, ratings: [], feedbackCount: 0, stages: [] }
+      byThread.set(e.threadId, t)
+    }
+    if (e.review.score != null) t.ratings.push(e.review.score)
+    if (e.review.feedback) t.feedbackCount += 1
+    for (const c of e.components) {
+      if (c.score != null) t.ratings.push(c.score)
+      if (c.feedback) t.feedbackCount += 1
+    }
+    if (!t.stages.includes(e.stage)) t.stages.push(e.stage)
+  }
+  const rows = [...byThread.values()].map((t) => ({
+    ...t,
+    average: t.ratings.length
+      ? Math.round((t.ratings.reduce((a, b) => a + b, 0) / t.ratings.length) * 10) / 10
+      : null,
+    ratedCount: t.ratings.length,
+  }))
+  rows.sort(
+    (l, r) =>
+      ((r.average ?? -1) - (l.average ?? -1)) ||
+      (r.feedbackCount - l.feedbackCount) ||
+      (l.threadId < r.threadId ? 1 : -1)
+  )
+  rows.forEach((row, i) => {
+    row.rank = i + 1
+  })
+  const buckets = [0, 0, 0, 0, 0, 0]
+  let unrated = 0
+  for (const row of rows) {
+    if (row.average == null) unrated += 1
+    else buckets[Math.min(5, Math.round(row.average))] += 1
+  }
+  return { rows, buckets, unrated, bucketMax: Math.max(1, ...buckets) }
+}
+
 function DistChart({ label, agg }) {
   if (agg.count === 0) return null
   return (
@@ -94,6 +138,7 @@ export default function AdminFeedback({ wire, loading, error, onOpenThread }) {
 
   const items = wire ? wire.items : []
   const stats = useMemo(() => buildStats(items), [items])
+  const board = useMemo(() => buildThreadBoard(items), [items])
 
   const visible = useMemo(
     () =>
@@ -149,6 +194,58 @@ export default function AdminFeedback({ wire, loading, error, onOpenThread }) {
           <div className="sb-admin-fb-dists">
             <DistChart label="설문" agg={stats.perStage.survey} />
             <DistChart label="계획" agg={stats.perStage.plan} />
+          </div>
+
+          {/* 쓰레드 총 점수 분포 + 리더보드 — 유효본 별점(페이지 전체+컴포넌트) 전부의 쓰레드 평균 기준 */}
+          <div className="sb-admin-fb-board">
+            <div className="sb-admin-fb-board__hist">
+              <p className="sb-admin-fb-board__label">쓰레드 총 점수별 갯수</p>
+              {[5, 4, 3, 2, 1, 0].map((score) => (
+                <div key={score} className="sb-admin-fb-board__bucket">
+                  <span className="sb-admin-fb-board__bucket-label">{score}점</span>
+                  <span className="sb-admin-fb-board__bucket-track">
+                    <span
+                      className={
+                        'sb-admin-fb-board__bucket-bar' +
+                        (score <= LOW_SCORE ? ' sb-admin-fb-board__bucket-bar--low' : '')
+                      }
+                      style={{ width: `${Math.round((board.buckets[score] / board.bucketMax) * 100)}%` }}
+                    />
+                  </span>
+                  <span className="sb-admin-fb-board__bucket-count">{board.buckets[score]}개</span>
+                </div>
+              ))}
+              {board.unrated > 0 && (
+                <p className="sb-admin__muted">별점 없이 코멘트만 있는 쓰레드 {board.unrated}개</p>
+              )}
+            </div>
+            <div className="sb-admin-fb-board__list">
+              <p className="sb-admin-fb-board__label">쓰레드 리더보드</p>
+              <ol className="sb-admin-fb-rank">
+                {board.rows.map((row) => (
+                  <li key={row.threadId} className="sb-admin-fb-rank__row">
+                    <span className="sb-admin-fb-rank__no">{row.rank}</span>
+                    <button
+                      type="button"
+                      className="sb-admin-fb-rank__title"
+                      title={row.threadId}
+                      onClick={() => onOpenThread(row.threadId)}
+                    >
+                      {row.title || row.threadId}
+                    </button>
+                    {row.threadStatus === 'archived' && (
+                      <span className="sb-admin-status sb-admin-status--archived">보관됨</span>
+                    )}
+                    <span className="sb-admin-fb-rank__avg">
+                      {row.average == null ? <span className="sb-admin-fb-badge">별점 없음</span> : fmtAvg(row.average)}
+                    </span>
+                    <span className="sb-admin-fb-rank__meta">
+                      {row.stages.map((s) => STAGE_LABEL[s]).join('·')} · 별점 {row.ratedCount}개 · 코멘트 {row.feedbackCount}개
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </div>
           </div>
 
           {/* 필터 */}

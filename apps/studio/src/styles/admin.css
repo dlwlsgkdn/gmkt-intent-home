@@ -465,3 +465,125 @@
   gap: 10px;
   margin-top: 2px;
 }
+
+/* 쓰레드 총 점수 분포 + 리더보드 */
+.sb-admin-fb-board {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+.sb-admin-fb-board__hist {
+  flex: 0 1 260px;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sb-admin-fb-board__list {
+  flex: 1 1 320px;
+  min-width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sb-admin-fb-board__label {
+  font-size: var(--sb-t-caption);
+  color: var(--sb-muted);
+}
+.sb-admin-fb-board__bucket {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sb-admin-fb-board__bucket-label {
+  flex: 0 0 26px;
+  font-size: var(--sb-t-caption);
+  color: var(--sb-ink-2);
+  text-align: right;
+}
+.sb-admin-fb-board__bucket-track {
+  flex: 1;
+  height: 10px;
+  background: var(--sb-n-100);
+  border-radius: var(--sb-r-pill);
+  overflow: hidden;
+}
+.sb-admin-fb-board__bucket-bar {
+  display: block;
+  height: 100%;
+  border-radius: var(--sb-r-pill);
+  background: var(--sb-info);
+  opacity: 0.75;
+}
+.sb-admin-fb-board__bucket-bar--low {
+  background: var(--sb-danger);
+}
+.sb-admin-fb-board__bucket-count {
+  flex: 0 0 30px;
+  font-size: var(--sb-t-caption);
+  color: var(--sb-muted);
+}
+.sb-admin-fb-rank {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  list-style: none;
+}
+.sb-admin-fb-rank__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: var(--sb-r-md);
+  background: var(--sb-n-50);
+}
+.sb-admin-fb-rank__no {
+  flex: 0 0 20px;
+  font-size: var(--sb-t-caption);
+  color: var(--sb-subtle);
+  text-align: center;
+}
+.sb-admin-fb-rank__title {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: var(--sb-t-small);
+  color: var(--sb-ink);
+  cursor: pointer;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+.sb-admin-fb-rank__title:hover {
+  text-decoration: underline;
+}
+.sb-admin-fb-rank__avg {
+  font-size: var(--sb-t-small);
+  color: var(--sb-ink-2);
+  white-space: nowrap;
+}
+.sb-admin-fb-rank__meta {
+  margin-left: auto;
+  font-size: var(--sb-t-micro);
+  color: var(--sb-subtle);
+  white-space: nowrap;
+}
+
+/* 쓰레드 상세 — 실제 렌더링 미리보기 (AdminThreadPreview.jsx) */
+.sb-admin-preview {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  background: var(--sb-n-100);
+}
+.sb-admin-preview__phone {
+  width: 390px;
+  flex: 0 0 auto;
+}

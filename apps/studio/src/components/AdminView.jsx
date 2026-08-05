@@ -13,6 +13,7 @@ import {
 import { renderMarkdown, statusLabel, threadMarkdown } from '../lib/adminReport.jsx'
 import { timeAgo } from '../lib/timeAgo.js'
 import AdminFeedback from './AdminFeedback.jsx'
+import AdminThreadPreview, { threadPreviewPages } from './AdminThreadPreview.jsx'
 
 /*
  * thread 관리 페이지 — #admin 해시로만 진입한다 (홈·플레이어 어디에도 링크 없음).
@@ -40,6 +41,7 @@ export default function AdminView({ api }) {
   const [modelSaving, setModelSaving] = useState(false)
 
   const [detail, setDetail] = useState(null) // ThreadWithSteps
+  const [detailView, setDetailView] = useState('doc') // 'doc' | 'survey' | 'plan'
   const [detailLoading, setDetailLoading] = useState(false)
   const [confirmArchive, setConfirmArchive] = useState(null) // thread row
   const [archiving, setArchiving] = useState(false)
@@ -129,6 +131,7 @@ export default function AdminView({ api }) {
 
   const openDetail = async (threadId) => {
     setDetailLoading(true)
+    setDetailView('doc')
     try {
       setDetail(await fetchAdminThread(token, threadId))
     } catch (e) {
@@ -348,6 +351,24 @@ export default function AdminView({ api }) {
               <div className="sb-admin-dialog__actions">
                 {detail && (
                   <>
+                    <div className="sb-admin-fb-seg" role="group" aria-label="상세 보기 방식">
+                      {[
+                        ['doc', '문서', true],
+                        ['survey', '설문 화면', !!threadPreviewPages(detail).survey],
+                        ['plan', '계획 화면', !!threadPreviewPages(detail).plan],
+                      ].map(([value, label, enabled]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          className={'sb-admin-fb-seg__btn' + (detailView === value ? ' is-on' : '')}
+                          disabled={!enabled}
+                          title={enabled ? undefined : '이 쓰레드에는 해당 페이지가 기록되지 않았어요'}
+                          onClick={() => setDetailView(value)}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
                     <button type="button" className="sb-btn sb-btn--ghost sb-btn--small" onClick={copyMarkdown}>
                       마크다운 복사
                     </button>
@@ -365,7 +386,8 @@ export default function AdminView({ api }) {
                 <button type="button" className="sb-icon-btn" aria-label="닫기" onClick={() => setDetail(null)}>×</button>
               </div>
             </div>
-            {detail && <div className="sb-admin-doc">{renderMarkdown(markdown)}</div>}
+            {detail && detailView === 'doc' && <div className="sb-admin-doc">{renderMarkdown(markdown)}</div>}
+            {detail && detailView !== 'doc' && <AdminThreadPreview thread={detail} stage={detailView} />}
           </section>
         </div>
       )}
