@@ -1,5 +1,5 @@
 import { Inject, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common'
-import { and, asc, desc, eq, lt, ne } from 'drizzle-orm'
+import { and, asc, desc, eq, lt, ne, sql } from 'drizzle-orm'
 import type { CreateThreadBody, ThreadStatus, UpdateThreadBody, UpsertStepBody } from '@ddak/schema'
 import { DB, type DbOrNull } from '../db/db.module'
 import type { Db } from '../db/client'
@@ -99,6 +99,23 @@ export class ThreadsService {
     const items = rows.slice(0, limit)
     const nextCursor = rows.length > limit ? items[items.length - 1].updatedAt.toISOString() : null
     return { items, nextCursor }
+  }
+
+  /** 관리 평가 모아보기의 원천 — 피드백 제출 스텝(stage='action', payload.type='feedback')을
+   * 쓰레드 메타와 함께 최신순으로 나열한다. core는 payload를 해석하지 않는다는 원칙대로
+   * jsonb 최상위 type 필터만 걸고, 파싱·최신 판정·집계는 BFF가 맡는다.
+   * 페이지네이션 없이 limit 상한 + truncated 신호 — 수동 평가라 건수가 적은 데이터다 */
+  async listFeedbackSteps(limit = 300) {
+    const db = this.conn()
+    const rows = await db
+      .select({ thread: threads, step: threadSteps })
+      .from(threadSteps)
+      .innerJoin(threads, eq(threadSteps.threadId, threads.id))
+      .where(and(eq(threadSteps.stage, 'action'), sql`${threadSteps.payload}->>'type' = 'feedback'`))
+      .orderBy(desc(threadSteps.createdAt), desc(threadSteps.seq))
+      .limit(limit + 1)
+    const items = rows.slice(0, limit)
+    return { items, truncated: rows.length > limit }
   }
 
   /** 관리 페이지용 전체 목록 — archived 포함, id(스노우플레이크) 키셋 커서.

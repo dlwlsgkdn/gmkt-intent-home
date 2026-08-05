@@ -23,10 +23,13 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger'
 import {
+  AdminFeedbackEntry,
+  AdminFeedbackWire,
   AdminModelWire,
   PutAdminModelBody,
   Thread,
   ThreadListPage,
+  ThreadStageFeedback,
   ThreadWithSteps,
 } from '@ddak/schema'
 import { CoreClientService } from '../core-client.service'
@@ -95,6 +98,40 @@ export class AdminController {
   @ApiOkResponse({ schema: toOpenApi(Thread) })
   archiveThread(@Param('id', ParseThreadIdPipe) id: string) {
     return this.core.updateThread(id, { status: 'archived' })
+  }
+
+  @Get('feedback')
+  @ApiOperation({
+    summary: '평가 모아보기 — 피드백 제출 전체를 최신순으로 (제출 1회 = 항목 1개)',
+    description:
+      "core의 피드백 스텝(action type='feedback') 원본을 파싱해 쓰레드 메타와 함께 돌려준다. " +
+      '같은 (쓰레드, 단계)의 최신 제출에 latest=true — 집계는 latest 항목만으로 한다.',
+  })
+  @ApiOkResponse({ schema: toOpenApi(AdminFeedbackWire) })
+  async listFeedback(): Promise<AdminFeedbackWire> {
+    const { items, truncated } = await this.core.listFeedbackSteps()
+    const seen = new Set<string>()
+    const entries: AdminFeedbackEntry[] = []
+    for (const { thread, step } of items) {
+      const payload = (step.payload ?? {}) as { data?: unknown; at?: unknown }
+      const parsed = ThreadStageFeedback.safeParse(payload.data)
+      if (!parsed.success) continue // 형태가 다른 구/실험 제출은 조용히 건너뛴다 — 원본은 상세 로그에 있다
+      const key = `${thread.id}:${parsed.data.stage}`
+      entries.push({
+        threadId: thread.id,
+        title: thread.title,
+        threadStatus: thread.status,
+        userId: thread.userId,
+        stage: parsed.data.stage,
+        seq: step.seq,
+        at: typeof payload.at === 'string' ? payload.at : step.createdAt,
+        review: parsed.data.review,
+        components: parsed.data.components,
+        latest: !seen.has(key), // 입력이 최신순이라 첫 등장 = 최신 제출
+      })
+      seen.add(key)
+    }
+    return { items: entries, truncated }
   }
 
   @Get('model')

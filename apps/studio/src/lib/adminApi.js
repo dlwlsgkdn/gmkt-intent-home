@@ -81,6 +81,11 @@ export function archiveAdminThread(token, threadId) {
   return req('POST', `/threads/${encodeURIComponent(threadId)}/archive`, token)
 }
 
+/** 평가 모아보기 — { items(제출 1회 = 항목 1개, 최신순, latest=유효본 표시), truncated } */
+export function fetchAdminFeedback(token) {
+  return req('GET', '/feedback', token)
+}
+
 /** LLM 모델 설정 조회 — { current, defaultModel, configured, options } */
 export function fetchAdminModel(token) {
   return req('GET', '/model', token)

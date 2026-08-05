@@ -1,6 +1,7 @@
 import { HttpException, Injectable, ServiceUnavailableException } from '@nestjs/common'
 import type {
   CreateThreadBody,
+  FeedbackStepsWire,
   SettingWire,
   Thread,
   ThreadListPage,
@@ -69,6 +70,12 @@ export class CoreClientService {
     if (limit) q.set('limit', String(limit))
     const qs = q.toString()
     return this.req<ThreadListPage>('GET', `/internal/threads${qs ? `?${qs}` : ''}`)
+  }
+
+  /** 피드백 스텝 나열 (관리 평가 모아보기 원천) — 최신순, limit 상한 + truncated */
+  listFeedbackSteps(limit?: number) {
+    const qs = limit ? `?limit=${limit}` : ''
+    return this.req<FeedbackStepsWire>('GET', `/internal/feedback-steps${qs}`)
   }
 
   /** 설정 KV — 없는 키는 null (404를 삼킨다) */

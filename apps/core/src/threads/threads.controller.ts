@@ -24,6 +24,7 @@ import {
 } from '@nestjs/swagger'
 import {
   CreateThreadBody,
+  FeedbackStepsWire,
   Thread,
   ThreadListPage,
   ThreadStep,
@@ -111,6 +112,19 @@ export class ThreadsController {
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number,
   ) {
     return this.threads.listByUser(uid, cursor, limit)
+  }
+
+  @Get('feedback-steps')
+  @ApiOperation({
+    summary: '피드백 스텝 나열 (관리 평가 모아보기용)',
+    description:
+      "action 스텝 중 payload.type='feedback'만 쓰레드 메타와 함께 최신순으로. " +
+      'core는 payload를 해석하지 않는다 — 파싱·최신 판정·집계는 BFF admin이 맡는다.',
+  })
+  @ApiQuery({ name: 'limit', required: false, type: 'integer', example: 300 })
+  @ApiOkResponse({ schema: toOpenApi(FeedbackStepsWire) })
+  listFeedbackSteps(@Query('limit', new DefaultValuePipe(300), ParseIntPipe) limit?: number) {
+    return this.threads.listFeedbackSteps(limit)
   }
 
   @Get('threads')

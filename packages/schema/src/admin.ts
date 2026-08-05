@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { Thread, ThreadId, ThreadStatus, ThreadStep } from './thread'
+import { FeedbackScore, ThreadFeedbackComponent } from './thread-flow'
 
 /*
  * 관리(admin) 계약 — 스튜디오 #admin 페이지 ↔ BFF `/api/admin/*` ↔ core 설정 KV.
@@ -53,3 +55,47 @@ export const PutAdminModelBody = z.object({
   model: z.string().nullable(),
 })
 export type PutAdminModelBody = z.infer<typeof PutAdminModelBody>
+
+/* ── core internal — 피드백 스텝 나열 (평가 모아보기의 원천) ──────────────
+ * core는 payload를 해석하지 않는다는 원칙 그대로: action 스텝 중 payload.type='feedback'
+ * 필터만 걸어 쓰레드 메타와 함께 원본을 돌려준다. 해석(zod 파싱·최신 판정·집계)은 BFF 몫. */
+
+export const FeedbackStepRow = z.object({ thread: Thread, step: ThreadStep })
+export type FeedbackStepRow = z.infer<typeof FeedbackStepRow>
+
+export const FeedbackStepsWire = z.object({
+  /** 스텝 createdAt 내림차순 (같은 시각이면 seq 내림차순) — 최신 제출이 먼저 */
+  items: z.array(FeedbackStepRow),
+  /** limit에 걸려 잘렸으면 true — 화면은 "최근 N건 기준"을 표시한다 */
+  truncated: z.boolean(),
+})
+export type FeedbackStepsWire = z.infer<typeof FeedbackStepsWire>
+
+/* ── BFF admin — 평가 모아보기 ───────────────────────────────────────────
+ * 피드백 제출(action type='feedback') 1건 = 항목 1개. append 로그라 같은 (쓰레드, 단계)에
+ * 여러 제출이 있을 수 있고, 최신 제출이 유효본이다(latest). 집계(평균·분포)는 FE가
+ * latest 항목만으로 계산한다 — 항목 전체가 한 응답에 실려 오기 때문(§1-1 표 참고). */
+
+export const AdminFeedbackEntry = z.object({
+  threadId: ThreadId,
+  /** 쓰레드 제목 — 목록에서 사람이 알아볼 이름 (없으면 null) */
+  title: z.string().nullable(),
+  threadStatus: ThreadStatus,
+  userId: z.string(),
+  stage: z.enum(['survey', 'plan']),
+  /** 스텝 seq — 상세 로그와 대조용 */
+  seq: z.number().int(),
+  /** 제출 시각 — payload.at(클라이언트 시각) 우선, 없으면 스텝 createdAt */
+  at: z.string(),
+  review: z.object({ score: FeedbackScore.nullable(), feedback: z.string() }),
+  components: z.array(ThreadFeedbackComponent),
+  /** 같은 (쓰레드, 단계)의 최신 제출인가 — 유효본 판정 */
+  latest: z.boolean(),
+})
+export type AdminFeedbackEntry = z.infer<typeof AdminFeedbackEntry>
+
+export const AdminFeedbackWire = z.object({
+  items: z.array(AdminFeedbackEntry),
+  truncated: z.boolean(),
+})
+export type AdminFeedbackWire = z.infer<typeof AdminFeedbackWire>

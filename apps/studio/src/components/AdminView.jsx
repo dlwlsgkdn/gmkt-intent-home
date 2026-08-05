@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   AdminApiError,
   archiveAdminThread,
+  fetchAdminFeedback,
   fetchAdminModel,
   fetchAdminThread,
   fetchAdminThreads,
@@ -11,6 +12,7 @@ import {
 } from '../lib/adminApi.js'
 import { renderMarkdown, statusLabel, threadMarkdown } from '../lib/adminReport.jsx'
 import { timeAgo } from '../lib/timeAgo.js'
+import AdminFeedback from './AdminFeedback.jsx'
 
 /*
  * thread 관리 페이지 — #admin 해시로만 진입한다 (홈·플레이어 어디에도 링크 없음).
@@ -28,6 +30,10 @@ export default function AdminView({ api }) {
   const [nextCursor, setNextCursor] = useState(null)
   const [listLoading, setListLoading] = useState(false)
   const [listError, setListError] = useState(null)
+
+  const [feedback, setFeedback] = useState(null) // AdminFeedbackWire { items, truncated }
+  const [feedbackLoading, setFeedbackLoading] = useState(false)
+  const [feedbackError, setFeedbackError] = useState(null)
 
   const [model, setModel] = useState(null) // { current, defaultModel, configured, options }
   const [modelChoice, setModelChoice] = useState('')
@@ -69,6 +75,19 @@ export default function AdminView({ api }) {
     }
   }, [])
 
+  const loadFeedback = useCallback(async (activeToken) => {
+    setFeedbackLoading(true)
+    setFeedbackError(null)
+    try {
+      setFeedback(await fetchAdminFeedback(activeToken))
+    } catch (e) {
+      if (e instanceof AdminApiError && e.unauthorized) return // loadList가 게이트 처리
+      setFeedbackError(e.message)
+    } finally {
+      setFeedbackLoading(false)
+    }
+  }, [])
+
   const loadModel = useCallback(async (activeToken) => {
     try {
       const wire = await fetchAdminModel(activeToken)
@@ -84,8 +103,9 @@ export default function AdminView({ api }) {
   useEffect(() => {
     if (!token) return
     loadList(token)
+    loadFeedback(token)
     loadModel(token)
-  }, [token, loadList, loadModel])
+  }, [token, loadList, loadFeedback, loadModel])
 
   const submitToken = (event) => {
     event.preventDefault()
@@ -103,6 +123,7 @@ export default function AdminView({ api }) {
     setThreads([])
     setDetail(null)
     setModel(null)
+    setFeedback(null)
     api.showToast('보관된 관리 토큰을 지웠어요.')
   }
 
@@ -192,7 +213,14 @@ export default function AdminView({ api }) {
           <p className="sb-admin__sub">core DB의 라이브 쓰레드 전체 — 보관 처리한 쓰레드는 사용자 목록에서 숨겨져요.</p>
         </div>
         <div className="sb-admin__head-actions">
-          <button type="button" className="sb-btn sb-btn--ghost sb-btn--small" onClick={() => loadList(token)}>
+          <button
+            type="button"
+            className="sb-btn sb-btn--ghost sb-btn--small"
+            onClick={() => {
+              loadList(token)
+              loadFeedback(token)
+            }}
+          >
             새로고침
           </button>
           <button type="button" className="sb-btn sb-btn--ghost sb-btn--small" onClick={lockOut} title="보관된 관리 토큰을 지우고 잠급니다">
@@ -241,6 +269,9 @@ export default function AdminView({ api }) {
           </>
         )}
       </div>
+
+      {/* 평가 모아보기 — 피드백 제출 대시보드 */}
+      <AdminFeedback wire={feedback} loading={feedbackLoading} error={feedbackError} onOpenThread={openDetail} />
 
       {/* 쓰레드 목록 */}
       <div className="sb-admin-card">

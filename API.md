@@ -107,6 +107,7 @@ Base: `/api/admin/*` (스튜디오 프록시 `/api/bff/admin/*` 경유) · 인�
 | GET | `/api/admin/threads?cursor=&limit=` | 전체 쓰레드 목록 — archived 포함, id(스노우플레이크) 키셋 커서·생성 최신순 |
 | GET | `/api/admin/threads/:id` | 쓰레드 상세 — core `ThreadWithSteps` 원본(라이프사이클 로그, llmMeta·action 포함) |
 | POST | `/api/admin/threads/:id/archive` | **보관 처리** — `status=archived`. 데이터 보존, 사용자 목록(`GET /api/threads`)에서만 숨김 |
+| GET | `/api/admin/feedback` | **평가 모아보기** — 피드백 제출 전체(`AdminFeedbackWire`), 제출 1회 = 항목 1개·최신순. core 피드백 스텝을 BFF가 파싱해 같은 (쓰레드, 단계)의 최신 제출에 `latest=true`. 페이지네이션 없음(core 상한 300건 + `truncated`) — 집계는 FE가 latest 항목만으로 |
 | GET | `/api/admin/model` | LLM 모델 설정 — `{ current, defaultModel, configured, options[] }` (카탈로그는 BFF `llm.service` 소유) |
 | PUT | `/api/admin/model` | 모델 변경 — `{ model }` (카탈로그 밖 400, `null`이면 기본값 복귀). core `settings.llm-model`에 저장, 새 생성부터 반영(인스턴스 캐시 ≤30s) |
 
@@ -123,6 +124,7 @@ Base: `https://ddak-core.vercel.app` · 인증: **`Authorization: Bearer <CORE_S
 | GET | `/internal/threads/:id` | 쓰레드 + 스텝 전체 (`ThreadWithSteps`) |
 | GET | `/internal/threads?cursor=&limit=` | 전체 목록 (관리용) — archived 포함, id 키셋 커서 |
 | GET | `/internal/users/:uid/threads?cursor=&limit=` | 사용자 쓰레드 목록 (updatedAt 키셋 커서) — **archived 제외** |
+| GET | `/internal/feedback-steps?limit=` | 피드백 스텝 나열 (`FeedbackStepsWire`) — action 스텝 중 `payload.type='feedback'`만 쓰레드 메타와 함께 최신순. core는 payload를 해석하지 않는다(jsonb 최상위 type 필터만) — 파싱·집계는 BFF admin 몫 |
 | GET | `/internal/settings/:key` · PUT · DELETE | 운영 설정 KV (jsonb — core는 해석 안 함). 예: `llm-model` |
 | GET | `/healthz` | 헬스체크 (가드 밖) |
 
