@@ -124,7 +124,10 @@ export class LlmService {
   async generateSurvey(intent: string, profile?: Profile, stream?: LlmStreamHandlers): Promise<GenResult<SurveyGen>> {
     return this.generate('설문 생성', SurveyGen, {
       system: SURVEY_SYSTEM,
-      effort: 'medium' as const,
+      // low인 이유: Opus 5는 thinking을 빼면 적응형 사고가 기본으로 켜져 첫 토큰 전
+      // 사고 구간이 effort에 비례해 길어진다(4.8까지는 생략 = 사고 없음). 질문 5개
+      // 생성은 low로 충분하고, 사고를 끄는 것보다 effort를 낮추는 쪽이 안전하다
+      effort: 'low' as const,
       user: buildSurveyRequest(intent, profile),
       stream,
     })
@@ -170,7 +173,7 @@ export class LlmService {
   private async generate<S extends z.ZodTypeAny>(
     label: string,
     schema: S,
-    req: { system: string; effort: 'medium' | 'high'; user: string; webSearch?: boolean; stream?: LlmStreamHandlers },
+    req: { system: string; effort: 'low' | 'medium' | 'high'; user: string; webSearch?: boolean; stream?: LlmStreamHandlers },
   ): Promise<GenResult<S['_output']>> {
     const client = this.requireClient()
     const model = await this.resolveModel()
