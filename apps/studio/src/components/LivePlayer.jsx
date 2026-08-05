@@ -3,6 +3,7 @@ import { DEVICE_PRESETS, STAGES } from '../lib/store.js'
 import { renderItem } from '../lib/registry.jsx'
 import { fetchLiveThread, recordLiveEvent, sendLiveFeedback, startLiveThread, streamLivePlan, streamLiveSurvey } from '../lib/liveApi.js'
 import { livePlanItems, liveSurveyItems } from '../lib/livePage.js'
+import { advanceReveal, REVEAL_TICK_MS } from '../lib/liveReveal.js'
 import { BgBlobs, FloatingBar, ViewerDeviceControl } from './Frame.jsx'
 import ThreadPanel from './ThreadPanel.jsx'
 import ProductDetailPanel from './ProductDetailPanel.jsx'
@@ -132,6 +133,42 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const cancelledRef = useRef(false)
   useEffect(() => () => { cancelledRef.current = true }, [])
 
+  /* 문자 단위 공개(reveal) — SSE 도착분은 partial에 바로 쓰지 않고 target 레퍼런스에만 둔다.
+     아래 틱커가 REVEAL_TICK_MS마다 partial(화면 사본)을 target 쪽으로 문자 단위로
+     전진시켜, 덩어리 도착(~120ms 스로틀)이 타자기처럼 이어져 보인다 (lib/liveReveal.js) */
+  const revealTargetRef = useRef(null)
+  const revealSettledRef = useRef(true) // true = 화면이 target을 다 따라잡음 — 틱 스킵
+  const pushRevealTarget = (updater) => {
+    revealTargetRef.current = updater(revealTargetRef.current)
+    revealSettledRef.current = false
+  }
+  const resetReveal = () => {
+    revealTargetRef.current = null
+    revealSettledRef.current = true
+  }
+  const streaming = !!loading && loading.step !== 'start'
+  useEffect(() => {
+    if (!streaming) return undefined
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const timer = setInterval(() => {
+      if (revealSettledRef.current) return
+      const target = revealTargetRef.current
+      if (!target) return
+      if (reduced) {
+        // 모션 최소화 사용자 — 문자 공개 없이 도착분을 그대로 (base.css 전역 규칙과 같은 태도)
+        revealSettledRef.current = true
+        setPartial(target)
+        return
+      }
+      setPartial((prev) => {
+        const { value, pending } = advanceReveal(prev, target)
+        revealSettledRef.current = pending
+        return value
+      })
+    }, REVEAL_TICK_MS)
+    return () => clearInterval(timer)
+  }, [streaming])
+
   const profileItems = ((api.profile && api.profile.items) || []).filter((it) => it.label && it.label.trim())
   const includedProfile = profileItems.filter((it) => !excludedProfile.includes(it.label))
   const profileWire = () => includedProfile.map((it) => ({ label: it.label, value: String(it.value || '') }))
@@ -142,16 +179,18 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const generateSurvey = (id) => {
     setError(null)
     setPartial(null)
+    resetReveal()
     setLoading({ step: 'survey', message: '질문을 구성하고 있어요…' })
     streamLiveSurvey(id, { profile: profileWire() }, {
       onStatus: (message) => { if (!cancelledRef.current) setLoading((prev) => ({ ...(prev || { step: 'survey' }), message })) },
-      /* 부분 스트리밍 — 자라는 질문이 같은 index로 반복 도착한다 (토큰 단위 미리보기 → 완성본) */
+      /* 부분 스트리밍 — 자라는 질문이 같은 index로 반복 도착한다 (토큰 단위 미리보기 → 완성본).
+         partial엔 직접 쓰지 않고 reveal target에만 — 화면 반영은 문자 공개 틱커가 맡는다 */
       onHead: (head) => {
-        if (!cancelledRef.current) setPartial((prev) => ({ questions: [], ...(prev || {}), ...head }))
+        if (!cancelledRef.current) pushRevealTarget((prev) => ({ questions: [], ...(prev || {}), ...head }))
       },
       onQuestion: (question, index) => {
         if (cancelledRef.current) return
-        setPartial((prev) => {
+        pushRevealTarget((prev) => {
           const next = { ...(prev || {}), questions: [...((prev && prev.questions) || [])] }
           next.questions[index] = question // 서버가 건너뛴 index는 빈 슬롯 — 투영 전에 걸러낸다
           return next
@@ -161,12 +200,14 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         if (cancelledRef.current) return
         setSurveyPage(page)
         setPartial(null)
+        resetReveal()
         setLoading(null)
         setStageKey('survey')
       },
       onError: (e) => {
         if (cancelledRef.current) return
         setPartial(null)
+        resetReveal()
         setLoading(null)
         setError({ step: 'survey', code: e.code, message: e.message, retryable: e.retryable })
       },
@@ -183,6 +224,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     }
     setError(null)
     setPartial(null)
+    resetReveal()
     setLoading({
       step: 'plan',
       message: opts.feedback ? '피드백을 반영해 계획을 다시 세우고 있어요…' : '카탈로그와 웹을 살펴 계획을 세우고 있어요…',
@@ -194,13 +236,14 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
       ...(opts.feedback ? { feedback: opts.feedback } : {}),
     }, {
       onStatus: (message) => { if (!cancelledRef.current) setLoading((prev) => ({ ...(prev || { step: 'plan' }), message })) },
-      /* 부분 스트리밍 — 머리(제목·요약)부터, 섹션은 자라는 채로 같은 index에 반복 도착한다 */
+      /* 부분 스트리밍 — 머리(제목·요약)부터, 섹션은 자라는 채로 같은 index에 반복 도착한다.
+         partial엔 직접 쓰지 않고 reveal target에만 — 화면 반영은 문자 공개 틱커가 맡는다 */
       onHead: (patch) => {
-        if (!cancelledRef.current) setPartial((prev) => ({ sections: [], ...(prev || {}), ...patch }))
+        if (!cancelledRef.current) pushRevealTarget((prev) => ({ sections: [], ...(prev || {}), ...patch }))
       },
       onSection: (section, index) => {
         if (cancelledRef.current) return
-        setPartial((prev) => {
+        pushRevealTarget((prev) => {
           const next = { ...(prev || {}), sections: [...((prev && prev.sections) || [])] }
           next.sections[index] = section // 서버가 드롭한 index는 빈 슬롯 — 투영 전에 걸러낸다
           return next
@@ -216,6 +259,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         setFeedback((prev) => ({ ...prev, plan: emptyStageFeedback() }))
         fbSavedRef.current.plan = null
         setPartial(null)
+        resetReveal()
         setLoading(null)
         setStageKey('plan')
         window.scrollTo(0, 0)
@@ -223,6 +267,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
       onError: (e) => {
         if (cancelledRef.current) return
         setPartial(null)
+        resetReveal()
         setLoading(null)
         setError({ step: 'plan', code: e.code, message: e.message, retryable: e.retryable })
       },
@@ -669,7 +714,9 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
               <>
                 <div className="sb-player__stack">
                   {partialItems.map((it) => (
-                    <div key={it.id} className="sb-player__item">
+                    /* sb-live-item-enter — 마운트 1회 페이드인. id가 안정적이라(같은 index
+                       재도착 = 같은 엘리먼트) 텍스트가 자라는 재렌더에는 다시 재생되지 않는다 */
+                    <div key={it.id} className="sb-player__item sb-live-item-enter">
                       {renderItem(it, { mode: 'player', player: playerApi, profile: api.profile, allItems: partialAllItems })}
                     </div>
                   ))}

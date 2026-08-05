@@ -567,6 +567,17 @@
   to { background-position: -200% 0; }
 }
 
+/* 스트리밍 등장 — 새 컴포넌트가 딱 나타나지 않고 아래에서 떠오르며 페이드인.
+   LivePlayer 부분 스트리밍 스택 전용: 아이템 id가 안정적이라 마운트 1회만 재생된다
+   (모션 최소화 사용자는 base.css 전역 규칙이 걷어낸다) */
+.sb-live-item-enter {
+  animation: sb-live-item-in var(--sb-dur-slow) var(--sb-ease) both;
+}
+@keyframes sb-live-item-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
 /* 부분 스트리밍 꼬리 — 도착한 컴포넌트 스택 아래에서 남은 생성 진행을 보여준다 */
 .sb-live-tail {
   display: flex;
