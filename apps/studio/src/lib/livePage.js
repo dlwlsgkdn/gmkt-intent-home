@@ -56,10 +56,16 @@ export function livePlanItems(page, opts = {}) {
     props: { title: '설문 요약', hiddenProfile: '', hiddenQuestions: '' },
   })
   let stepNo = 0
-  ;(page.sections || []).forEach((section, i) => {
+  const sections = page.sections || []
+  ;(sections).forEach((section, i) => {
+    // 단계 하위 표시 — 단계 안내(guide) 바로 뒤의 상품 섹션(자리 포함)은 그 단계에 속한
+    // 콘텐츠처럼 들여 배치한다 (LivePlayer가 stepSub로 래퍼 클래스를 단다)
+    const stepSub = sections[i - 1] != null && sections[i - 1].kind === 'guide'
     if (!section) {
       // 빈 슬롯 — 아직 안 온 상품·콘텐츠 자리. 인덱스는 보존되고, 조기 확정 뒤에는 로딩 카드
-      if (pendingSlots.includes(i)) items.push({ id: `live-plan-pending-${i}`, type: 'livePending', props: {} })
+      if (pendingSlots.includes(i)) {
+        items.push({ id: `live-plan-pending-${i}`, type: 'livePending', stepSub, props: {} })
+      }
       return
     }
     const base = `live-plan-s${i}`
@@ -78,9 +84,9 @@ export function livePlanItems(page, opts = {}) {
       })
     } else if (section.kind === 'products') {
       if (section.reason) {
-        items.push({ id: `${base}-reason`, type: 'textBlock', props: { kicker: '', title: '', body: section.reason } })
+        items.push({ id: `${base}-reason`, type: 'textBlock', stepSub, props: { kicker: '', title: '', body: section.reason } })
       }
-      items.push({ id: base, type: 'hscroll', props: { title: section.title, cardW: '232', items: '' } })
+      items.push({ id: base, type: 'hscroll', stepSub, props: { title: section.title, cardW: '232', items: '' } })
       ;(section.products || []).forEach((product, j) => {
         items.push({
           id: `${base}-p${j}`,

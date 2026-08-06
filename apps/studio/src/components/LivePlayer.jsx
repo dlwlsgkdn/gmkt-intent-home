@@ -3,7 +3,6 @@ import { DEVICE_PRESETS, STAGES } from '../lib/store.js'
 import { renderItem } from '../lib/registry.jsx'
 import { fetchLiveThread, recordLiveEvent, sendLiveFeedback, startLiveThread, streamLivePlan, streamLiveSurvey } from '../lib/liveApi.js'
 import { livePlanItems, liveSurveyItems } from '../lib/livePage.js'
-import { advanceReveal, REVEAL_TICK_MS } from '../lib/liveReveal.js'
 import { BgBlobs, FloatingBar, ViewerDeviceControl } from './Frame.jsx'
 import ThreadPanel from './ThreadPanel.jsx'
 import ProductDetailPanel from './ProductDetailPanel.jsx'
@@ -157,41 +156,12 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const cancelledRef = useRef(false)
   useEffect(() => () => { cancelledRef.current = true }, [])
 
-  /* 문자 단위 공개(reveal) — SSE 도착분은 partial에 바로 쓰지 않고 target 레퍼런스에만 둔다.
-     아래 틱커가 REVEAL_TICK_MS마다 partial(화면 사본)을 target 쪽으로 문자 단위로
-     전진시켜, 덩어리 도착(~120ms 스로틀)이 타자기처럼 이어져 보인다 (lib/liveReveal.js) */
-  const revealTargetRef = useRef(null)
-  const revealSettledRef = useRef(true) // true = 화면이 target을 다 따라잡음 — 틱 스킵
-  const pushRevealTarget = (updater) => {
-    revealTargetRef.current = updater(revealTargetRef.current)
-    revealSettledRef.current = false
-  }
-  const resetReveal = () => {
-    revealTargetRef.current = null
-    revealSettledRef.current = true
-  }
-  const streaming = !!loading && loading.step !== 'start'
-  useEffect(() => {
-    if (!streaming) return undefined
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    const timer = setInterval(() => {
-      if (revealSettledRef.current) return
-      const target = revealTargetRef.current
-      if (!target) return
-      if (reduced) {
-        // 모션 최소화 사용자 — 문자 공개 없이 도착분을 그대로 (base.css 전역 규칙과 같은 태도)
-        revealSettledRef.current = true
-        setPartial(target)
-        return
-      }
-      setPartial((prev) => {
-        const { value, pending } = advanceReveal(prev, target)
-        revealSettledRef.current = pending
-        return value
-      })
-    }, REVEAL_TICK_MS)
-    return () => clearInterval(timer)
-  }, [streaming])
+  /* 스트리밍 표시는 도착 즉시 렌더다 — 별도 타이핑 페이싱(구 liveReveal 틱커) 없이 SSE
+     도착분(~120ms 스로틀 덩어리)을 그대로 partial에 쓴다. 부드러움은 kText revealFade의
+     글자 단위 마운트 페이드(sb-live-ch, 260ms)가 담당한다: 덩어리로 도착해도 새 글자들이
+     겹치며 떠올라 끊김 없이 이어져 보이고, 화면이 실제 토큰 속도보다 늦는 일이 없다.
+     (모션 최소화 사용자는 base.css 전역 규칙이 페이드를 걷어낸다) */
+  const pushPartial = (updater) => setPartial((prev) => updater(prev))
 
   const profileItems = ((api.profile && api.profile.items) || []).filter((it) => it.label && it.label.trim())
   const includedProfile = profileItems.filter((it) => !excludedProfile.includes(it.label))
@@ -203,18 +173,17 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const generateSurvey = (id) => {
     setError(null)
     setPartial(null)
-    resetReveal()
     setLoading({ step: 'survey', message: '질문을 구성하고 있어요…' })
     streamLiveSurvey(id, { profile: profileWire() }, {
       onStatus: (message) => { if (!cancelledRef.current) setLoading((prev) => ({ ...(prev || { step: 'survey' }), message })) },
       /* 부분 스트리밍 — 자라는 질문이 같은 index로 반복 도착한다 (토큰 단위 미리보기 → 완성본).
          partial엔 직접 쓰지 않고 reveal target에만 — 화면 반영은 문자 공개 틱커가 맡는다 */
       onHead: (head) => {
-        if (!cancelledRef.current) pushRevealTarget((prev) => ({ questions: [], ...(prev || {}), ...head }))
+        if (!cancelledRef.current) pushPartial((prev) => ({ questions: [], ...(prev || {}), ...head }))
       },
       onQuestion: (question, index) => {
         if (cancelledRef.current) return
-        pushRevealTarget((prev) => {
+        pushPartial((prev) => {
           const next = { ...(prev || {}), questions: [...((prev && prev.questions) || [])] }
           next.questions[index] = question // 서버가 건너뛴 index는 빈 슬롯 — 투영 전에 걸러낸다
           return next
@@ -224,14 +193,12 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         if (cancelledRef.current) return
         setSurveyPage(page)
         setPartial(null)
-        resetReveal()
         setLoading(null)
         setStageKey('survey')
       },
       onError: (e) => {
         if (cancelledRef.current) return
         setPartial(null)
-        resetReveal()
         setLoading(null)
         setError({ step: 'survey', code: e.code, message: e.message, retryable: e.retryable })
       },
@@ -261,7 +228,6 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     setPendingMessage(null)
     setError(null)
     setPartial(null)
-    resetReveal()
     setLoading({
       step: 'plan',
       message: opts.feedback ? '피드백을 반영해 계획을 다시 세우고 있어요…' : '카탈로그와 웹을 살펴 계획을 세우고 있어요…',
@@ -281,7 +247,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
       /* 부분 스트리밍 — 머리(제목·요약)부터, 섹션은 자라는 채로 같은 index에 반복 도착한다.
          partial엔 직접 쓰지 않고 reveal target에만 — 화면 반영은 문자 공개 틱커가 맡는다 */
       onHead: (patch) => {
-        if (active() && !skeletonDoneRef.current) pushRevealTarget((prev) => ({ sections: [], ...(prev || {}), ...patch }))
+        if (active() && !skeletonDoneRef.current) pushPartial((prev) => ({ sections: [], ...(prev || {}), ...patch }))
       },
       /* 뼈대 조기 확정 — 텍스트는 전부 왔다: 계획을 확정 렌더로 전환하고(잠금·planKey·평가
          초기화 포함), 상품·콘텐츠 자리(pending)는 로딩 카드로 남겨 비동기로 채운다 */
@@ -296,7 +262,6 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         setFeedback((prev) => ({ ...prev, plan: emptyStageFeedback() }))
         fbSavedRef.current.plan = null
         setPartial(null)
-        resetReveal()
         setLoading(null)
         setStageKey('plan')
         window.scrollTo(0, 0)
@@ -316,7 +281,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
           setPendingSlots((prev) => prev.filter((i) => i !== index))
           return
         }
-        pushRevealTarget((prev) => {
+        pushPartial((prev) => {
           const next = { ...(prev || {}), sections: [...((prev && prev.sections) || [])] }
           next.sections[index] = section // 서버가 드롭한 index는 빈 슬롯 — 투영 전에 걸러낸다
           return next
@@ -339,7 +304,6 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         setFeedback((prev) => ({ ...prev, plan: emptyStageFeedback() }))
         fbSavedRef.current.plan = null
         setPartial(null)
-        resetReveal()
         setLoading(null)
         setStageKey('plan')
         window.scrollTo(0, 0)
@@ -354,7 +318,6 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
           return
         }
         setPartial(null)
-        resetReveal()
         setLoading(null)
         setError({ step: 'plan', code: e.code, message: e.message, retryable: e.retryable })
       },
@@ -806,7 +769,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
                   {partialItems.map((it) => (
                     /* sb-live-item-enter — 마운트 1회 페이드인. id가 안정적이라(같은 index
                        재도착 = 같은 엘리먼트) 텍스트가 자라는 재렌더에는 다시 재생되지 않는다 */
-                    <div key={it.id} className="sb-player__item sb-live-item-enter">
+                    <div key={it.id} className={'sb-player__item sb-live-item-enter' + (it.stepSub ? ' sb-player__item--stepsub' : '')}>
                       {/* revealFade — kText가 글자를 위치 고정 span으로 그려 새 글자만 페이드인 */}
                       {renderItem(it, { mode: 'player', player: playerApi, profile: api.profile, allItems: partialAllItems, revealFade: true })}
                     </div>
@@ -838,7 +801,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
                   /* 검색 결과가 아직 안 채운 자리 — 레지스트리 밖 타입이라 여기서 직접 그린다 */
                   if (it.type === 'livePending') {
                     return (
-                      <div key={it.id} className="sb-player__item">
+                      <div key={it.id} className={'sb-player__item' + (it.stepSub ? ' sb-player__item--stepsub' : '')}>
                         <LivePendingSlot message={pendingMessage} />
                       </div>
                     )
@@ -852,6 +815,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
                       ref={(el) => { fbAnchorRefs.current[it.id] = el }}
                       className={
                         'sb-player__item'
+                        + (it.stepSub ? ' sb-player__item--stepsub' : '')
                         + (lateIdsRef.current.has(it.id) ? ' sb-live-item-enter' : '')
                         + (isAnchor
                           ? ' sb-live-annotate__anchor'
