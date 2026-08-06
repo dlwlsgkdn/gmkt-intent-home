@@ -30,11 +30,12 @@ const VERBATIM_KEYS = new Set(['products'])
 const KEY_ORDER = { intro: 0, headline: 0, summary: 1 }
 
 export const REVEAL_TICK_MS = 30
-/* 틱당 문자 예산: 기본 2자(≈66자/s — 타자 체감), 밀린 양/50 만큼 가속, 최대 24자
-   (≈800자/s — result 직전 몰아치기용). 30ms 틱 기준 */
-const BASE_CHARS_PER_TICK = 2
+/* 틱당 문자 예산: 기본 4자(≈133자/s — 실제 스트림에 가깝게, 부드러움은 글자 페이드가 담당),
+   밀린 양/25 만큼 가속, 최대 24자(≈800자/s — result 직전 몰아치기용). 30ms 틱 기준.
+   (구 값 2자/÷50은 화면이 스트림보다 한참 뒤처져 LLM이 느린 것처럼 보였다) */
+const BASE_CHARS_PER_TICK = 4
 const MAX_CHARS_PER_TICK = 24
-const CATCH_UP_DIVISOR = 50
+const CATCH_UP_DIVISOR = 25
 
 function orderedEntries(obj) {
   return Object.entries(obj).sort((a, b) => (KEY_ORDER[a[0]] ?? 10) - (KEY_ORDER[b[0]] ?? 10))
