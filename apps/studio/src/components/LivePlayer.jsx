@@ -807,7 +807,8 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
                     /* sb-live-item-enter — 마운트 1회 페이드인. id가 안정적이라(같은 index
                        재도착 = 같은 엘리먼트) 텍스트가 자라는 재렌더에는 다시 재생되지 않는다 */
                     <div key={it.id} className="sb-player__item sb-live-item-enter">
-                      {renderItem(it, { mode: 'player', player: playerApi, profile: api.profile, allItems: partialAllItems })}
+                      {/* revealFade — kText가 글자를 위치 고정 span으로 그려 새 글자만 페이드인 */}
+                      {renderItem(it, { mode: 'player', player: playerApi, profile: api.profile, allItems: partialAllItems, revealFade: true })}
                     </div>
                   ))}
                 </div>

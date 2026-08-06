@@ -578,6 +578,19 @@
   to { opacity: 1; transform: none; }
 }
 
+/* 문자 단위 공개 페이드 — 스트리밍 중 새로 공개된 글자가 딱 붙지 않고 떠오른다.
+   kText의 revealFade 모드가 글자마다 위치 고정 키 span을 만들어, 자란 텍스트의 새 글자만
+   마운트 → 이 애니메이션이 재생된다 (이미 보인 글자는 span 재사용이라 다시 안 돈다).
+   30ms 틱 × 2자 공개에 260ms 페이드가 겹치며 연속된 그라데이션처럼 부드럽게 이어진다.
+   inline 유지(단어 중간 줄바꿈 방지) — transform 대신 opacity만 쓴다 */
+.sb-live-ch {
+  animation: sb-live-ch-in 260ms ease-out both;
+}
+@keyframes sb-live-ch-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 /* 검색 결과가 아직 안 채운 자리(상품·콘텐츠) — 뼈대 조기 확정 뒤 페이지 안 로딩 카드.
    실제 카드(232~260px)와 비슷한 실루엣의 쉬머 두 장 + 진행 문구 */
 .sb-live-slot {

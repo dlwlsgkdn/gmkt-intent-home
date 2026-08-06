@@ -208,6 +208,14 @@ export function kText(text, ctx, fieldKey) {
     if (kw) return <RichSpan key={i} optsStr="kw" content={kw[1]} ctx={ctx} i={i} />
     const rich = part.match(/^\{\{([^|{}]*)\|([^{}]*?)\}\}$/)
     if (rich) return <RichSpan key={i} optsStr={rich[1]} content={rich[2]} ctx={ctx} i={i} />
+    // 라이브 스트리밍 문자 공개 페이드(ctx.revealFade — LivePlayer 부분 렌더 전용):
+    // 글자마다 위치 고정 키의 span을 만들어, 텍스트가 자라면 이미 있던 글자는 그대로
+    // 재사용되고(재애니메이션 없음) 새로 공개된 글자만 마운트 페이드인으로 떠오른다
+    if (ctx && ctx.revealFade) {
+      return Array.from(part).map((ch, j) => (
+        <span key={`${i}-${j}`} className="sb-live-ch">{ch}</span>
+      ))
+    }
     return part
   })
 
