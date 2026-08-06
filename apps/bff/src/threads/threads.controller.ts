@@ -106,7 +106,12 @@ export class ThreadsController {
   @Post(':id/plan')
   @ApiOperation({
     summary: '응답 제출 → 계획 페이지 생성 (LLM #2, SSE)',
-    description: `카탈로그 그라운딩(상품 id 허용 목록 검증) + 웹 검색 상품(URL 검증 통과분만). body.feedback(stage=plan)이 있으면 피드백 반영 재생성 — 직전 계획·피드백을 프롬프트에 실어 지적된 상품을 웹 검색 대안으로 교체한다. result.page = PlanPageWire. ${SSE_DESC}`,
+    description:
+      `카탈로그 그라운딩(상품 id 허용 목록 검증) + 웹 검색 상품·콘텐츠(URL 검증 통과분만). ` +
+      `뼈대(텍스트)가 끝나면 \`event: skeleton\`({ page, pending })으로 **조기 확정**을 알린다 — page.sections의 ` +
+      `상품·콘텐츠 자리는 null이고 pending이 그 인덱스 목록, 이후 \`section\` 이벤트가 자리를 비동기로 채운다 ` +
+      `(구버전 FE는 무시 가능 — result가 언제나 권위). body.feedback(stage=plan)이 있으면 피드백 반영 재생성 — ` +
+      `직전 계획·피드백을 프롬프트에 실어 지적된 상품을 웹 검색 대안으로 교체한다. result.page = PlanPageWire. ${SSE_DESC}`,
   })
   @ApiParam(THREAD_ID_PARAM)
   @ApiBody({ schema: toOpenApi(PlanRequestBody) })
@@ -128,6 +133,8 @@ export class ThreadsController {
         body.profile,
         {
           onHead: (patch) => sseSend(res, 'head', patch),
+          // 뼈대 조기 확정 — FE가 계획을 확정 렌더하고, 상품·콘텐츠 자리(pending)는 로딩 카드로 둔다
+          onSkeleton: (page, pending) => sseSend(res, 'skeleton', { page, pending }),
           onSection: (section, index) => sseSend(res, 'section', { index, section }),
           onSearch: (query) => sseSend(res, 'status', { message: `웹에서 "${query}" 검색 중…` }),
         },

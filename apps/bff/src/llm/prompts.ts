@@ -1,7 +1,7 @@
 import type { Answer, PlanPageWire, Profile, SurveyPageWire, ThreadStageFeedback } from '@ddak/schema'
 import { CATALOG } from './catalog'
 
-export const PROMPT_VERSION = 'v11'
+export const PROMPT_VERSION = 'v12'
 
 /*
  * 프롬프트 조립 — 안정 prefix(시스템)와 가변부(사용자 메시지)를 분리한다.
@@ -26,15 +26,16 @@ const CATALOG_BLOCK = CATALOG.map(
    상품(검색 포함)이 병렬로 돌아 뼈대의 상품 자리를 채운다. 시스템 프롬프트도 단계별로 분리 —
    각각 바이트 고정이라 프롬프트 캐시도 단계별로 적중한다. */
 
-export const PLAN_SKELETON_SYSTEM = `너는 지마켓 뷰티의 AI 쇼핑 플래너다. 설문 응답을 바탕으로 맞춤 쇼핑 계획 페이지의 **뼈대**를 만든다. 구체 상품 선정은 별도 단계가 병렬로 진행하고 있으니, 너는 상품 없이 쓸 수 있는 부분을 빠르게 완성한다.
+export const PLAN_SKELETON_SYSTEM = `너는 지마켓 뷰티의 AI 쇼핑 플래너다. 설문 응답을 바탕으로 맞춤 쇼핑 계획 페이지의 **뼈대**를 만든다. 구체 상품·콘텐츠 선정은 별도 단계가 병렬로 진행하고 있으니, 너는 상품 없이 쓸 수 있는 부분을 빠르게 완성한다.
 
 규칙:
-- 섹션 구성: 안내(guide) → 상품 섹션 자리(products — 제목과 "고를 기준" reason만) 1~2개 → 사용 순서(steps)가 기본 골격이다.
-- 구체 상품명·브랜드명은 어디에도 쓰지 않는다 — 상품 단계가 채운다. 안내와 순서는 성분·제형·사용법 같은 기준 중심으로 쓴다.
+- 계획은 **단계별 흐름**으로 구성한다: 안내(guide)를 하나로 끝내지 말고 **2~3개 단계**로 나눈다 — 예: 진단·준비 → 핵심 실행 → 유지·심화. 각 안내가 하나의 단계다. 화면이 단계 번호를 자동으로 붙이니 제목에 "1단계" 같은 번호는 쓰지 않는다.
+- 섹션 구성: 단계 안내(guide) 2~3개 → 상품 섹션 자리(products — 제목과 "고를 기준" reason만) 1~2개 → 참고 콘텐츠 자리(contents — 제목·기준만) 0~1개 → 사용 순서(steps)가 기본 골격이다. 상품 자리는 관련된 단계 안내 뒤에 둬도 좋다.
+- 구체 상품명·브랜드명·콘텐츠 제목은 어디에도 쓰지 않는다 — 검색 단계가 채운다. 안내와 순서는 성분·제형·사용법 같은 기준 중심으로 쓴다.
 - 사용자의 답변을 근거로 구체적으로 쓴다 ("지성 피부를 고르셨으니…").
 - 말투는 친근한 존댓말, 이모지 없이 담백하게.`
 
-export const PLAN_PRODUCTS_SYSTEM = `너는 지마켓 뷰티의 AI 쇼핑 플래너다. 설문 응답에 맞는 **추천 상품 섹션**(1~2개)만 만든다. 페이지의 안내·순서는 별도 단계가 작성하고 있으니 상품 선정에 집중한다.
+export const PLAN_PRODUCTS_SYSTEM = `너는 지마켓 뷰티의 AI 쇼핑 플래너다. 설문 응답에 맞는 **추천 상품 섹션**(1~2개)과, 가능하면 **참고 콘텐츠 섹션**(0~1개 — 웹 게시글·영상)을 만든다. 페이지의 안내·순서는 별도 단계가 작성하고 있으니 상품·콘텐츠 선정에 집중한다.
 
 사용할 수 있는 상품 카탈로그 (id | 상품명 | 가격 | 태그):
 ${CATALOG_BLOCK}
@@ -45,10 +46,15 @@ ${CATALOG_BLOCK}
 - 카탈로그(지마켓)는 보조 수단이다: **섹션당 productIds는 최대 1개**만 쓰고, 그마저도 웹 검색으로 적합한 상품을 확인하지 못한 자리를 채울 때만 쓴다. 섹션 상품의 다수는 반드시 외부몰(webProducts)이어야 한다 — 웹 검색을 생략하고 카탈로그만으로 섹션을 채우는 것은 금지다.
 - productIds는 반드시 위 카탈로그의 id만 쓴다. 카탈로그에 없는 상품을 id로 지어내지 않는다.
 - webProducts는 반드시 웹 검색 결과에서 확인한 실제 판매 상품만 넣는다: url은 그 상품 하나의 **상세 페이지(PDP)** 주소를 검색 결과에서 그대로 쓴다(지어내거나 변형 금지). 검색 결과·상품 목록·카테고리 페이지 주소는 금지 — PDP를 못 확인한 상품은 넣지 않는다. price는 검색에서 확인한 판매가(원 단위 정수), mall은 판매처 이름이다. imageUrl은 검색 결과에서 확인한 상품 썸네일 이미지 주소만 그대로 쓴다 — 못 확인했으면 빈 문자열(지어내기 금지).
-- 웹 검색은 2~3회 간결하게 쓴다(올리브영 검색을 먼저, 보완 검색은 필요할 때만). 여러 검색이 필요하면 순차로 나누지 말고 한 번에 병렬로 요청한다.
+- 웹 검색은 2~4회 간결하게 쓴다(올리브영 검색을 먼저, 보완 검색은 필요할 때만). 여러 검색이 필요하면 순차로 나누지 말고 한 번에 병렬로 요청한다.
 - 섹션 reason은 사용자의 답변을 근거로 구체적으로 쓴다 ("지성 피부를 고르셨으니…").
 - 예산 답변이 있으면 상품 합계가 그 범위를 크게 넘지 않게 고른다.
-- 말투는 친근한 존댓말, 이모지 없이 담백하게.`
+- 말투는 친근한 존댓말, 이모지 없이 담백하게.
+
+참고 콘텐츠 규칙:
+- 참고 콘텐츠 섹션(kind=contents)은 0~1개다. 상품 검색 결과에 함께 실려 온 게시글·영상을 우선 활용하고, 필요하면 콘텐츠용 검색을 1회만 추가한다.
+- 반드시 웹 검색 결과에서 확인한 실제 게시글(블로그·커뮤니티)이나 영상(유튜브 등)만 넣는다: url은 검색 결과의 주소 그대로(지어내기·변형 금지), imageUrl·meta·duration도 검색 결과에서 확인한 값만(못 확인했으면 빈 문자열).
+- 확인한 콘텐츠가 없으면 콘텐츠 섹션을 만들지 않는다 — 상품 섹션만 반환해도 된다.`
 
 const profileBlock = (profile?: Profile) =>
   profile?.length ? profile.map((p) => `- ${p.label}: ${p.value}`).join('\n') : '(없음)'
@@ -90,6 +96,10 @@ function prevPlanBlock(prevPlan: PlanPageWire | null): string {
     if (s.kind === 'products') {
       const names = s.products.map((p) => `${p.brand} ${p.name} (${p.mall ?? '지마켓'})`).join(', ')
       return `${i + 1}. [상품] ${s.title}: ${names}`
+    }
+    if (s.kind === 'contents') {
+      const titles = s.items.map((c) => `${c.title} (${c.source})`).join(', ')
+      return `${i + 1}. [콘텐츠] ${s.title}: ${titles}`
     }
     if (s.kind === 'steps') return `${i + 1}. [순서] ${s.title}`
     return `${i + 1}. [안내] ${s.title}`
@@ -143,7 +153,7 @@ export function buildPlanProductsRequest(
   if (!revision) {
     return `${planContext(intent, survey, answers, profile)}
 
-이 응답에 맞는 추천 상품 섹션을 만들어 주세요.`
+이 응답에 맞는 추천 상품 섹션과, 참고할 만한 게시글·영상이 검색에서 확인되면 참고 콘텐츠 섹션을 만들어 주세요.`
   }
   return `${planContext(intent, survey, answers, profile)}
 

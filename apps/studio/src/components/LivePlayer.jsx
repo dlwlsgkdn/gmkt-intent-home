@@ -68,6 +68,23 @@ function LiveTail({ message }) {
   )
 }
 
+/* 검색 결과가 아직 안 채운 자리(상품·콘텐츠) — 뼈대 조기 확정 뒤 페이지 안에서 자리만
+   로딩 카드로 남는다. 몇 개가 올지 모르니 카드 흉내 두 장 + 진행 문구만 정직하게 */
+function LivePendingSlot({ message }) {
+  return (
+    <div className="sb-live-slot" role="status" aria-live="polite">
+      <p className="sb-live-status">
+        <span className="sb-live-status__spark" aria-hidden="true">✦</span>
+        {message || '추천 상품과 콘텐츠를 찾고 있어요…'}
+      </p>
+      <div className="sb-live-slot__cards" aria-hidden="true">
+        <div className="sb-live-skel sb-live-skel--card" />
+        <div className="sb-live-skel sb-live-skel--card" />
+      </div>
+    </div>
+  )
+}
+
 /* 실패 안내 — retryable이면 다시 시도, 발행 시나리오가 있으면 강등 제안(사용자 선택) */
 function LiveError({ error, onRetry, fallbacks, onPlayScenario }) {
   return (
@@ -104,6 +121,13 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   // 생성 중 부분 페이지 (컴포넌트 단위 스트리밍) — 설문 { intro?, questions[] } | 계획 { headline?, summary?, sections[] }.
   // 미리보기 전용: 확정은 언제나 result(전체 페이지)이고, 도착 즉시 이 상태는 버린다
   const [partial, setPartial] = useState(null)
+  /* 계획 조기 확정(skeleton 이벤트) 뒤 아직 검색 결과가 안 채운 자리 인덱스 — 비어 있지
+     않으면 페이지는 확정 렌더지만 상품·콘텐츠가 비동기로 들어오는 중이다 */
+  const [pendingSlots, setPendingSlots] = useState([])
+  const [pendingMessage, setPendingMessage] = useState(null) // 자리 로딩 카드에 띄울 진행 문구 (검색 status)
+  const planRunRef = useRef(0) // 계획 생성 실행 토큰 — 조기 확정 뒤 겹칠 수 있는 옛 스트림 이벤트를 무시한다
+  const skeletonDoneRef = useRef(false) // 이번 계획 생성에서 skeleton(조기 확정)을 받았는지
+  const lateIdsRef = useRef(new Set()) // 조기 확정 뒤 늦게 채워진 섹션 아이템 id — 등장 페이드인용
   const [error, setError] = useState(null) // null | { step, code, message, retryable }
   const [answers, setAnswers] = useState({})
   const [excludedProfile, setExcludedProfile] = useState([])
@@ -215,13 +239,26 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   }
 
   /* opts.feedback(ThreadStageFeedback, stage='plan')이 있으면 피드백 반영 재생성 —
-     BFF가 직전 계획·피드백을 프롬프트에 실어 지적된 상품을 웹 검색 대안으로 교체한다 */
+     BFF가 직전 계획·피드백을 프롬프트에 실어 지적된 상품을 웹 검색 대안으로 교체한다.
+     흐름: 뼈대 스트리밍(partial) → skeleton 이벤트에서 **조기 확정**(페이지 확정 렌더 +
+     자리는 로딩 카드) → section 이벤트가 상품·콘텐츠를 비동기로 채움 → result(권위)로 마감 */
   const generatePlan = (opts = {}) => {
+    if (pendingSlots.length > 0) {
+      // 직전 계획의 검색 스트림이 아직 여는 중 — 서버 저장 경합을 피하려 마감까지 기다린다
+      api.showToast('아직 추천 상품·콘텐츠를 채우는 중이에요. 잠시 후 다시 시도해주세요.')
+      return
+    }
     const wire = answersWire()
     if (wire.length === 0) {
       api.showToast('질문에 하나 이상 답해주세요.')
       return
     }
+    const run = ++planRunRef.current
+    const active = () => !cancelledRef.current && planRunRef.current === run
+    skeletonDoneRef.current = false
+    lateIdsRef.current = new Set()
+    setPendingSlots([])
+    setPendingMessage(null)
     setError(null)
     setPartial(null)
     resetReveal()
@@ -235,14 +272,50 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
       profile: profileWire(),
       ...(opts.feedback ? { feedback: opts.feedback } : {}),
     }, {
-      onStatus: (message) => { if (!cancelledRef.current) setLoading((prev) => ({ ...(prev || { step: 'plan' }), message })) },
+      onStatus: (message) => {
+        if (!active()) return
+        // 조기 확정 뒤의 status(검색 진행 등)는 로딩 화면이 아니라 자리 로딩 카드 문구로
+        if (skeletonDoneRef.current) setPendingMessage(message)
+        else setLoading((prev) => ({ ...(prev || { step: 'plan' }), message }))
+      },
       /* 부분 스트리밍 — 머리(제목·요약)부터, 섹션은 자라는 채로 같은 index에 반복 도착한다.
          partial엔 직접 쓰지 않고 reveal target에만 — 화면 반영은 문자 공개 틱커가 맡는다 */
       onHead: (patch) => {
-        if (!cancelledRef.current) pushRevealTarget((prev) => ({ sections: [], ...(prev || {}), ...patch }))
+        if (active() && !skeletonDoneRef.current) pushRevealTarget((prev) => ({ sections: [], ...(prev || {}), ...patch }))
+      },
+      /* 뼈대 조기 확정 — 텍스트는 전부 왔다: 계획을 확정 렌더로 전환하고(잠금·planKey·평가
+         초기화 포함), 상품·콘텐츠 자리(pending)는 로딩 카드로 남겨 비동기로 채운다 */
+      onSkeleton: (page, pending) => {
+        if (!active()) return
+        skeletonDoneRef.current = true
+        setPlanPage(page) // sections의 자리 인덱스는 null — livePlanItems가 pending 카드로 그린다
+        setPendingSlots(pending)
+        setPlanKey(JSON.stringify(wire))
+        setReselecting(false) // 새 계획이 만들어졌으니 설문을 다시 잠근다
+        // 계획이 새로 만들어지면 이전 계획의 컴포넌트 평가는 대상이 사라진 것 — 로컬만 비운다
+        setFeedback((prev) => ({ ...prev, plan: emptyStageFeedback() }))
+        fbSavedRef.current.plan = null
+        setPartial(null)
+        resetReveal()
+        setLoading(null)
+        setStageKey('plan')
+        window.scrollTo(0, 0)
       },
       onSection: (section, index) => {
-        if (cancelledRef.current) return
+        if (!active()) return
+        if (skeletonDoneRef.current) {
+          // 조기 확정 뒤 도착한 상품·콘텐츠 — 확정 페이지의 자리를 직접 채운다 (등장 페이드인)
+          lateIdsRef.current.add(`live-plan-s${index}`)
+          lateIdsRef.current.add(`live-plan-s${index}-reason`)
+          setPlanPage((prev) => {
+            if (!prev) return prev
+            const sections = [...(prev.sections || [])]
+            sections[index] = section
+            return { ...prev, sections }
+          })
+          setPendingSlots((prev) => prev.filter((i) => i !== index))
+          return
+        }
         pushRevealTarget((prev) => {
           const next = { ...(prev || {}), sections: [...((prev && prev.sections) || [])] }
           next.sections[index] = section // 서버가 드롭한 index는 빈 슬롯 — 투영 전에 걸러낸다
@@ -250,12 +323,19 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         })
       },
       onResult: (page) => {
-        if (cancelledRef.current) return
+        if (!active()) return
+        if (skeletonDoneRef.current) {
+          // 조기 확정 흐름의 마감 — 최종본(권위)으로 갈아끼우고 남은 자리를 정리한다
+          // (검색 단계가 못 채운 자리는 최종본에서 빠진다 — 빈 섹션을 보여주지 않는 서버 규칙)
+          setPlanPage(page)
+          setPendingSlots([])
+          setPendingMessage(null)
+          return
+        }
+        // 구버전 BFF(skeleton 이벤트 없음) — 기존 확정 흐름 그대로
         setPlanPage(page)
         setPlanKey(JSON.stringify(wire))
-        setReselecting(false) // 새 계획이 만들어졌으니 설문을 다시 잠근다
-        // 계획이 새로 만들어지면 이전 계획의 컴포넌트 평가는 대상이 사라진 것 — 로컬만 비운다
-        // (서버의 이전 제출은 로그로 남고, 다음 저장이 최신 유효본이 된다)
+        setReselecting(false)
         setFeedback((prev) => ({ ...prev, plan: emptyStageFeedback() }))
         fbSavedRef.current.plan = null
         setPartial(null)
@@ -265,7 +345,14 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         window.scrollTo(0, 0)
       },
       onError: (e) => {
-        if (cancelledRef.current) return
+        if (!active()) return
+        if (skeletonDoneRef.current) {
+          // 계획(텍스트)은 이미 확정 — 검색 스트림만 끊긴 것. 페이지를 지우지 않고 정직하게 알린다
+          setPendingSlots([])
+          setPendingMessage(null)
+          api.showToast(`추천 상품·콘텐츠를 마저 받지 못했어요 — ${e.message}`)
+          return
+        }
         setPartial(null)
         resetReveal()
         setLoading(null)
@@ -439,7 +526,10 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         : [],
     [surveyPage, surveyLocked]
   )
-  const planItems = useMemo(() => (planPage ? livePlanItems(planPage) : []), [planPage])
+  const planItems = useMemo(
+    () => (planPage ? livePlanItems(planPage, { pendingSlots }) : []),
+    [planPage, pendingSlots]
+  )
   const allItems = stageKey === 'plan' ? planItems : surveyItems
   const items = allItems.filter((it) => !it.parentId)
 
@@ -665,7 +755,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
               {/* 상시 모드 배지 — 이 체험이 실시간 생성임을 저니 내내 보여준다 */}
               <p className="sb-eyebrow sb-live-eyebrow">
                 <span className="sb-live-eyebrow__spark" aria-hidden="true">✦</span>
-                AI 실시간 생성{loading ? ' · 생성 중' : ''}
+                AI 실시간 생성{loading ? ' · 생성 중' : pendingSlots.length > 0 ? ' · 추천 찾는 중' : ''}
               </p>
               <div className="sb-player__head-actions">
                 <button
@@ -744,6 +834,14 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
               )}
               <div className="sb-player__stack">
                 {items.map((it) => {
+                  /* 검색 결과가 아직 안 채운 자리 — 레지스트리 밖 타입이라 여기서 직접 그린다 */
+                  if (it.type === 'livePending') {
+                    return (
+                      <div key={it.id} className="sb-player__item">
+                        <LivePendingSlot message={pendingMessage} />
+                      </div>
+                    )
+                  }
                   const fbEntry = stageFb.components[it.id]
                   const noted = !!fbEntry && (fbEntry.score != null || (fbEntry.feedback || '').trim())
                   const isAnchor = fbMode && fbAvailable && isLiveFeedbackTarget(it)
@@ -753,6 +851,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
                       ref={(el) => { fbAnchorRefs.current[it.id] = el }}
                       className={
                         'sb-player__item'
+                        + (lateIdsRef.current.has(it.id) ? ' sb-live-item-enter' : '')
                         + (isAnchor
                           ? ' sb-live-annotate__anchor'
                             + (fbActiveId === it.id ? ' is-active' : '')

@@ -68,6 +68,8 @@ function stepSummary(step, surveyPage) {
     for (const s of sections) {
       if (s.kind === 'products') {
         lines.push(`- [products] ${s.title} — 상품 ${(s.products || []).length}개`)
+      } else if (s.kind === 'contents') {
+        lines.push(`- [contents] ${s.title} — 콘텐츠 ${(s.items || []).length}개`)
       } else if (s.kind === 'steps') {
         lines.push(`- [steps] ${s.title} — 체크 ${(s.steps || []).length}개`)
       } else {

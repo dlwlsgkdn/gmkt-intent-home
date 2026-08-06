@@ -4,6 +4,7 @@ import type {
   CatalogProduct,
   LlmMeta,
   ThreadEventBody,
+  PlanContentItem,
   PlanPageWire,
   PlanSectionWire,
   Profile,
@@ -18,13 +19,15 @@ import { CoreClientService } from '../core-client.service'
 import { LlmService } from '../llm/llm.service'
 import { CATALOG_BY_ID } from '../llm/catalog'
 import {
+  ContentsSectionGen,
+  PlanSearchSectionGen,
   PlanSectionPartialGen,
   PlanSkeletonSectionGen,
   ProductsSectionGen,
   SurveyQuestionGen,
   SurveyQuestionPartialGen,
 } from '../llm/gen-schemas'
-import { mergePlanSections, productSectionIndex } from './plan-merge'
+import { GeneratedIndexAllocator, isSlotKind, mergePlanSections, slotIndexesOf } from './plan-merge'
 
 /** 스텝 순번 — (thread, seq)가 멱등 키라 단계별 고정 순번을 쓴다 */
 const SEQ = { explore: 1, survey: 2, answers: 3, plan: 4, actionBase: 5 } as const
@@ -40,8 +43,16 @@ export type SurveyStreamHandlers = {
   onIntro?: (intro: string) => void
   onQuestion?: (question: SurveyQuestionWire, index: number) => void
 }
+/** 뼈대 확정 페이지 — 자리(상품·콘텐츠)는 null, pending이 그 인덱스 목록.
+ * FE는 이 시점에 계획을 조기 확정하고 자리에는 로딩 카드를 그린다 */
+export type PlanSkeletonPageWire = {
+  headline: string
+  summary: string
+  sections: (PlanSectionWire | null)[]
+}
 export type PlanStreamHandlers = {
   onHead?: (patch: { headline?: string; summary?: string }) => void
+  onSkeleton?: (page: PlanSkeletonPageWire, pending: number[]) => void
   onSection?: (section: PlanSectionWire, index: number) => void
   onSearch?: (query: string) => void
 }
@@ -125,9 +136,11 @@ export class ThreadsService {
   }
 
   /** 응답 제출 → 계획 페이지 생성 (LLM #2, 2단계 병렬 — §9-1).
-   * 뼈대(검색 없음, 수 초)가 제목·안내·순서와 상품 "자리"를 확정해 먼저 스트리밍되고,
-   * 상품(검색 포함)이 병렬로 돌아 자리를 채운다. 상품 섹션 스트림은 뼈대 완료로 자리
-   * 인덱스가 확정된 뒤 내보낸다 — 실측상 뼈대가 항상 훨씬 먼저 끝나 체감 지연이 없다.
+   * 뼈대(검색 없음, 수 초)가 제목·단계 안내·순서와 상품/콘텐츠 "자리"를 확정해 먼저
+   * 스트리밍되고, 뼈대가 끝나면 onSkeleton으로 **조기 확정**을 알린다 — FE는 이 시점에
+   * 계획을 확정 렌더하고 자리에 로딩 카드를 둔다. 검색 단계(상품+참고 콘텐츠, 웹 검색
+   * 포함)는 병렬로 돌아 자리를 나중에 비동기로 채운다. 검색 섹션 스트림은 뼈대 완료로
+   * 자리 인덱스가 확정된 뒤 내보낸다 — 실측상 뼈대가 항상 훨씬 먼저 끝난다.
    * feedback(stage='plan')이 오면 피드백 반영 재생성: 저장된 직전 계획과 피드백을 프롬프트에
    * 실어, 지적된 상품은 빼고 웹 검색으로 대안을 찾는다 (카탈로그 밖 상품도 webProducts로) */
   async generatePlan(
@@ -152,16 +165,15 @@ export class ThreadsService {
         }
       : undefined
 
-    const slotIndexes: number[] = []
-    let skeletonLength: number | null = null // null = 뼈대 미완 — 상품 섹션은 대기열에 쌓인다
-    const arrivedProducts: PlanSectionWire[] = []
-    let emittedProducts = 0
-    const flushProducts = () => {
-      if (skeletonLength === null || !stream?.onSection) return
-      while (emittedProducts < arrivedProducts.length) {
-        const index = productSectionIndex(slotIndexes, skeletonLength, emittedProducts)
-        stream.onSection(arrivedProducts[emittedProducts], index)
-        emittedProducts += 1
+    let allocator: GeneratedIndexAllocator | null = null // null = 뼈대 미완 — 검색 섹션은 대기열에 쌓인다
+    const arrivedSections: PlanSectionWire[] = [] // 그라운딩 통과분 (도착 순)
+    let emitted = 0
+    const flushGenerated = () => {
+      if (!allocator || !stream?.onSection) return
+      while (emitted < arrivedSections.length) {
+        const section = arrivedSections[emitted]
+        stream.onSection(section, allocator.next(section.kind === 'contents' ? 'contents' : 'products'))
+        emitted += 1
       }
     }
 
@@ -179,8 +191,8 @@ export class ThreadsService {
           onElement: (element, index) => {
             const parsed = PlanSkeletonSectionGen.safeParse(element)
             if (!parsed.success) return
-            // 상품 자리는 내보내지 않는다 — 상품 단계 결과가 이 인덱스를 차지한다
-            if (parsed.data.kind !== 'products') stream.onSection?.(parsed.data, index)
+            // 상품·콘텐츠 자리는 내보내지 않는다 — 검색 단계 결과가 이 인덱스를 차지한다
+            if (!isSlotKind(parsed.data.kind)) stream.onSection?.(parsed.data as PlanSectionWire, index)
           },
           // 자라는 중인 섹션 — 제목이 나오기 시작하면 토큰 단위로 같은 index에 재전송한다
           onElementPartial: (element, index) => {
@@ -191,23 +203,35 @@ export class ThreadsService {
             if (s.kind === 'guide') stream.onSection?.({ kind: 'guide', title: s.title, body: s.body ?? '' }, index)
             else if (s.kind === 'steps')
               stream.onSection?.({ kind: 'steps', title: s.title, steps: (s.steps ?? []).filter(Boolean) }, index)
-            // products 자리는 부분도 내보내지 않는다 — 상품 단계 결과가 차지할 인덱스
+            // products·contents 자리는 부분도 내보내지 않는다 — 검색 단계 결과가 차지할 인덱스
           },
         },
         revision,
       )
       .then((result) => {
         // 자리 인덱스는 스트림 조각이 아니라 최종 검증본 기준으로 확정한다 (조각 파싱 누락 보정)
-        skeletonLength = result.content.sections.length
-        slotIndexes.length = 0
-        result.content.sections.forEach((s, i) => {
-          if (s.kind === 'products') slotIndexes.push(i)
-        })
-        flushProducts()
+        const skeletonSections = result.content.sections
+        allocator = new GeneratedIndexAllocator(slotIndexesOf(skeletonSections), skeletonSections.length)
+        // 뼈대 조기 확정 알림 — 텍스트 완성본 + 아직 안 채워진 자리 인덱스. 대기열 플러시보다 먼저
+        if (stream?.onSkeleton) {
+          const pending: number[] = []
+          const wireSections = skeletonSections.map((s, i) => {
+            if (isSlotKind(s.kind)) {
+              pending.push(i)
+              return null
+            }
+            return s as PlanSectionWire
+          })
+          stream.onSkeleton(
+            { headline: result.content.headline, summary: result.content.summary, sections: wireSections },
+            pending,
+          )
+        }
+        flushGenerated()
         return result
       })
 
-    const productsPromise = this.llm.generatePlanProducts(
+    const searchPromise = this.llm.generatePlanProducts(
       intent,
       survey,
       answers,
@@ -215,13 +239,16 @@ export class ThreadsService {
       stream && {
         arrayKey: 'sections',
         onElement: (element, index) => {
-          const parsed = ProductsSectionGen.safeParse(element)
+          const parsed = PlanSearchSectionGen.safeParse(element)
           if (!parsed.success) return
           // 스트림 조각도 최종과 같은 그라운딩을 통과시킨다 — 결정적이라 result와 어긋나지 않는다
-          const section = this.resolveProductsSection(parsed.data, index)
+          const section =
+            parsed.data.kind === 'contents'
+              ? this.resolveContentsSection(parsed.data)
+              : this.resolveProductsSection(parsed.data, index)
           if (section) {
-            arrivedProducts.push(section)
-            flushProducts()
+            arrivedSections.push(section)
+            flushGenerated()
           }
         },
         onSearch: stream.onSearch,
@@ -229,25 +256,25 @@ export class ThreadsService {
       revision,
     )
 
-    const [skeletonSettled, productsSettled] = await Promise.allSettled([skeletonPromise, productsPromise])
+    const [skeletonSettled, searchSettled] = await Promise.allSettled([skeletonPromise, searchPromise])
     if (skeletonSettled.status === 'rejected') throw skeletonSettled.reason
     const skeleton = skeletonSettled.value
 
-    // 상품 단계 실패는 계획 전체를 죽이지 않는다 — 상품 없는 계획을 정직하게 반환하고 로그만 남긴다
-    let productSections: PlanSectionWire[] = []
+    // 검색 단계 실패는 계획 전체를 죽이지 않는다 — 상품·콘텐츠 없는 계획을 정직하게 반환하고 로그만 남긴다
+    let generatedSections: PlanSectionWire[] = []
     let productsMeta: LlmMeta | null = null
-    if (productsSettled.status === 'fulfilled') {
-      productsMeta = productsSettled.value.meta
-      productSections = productsSettled.value.content.sections
-        .map((s, i) => this.resolveProductsSection(s, i))
+    if (searchSettled.status === 'fulfilled') {
+      productsMeta = searchSettled.value.meta
+      generatedSections = searchSettled.value.content.sections
+        .map((s, i) => (s.kind === 'contents' ? this.resolveContentsSection(s) : this.resolveProductsSection(s, i)))
         .filter((s): s is PlanSectionWire => s !== null)
     } else {
       this.logger.warn(
-        `계획 상품 생성 실패 — 상품 없이 계획 반환: ${(productsSettled.reason as Error)?.message ?? productsSettled.reason}`,
+        `계획 검색 단계 실패 — 상품·콘텐츠 없이 계획 반환: ${(searchSettled.reason as Error)?.message ?? searchSettled.reason}`,
       )
     }
 
-    const sections = mergePlanSections(skeleton.content.sections, productSections)
+    const sections = mergePlanSections(skeleton.content.sections, generatedSections)
     if (!sections.length) {
       sections.push({ kind: 'guide', title: '준비된 안내', body: skeleton.content.summary })
     }
@@ -306,6 +333,32 @@ export class ThreadsService {
     })
     products.push(...catalogProducts)
     return products.length ? { kind: 'products', title: s.title, reason: s.reason, products } : null
+  }
+
+  /** 참고 콘텐츠 섹션 그라운딩 검증 — url이 http(s)이고 검색/목록 페이지가 아닌 항목만 채택.
+   * 항목이 하나도 안 남으면 null(드롭). 결정적이라 스트림 조각과 최종 결과가 일치한다 */
+  private resolveContentsSection(s: ContentsSectionGen): PlanSectionWire | null {
+    const items: PlanContentItem[] = []
+    s.items.forEach((c) => {
+      const url = parseHttpUrl(c.url)
+      if (!url || isSearchLikeUrl(url)) {
+        this.logger.warn(`콘텐츠 URL 검증 실패로 드롭: ${c.title} (${c.url})`)
+        return
+      }
+      // 썸네일도 http(s) 검증 통과분만 — 실패해도 항목은 싣는다 (FE가 폴백 이미지)
+      const imageUrl = parseHttpUrl(c.imageUrl) ? c.imageUrl : undefined
+      items.push({
+        type: c.type,
+        source: c.source.trim() || (c.type === 'video' ? '영상' : '게시글'),
+        title: c.title,
+        url: c.url,
+        ...(imageUrl ? { imageUrl } : {}),
+        ...(c.meta.trim() ? { meta: c.meta.trim() } : {}),
+        ...(c.snippet.trim() ? { snippet: c.snippet.trim() } : {}),
+        ...(c.duration.trim() ? { duration: c.duration.trim() } : {}),
+      })
+    })
+    return items.length ? { kind: 'contents', title: s.title, reason: s.reason, items } : null
   }
 
   /** 담기/완료 등 행동 기록 — 다음 빈 seq에 기록, complete면 상태 갱신 */
@@ -386,7 +439,7 @@ function parseHttpUrl(raw: string): URL | null {
 
 /** 검색 결과·목록 페이지로 보이는 URL 판정 — 상세보기는 PDP만 허용한다 (프롬프트 지시의 서버측 가드).
  * 검색어 쿼리 키나 /search 경로가 있으면 검색 페이지로 본다 — PDP는 보통 상품 번호 키(goodsNo 등)를 쓴다 */
-const SEARCH_QUERY_KEYS = new Set(['q', 'query', 'keyword', 'kwd', 'searchterm', 'searchkeyword', 'searchword', 'sq', 'k'])
+const SEARCH_QUERY_KEYS = new Set(['q', 'query', 'keyword', 'kwd', 'searchterm', 'searchkeyword', 'searchword', 'search_query', 'sq', 'k'])
 function isSearchLikeUrl(url: URL): boolean {
   if (/\/(search|srchall|category|display)\b/i.test(url.pathname)) return true
   for (const key of url.searchParams.keys()) {

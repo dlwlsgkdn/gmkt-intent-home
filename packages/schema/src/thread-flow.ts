@@ -110,6 +110,20 @@ export const CatalogProduct = z.object({
 })
 export type CatalogProduct = z.infer<typeof CatalogProduct>
 
+/** 참고 콘텐츠(웹 게시글·영상) 항목 — 웹 검색 그라운딩(BFF url 검증)을 거친 실제 콘텐츠만.
+ * FE 투영: video→videoCard, article→articleCard (meta는 채널·조회수 또는 작성자·시점) */
+export const PlanContentItem = z.object({
+  type: z.enum(['video', 'article']),
+  source: z.string(),
+  title: z.string(),
+  url: z.string(),
+  imageUrl: z.string().optional(),
+  meta: z.string().optional(),
+  snippet: z.string().optional(),
+  duration: z.string().optional(),
+})
+export type PlanContentItem = z.infer<typeof PlanContentItem>
+
 export const PlanSectionWire = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('guide'), title: z.string(), body: z.string() }),
   z.object({
@@ -117,6 +131,12 @@ export const PlanSectionWire = z.discriminatedUnion('kind', [
     title: z.string(),
     reason: z.string(),
     products: z.array(CatalogProduct).min(1),
+  }),
+  z.object({
+    kind: z.literal('contents'),
+    title: z.string(),
+    reason: z.string(),
+    items: z.array(PlanContentItem).min(1),
   }),
   z.object({ kind: z.literal('steps'), title: z.string(), steps: z.array(z.string()).min(2) }),
 ])

@@ -35,8 +35,8 @@ const MODEL_CACHE_MS = 30_000
 
 /** 동적 필터링 web_search_20260209 미지원 모델 — 기본 변형(20250305)으로 호출한다 */
 const WEB_SEARCH_BASIC_MODELS = new Set(['claude-haiku-4-5'])
-/** 생성 1회당 웹 검색 상한 — 상품 확인용 소수 검색만 허용 (비용·지연 가드) */
-const WEB_SEARCH_MAX_USES = 3
+/** 생성 1회당 웹 검색 상한 — 상품·콘텐츠 확인용 소수 검색만 허용 (비용·지연 가드) */
+const WEB_SEARCH_MAX_USES = 4
 /** 서버 도구 루프가 pause_turn으로 멈췄을 때 이어붙이는 최대 횟수 */
 const MAX_CONTINUATIONS = 3
 
@@ -133,7 +133,7 @@ export class LlmService {
     })
   }
 
-  /** 계획 1단계 — 뼈대 (검색 없음·medium): 제목·요약·안내·순서 + 상품 자리. 수 초 안에 스트리밍된다.
+  /** 계획 1단계 — 뼈대 (검색 없음·medium): 제목·요약·단계 안내·순서 + 상품/콘텐츠 자리. 수 초 안에 스트리밍된다.
    * revision이 있으면 피드백 반영 재생성 — 직전 계획+피드백이 사용자 메시지에 실린다 */
   async generatePlanSkeleton(
     intent: string,
@@ -151,7 +151,7 @@ export class LlmService {
     })
   }
 
-  /** 계획 2단계 — 상품 (검색 포함·high): 카탈로그+웹 그라운딩 상품 섹션만. 뼈대와 병렬로 돈다 (§4-3·§9-1).
+  /** 계획 2단계 — 검색 (검색 포함·high): 카탈로그+웹 그라운딩 상품 섹션 + 참고 콘텐츠 섹션. 뼈대와 병렬로 돈다 (§4-3·§9-1).
    * revision이 있으면 지적된 상품을 빼고 웹 검색으로 대안을 찾는 재생성이 된다 */
   async generatePlanProducts(
     intent: string,

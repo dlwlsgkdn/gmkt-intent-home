@@ -145,6 +145,10 @@ async function consumeSse(res, handlers) {
       if (handlers.onHead) handlers.onHead(payload)
     } else if (event === 'question') {
       if (handlers.onQuestion && payload.question) handlers.onQuestion(payload.question, payload.index)
+    } else if (event === 'skeleton') {
+      // 계획 뼈대 조기 확정 — page.sections의 상품·콘텐츠 자리는 null, pending이 그 인덱스 목록.
+      // 이후 section 이벤트가 자리를 비동기로 채우고, result(권위)가 최종본으로 마감한다
+      if (handlers.onSkeleton && payload.page) handlers.onSkeleton(payload.page, payload.pending || [])
     } else if (event === 'section') {
       if (handlers.onSection && payload.section) handlers.onSection(payload.section, payload.index)
     } else if (event === 'result') {
@@ -202,6 +206,7 @@ export function streamLiveSurvey(threadId, body, handlers) {
 }
 
 /* 응답 제출 → 계획 페이지 생성 (LLM #2) — handlers: { onStatus, onHead({headline?, summary?}),
+   onSkeleton(page, pending[]) — 뼈대 조기 확정(자리는 null·pending 인덱스),
    onSection(PlanSectionWire, index), onResult(PlanPageWire), onError } */
 export function streamLivePlan(threadId, body, handlers) {
   return streamGeneration(`/threads/${encodeURIComponent(threadId)}/plan`, body, handlers)

@@ -37,7 +37,7 @@ Base: `https://ddak-bff.vercel.app` · 사용자 식별: **`x-device-id` 헤더*
 |---|---|---|---|---|
 | POST | `/api/threads` | 쓰레드 시작 — 생성 + 탐색 스텝 기록 | `StartThreadBody` `{ chipId?\|query, title?, profile? }` | `{ threadId }` |
 | POST | `/api/threads/:id/survey` | **설문 페이지 생성 (LLM #1**, effort medium**)** | `{ profile? }` | **SSE** → `result.page: SurveyPageWire` |
-| POST | `/api/threads/:id/plan` | **응답 제출 → 계획 생성 (LLM #2 — 2단계 병렬**: 뼈대(검색 없음·medium, 수 초 스트리밍) ∥ 상품(카탈로그+웹 검색 그라운딩·high) — 상품 섹션이 뼈대의 자리 인덱스로 끼어든다, DESIGN §9-1**)**. `feedback`(stage=plan)이 있으면 **피드백 반영 재생성** — 직전 계획(plan 스텝)+피드백을 프롬프트 가변부에 실어 지적된 상품을 웹 검색 대안으로 교체 | `{ answers: [{questionId, choices[]}], profile?, feedback? }` | **SSE** → `result.page: PlanPageWire` |
+| POST | `/api/threads/:id/plan` | **응답 제출 → 계획 생성 (LLM #2 — 2단계 병렬**: 뼈대(검색 없음·medium, 수 초 스트리밍 — 단계 안내 2~3개) ∥ 검색(상품+참고 콘텐츠, 카탈로그+웹 검색 그라운딩·high) — 뼈대가 끝나면 `skeleton` 이벤트로 **조기 확정**되고 검색 섹션이 자리 인덱스로 비동기로 끼어든다, DESIGN §9-1**)**. `feedback`(stage=plan)이 있으면 **피드백 반영 재생성** — 직전 계획(plan 스텝)+피드백을 프롬프트 가변부에 실어 지적된 상품을 웹 검색 대안으로 교체 | `{ answers: [{questionId, choices[]}], profile?, feedback? }` | **SSE** → `result.page: PlanPageWire` |
 | POST | `/api/threads/:id/events` | 담기/완료 행동 + **피드백 제출**(`type=feedback`, data=`ThreadStageFeedback`) 기록 (`complete`면 status=done) | `{ type, data? }` | `{ ok: true }` |
 | GET | `/api/threads/:id` | 이어보기 — 단계별 페이지 + 최신 피드백 복원 | — | `{ threadId, title, status, source, survey, answers, plan, feedback, updatedAt }` |
 | GET | `/api/threads?cursor=&limit=` | 쓰레드 목록 (히스토리 패널) | — | `ThreadListPage` |
@@ -49,6 +49,7 @@ Base: `https://ddak-bff.vercel.app` · 사용자 식별: **`x-device-id` 헤더*
 event: status   → { message: "질문을 구성하고 있어요…" }         (진행 표시 — 웹 검색 중엔 검색어 문구)
 event: head     → { intro } | { headline } | { summary }         (머리 필드 — 자라는 값 반복 발송 + 완성본)
 event: question → { index, question: SurveyQuestionWire }        (설문 — 자라는 질문을 같은 index로 반복 발송)
+event: skeleton → { page, pending: number[] }                    (계획 — 뼈대 조기 확정: page.sections의 상품·콘텐츠 자리는 null, pending이 그 인덱스)
 event: section  → { index, section: PlanSectionWire }            (계획 — 자라는 섹션을 같은 index로 반복 발송)
 event: result   → { page: SurveyPageWire | PlanPageWire }        (완성 페이지 — 권위·저장 기준, 종료)
 event: error    → { code, message, retryable }                   (실패 안내 — 종료)
@@ -56,9 +57,13 @@ event: error    → { code, message, retryable }                   (실패 안�
 
 부분 이벤트(head/question/section)는 **미리보기**다: 컴포넌트 안 텍스트가 토큰 단위로 자라며
 같은 키/index로 반복 전송되고(FE는 슬롯 덮어쓰기 — 스로틀 ~120ms), 원소가 완성되면 검증·그라운딩을
-통과한 최종본이 같은 index로 한 번 더 나간다(검증 실패로 드롭된 원소는 index가 건너뛴다 — 상품
-섹션은 부분 전송 없이 완성·그라운딩 통과분만). 확정은 언제나 `result`의 전체 페이지다. 모르는
-이벤트는 무시해도 안전하다 — 구버전 FE ↔ 신버전 BFF 조합에서도 스켈레톤→result 동작으로 자연 강등된다.
+통과한 최종본이 같은 index로 한 번 더 나간다(검증 실패로 드롭된 원소는 index가 건너뛴다 — 상품·콘텐츠
+섹션은 부분 전송 없이 완성·그라운딩 통과분만). **`skeleton`은 계획 전용 조기 확정**이다: 뼈대(텍스트)가
+끝나는 즉시 완성 텍스트 섹션 + 자리(null·pending 인덱스)를 보내고, FE는 이 시점에 계획을 확정
+렌더하며 자리에 로딩 카드를 둔다 — 이후 `section` 이벤트(웹 검색 완료분)가 자리를 비동기로 채우고,
+검색 단계가 못 채운 자리는 `result`에서 빠진다(이때만 뒤 섹션 인덱스가 당겨진다). 확정·저장은 언제나
+`result`의 전체 페이지다. 모르는 이벤트는 무시해도 안전하다 — 구버전 FE ↔ 신버전 BFF 조합에서도
+스켈레톤→result 동작으로 자연 강등된다.
 
 **실패 안내 정책**: LLM 실패 시 가짜 맞춤 콘텐츠(템플릿)로 대체하지 않고 `error` 이벤트로 정직하게
 알린다. FE는 `retryable`이면 "다시 시도"를, 아니면 안내 문구를 보여준다. (캐시 재서빙·칩→스튜디오
@@ -71,14 +76,18 @@ event: error    → { code, message, retryable }                   (실패 안�
 | `llm_failed` | 호출 실패·파싱 실패 (SDK 자동 재시도 2회 후) | ○ |
 | `internal` | 그 외 서버 오류 (core 연결 등) | ○ |
 
-**와이어 페이지 형태** (스튜디오 레지스트리 투영 기준: question→`surveyQuestion`, guide→`planStep`, products→`productCard`, steps→`checklist`):
+**와이어 페이지 형태** (스튜디오 레지스트리 투영 기준: question→`surveyQuestion`, guide→`planStep`, products→`productCard`, contents→`videoCard`/`articleCard`, steps→`checklist`):
 
 ```ts
 SurveyPageWire = { intro, questions: [{ id, question, options[2..6], multi }] }
 PlanPageWire   = { headline, summary, sections: [
-                   { kind: 'guide',    title, body } |
+                   { kind: 'guide',    title, body } |                                 // 단계 안내 — 2~3개(다단계 계획), FE가 단계 번호를 붙인다
                    { kind: 'products', title, reason, products: CatalogProduct[] } |  // 카탈로그 id 검증 + 웹 상품 URL 검증 통과분만
+                   { kind: 'contents', title, reason, items: PlanContentItem[] } |    // 참고 콘텐츠 — 웹 검색으로 확인한 게시글·영상 (URL 검증 통과분만)
                    { kind: 'steps',    title, steps[] } ] }
+PlanContentItem = { type: 'video'|'article', source, title, url, imageUrl?, meta?, snippet?, duration? }
+// meta = 영상은 채널·조회수, 게시글은 작성자·시점. FE 투영: video→videoCard(썸네일 없으면 유튜브
+// 자동 썸네일), article→articleCard. 카드 클릭 = 새 탭 열기(openExternal)
 CatalogProduct = { id, name, brand, price, tags[], url?, mall?, imageUrl? }
 // url·mall = 웹 검색으로 찾은 외부몰 상품 (id는 `web-*`, mall이 있으면 FE가 외부몰 태그·담기불가로 렌더,
 // url은 상세보기 사이드 패널이 iframe으로 연다). url은 상품 상세 페이지(PDP)만 — BFF가 검색/목록

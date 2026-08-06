@@ -578,6 +578,27 @@
   to { opacity: 1; transform: none; }
 }
 
+/* 검색 결과가 아직 안 채운 자리(상품·콘텐츠) — 뼈대 조기 확정 뒤 페이지 안 로딩 카드.
+   실제 카드(232~260px)와 비슷한 실루엣의 쉬머 두 장 + 진행 문구 */
+.sb-live-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 0;
+}
+.sb-live-slot__cards {
+  display: flex;
+  gap: 12px;
+  overflow: hidden;
+}
+.sb-live-skel--card {
+  width: 232px;
+  min-width: 160px;
+  height: 200px;
+  flex: 0 1 auto;
+  border-radius: var(--sb-r-xl);
+}
+
 /* 부분 스트리밍 꼬리 — 도착한 컴포넌트 스택 아래에서 남은 생성 진행을 보여준다 */
 .sb-live-tail {
   display: flex;

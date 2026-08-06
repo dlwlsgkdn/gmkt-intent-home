@@ -1,8 +1,9 @@
 /* 라이브 와이어 페이지 → 스튜디오 아이템 투영 (DESIGN-LLM-SERVICE.md §2-1).
    매핑 기준: question→surveyQuestion, guide→planStep, products→hscroll+productCard,
-   steps→checklist. 새 렌더 계층을 만들지 않고 레지스트리 player 렌더러를 그대로 재사용하기
-   위한 얇은 변환이다. id는 결정적으로 부여한다 — 설문 답변 키는 와이어 질문 id 그대로
-   (= surveyQuestion 아이템 id)라 answers 왕복에 재매핑이 없다. 좌표(x/y)는 넣지 않는다. */
+   contents→hscroll+videoCard/articleCard, steps→checklist. 새 렌더 계층을 만들지 않고
+   레지스트리 player 렌더러를 그대로 재사용하기 위한 얇은 변환이다. id는 결정적으로
+   부여한다 — 설문 답변 키는 와이어 질문 id 그대로(= surveyQuestion 아이템 id)라 answers
+   왕복에 재매핑이 없다. 좌표(x/y)는 넣지 않는다. */
 
 import { joinTextList } from './store.js'
 
@@ -38,7 +39,11 @@ export function liveSurveyItems(page) {
   return items
 }
 
-export function livePlanItems(page) {
+/** opts.pendingSlots — 뼈대 조기 확정 뒤 아직 검색 결과가 안 채운 자리 인덱스. 이 자리는
+ * LivePlayer가 로딩 카드로 렌더하는 `livePending` 아이템으로 투영된다 (레지스트리 밖 타입 —
+ * id도 `live-plan-s#` 문법 밖이라 피드백 앵커 판정에 걸리지 않는다) */
+export function livePlanItems(page, opts = {}) {
+  const pendingSlots = opts.pendingSlots || []
   const items = [
     { id: 'live-plan-title', type: 'planTitle', props: { kicker: 'AI Plan', title: page.headline || '' } },
   ]
@@ -52,7 +57,11 @@ export function livePlanItems(page) {
   })
   let stepNo = 0
   ;(page.sections || []).forEach((section, i) => {
-    if (!section) return // 부분 스트리밍의 빈 슬롯(아직 안 온 상품 자리) — 인덱스는 보존된다
+    if (!section) {
+      // 빈 슬롯 — 아직 안 온 상품·콘텐츠 자리. 인덱스는 보존되고, 조기 확정 뒤에는 로딩 카드
+      if (pendingSlots.includes(i)) items.push({ id: `live-plan-pending-${i}`, type: 'livePending', props: {} })
+      return
+    }
     const base = `live-plan-s${i}`
     if (section.kind === 'guide') {
       stepNo += 1
@@ -95,6 +104,42 @@ export function livePlanItems(page) {
             imageUrl: product.imageUrl || '', // 카탈로그(지마켓 gdimg)·웹 검색 상품의 실제 썸네일
           },
         })
+      })
+    } else if (section.kind === 'contents') {
+      // 참고 콘텐츠 — 웹 검색으로 확인한 게시글·영상. 스튜디오 미디어 카드 렌더러를 재사용한다
+      if (section.reason) {
+        items.push({ id: `${base}-reason`, type: 'textBlock', props: { kicker: '', title: '', body: section.reason } })
+      }
+      items.push({ id: base, type: 'hscroll', props: { title: section.title, cardW: '260', items: '' } })
+      ;(section.items || []).forEach((c, j) => {
+        const common = { id: `${base}-c${j}`, parentId: base, slot: j, w: 260 }
+        if (c.type === 'video') {
+          items.push({
+            ...common,
+            type: 'videoCard',
+            props: {
+              source: c.source || '영상',
+              title: c.title || '',
+              channel: c.meta || '',
+              duration: c.duration || '',
+              url: c.url || '', // 카드 클릭 = 새 탭 (registry videoCard의 openExternal)
+              imageUrl: c.imageUrl || '', // 없으면 유튜브 URL 자동 썸네일 → 폴백 이미지
+            },
+          })
+        } else {
+          items.push({
+            ...common,
+            type: 'articleCard',
+            props: {
+              source: c.source || '게시글',
+              title: c.title || '',
+              snippet: c.snippet || '',
+              author: c.meta || '',
+              url: c.url || '',
+              imageUrl: c.imageUrl || '',
+            },
+          })
+        }
       })
     }
   })
