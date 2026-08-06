@@ -9,6 +9,7 @@ import Player from './components/Player.jsx'
 import LivePlayer from './components/LivePlayer.jsx'
 import ExploreEditor from './components/ExploreEditor.jsx'
 import AdminView from './components/AdminView.jsx'
+import TaggingStudio from './components/TaggingStudio.jsx'
 
 /*
  * 앱 셸 — 라우팅과 토스트를 갖고, 화면들이 쓰는 api 객체를 조립한다.
@@ -208,6 +209,9 @@ export default function App() {
     },
     openExploreEditor: () => setRoute((prev) => ({ name: 'explore-editor', back: prev })),
     closeExploreEditor: () => setRoute((prev) => prev.back || { name: 'home' }),
+    /* 상품 태깅 검토 스튜디오 — 라이브 생성 카탈로그 태그 검토 (진입은 홈 드로어 도구 행) */
+    openTaggingStudio: () => setRoute((prev) => ({ name: 'tagging', back: prev })),
+    closeTaggingStudio: () => setRoute((prev) => prev.back || { name: 'home' }),
     explore: workspace.explore,
     updateExplore: workspace.setExplore,
     profile: workspace.profile,
@@ -275,7 +279,8 @@ export default function App() {
         <LivePlayer key={route.runId} api={api} query={route.query} resumeThreadId={route.resumeThreadId} />
       )}
       {route.name === 'admin' && <AdminView api={api} />}
-      {route.name !== 'home' && route.name !== 'explore-editor' && route.name !== 'live' && route.name !== 'admin' && !current && <HomeView api={api} />}
+      {route.name === 'tagging' && <TaggingStudio api={api} />}
+      {route.name !== 'home' && route.name !== 'explore-editor' && route.name !== 'live' && route.name !== 'admin' && route.name !== 'tagging' && !current && <HomeView api={api} />}
 
       {toast && <div className="sb-toast">{toast}</div>}
     </>

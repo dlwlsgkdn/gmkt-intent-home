@@ -1,0 +1,333 @@
+/* ── 상품 태깅 검토 스튜디오 — 진행 요약 · 태그 사전 · 상품 검토 목록 ──
+   진입은 홈 드로어 도구 행. 값은 전부 base.css 디자인 토큰만 사용. */
+
+.sb-tagging {
+  position: relative;
+  z-index: 10;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 48px 24px 96px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.sb-tagging h1 {
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--sb-ink);
+}
+.sb-tagging__sub {
+  margin-top: 4px;
+  max-width: 560px;
+  font-size: var(--sb-t-small);
+  color: var(--sb-muted);
+  line-height: 1.6;
+}
+.sb-tagging__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.sb-tagging__head-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* 진행 요약 — 상태 타일이 곧 필터 */
+.sb-tagging-summary {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sb-tagging-summary__tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 92px;
+  padding: 10px 14px;
+  background: var(--sb-n-0);
+  border: 1px solid var(--sb-n-200);
+  border-radius: var(--sb-r-lg);
+  transition: border-color var(--sb-dur) var(--sb-ease), background-color var(--sb-dur) var(--sb-ease);
+}
+.sb-tagging-summary__tile:hover { border-color: var(--sb-n-400); }
+.sb-tagging-summary__tile.is-active { border-color: var(--sb-ink-2); background: var(--sb-n-50); }
+.sb-tagging-summary__tile b {
+  font-size: var(--sb-t-title);
+  font-weight: 500;
+  color: var(--sb-ink);
+}
+.sb-tagging-summary__tile span {
+  font-size: var(--sb-t-micro);
+  color: var(--sb-muted);
+}
+.sb-tagging-summary__tile--approved b { color: var(--sb-success); }
+.sb-tagging-summary__tile--flagged b { color: var(--sb-danger); }
+.sb-tagging-progress {
+  margin-left: auto;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--sb-t-caption);
+  color: var(--sb-muted);
+}
+.sb-tagging-progress__bar {
+  width: 120px;
+  height: 6px;
+  border-radius: var(--sb-r-pill);
+  background: var(--sb-n-200);
+  overflow: hidden;
+}
+.sb-tagging-progress__bar i {
+  display: block;
+  height: 100%;
+  border-radius: var(--sb-r-pill);
+  background: var(--sb-accent);
+  transition: width var(--sb-dur) var(--sb-ease);
+}
+
+/* 태그 사전 */
+.sb-tagging-dict {
+  background: var(--sb-n-0);
+  border: 1px solid var(--sb-n-200);
+  border-radius: var(--sb-r-xl);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sb-tagging-dict__label {
+  font-size: var(--sb-t-caption);
+  color: var(--sb-muted);
+}
+.sb-tagging-dict__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.sb-tagging-dict__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid var(--sb-n-200);
+  border-radius: var(--sb-r-pill);
+  background: var(--sb-n-50);
+  font-size: var(--sb-t-caption);
+  color: var(--sb-ink-2);
+  transition: border-color var(--sb-dur) var(--sb-ease), background-color var(--sb-dur) var(--sb-ease);
+}
+.sb-tagging-dict__chip b {
+  font-weight: 400;
+  color: var(--sb-subtle);
+}
+.sb-tagging-dict__chip:hover { border-color: var(--sb-n-400); }
+.sb-tagging-dict__chip.is-active {
+  border-color: var(--sb-ink-2);
+  background: var(--sb-n-100);
+  color: var(--sb-ink);
+}
+
+/* 목록 툴바 */
+.sb-tagging-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sb-tagging-toolbar input {
+  flex: 0 1 260px;
+  border: 1px solid var(--sb-n-300);
+  border-radius: var(--sb-r-md);
+  padding: 8px 12px;
+  font-size: var(--sb-t-small);
+  color: var(--sb-ink);
+  background: var(--sb-n-0);
+}
+.sb-tagging-toolbar input:focus-visible { border-color: var(--sb-accent); }
+.sb-tagging-toolbar__count {
+  margin-left: auto;
+  font-size: var(--sb-t-caption);
+  color: var(--sb-subtle);
+}
+
+/* 상품 검토 행 */
+.sb-tagging-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sb-tagging-empty {
+  padding: 32px 0;
+  text-align: center;
+  font-size: var(--sb-t-small);
+  color: var(--sb-subtle);
+}
+.sb-tagging-row {
+  display: flex;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--sb-n-0);
+  border: 1px solid var(--sb-n-200);
+  border-radius: var(--sb-r-xl);
+}
+.sb-tagging-row--approved { border-color: color-mix(in srgb, var(--sb-success) 35%, var(--sb-n-200)); }
+.sb-tagging-row--flagged { border-color: color-mix(in srgb, var(--sb-danger) 35%, var(--sb-n-200)); }
+.sb-tagging-row__thumb {
+  flex: 0 0 64px;
+  width: 64px;
+  height: 64px;
+  border-radius: var(--sb-r-lg);
+  border: 1px solid var(--sb-n-100);
+  background: var(--sb-n-50);
+  overflow: hidden;
+}
+.sb-tagging-row__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.sb-tagging-row__thumb span {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+}
+.sb-tagging-row__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sb-tagging-row__title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sb-tagging-row__title em {
+  font-style: normal;
+  font-size: var(--sb-t-caption);
+  color: var(--sb-muted);
+}
+.sb-tagging-row__title strong {
+  font-weight: 400;
+  font-size: var(--sb-t-body);
+  color: var(--sb-ink);
+}
+.sb-tagging-row__title span {
+  font-size: var(--sb-t-caption);
+  color: var(--sb-ink-2);
+}
+.sb-tagging-row__title code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--sb-subtle);
+}
+.sb-tagging-row__revert {
+  font-size: var(--sb-t-micro);
+  color: var(--sb-info);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.sb-tagging-tags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.sb-tagging-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px 3px 10px;
+  border: 1px solid var(--sb-n-200);
+  border-radius: var(--sb-r-pill);
+  background: var(--sb-n-50);
+  font-size: var(--sb-t-caption);
+  color: var(--sb-ink-2);
+}
+.sb-tagging-tag button {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--sb-subtle);
+  transition: color var(--sb-dur) var(--sb-ease), background-color var(--sb-dur) var(--sb-ease);
+}
+.sb-tagging-tag button:hover {
+  color: var(--sb-danger);
+  background: var(--sb-n-100);
+}
+.sb-tagging-tags input {
+  width: 92px;
+  border: 1px dashed var(--sb-n-300);
+  border-radius: var(--sb-r-pill);
+  padding: 3px 10px;
+  font-size: var(--sb-t-caption);
+  color: var(--sb-ink);
+  background: transparent;
+}
+.sb-tagging-tags input:focus-visible { border-color: var(--sb-accent); border-style: solid; }
+.sb-tagging-row__note {
+  border: 1px solid transparent;
+  border-radius: var(--sb-r-md);
+  padding: 5px 8px;
+  margin-left: -8px;
+  font-size: var(--sb-t-caption);
+  color: var(--sb-ink-2);
+  background: transparent;
+}
+.sb-tagging-row__note::placeholder { color: var(--sb-subtle); }
+.sb-tagging-row__note:hover { border-color: var(--sb-n-200); }
+.sb-tagging-row__note:focus-visible {
+  border-color: var(--sb-n-300);
+  background: var(--sb-n-0);
+}
+
+/* 상태 버튼 — 같은 버튼 재클릭 = 미검토로 복귀 */
+.sb-tagging-row__status {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: center;
+}
+.sb-tagging-status {
+  padding: 6px 14px;
+  border: 1px solid var(--sb-n-200);
+  border-radius: var(--sb-r-pill);
+  background: var(--sb-n-0);
+  font-size: var(--sb-t-caption);
+  color: var(--sb-muted);
+  white-space: nowrap;
+  transition: color var(--sb-dur) var(--sb-ease), border-color var(--sb-dur) var(--sb-ease), background-color var(--sb-dur) var(--sb-ease);
+}
+.sb-tagging-status:hover { border-color: var(--sb-n-400); }
+.sb-tagging-status--approved.is-on {
+  border-color: var(--sb-success);
+  background: color-mix(in srgb, var(--sb-success) 10%, var(--sb-n-0));
+  color: var(--sb-success);
+}
+.sb-tagging-status--flagged.is-on {
+  border-color: var(--sb-danger);
+  background: color-mix(in srgb, var(--sb-danger) 8%, var(--sb-n-0));
+  color: var(--sb-danger);
+}
+
+@media (max-width: 640px) {
+  .sb-tagging { padding: 32px 16px 80px; }
+  .sb-tagging-row { flex-wrap: wrap; }
+  .sb-tagging-row__status { flex-direction: row; width: 100%; }
+  .sb-tagging-progress { margin-left: 0; width: 100%; }
+}

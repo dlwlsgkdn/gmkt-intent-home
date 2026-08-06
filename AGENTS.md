@@ -86,6 +86,7 @@ npm run db:generate --workspace=apps/core   # core 스키마 → drizzle/ 마이
 - `components/Frame.jsx` — 공통 프레임 조각: BgBlobs, FloatingBar(하단, 햄버거=쓰레드 패널, 버튼 위치→패널 방향), ViewerDeviceControl(기기 폭), ProfileControl(프로필 전환/추가/삭제), StudioFab
 - `components/ThreadPanel.jsx` — 쇼핑 쓰레드 히스토리 패널 (원본 history-sidebar 룩, 좌/우/중앙 등장, 아코디언 카드, 이어보기/삭제)
 - `components/StarterPanel.jsx` — 기본 시나리오 패널 (전역 라이브러리 목록·내리기 — 진입은 드로어 하단 도구 행의 ⭐ 버튼, 지정은 시나리오 행)
+- `components/TaggingStudio.jsx` + `lib/taggingCatalog.js` — **상품 태깅 검토 스튜디오** (진입은 드로어 도구 행의 🏷️ 버튼): 라이브 생성의 상품 매칭 근거인 BFF 데모 카탈로그 태그를 사람이 검토하는 화면 — 상품별 태그 편집(추가/삭제/되돌리기)·검토 상태(승인/수정 필요, 같은 버튼 재클릭=미검토 복귀)·메모, 태그 사전(빈도) 필터·상태 타일 필터·진행률, JSON 내보내기. 시드는 `apps/bff/src/llm/catalog.ts`의 FE 사본(카탈로그 변경 시 같이 맞출 것), 검토 상태는 localStorage(`ddak-tagging-review-v1`) 전용 — 계정 서버 동기화 기계 밖. 스타일은 `styles/tagging.css`(배럴 끝 @import)
 - `components/Player.jsx` — 시나리오 실행(설문→계획 스테퍼). 기기 폭 반영, hidden 아이템 제외, 다시 시작, 응답/프로필 제외 상태를 ctx.player로 공급, **쓰레드 자동 기록**(체험 1회 = 쓰레드 1개)
 - `components/HomeView.jsx` — 홈. 발행 칩(색상/드래그 순서변경/클릭 실행), 좌상단 기기+프로필 컨트롤, 시나리오 드로어(템플릿·복제·**JSON 통합 입출력** — 내보내기는 범위 선택(시나리오 목록/전체 백업), 가져오기는 `classifyImportPayload` 자동 감지 후 동작별 확인 다이얼로그(추가/전체 교체). 빌더의 현재 시나리오 입출력은 별도), 쓰레드 패널
 - `components/ExploreFrame.jsx` — 구버전 설정 기반 탐색 렌더러 (explore.items가 없을 때의 안전망 전용)

@@ -335,13 +335,16 @@ export default function HomeView({ api }) {
               ))}
             </div>
 
-            {/* 워크스페이스 도구 — 목록에 자리를 양보하고 하단으로 (2×2) */}
+            {/* 워크스페이스 도구 — 목록에 자리를 양보하고 하단으로 (2열 그리드) */}
             <div className="sb-drawer__utils">
               <button type="button" title='고정 설문 정보와 밑줄 키워드 설명 (탐색 페이지는 빌더의 "탐색" 탭)' onClick={api.openExploreEditor}>
                 🪪 프로필 · 키워드 사전
               </button>
               <button type="button" title="새 프로필을 만들 때 가져오는 목록 (모든 프로필 공통)" onClick={() => setStarterPanelOpen(true)}>
                 ⭐ 기본 시나리오{api.starterEntries.length > 0 ? ` ${api.starterEntries.length}개` : ''}
+              </button>
+              <button type="button" title="AI 실시간 생성이 상품을 고르는 근거(카탈로그 특징 태그)를 검토해요 (이 브라우저에만 저장)" onClick={api.openTaggingStudio}>
+                🏷️ 상품 태깅 검토
               </button>
               <button type="button" onClick={() => setJsonDialog({ mode: 'export' })}>
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16" /></svg>

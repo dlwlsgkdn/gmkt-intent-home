@@ -20,3 +20,4 @@
 @import './styles/responsive.css';       /* 반응형 (모바일 ↔ 데스크톱) */
 @import './styles/ai-dialogs.css';       /* AI 왕복 다이얼로그 한 벌 */
 @import './styles/admin.css';            /* thread 관리 페이지 (#admin) — 게이트 · 목록 · 마크다운 문서 */
+@import './styles/tagging.css';          /* 상품 태깅 검토 스튜디오 — 진행 요약 · 태그 사전 · 검토 목록 */
