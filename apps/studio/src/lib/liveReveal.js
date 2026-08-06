@@ -9,8 +9,11 @@
    아직 한 글자도 못 받은 새 원소는 빈 껍데기로 그리지 않고 프런티어가 닿을 때
    등장시킨다(마운트 페이드인과 자연스럽게 맞물린다).
 
-   예산은 틱당 글자 수 상한이 있어 큰 덩어리도 일정한 타자 속도로 풀리고,
-   밀린 양(gap)에 비례해 완만히 가속해 스트림에 뒤처지지 않는다.
+   속도는 **비례 제어**다: 틱마다 밀린 양(gap)의 1/PACE_DIVISOR 만큼 공개한다.
+   그러면 화면 타자 속도가 실제 토큰 도착 속도에 자동으로 수렴한다 — 스트림이 빠르면
+   gap이 커져 빨라지고, 느리면 gap이 작아져 같이 느려진다(지수 평활 추종, 시간 상수
+   ≈ PACE_DIVISOR × 틱 = 0.5s). 고정 기본 속도를 두면 느린 스트림에서 "타닥—멈춤—타닥"
+   스톱앤고가 생기고 빠른 스트림에선 뒤처진다 — 그래서 하한은 1자(진행 보장)뿐이다.
 
    안전 규칙:
    - 텍스트 허용 목록 키만 자른다 — id·kind·url·imageUrl 같은 기계 필드가 잘리면
@@ -30,12 +33,12 @@ const VERBATIM_KEYS = new Set(['products'])
 const KEY_ORDER = { intro: 0, headline: 0, summary: 1 }
 
 export const REVEAL_TICK_MS = 30
-/* 틱당 문자 예산: 기본 4자(≈133자/s — 실제 스트림에 가깝게, 부드러움은 글자 페이드가 담당),
-   밀린 양/25 만큼 가속, 최대 24자(≈800자/s — result 직전 몰아치기용). 30ms 틱 기준.
-   (구 값 2자/÷50은 화면이 스트림보다 한참 뒤처져 LLM이 느린 것처럼 보였다) */
-const BASE_CHARS_PER_TICK = 4
-const MAX_CHARS_PER_TICK = 24
-const CATCH_UP_DIVISOR = 25
+/* 비례 제어 상수 — 틱당 예산 = clamp(ceil(gap / PACE_DIVISOR), 1, MAX).
+   PACE_DIVISOR 16 = 밀린 양을 약 0.5s에 걸쳐 소진(도착 속도 추종 시간 상수).
+   MAX 32(≈1000자/s)는 result 직전 큰 덩어리 몰아치기 상한. 30ms 틱 기준.
+   (구 방식: 고정 기본 속도 + 완만한 가속 — 도착 속도와 화면 속도가 따로 놀았다) */
+const MAX_CHARS_PER_TICK = 32
+const PACE_DIVISOR = 16
 
 function orderedEntries(obj) {
   return Object.entries(obj).sort((a, b) => (KEY_ORDER[a[0]] ?? 10) - (KEY_ORDER[b[0]] ?? 10))
@@ -127,7 +130,8 @@ export function advanceReveal(displayed, target) {
   const gap = measure(displayed, target, '')
   const ctx = {
     pending: false,
-    budget: Math.max(BASE_CHARS_PER_TICK, Math.min(MAX_CHARS_PER_TICK, Math.ceil(gap / CATCH_UP_DIVISOR))),
+    // 비례 제어: 밀린 양의 1/16씩 — 화면 속도가 도착 속도에 수렴한다 (하한 1자 = 진행 보장)
+    budget: Math.max(1, Math.min(MAX_CHARS_PER_TICK, Math.ceil(gap / PACE_DIVISOR))),
   }
   const value = walk(displayed, target, '', ctx)
   return { value, pending: ctx.pending }
