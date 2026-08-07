@@ -119,6 +119,8 @@ Base: `/api/admin/*` (스튜디오 프록시 `/api/bff/admin/*` 경유) · 인�
 | GET | `/api/admin/feedback` | **평가 모아보기** — 피드백 제출 전체(`AdminFeedbackWire`), 제출 1회 = 항목 1개·최신순. core 피드백 스텝을 BFF가 파싱해 같은 (쓰레드, 단계)의 최신 제출에 `latest=true`. 페이지네이션 없음(core 상한 300건 + `truncated`) — 집계는 FE가 latest 항목만으로 |
 | GET | `/api/admin/model` | LLM 모델 설정 — `{ current, defaultModel, configured, options[] }` (카탈로그는 BFF `llm.service` 소유) |
 | PUT | `/api/admin/model` | 모델 변경 — `{ model }` (카탈로그 밖 400, `null`이면 기본값 복귀). core `settings.llm-model`에 저장, 새 생성부터 반영(인스턴스 캐시 ≤30s) |
+| GET | `/api/admin/prompts` | LLM 시스템 프롬프트 — `{ promptVersion, prompts[] }` (단계별 `defaultText`·`configured`). 카탈로그(3종: survey·plan-skeleton·plan-products)는 BFF `prompts.ts` 소유, `{{CATALOG}}` 자리표시자는 호출 시점 치환 |
+| PUT | `/api/admin/prompts/:id` | 프롬프트 재정의 — `{ text }` (null/공백/기본값과 동일이면 설정 삭제 = 기본값 복귀, 카탈로그 밖 id 400). core `settings.llm-prompt-<id>`에 원문 저장, 새 생성부터 반영(인스턴스 캐시 ≤30s). 재정의로 생성된 스텝은 `llmMeta.promptVersion`에 `+custom` 접미 |
 
 ## 2. Core — internal API (BFF 전용, 비공개)
 

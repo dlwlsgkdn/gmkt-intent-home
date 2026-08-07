@@ -70,3 +70,13 @@ export function fetchAdminModel() {
 export function putAdminModel(model) {
   return req('PUT', '/model', { model })
 }
+
+/** LLM 시스템 프롬프트 조회 — { promptVersion, prompts: [{ id, label, note, defaultText, configured }] } */
+export function fetchAdminPrompts() {
+  return req('GET', '/prompts')
+}
+
+/** LLM 시스템 프롬프트 재정의 — text: 원문 또는 null(기본값 복귀). 기본값과 같은 저장도 복귀로 처리된다 */
+export function putAdminPrompt(id, text) {
+  return req('PUT', `/prompts/${encodeURIComponent(id)}`, { text })
+}

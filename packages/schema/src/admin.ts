@@ -56,6 +56,40 @@ export const PutAdminModelBody = z.object({
 })
 export type PutAdminModelBody = z.infer<typeof PutAdminModelBody>
 
+/* ── BFF admin — 시스템 프롬프트 관리 ─────────────────────────────────────
+ * 생성 단계별 시스템 프롬프트의 조회·재정의. 기본 프롬프트는 코드(BFF prompts.ts)가
+ * 소유하고, 재정의는 core 설정 KV(`llm-prompt-<id>`)에 원문으로 저장된다.
+ * 프롬프트는 캐시 적중을 위해 바이트 고정이어야 하므로 저장값 자체가 곧 시스템 프롬프트다
+ * (plan-products의 카탈로그 목록만 {{CATALOG}} 자리표시자로 호출 시점에 치환). */
+
+export const AdminPromptId = z.enum(['survey', 'plan-skeleton', 'plan-products'])
+export type AdminPromptId = z.infer<typeof AdminPromptId>
+
+export const AdminPromptEntry = z.object({
+  id: AdminPromptId,
+  label: z.string(),
+  /** 이 프롬프트가 쓰이는 자리·주의점 설명 */
+  note: z.string().optional(),
+  /** 코드 기본 프롬프트 원문 (자리표시자 포함 템플릿) */
+  defaultText: z.string(),
+  /** 설정 저장소의 재정의 원문 — 없으면 null (= 기본값 사용 중) */
+  configured: z.string().nullable(),
+})
+export type AdminPromptEntry = z.infer<typeof AdminPromptEntry>
+
+export const AdminPromptsWire = z.object({
+  /** 코드 기본 프롬프트의 버전 표기 (llmMeta.promptVersion과 대조용 — 재정의 사용 시 `+custom` 접미) */
+  promptVersion: z.string(),
+  prompts: z.array(AdminPromptEntry),
+})
+export type AdminPromptsWire = z.infer<typeof AdminPromptsWire>
+
+export const PutAdminPromptBody = z.object({
+  /** 재정의 원문 — null/공백이거나 기본값과 같으면 설정을 지우고 기본값으로 복귀 */
+  text: z.string().max(20000).nullable(),
+})
+export type PutAdminPromptBody = z.infer<typeof PutAdminPromptBody>
+
 /* ── core internal — 피드백 스텝 나열 (평가 모아보기의 원천) ──────────────
  * core는 payload를 해석하지 않는다는 원칙 그대로: action 스텝 중 payload.type='feedback'
  * 필터만 걸어 쓰레드 메타와 함께 원본을 돌려준다. 해석(zod 파싱·최신 판정·집계)은 BFF 몫. */

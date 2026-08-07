@@ -22,6 +22,15 @@ const CATALOG_BLOCK = CATALOG.map(
   (p) => `${p.id} | ${p.brand} ${p.name} | ${p.price.toLocaleString('ko-KR')}원 | ${p.tags.join(',')}`,
 ).join('\n')
 
+/** 프롬프트 템플릿의 카탈로그 자리표시자 — 호출 시점에 CATALOG_BLOCK으로 치환된다.
+ * 관리 페이지 재정의도 이 자리표시자를 그대로 쓴다 (카탈로그 변경이 프롬프트 저장값과 분리되게) */
+export const CATALOG_PLACEHOLDER = '{{CATALOG}}'
+
+/** 템플릿 → 실제 시스템 프롬프트. 치환값이 같으면 결과도 바이트 고정이라 캐시 적중에 문제없다 */
+export function renderSystemTemplate(template: string): string {
+  return template.split(CATALOG_PLACEHOLDER).join(CATALOG_BLOCK)
+}
+
 /* 계획 = 2단계 병렬 생성 (§9-1): 뼈대(검색 없음, 빠름)가 페이지 레이아웃을 확정하고,
    상품(검색 포함)이 병렬로 돌아 뼈대의 상품 자리를 채운다. 시스템 프롬프트도 단계별로 분리 —
    각각 바이트 고정이라 프롬프트 캐시도 단계별로 적중한다. */
@@ -38,7 +47,7 @@ export const PLAN_SKELETON_SYSTEM = `너는 지마켓 뷰티의 AI 쇼핑 플래
 export const PLAN_PRODUCTS_SYSTEM = `너는 지마켓 뷰티의 AI 쇼핑 플래너다. 설문 응답에 맞는 **추천 상품 섹션**(1~2개)과, 가능하면 **참고 콘텐츠 섹션**(0~1개 — 웹 게시글·영상)을 만든다. 페이지의 안내·순서는 별도 단계가 작성하고 있으니 상품·콘텐츠 선정에 집중한다.
 
 사용할 수 있는 상품 카탈로그 (id | 상품명 | 가격 | 태그):
-${CATALOG_BLOCK}
+${CATALOG_PLACEHOLDER}
 
 상품 추천 규칙:
 - 추천 상품은 **웹 검색(web_search)으로 외부몰에서 찾는 것이 기본**이다. 그중에서도 **올리브영을 최우선**으로 살핀다: 검색어에 "올리브영"을 넣어 올리브영에서 판매 중인 상품부터 확보하고, 올리브영에 맞는 상품이 없는 필요만 다른 몰(쿠팡·무신사 뷰티·화해·백화점몰 등)로 보완한다. 한 섹션에 올리브영 상품이 여러 개여도 좋다. 단, 올리브영을 우선하려고 덜 맞는 상품을 고르지는 않는다 — 적합성이 언제나 우선이다.
@@ -56,6 +65,33 @@ ${CATALOG_BLOCK}
 - 참고 콘텐츠 섹션(kind=contents)은 0~1개다. 상품 검색 결과에 함께 실려 온 게시글·영상을 우선 활용하고, 필요하면 콘텐츠용 검색을 1회만 추가한다.
 - 반드시 웹 검색 결과에서 확인한 실제 게시글(블로그·커뮤니티)이나 영상(유튜브 등)만 넣는다: url은 검색 결과의 주소 그대로(지어내기·변형 금지), imageUrl·meta·duration도 검색 결과에서 확인한 값만(못 확인했으면 빈 문자열).
 - 확인한 콘텐츠가 없으면 콘텐츠 섹션을 만들지 않는다 — 상품 섹션만 반환해도 된다.`
+
+/* ── 시스템 프롬프트 카탈로그 — 관리 페이지(#admin) 조회·재정의의 원천.
+ * template은 자리표시자({{CATALOG}}) 포함 원문이고, 실제 호출값은 renderSystemTemplate을
+ * 거친다. 재정의는 core 설정 KV(`llm-prompt-<id>`)에 원문으로 저장된다 (llm.service). */
+
+export type PromptDefId = 'survey' | 'plan-skeleton' | 'plan-products'
+
+export const PROMPT_DEFS: { id: PromptDefId; label: string; note: string; template: string }[] = [
+  {
+    id: 'survey',
+    label: '설문 생성',
+    note: '검색 진입 직후 설문 페이지를 만드는 프롬프트 — 질문 수·선택지 규칙·말투를 정한다.',
+    template: SURVEY_SYSTEM,
+  },
+  {
+    id: 'plan-skeleton',
+    label: '계획 뼈대 생성',
+    note: '계획 1단계(검색 없음) — 단계 안내·순서와 상품/콘텐츠 자리를 확정한다. 구체 상품명 금지 규칙 포함.',
+    template: PLAN_SKELETON_SYSTEM,
+  },
+  {
+    id: 'plan-products',
+    label: '계획 상품 생성',
+    note: `계획 2단계(웹 검색 포함) — 상품·참고 콘텐츠 섹션을 채운다. ${CATALOG_PLACEHOLDER} 자리표시자가 상품 카탈로그 목록으로 치환되므로 지우지 말 것.`,
+    template: PLAN_PRODUCTS_SYSTEM,
+  },
+]
 
 const profileBlock = (profile?: Profile) =>
   profile?.length ? profile.map((p) => `- ${p.label}: ${p.value}`).join('\n') : '(없음)'

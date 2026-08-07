@@ -25,7 +25,10 @@ import {
   AdminFeedbackEntry,
   AdminFeedbackWire,
   AdminModelWire,
+  AdminPromptId,
+  AdminPromptsWire,
   PutAdminModelBody,
+  PutAdminPromptBody,
   Thread,
   ThreadListPage,
   ThreadStageFeedback,
@@ -36,7 +39,8 @@ import { ServiceTokenGuard } from '../common/service-token.guard'
 import { ParseThreadIdPipe } from '../common/thread-id.pipe'
 import { ZodValidationPipe } from '../common/zod-validation.pipe'
 import { toOpenApi } from '../common/openapi'
-import { DEFAULT_MODEL, LLM_MODEL_SETTING_KEY, LlmService, MODEL_OPTIONS } from '../llm/llm.service'
+import { DEFAULT_MODEL, LLM_MODEL_SETTING_KEY, LlmService, MODEL_OPTIONS, promptSettingKey } from '../llm/llm.service'
+import { PROMPT_DEFS, PROMPT_VERSION } from '../llm/prompts'
 
 const THREAD_ID_PARAM = {
   name: 'id',
@@ -154,5 +158,52 @@ export class AdminController {
     }
     this.llm.invalidateModelCache()
     return this.getModel()
+  }
+
+  @Get('prompts')
+  @ApiOperation({
+    summary: 'LLM 시스템 프롬프트 — 단계별 기본값·재정의 원문 (카탈로그는 BFF prompts.ts 소유)',
+    description:
+      'defaultText는 코드 기본 템플릿, configured는 core 설정(llm-prompt-<id>)의 재정의 원문(없으면 null). ' +
+      'plan-products의 {{CATALOG}} 자리표시자는 호출 시점에 상품 카탈로그 목록으로 치환된다.',
+  })
+  @ApiOkResponse({ schema: toOpenApi(AdminPromptsWire) })
+  async getPrompts(): Promise<AdminPromptsWire> {
+    const prompts = await Promise.all(
+      PROMPT_DEFS.map(async (def) => {
+        const setting = await this.core.getSetting(promptSettingKey(def.id))
+        const configured = typeof setting?.value === 'string' ? setting.value : null
+        return { id: def.id, label: def.label, note: def.note, defaultText: def.template, configured }
+      }),
+    )
+    return { promptVersion: PROMPT_VERSION, prompts }
+  }
+
+  @Put('prompts/:id')
+  @ApiOperation({
+    summary: 'LLM 시스템 프롬프트 재정의 — null/공백/기본값과 동일하면 설정을 지우고 기본값 복귀',
+    description:
+      '재정의는 core 설정(llm-prompt-<id>)에 원문으로 저장되고 새 생성부터 반영된다 (인스턴스 캐시 최대 30초). ' +
+      '재정의로 생성된 스텝은 llmMeta.promptVersion에 +custom 접미가 붙는다.',
+  })
+  @ApiParam({ name: 'id', enum: AdminPromptId.options, description: '프롬프트 id (PROMPT_DEFS 카탈로그)' })
+  @ApiBody({ schema: toOpenApi(PutAdminPromptBody) })
+  @ApiOkResponse({ schema: toOpenApi(AdminPromptsWire) })
+  async putPrompt(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(PutAdminPromptBody)) body: PutAdminPromptBody,
+  ): Promise<AdminPromptsWire> {
+    const parsed = AdminPromptId.safeParse(id)
+    if (!parsed.success) throw new BadRequestException('카탈로그에 없는 프롬프트입니다')
+    const def = PROMPT_DEFS.find((d) => d.id === parsed.data)!
+    const text = body.text?.trim() ? body.text : null
+    // 기본값과 동일한 저장은 재정의가 아니다 — 설정을 지워 코드 기본값 추종으로 되돌린다
+    if (text === null || text === def.template) {
+      await this.core.deleteSetting(promptSettingKey(def.id))
+    } else {
+      await this.core.putSetting(promptSettingKey(def.id), text)
+    }
+    this.llm.invalidatePromptCache()
+    return this.getPrompts()
   }
 }

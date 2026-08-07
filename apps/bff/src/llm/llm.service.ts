@@ -6,14 +6,14 @@ import type { AdminModelOption, Answer, LlmMeta, Profile, SurveyPageWire } from 
 import { CoreClientService } from '../core-client.service'
 import { PlanProductsGen, PlanSkeletonGen, SurveyGen } from './gen-schemas'
 import {
-  PLAN_PRODUCTS_SYSTEM,
-  PLAN_SKELETON_SYSTEM,
+  PROMPT_DEFS,
   PROMPT_VERSION,
-  SURVEY_SYSTEM,
   buildPlanProductsRequest,
   buildPlanSkeletonRequest,
   buildSurveyRequest,
+  renderSystemTemplate,
   type PlanRevisionContext,
+  type PromptDefId,
 } from './prompts'
 import { StructuredStreamParser } from './stream-parse'
 
@@ -30,6 +30,8 @@ export const MODEL_OPTIONS: AdminModelOption[] = [
 
 /** 런타임 모델 설정이 저장되는 core 설정 키 */
 export const LLM_MODEL_SETTING_KEY = 'llm-model'
+/** 시스템 프롬프트 재정의가 저장되는 core 설정 키 (id는 PROMPT_DEFS 카탈로그) */
+export const promptSettingKey = (id: PromptDefId) => `llm-prompt-${id}`
 /** 설정 조회 캐시 TTL — 관리 페이지 변경이 새 생성에 반영되는 최대 지연 */
 const MODEL_CACHE_MS = 30_000
 
@@ -41,6 +43,9 @@ const WEB_SEARCH_MAX_USES = 4
 const MAX_CONTINUATIONS = 3
 
 export type GenResult<T> = { content: T; meta: LlmMeta }
+
+/** 조회를 마친 시스템 프롬프트 — custom이면 llmMeta.promptVersion에 `+custom`을 남긴다 */
+type ResolvedSystem = { text: string; custom: boolean }
 
 /** 부분 스트리밍 핸들러 — 원소는 원시 JSON 조각으로 전달되고, 검증·투영은 호출자(threads.service) 몫.
  * *Partial은 자라는 중인 값의 토큰 단위 미리보기(같은 키/인덱스 반복 호출 — 완성 시 onHead/onElement가 최종본).
@@ -78,6 +83,7 @@ export class LlmService {
   private readonly logger = new Logger(LlmService.name)
   private client: Anthropic | null | undefined
   private modelCache: { value: string; at: number } | null = null
+  private promptCache = new Map<PromptDefId, { value: ResolvedSystem; at: number }>()
 
   constructor(private readonly core: CoreClientService) {}
 
@@ -103,6 +109,31 @@ export class LlmService {
     this.modelCache = null
   }
 
+  /** 지금 생성에 쓸 시스템 프롬프트 — core 설정(llm-prompt-<id>) 재정의 우선, 없거나 조회
+   * 실패면 코드 기본값. 모델과 같은 30s 캐시. 재정의도 자리표시자 치환(renderSystemTemplate)을
+   * 거치며, 저장값이 고정인 한 결과도 바이트 고정이라 프롬프트 캐시는 계속 적중한다 */
+  async resolveSystem(id: PromptDefId): Promise<ResolvedSystem> {
+    const cached = this.promptCache.get(id)
+    if (cached && Date.now() - cached.at < MODEL_CACHE_MS) return cached.value
+    const def = PROMPT_DEFS.find((d) => d.id === id)
+    if (!def) throw new Error(`알 수 없는 프롬프트 id: ${id}`)
+    let value: ResolvedSystem = { text: renderSystemTemplate(def.template), custom: false }
+    try {
+      const setting = await this.core.getSetting(promptSettingKey(id))
+      const configured = typeof setting?.value === 'string' ? setting.value : null
+      if (configured?.trim()) value = { text: renderSystemTemplate(configured), custom: true }
+    } catch (e) {
+      this.logger.warn(`프롬프트 설정 조회 실패(${id}) — 기본값 사용: ${(e as Error).message}`)
+    }
+    this.promptCache.set(id, { value, at: Date.now() })
+    return value
+  }
+
+  /** 관리 페이지가 프롬프트를 바꾼 직후 캐시를 비워 즉시 반영한다 (모델 캐시와 같은 규칙) */
+  invalidatePromptCache() {
+    this.promptCache.clear()
+  }
+
   private requireClient(): Anthropic {
     if (this.client === undefined) {
       try {
@@ -123,7 +154,7 @@ export class LlmService {
 
   async generateSurvey(intent: string, profile?: Profile, stream?: LlmStreamHandlers): Promise<GenResult<SurveyGen>> {
     return this.generate('설문 생성', SurveyGen, {
-      system: SURVEY_SYSTEM,
+      system: await this.resolveSystem('survey'),
       // low인 이유: Opus 5는 thinking을 빼면 적응형 사고가 기본으로 켜져 첫 토큰 전
       // 사고 구간이 effort에 비례해 길어진다(4.8까지는 생략 = 사고 없음). 질문 5개
       // 생성은 low로 충분하고, 사고를 끄는 것보다 effort를 낮추는 쪽이 안전하다
@@ -144,7 +175,7 @@ export class LlmService {
     revision?: PlanRevisionContext,
   ): Promise<GenResult<PlanSkeletonGen>> {
     return this.generate('계획 뼈대 생성', PlanSkeletonGen, {
-      system: PLAN_SKELETON_SYSTEM,
+      system: await this.resolveSystem('plan-skeleton'),
       effort: 'medium' as const, // 속도가 목적 — 텍스트 뼈대는 medium으로 충분
       user: buildPlanSkeletonRequest(intent, survey, answers, profile, revision),
       stream,
@@ -162,7 +193,7 @@ export class LlmService {
     revision?: PlanRevisionContext,
   ): Promise<GenResult<PlanProductsGen>> {
     return this.generate('계획 상품 생성', PlanProductsGen, {
-      system: PLAN_PRODUCTS_SYSTEM,
+      system: await this.resolveSystem('plan-products'),
       effort: 'high' as const,
       user: buildPlanProductsRequest(intent, survey, answers, profile, revision),
       webSearch: true,
@@ -173,7 +204,13 @@ export class LlmService {
   private async generate<S extends z.ZodTypeAny>(
     label: string,
     schema: S,
-    req: { system: string; effort: 'low' | 'medium' | 'high'; user: string; webSearch?: boolean; stream?: LlmStreamHandlers },
+    req: {
+      system: ResolvedSystem
+      effort: 'low' | 'medium' | 'high'
+      user: string
+      webSearch?: boolean
+      stream?: LlmStreamHandlers
+    },
   ): Promise<GenResult<S['_output']>> {
     const client = this.requireClient()
     const model = await this.resolveModel()
@@ -204,7 +241,7 @@ export class LlmService {
         const stream = client.messages.stream({
           model,
           max_tokens: 16000,
-          system: [{ type: 'text', text: req.system, cache_control: { type: 'ephemeral', ttl: '1h' } }],
+          system: [{ type: 'text', text: req.system.text, cache_control: { type: 'ephemeral', ttl: '1h' } }],
           output_config: supportsEffort
             ? { effort: req.effort, format: zodOutputFormat(schema) }
             : { format: zodOutputFormat(schema) },
@@ -264,7 +301,7 @@ export class LlmService {
         true,
       )
     }
-    return { content, meta: this.meta(started, response) }
+    return { content, meta: this.meta(started, response, req.system.custom) }
   }
 
   /** 구조화 출력 텍스트 → 스키마 검증. JSON은 보통 마지막 텍스트 블록이지만,
@@ -287,11 +324,12 @@ export class LlmService {
     return null
   }
 
-  private meta(started: number, response: Anthropic.Message): LlmMeta {
+  private meta(started: number, response: Anthropic.Message, customPrompt: boolean): LlmMeta {
     const webSearchRequests = response.usage.server_tool_use?.web_search_requests
     return {
       model: response.model,
-      promptVersion: PROMPT_VERSION,
+      // 재정의 프롬프트로 생성된 스텝은 promptVersion에 흔적을 남긴다 — 관리 페이지 대조용
+      promptVersion: customPrompt ? `${PROMPT_VERSION}+custom` : PROMPT_VERSION,
       usage: {
         inputTokens: response.usage.input_tokens,
         outputTokens: response.usage.output_tokens,

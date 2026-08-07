@@ -3,9 +3,11 @@ import {
   archiveAdminThread,
   fetchAdminFeedback,
   fetchAdminModel,
+  fetchAdminPrompts,
   fetchAdminThread,
   fetchAdminThreads,
   putAdminModel,
+  putAdminPrompt,
 } from '../lib/adminApi.js'
 import { renderMarkdown, statusLabel, threadMarkdown } from '../lib/adminReport.jsx'
 import { timeAgo } from '../lib/timeAgo.js'
@@ -31,6 +33,12 @@ export default function AdminView({ api }) {
   const [model, setModel] = useState(null) // { current, defaultModel, configured, options }
   const [modelChoice, setModelChoice] = useState('')
   const [modelSaving, setModelSaving] = useState(false)
+
+  const [prompts, setPrompts] = useState(null) // AdminPromptsWire { promptVersion, prompts }
+  const [promptsError, setPromptsError] = useState(null)
+  const [promptEdit, setPromptEdit] = useState(null) // AdminPromptEntry (편집 다이얼로그)
+  const [promptText, setPromptText] = useState('')
+  const [promptSaving, setPromptSaving] = useState(false)
 
   const [detail, setDetail] = useState(null) // ThreadWithSteps
   const [detailView, setDetailView] = useState('doc') // 'doc' | 'survey' | 'plan'
@@ -79,11 +87,21 @@ export default function AdminView({ api }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const loadPrompts = useCallback(async () => {
+    setPromptsError(null)
+    try {
+      setPrompts(await fetchAdminPrompts())
+    } catch (e) {
+      setPromptsError(e.message)
+    }
+  }, [])
+
   useEffect(() => {
     loadList()
     loadFeedback()
     loadModel()
-  }, [loadList, loadFeedback, loadModel])
+    loadPrompts()
+  }, [loadList, loadFeedback, loadModel, loadPrompts])
 
   const openDetail = async (threadId) => {
     setDetailLoading(true)
@@ -108,6 +126,31 @@ export default function AdminView({ api }) {
       handleError(e, '모델을 변경하지 못했어요.')
     } finally {
       setModelSaving(false)
+    }
+  }
+
+  const openPromptEdit = (entry) => {
+    setPromptEdit(entry)
+    setPromptText(entry.configured ?? entry.defaultText)
+  }
+
+  const savePrompt = async (textOrNull) => {
+    if (!promptEdit) return
+    setPromptSaving(true)
+    try {
+      const wire = await putAdminPrompt(promptEdit.id, textOrNull)
+      setPrompts(wire)
+      const updated = wire.prompts.find((p) => p.id === promptEdit.id)
+      api.showToast(
+        updated?.configured
+          ? `「${promptEdit.label}」 프롬프트를 재정의했어요 — 새 생성부터 반영돼요.`
+          : `「${promptEdit.label}」 프롬프트를 기본값으로 되돌렸어요.`,
+      )
+      setPromptEdit(null)
+    } catch (e) {
+      handleError(e, '프롬프트를 저장하지 못했어요.')
+    } finally {
+      setPromptSaving(false)
     }
   }
 
@@ -154,6 +197,7 @@ export default function AdminView({ api }) {
             onClick={() => {
               loadList()
               loadFeedback()
+              loadPrompts()
             }}
           >
             새로고침
@@ -198,6 +242,55 @@ export default function AdminView({ api }) {
               ))}
             </ul>
             <p className="sb-admin__muted">변경은 core 설정(llm-model)에 저장되고 새 생성부터 반영돼요 (서버 캐시 최대 30초).</p>
+          </>
+        )}
+      </div>
+
+      {/* LLM 시스템 프롬프트 — 단계별 기본값·재정의 관리 */}
+      <div className="sb-admin-card">
+        <p className="sb-panel-label">
+          시스템 프롬프트{prompts ? ` (기본 ${prompts.promptVersion})` : ''}
+        </p>
+        {promptsError && <p className="sb-admin-gate__error">{promptsError}</p>}
+        {!prompts && !promptsError && <p className="sb-admin__muted">프롬프트를 불러오는 중…</p>}
+        {prompts && (
+          <>
+            <ul className="sb-admin-prompts">
+              {prompts.prompts.map((entry) => {
+                const effective = entry.configured ?? entry.defaultText
+                return (
+                  <li key={entry.id} className="sb-admin-prompts__row">
+                    <div className="sb-admin-prompts__main">
+                      <div className="sb-admin-prompts__title">
+                        <b>{entry.label}</b>
+                        <code>{entry.id}</code>
+                        {entry.configured ? (
+                          <span className="sb-admin-prompt-chip sb-admin-prompt-chip--custom">재정의 사용 중</span>
+                        ) : (
+                          <span className="sb-admin-prompt-chip">기본값</span>
+                        )}
+                      </div>
+                      <p className="sb-admin-prompts__note">{entry.note}</p>
+                      <p className="sb-admin-prompts__preview">{effective.split('\n')[0]}</p>
+                    </div>
+                    <div className="sb-admin-prompts__actions">
+                      <span className="sb-admin__muted">{effective.length.toLocaleString('ko-KR')}자</span>
+                      <button
+                        type="button"
+                        className="sb-btn sb-btn--ghost sb-btn--tiny"
+                        onClick={() => openPromptEdit(entry)}
+                      >
+                        열람·수정
+                      </button>
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+            <p className="sb-admin__muted">
+              재정의는 core 설정(llm-prompt-*)에 저장되고 새 생성부터 반영돼요 (서버 캐시 최대 30초).
+              재정의로 생성된 스텝은 llmMeta.promptVersion에 +custom이 붙어요.
+            </p>
           </>
         )}
       </div>
@@ -320,6 +413,89 @@ export default function AdminView({ api }) {
           </section>
         </div>
       )}
+
+      {/* 시스템 프롬프트 열람·수정 */}
+      {promptEdit && (() => {
+        const isDefaultText = promptText === promptEdit.defaultText
+        const saved = promptEdit.configured ?? promptEdit.defaultText
+        const dirtyPrompt = promptText !== saved
+        const missingCatalog = promptEdit.id === 'plan-products' && !promptText.includes('{{CATALOG}}')
+        return (
+          <div
+            className="sb-llm-modal"
+            role="presentation"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget && !promptSaving) setPromptEdit(null)
+            }}
+          >
+            <section
+              className="sb-llm-dialog sb-admin-dialog sb-admin-prompt-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-label="시스템 프롬프트 열람·수정"
+            >
+              <div className="sb-admin-dialog__head">
+                <h2>시스템 프롬프트 — {promptEdit.label}</h2>
+                <div className="sb-admin-dialog__actions">
+                  <button type="button" className="sb-icon-btn" aria-label="닫기" onClick={() => setPromptEdit(null)}>×</button>
+                </div>
+              </div>
+              <div className="sb-admin-prompt-dialog__body">
+                <p className="sb-admin__muted">{promptEdit.note}</p>
+                <textarea
+                  className="sb-admin-prompt-dialog__editor"
+                  value={promptText}
+                  spellCheck={false}
+                  onChange={(event) => setPromptText(event.target.value)}
+                />
+                <div className="sb-admin-prompt-dialog__meta">
+                  <span className="sb-admin__muted">{promptText.length.toLocaleString('ko-KR')}자</span>
+                  {isDefaultText && <span className="sb-admin-prompt-chip">기본값과 동일 — 저장하면 기본값 추종으로 돌아가요</span>}
+                  {!isDefaultText && promptEdit.configured && !dirtyPrompt && (
+                    <span className="sb-admin-prompt-chip sb-admin-prompt-chip--custom">재정의 사용 중</span>
+                  )}
+                  {missingCatalog && (
+                    <span className="sb-admin-prompt-chip sb-admin-prompt-chip--warn">
+                      {'{{CATALOG}}'} 자리표시자가 없어요 — 상품 카탈로그 목록이 프롬프트에서 빠져요
+                    </span>
+                  )}
+                </div>
+                <div className="sb-json-dialog__actions">
+                  {promptEdit.configured && (
+                    <button
+                      type="button"
+                      className="sb-btn sb-btn--ghost"
+                      disabled={promptSaving}
+                      onClick={() => savePrompt(null)}
+                    >
+                      기본값으로 되돌리기
+                    </button>
+                  )}
+                  {!isDefaultText && !promptEdit.configured && (
+                    <button
+                      type="button"
+                      className="sb-btn sb-btn--ghost"
+                      disabled={promptSaving}
+                      onClick={() => setPromptText(promptEdit.defaultText)}
+                    >
+                      기본값 원문으로 채우기
+                    </button>
+                  )}
+                  <button type="button" className="sb-btn sb-btn--ghost" onClick={() => setPromptEdit(null)}>취소</button>
+                  <button
+                    type="button"
+                    className="sb-btn sb-btn--primary"
+                    disabled={!dirtyPrompt || promptSaving || !promptText.trim()}
+                    onClick={() => savePrompt(promptText)}
+                  >
+                    {promptSaving ? '저장 중…' : '저장'}
+                  </button>
+                </div>
+              </div>
+            </section>
+          </div>
+        )
+      })()}
 
       {/* 보관 확인 */}
       {confirmArchive && (

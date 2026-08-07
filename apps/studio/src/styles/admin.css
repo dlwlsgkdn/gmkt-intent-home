@@ -550,3 +550,113 @@
   width: 390px;
   flex: 0 0 auto;
 }
+
+/* 시스템 프롬프트 — 카드 목록 + 열람·수정 다이얼로그 */
+.sb-admin-prompts {
+  display: flex;
+  flex-direction: column;
+}
+.sb-admin-prompts__row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--sb-n-150, var(--sb-n-200));
+}
+.sb-admin-prompts__row:last-child {
+  border-bottom: 0;
+}
+.sb-admin-prompts__main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.sb-admin-prompts__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sb-admin-prompts__title b {
+  font-weight: 500;
+  font-size: var(--sb-t-small);
+  color: var(--sb-ink);
+}
+.sb-admin-prompts__title code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--sb-subtle);
+}
+.sb-admin-prompts__note {
+  font-size: var(--sb-t-caption);
+  color: var(--sb-muted);
+}
+.sb-admin-prompts__preview {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--sb-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 520px;
+}
+.sb-admin-prompts__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.sb-admin-prompt-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--sb-r-pill);
+  font-size: var(--sb-t-micro);
+  color: var(--sb-muted);
+  background: var(--sb-n-100);
+  border: 1px solid var(--sb-n-200);
+}
+.sb-admin-prompt-chip--custom {
+  color: var(--sb-info);
+  background: color-mix(in srgb, var(--sb-info) 8%, transparent);
+  border-color: color-mix(in srgb, var(--sb-info) 30%, transparent);
+}
+.sb-admin-prompt-chip--warn {
+  color: var(--sb-warn);
+  background: color-mix(in srgb, var(--sb-warn) 10%, transparent);
+  border-color: color-mix(in srgb, var(--sb-warn) 35%, transparent);
+}
+/* 다이얼로그는 고정 높이 — 편집기가 남는 세로를 전부 차지해 액션 줄이 항상 보인다 */
+.sb-admin-prompt-dialog {
+  height: min(720px, calc(100vh - 48px));
+}
+.sb-admin-prompt-dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 24px 20px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.sb-admin-prompt-dialog__editor {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--sb-ink);
+  background: var(--sb-n-50, var(--sb-n-100));
+  border: 1px solid var(--sb-n-200);
+  border-radius: var(--sb-r-md);
+  padding: 12px 14px;
+  flex: 1 1 auto;
+  min-height: 160px;
+  resize: none;
+  white-space: pre-wrap;
+}
+.sb-admin-prompt-dialog__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
