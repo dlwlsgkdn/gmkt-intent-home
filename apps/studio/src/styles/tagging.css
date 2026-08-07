@@ -21,7 +21,7 @@
 }
 .sb-tagging__mark {
   font-size: 24px;
-  color: var(--sb-success);
+  color: var(--sb-pink);
 }
 .sb-tagging__sub {
   margin-top: 4px;
@@ -67,8 +67,8 @@
 .sb-tagging-pill.is-on b { color: inherit; }
 .sb-tagging-pill:hover { border-color: var(--sb-n-400); }
 .sb-tagging-pill.is-on {
-  border-color: var(--sb-ink);
-  background: var(--sb-ink);
+  border-color: var(--sb-pink);
+  background: var(--sb-pink);
   color: var(--sb-n-0);
 }
 .sb-tagging-pill--unreviewed.is-on {
@@ -178,9 +178,9 @@
 .sb-tagging-unit--rejected { border-left-color: var(--sb-danger); }
 .sb-tagging-unit:hover { background: var(--sb-n-50); }
 .sb-tagging-unit.is-sel {
-  border-color: var(--sb-accent);
+  border-color: var(--sb-pink);
   border-left-width: 3px;
-  background: var(--sb-accent-soft);
+  background: var(--sb-pink-soft);
 }
 /* 선택돼도 상태 스트립 색은 유지한다 (is-sel의 border-color가 사면을 덮으므로 재선언) */
 .sb-tagging-unit--done.is-sel { border-left-color: color-mix(in srgb, var(--sb-success) 45%, var(--sb-n-200)); }
@@ -308,13 +308,23 @@
   color: var(--sb-muted);
   cursor: pointer;
 }
-.sb-tagging-sw input { accent-color: var(--sb-accent); }
+.sb-tagging-sw input { accent-color: var(--sb-pink); }
+
+/* 필드 식별색 — 편집 카드(가운데)와 최종 적용 태그(우측)가 같은 색을 공유한다 */
+.sb-tagging-field--k-category, .sb-tagging-ftag--k-category { --sb-f: var(--sb-tag-c1); }
+.sb-tagging-field--k-subtype, .sb-tagging-ftag--k-subtype { --sb-f: var(--sb-tag-c2); }
+.sb-tagging-field--k-area, .sb-tagging-ftag--k-area { --sb-f: var(--sb-tag-c3); }
+.sb-tagging-field--k-type, .sb-tagging-ftag--k-type { --sb-f: var(--sb-tag-c4); }
+.sb-tagging-field--k-concern, .sb-tagging-ftag--k-concern { --sb-f: var(--sb-tag-c5); }
+.sb-tagging-field--k-result, .sb-tagging-ftag--k-result { --sb-f: var(--sb-tag-c6); }
+.sb-tagging-field--k-condition, .sb-tagging-ftag--k-condition { --sb-f: var(--sb-tag-c7); }
 
 .sb-tagging-field {
   margin-bottom: 10px;
   padding: 13px 14px;
   background: var(--sb-n-0);
   border: 1px solid var(--sb-n-200);
+  border-left: 3px solid var(--sb-f, var(--sb-n-300));
   border-radius: var(--sb-r-xl);
 }
 .sb-tagging-field--unreviewed {
@@ -341,7 +351,7 @@
   gap: 7px;
   font-size: var(--sb-t-small);
   font-weight: 500;
-  color: var(--sb-ink);
+  color: var(--sb-f, var(--sb-ink));
 }
 .sb-tagging-field__label em {
   font-style: normal;
@@ -425,8 +435,8 @@
 }
 .sb-tagging-opt:hover { border-color: var(--sb-n-400); }
 .sb-tagging-opt.is-on {
-  border-color: color-mix(in srgb, var(--sb-success) 55%, var(--sb-n-0));
-  background: color-mix(in srgb, var(--sb-success) 9%, var(--sb-n-0));
+  border-color: color-mix(in srgb, var(--sb-f, var(--sb-pink)) 65%, var(--sb-n-0));
+  background: color-mix(in srgb, var(--sb-f, var(--sb-pink)) 10%, var(--sb-n-0));
 }
 .sb-tagging-opt__body {
   padding: 5px 10px;
@@ -436,13 +446,13 @@
 }
 .sb-tagging-opt.is-on .sb-tagging-opt__body {
   font-weight: 500;
-  color: var(--sb-success);
+  color: var(--sb-f, var(--sb-pink-ink));
 }
 .sb-tagging-opt__star {
   display: flex;
   align-items: center;
   padding: 0 8px;
-  border-left: 1px dashed color-mix(in srgb, var(--sb-success) 35%, var(--sb-n-200));
+  border-left: 1px dashed color-mix(in srgb, var(--sb-f, var(--sb-pink)) 40%, var(--sb-n-200));
   font-size: 13px;
   color: var(--sb-subtle);
 }
@@ -506,8 +516,8 @@
   background: var(--sb-n-50);
 }
 .sb-tagging-gauge__cell.is-fill {
-  border-color: var(--sb-success);
-  background: color-mix(in srgb, var(--sb-success) 60%, var(--sb-n-0));
+  border-color: var(--sb-pink);
+  background: color-mix(in srgb, var(--sb-pink) 60%, var(--sb-n-0));
 }
 .sb-tagging-gauge__cell.is-fill.is-over {
   border-color: var(--sb-danger);
@@ -543,9 +553,9 @@
 }
 .sb-tagging-ftag {
   padding: 4px 8px;
-  border: 1px solid var(--sb-n-200);
+  border: 1px solid color-mix(in srgb, var(--sb-f, var(--sb-n-500)) 35%, var(--sb-n-0));
   border-radius: var(--sb-r-md);
-  background: var(--sb-n-50);
+  background: color-mix(in srgb, var(--sb-f, var(--sb-n-500)) 8%, var(--sb-n-0));
   font-size: var(--sb-t-caption);
   font-weight: 400;
   color: var(--sb-ink);
@@ -554,12 +564,12 @@
   margin-left: 5px;
   font-style: normal;
   font-size: var(--sb-t-micro);
-  font-weight: 300;
-  color: var(--sb-subtle);
+  font-weight: 400;
+  color: var(--sb-f, var(--sb-subtle));
 }
 .sb-tagging-ftag.is-rep {
-  border-color: color-mix(in srgb, var(--sb-star) 70%, var(--sb-n-200));
-  background: color-mix(in srgb, var(--sb-star) 14%, var(--sb-n-0));
+  border-color: var(--sb-f, var(--sb-star));
+  background: color-mix(in srgb, var(--sb-f, var(--sb-star)) 13%, var(--sb-n-0));
 }
 
 /* 검증 결과 */
@@ -598,7 +608,7 @@
   line-height: 1.5;
 }
 .sb-tagging-note::placeholder { color: var(--sb-subtle); }
-.sb-tagging-note:focus-visible { border-color: var(--sb-accent); }
+.sb-tagging-note:focus-visible { border-color: var(--sb-pink); }
 
 /* 승인/반려 */
 .sb-tagging-actions {

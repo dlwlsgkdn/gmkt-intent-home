@@ -57,7 +57,7 @@ export default function TaggingStudio({ api }) {
 
   const listed = units.filter((u) => listFilter === 'all' || statusById.get(u.id) === listFilter)
   const finalTags = FIELD_DEFS.flatMap((d) =>
-    unit.fields[d.key].selected.map((tag) => ({ tag, field: d.label, rep: unit.fields[d.key].rep === tag }))
+    unit.fields[d.key].selected.map((tag) => ({ tag, key: d.key, field: d.label, rep: unit.fields[d.key].rep === tag }))
   )
   const unreviewedFields = FIELD_DEFS.filter((d) => unit.fields[d.key].status === 'unreviewed')
 
@@ -287,7 +287,7 @@ export default function TaggingStudio({ api }) {
               <section
                 key={def.key}
                 className={
-                  'sb-tagging-field' +
+                  `sb-tagging-field sb-tagging-field--k-${def.key}` +
                   (field.status === 'unreviewed' ? ' sb-tagging-field--unreviewed' : '') +
                   (field.status === 'fix' ? ' sb-tagging-field--fix' : '')
                 }
@@ -398,7 +398,10 @@ export default function TaggingStudio({ api }) {
             <div className="sb-tagging-final">
               {finalTags.length === 0 && <span className="sb-tagging-panel__dim">선택된 태그가 없어요.</span>}
               {finalTags.map((entry) => (
-                <span key={`${entry.field}:${entry.tag}`} className={'sb-tagging-ftag' + (entry.rep ? ' is-rep' : '')}>
+                <span
+                  key={`${entry.field}:${entry.tag}`}
+                  className={`sb-tagging-ftag sb-tagging-ftag--k-${entry.key}` + (entry.rep ? ' is-rep' : '')}
+                >
                   {entry.rep ? '★ ' : ''}{entry.tag}<i>{entry.field}</i>
                 </span>
               ))}
