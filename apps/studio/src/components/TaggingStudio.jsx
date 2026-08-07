@@ -165,7 +165,7 @@ export default function TaggingStudio({ api }) {
     <section className="sb-tagging">
       <div className="sb-tagging__head">
         <div className="sb-tagging__title">
-          <h1>상품 태깅 검토 스튜디오</h1>
+          <h1><span className="sb-tagging__mark">◈</span>상품 태깅 검토 스튜디오</h1>
           <p className="sb-tagging__sub">
             AI 1차 분류를 사람이 점검해요 — 애매한 항목(미검토)만 확인하고, 규칙 위반을 고친 뒤 승인해요.
             검토 내용은 이 브라우저에만 저장되고, 카탈로그 반영은 JSON 내보내기로 전달해요.
@@ -177,21 +177,21 @@ export default function TaggingStudio({ api }) {
             className={'sb-tagging-pill' + (listFilter === 'all' ? ' is-on' : '')}
             onClick={() => setListFilter('all')}
           >
-            전체 {units.length}
+            전체 <b>{units.length}</b>
           </button>
           <button
             type="button"
             className={'sb-tagging-pill sb-tagging-pill--unreviewed' + (listFilter === 'unreviewed' ? ' is-on' : '')}
             onClick={() => setListFilter((prev) => (prev === 'unreviewed' ? 'all' : 'unreviewed'))}
           >
-            미검토 {counts.unreviewed}
+            미검토 <b>{counts.unreviewed}</b>
           </button>
           <button
             type="button"
             className={'sb-tagging-pill sb-tagging-pill--fix' + (listFilter === 'fix' ? ' is-on' : '')}
             onClick={() => setListFilter((prev) => (prev === 'fix' ? 'all' : 'fix'))}
           >
-            수정 필요 {counts.fix}
+            수정 필요 <b>{counts.fix}</b>
           </button>
         </div>
         <div className="sb-tagging__head-actions">
@@ -222,7 +222,7 @@ export default function TaggingStudio({ api }) {
                   <button
                     key={u.id}
                     type="button"
-                    className={'sb-tagging-unit' + (u.id === unit.id ? ' is-sel' : '')}
+                    className={`sb-tagging-unit sb-tagging-unit--${status.cls}` + (u.id === unit.id ? ' is-sel' : '')}
                     onClick={() => selectUnit(u.id)}
                   >
                     <span className="sb-tagging-unit__thumb">
@@ -381,6 +381,7 @@ export default function TaggingStudio({ api }) {
                   className={
                     'sb-tagging-gauge__cell' +
                     (index < Math.min(total, TAG_LIMIT.max) ? ' is-fill' : '') +
+                    (total > TAG_LIMIT.max ? ' is-over' : '') +
                     (index === TAG_LIMIT.min - 1 ? ' is-min' : '')
                   }
                 />

@@ -12,9 +12,16 @@
   gap: 18px;
 }
 .sb-tagging h1 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   font-size: 22px;
   font-weight: 500;
   color: var(--sb-ink);
+}
+.sb-tagging__mark {
+  font-size: 24px;
+  color: var(--sb-success);
 }
 .sb-tagging__sub {
   margin-top: 4px;
@@ -51,6 +58,13 @@
   color: var(--sb-ink-2);
   transition: border-color var(--sb-dur) var(--sb-ease), background-color var(--sb-dur) var(--sb-ease), color var(--sb-dur) var(--sb-ease);
 }
+.sb-tagging-pill b {
+  font-weight: 500;
+  color: var(--sb-ink);
+}
+.sb-tagging-pill--unreviewed b { color: var(--sb-warn-ink); }
+.sb-tagging-pill--fix b { color: var(--sb-danger); }
+.sb-tagging-pill.is-on b { color: inherit; }
 .sb-tagging-pill:hover { border-color: var(--sb-n-400); }
 .sb-tagging-pill.is-on {
   border-color: var(--sb-ink);
@@ -122,8 +136,8 @@
   color: var(--sb-success);
 }
 .sb-tagging-chip--unreviewed {
-  background: color-mix(in srgb, var(--sb-warn) 16%, var(--sb-n-0));
-  color: color-mix(in srgb, var(--sb-warn) 72%, var(--sb-ink));
+  background: color-mix(in srgb, var(--sb-warn) 18%, var(--sb-n-0));
+  color: var(--sb-warn-ink);
 }
 .sb-tagging-chip--fix {
   background: color-mix(in srgb, var(--sb-danger) 10%, var(--sb-n-0));
@@ -149,17 +163,31 @@
   align-items: center;
   gap: 9px;
   width: 100%;
-  padding: 8px;
+  padding: 8px 8px 8px 10px;
   border: 1px solid transparent;
+  border-left: 3px solid transparent;
   border-radius: var(--sb-r-lg);
   text-align: left;
   transition: background-color var(--sb-dur) var(--sb-ease), border-color var(--sb-dur) var(--sb-ease);
 }
+/* 왼쪽 스트립 = 파생 상태 — 목록을 훑기만 해도 상태가 보인다 */
+.sb-tagging-unit--done { border-left-color: color-mix(in srgb, var(--sb-success) 45%, var(--sb-n-200)); }
+.sb-tagging-unit--unreviewed { border-left-color: var(--sb-warn); }
+.sb-tagging-unit--fix { border-left-color: var(--sb-danger); }
+.sb-tagging-unit--approved { border-left-color: var(--sb-success); }
+.sb-tagging-unit--rejected { border-left-color: var(--sb-danger); }
 .sb-tagging-unit:hover { background: var(--sb-n-50); }
 .sb-tagging-unit.is-sel {
   border-color: var(--sb-accent);
-  background: color-mix(in srgb, var(--sb-accent) 7%, var(--sb-n-0));
+  border-left-width: 3px;
+  background: var(--sb-accent-soft);
 }
+/* 선택돼도 상태 스트립 색은 유지한다 (is-sel의 border-color가 사면을 덮으므로 재선언) */
+.sb-tagging-unit--done.is-sel { border-left-color: color-mix(in srgb, var(--sb-success) 45%, var(--sb-n-200)); }
+.sb-tagging-unit--unreviewed.is-sel { border-left-color: var(--sb-warn); }
+.sb-tagging-unit--fix.is-sel { border-left-color: var(--sb-danger); }
+.sb-tagging-unit--approved.is-sel { border-left-color: var(--sb-success); }
+.sb-tagging-unit--rejected.is-sel { border-left-color: var(--sb-danger); }
 .sb-tagging-unit__thumb {
   flex: none;
   width: 34px;
@@ -290,12 +318,14 @@
   border-radius: var(--sb-r-xl);
 }
 .sb-tagging-field--unreviewed {
-  border-color: color-mix(in srgb, var(--sb-warn) 45%, var(--sb-n-200));
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sb-warn) 14%, transparent);
+  border-color: color-mix(in srgb, var(--sb-warn) 55%, var(--sb-n-200));
+  background: color-mix(in srgb, var(--sb-warn) 4%, var(--sb-n-0));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sb-warn) 16%, transparent);
 }
 .sb-tagging-field--fix {
-  border-color: color-mix(in srgb, var(--sb-danger) 40%, var(--sb-n-200));
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sb-danger) 10%, transparent);
+  border-color: color-mix(in srgb, var(--sb-danger) 50%, var(--sb-n-200));
+  background: color-mix(in srgb, var(--sb-danger) 3%, var(--sb-n-0));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sb-danger) 12%, transparent);
 }
 .sb-tagging-field__hd {
   display: flex;
@@ -350,9 +380,9 @@
   bottom: 0;
   border-radius: inherit;
 }
-.sb-tagging-conf--ok i { background: color-mix(in srgb, var(--sb-success) 28%, var(--sb-n-0)); }
-.sb-tagging-conf--warn i { background: color-mix(in srgb, var(--sb-warn) 34%, var(--sb-n-0)); }
-.sb-tagging-conf--bad i { background: color-mix(in srgb, var(--sb-danger) 26%, var(--sb-n-0)); }
+.sb-tagging-conf--ok i { background: color-mix(in srgb, var(--sb-success) 45%, var(--sb-n-0)); }
+.sb-tagging-conf--warn i { background: color-mix(in srgb, var(--sb-warn) 55%, var(--sb-n-0)); }
+.sb-tagging-conf--bad i { background: color-mix(in srgb, var(--sb-danger) 42%, var(--sb-n-0)); }
 .sb-tagging-conf b {
   position: absolute;
   inset: 0;
@@ -368,14 +398,14 @@
 .sb-tagging-origin {
   padding: 2px 7px;
   border-radius: var(--sb-r-xs);
-  background: var(--sb-n-100);
+  background: var(--sb-ai-soft);
   font-size: 10px;
   font-weight: 500;
-  color: var(--sb-muted);
+  color: var(--sb-ai);
 }
 .sb-tagging-origin--human {
-  background: color-mix(in srgb, var(--sb-accent) 12%, var(--sb-n-0));
-  color: var(--sb-accent);
+  background: var(--sb-info-soft);
+  color: var(--sb-info);
 }
 
 /* 태그 선택 칩 (+대표 ★) */
@@ -395,8 +425,8 @@
 }
 .sb-tagging-opt:hover { border-color: var(--sb-n-400); }
 .sb-tagging-opt.is-on {
-  border-color: var(--sb-accent);
-  background: color-mix(in srgb, var(--sb-accent) 8%, var(--sb-n-0));
+  border-color: color-mix(in srgb, var(--sb-success) 55%, var(--sb-n-0));
+  background: color-mix(in srgb, var(--sb-success) 9%, var(--sb-n-0));
 }
 .sb-tagging-opt__body {
   padding: 5px 10px;
@@ -406,17 +436,17 @@
 }
 .sb-tagging-opt.is-on .sb-tagging-opt__body {
   font-weight: 500;
-  color: var(--sb-accent);
+  color: var(--sb-success);
 }
 .sb-tagging-opt__star {
   display: flex;
   align-items: center;
   padding: 0 8px;
-  border-left: 1px dashed color-mix(in srgb, var(--sb-accent) 30%, var(--sb-n-200));
+  border-left: 1px dashed color-mix(in srgb, var(--sb-success) 35%, var(--sb-n-200));
   font-size: 13px;
   color: var(--sb-subtle);
 }
-.sb-tagging-opt__star.is-rep { color: var(--sb-warn); }
+.sb-tagging-opt__star.is-rep { color: var(--sb-star); }
 .sb-tagging-opt__star.is-auto { cursor: default; }
 
 .sb-tagging-field__ft {
@@ -476,8 +506,12 @@
   background: var(--sb-n-50);
 }
 .sb-tagging-gauge__cell.is-fill {
-  border-color: var(--sb-accent);
-  background: color-mix(in srgb, var(--sb-accent) 55%, var(--sb-n-0));
+  border-color: var(--sb-success);
+  background: color-mix(in srgb, var(--sb-success) 60%, var(--sb-n-0));
+}
+.sb-tagging-gauge__cell.is-fill.is-over {
+  border-color: var(--sb-danger);
+  background: color-mix(in srgb, var(--sb-danger) 45%, var(--sb-n-0));
 }
 .sb-tagging-gauge__cell.is-min::after {
   content: '';
@@ -486,7 +520,7 @@
   top: -4px;
   bottom: -4px;
   width: 2px;
-  background: var(--sb-warn);
+  background: var(--sb-star);
 }
 .sb-tagging-gauge__over {
   font-size: var(--sb-t-micro);
@@ -524,8 +558,8 @@
   color: var(--sb-subtle);
 }
 .sb-tagging-ftag.is-rep {
-  border-color: color-mix(in srgb, var(--sb-warn) 55%, var(--sb-n-200));
-  background: color-mix(in srgb, var(--sb-warn) 10%, var(--sb-n-0));
+  border-color: color-mix(in srgb, var(--sb-star) 70%, var(--sb-n-200));
+  background: color-mix(in srgb, var(--sb-star) 14%, var(--sb-n-0));
 }
 
 /* 검증 결과 */
@@ -548,7 +582,7 @@
 }
 .sb-tagging-vd--warn {
   background: color-mix(in srgb, var(--sb-warn) 14%, var(--sb-n-0));
-  color: color-mix(in srgb, var(--sb-warn) 72%, var(--sb-ink));
+  color: var(--sb-warn-ink);
 }
 
 /* 검토 메모 */
