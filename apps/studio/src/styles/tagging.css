@@ -1,12 +1,12 @@
-/* ── 상품 태깅 검토 스튜디오 — 진행 요약 · 태그 사전 · 상품 검토 목록 ──
-   진입은 홈 드로어 도구 행. 값은 전부 base.css 디자인 토큰만 사용. */
+/* ── 상품 태깅 검토 스튜디오 — 3컬럼: 작업 단위·상품 정보 / 필드별 태깅 편집 / 검증·승인 ──
+   진입은 홈 드로어 도구 행. 값은 전부 디자인 토큰만 사용(굵기 300/400/500). */
 
 .sb-tagging {
   position: relative;
   z-index: 10;
-  max-width: 960px;
+  max-width: 1320px;
   margin: 0 auto;
-  padding: 48px 24px 96px;
+  padding: 40px 24px 96px;
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -27,307 +27,570 @@
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 12px;
+  gap: 12px 20px;
   flex-wrap: wrap;
+}
+.sb-tagging__title { flex: 1 1 320px; }
+.sb-tagging__filters {
+  display: flex;
+  gap: 6px;
 }
 .sb-tagging__head-actions {
   display: flex;
   gap: 6px;
 }
 
-/* 진행 요약 — 상태 타일이 곧 필터 */
-.sb-tagging-summary {
-  display: flex;
-  align-items: stretch;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.sb-tagging-summary__tile {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  min-width: 92px;
-  padding: 10px 14px;
-  background: var(--sb-n-0);
-  border: 1px solid var(--sb-n-200);
-  border-radius: var(--sb-r-lg);
-  transition: border-color var(--sb-dur) var(--sb-ease), background-color var(--sb-dur) var(--sb-ease);
-}
-.sb-tagging-summary__tile:hover { border-color: var(--sb-n-400); }
-.sb-tagging-summary__tile.is-active { border-color: var(--sb-ink-2); background: var(--sb-n-50); }
-.sb-tagging-summary__tile b {
-  font-size: var(--sb-t-title);
-  font-weight: 500;
-  color: var(--sb-ink);
-}
-.sb-tagging-summary__tile span {
-  font-size: var(--sb-t-micro);
-  color: var(--sb-muted);
-}
-.sb-tagging-summary__tile--approved b { color: var(--sb-success); }
-.sb-tagging-summary__tile--flagged b { color: var(--sb-danger); }
-.sb-tagging-progress {
-  margin-left: auto;
-  align-self: center;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--sb-t-caption);
-  color: var(--sb-muted);
-}
-.sb-tagging-progress__bar {
-  width: 120px;
-  height: 6px;
-  border-radius: var(--sb-r-pill);
-  background: var(--sb-n-200);
-  overflow: hidden;
-}
-.sb-tagging-progress__bar i {
-  display: block;
-  height: 100%;
-  border-radius: var(--sb-r-pill);
-  background: var(--sb-accent);
-  transition: width var(--sb-dur) var(--sb-ease);
-}
-
-/* 태그 사전 */
-.sb-tagging-dict {
-  background: var(--sb-n-0);
-  border: 1px solid var(--sb-n-200);
-  border-radius: var(--sb-r-xl);
-  padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.sb-tagging-dict__label {
-  font-size: var(--sb-t-caption);
-  color: var(--sb-muted);
-}
-.sb-tagging-dict__chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.sb-tagging-dict__chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  border: 1px solid var(--sb-n-200);
-  border-radius: var(--sb-r-pill);
-  background: var(--sb-n-50);
-  font-size: var(--sb-t-caption);
-  color: var(--sb-ink-2);
-  transition: border-color var(--sb-dur) var(--sb-ease), background-color var(--sb-dur) var(--sb-ease);
-}
-.sb-tagging-dict__chip b {
-  font-weight: 400;
-  color: var(--sb-subtle);
-}
-.sb-tagging-dict__chip:hover { border-color: var(--sb-n-400); }
-.sb-tagging-dict__chip.is-active {
-  border-color: var(--sb-ink-2);
-  background: var(--sb-n-100);
-  color: var(--sb-ink);
-}
-
-/* 목록 툴바 */
-.sb-tagging-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.sb-tagging-toolbar input {
-  flex: 0 1 260px;
-  border: 1px solid var(--sb-n-300);
-  border-radius: var(--sb-r-md);
-  padding: 8px 12px;
-  font-size: var(--sb-t-small);
-  color: var(--sb-ink);
-  background: var(--sb-n-0);
-}
-.sb-tagging-toolbar input:focus-visible { border-color: var(--sb-accent); }
-.sb-tagging-toolbar__count {
-  margin-left: auto;
-  font-size: var(--sb-t-caption);
-  color: var(--sb-subtle);
-}
-
-/* 상품 검토 행 */
-.sb-tagging-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.sb-tagging-empty {
-  padding: 32px 0;
-  text-align: center;
-  font-size: var(--sb-t-small);
-  color: var(--sb-subtle);
-}
-.sb-tagging-row {
-  display: flex;
-  gap: 14px;
-  padding: 14px 16px;
-  background: var(--sb-n-0);
-  border: 1px solid var(--sb-n-200);
-  border-radius: var(--sb-r-xl);
-}
-.sb-tagging-row--approved { border-color: color-mix(in srgb, var(--sb-success) 35%, var(--sb-n-200)); }
-.sb-tagging-row--flagged { border-color: color-mix(in srgb, var(--sb-danger) 35%, var(--sb-n-200)); }
-.sb-tagging-row__thumb {
-  flex: 0 0 64px;
-  width: 64px;
-  height: 64px;
-  border-radius: var(--sb-r-lg);
-  border: 1px solid var(--sb-n-100);
-  background: var(--sb-n-50);
-  overflow: hidden;
-}
-.sb-tagging-row__thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.sb-tagging-row__thumb span {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
-}
-.sb-tagging-row__main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.sb-tagging-row__title {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.sb-tagging-row__title em {
-  font-style: normal;
-  font-size: var(--sb-t-caption);
-  color: var(--sb-muted);
-}
-.sb-tagging-row__title strong {
-  font-weight: 400;
-  font-size: var(--sb-t-body);
-  color: var(--sb-ink);
-}
-.sb-tagging-row__title span {
-  font-size: var(--sb-t-caption);
-  color: var(--sb-ink-2);
-}
-.sb-tagging-row__title code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
-  color: var(--sb-subtle);
-}
-.sb-tagging-row__revert {
-  font-size: var(--sb-t-micro);
-  color: var(--sb-info);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-.sb-tagging-tags {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.sb-tagging-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 6px 3px 10px;
-  border: 1px solid var(--sb-n-200);
-  border-radius: var(--sb-r-pill);
-  background: var(--sb-n-50);
-  font-size: var(--sb-t-caption);
-  color: var(--sb-ink-2);
-}
-.sb-tagging-tag button {
-  width: 16px;
-  height: 16px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  font-size: 12px;
-  line-height: 1;
-  color: var(--sb-subtle);
-  transition: color var(--sb-dur) var(--sb-ease), background-color var(--sb-dur) var(--sb-ease);
-}
-.sb-tagging-tag button:hover {
-  color: var(--sb-danger);
-  background: var(--sb-n-100);
-}
-.sb-tagging-tags input {
-  width: 92px;
-  border: 1px dashed var(--sb-n-300);
-  border-radius: var(--sb-r-pill);
-  padding: 3px 10px;
-  font-size: var(--sb-t-caption);
-  color: var(--sb-ink);
-  background: transparent;
-}
-.sb-tagging-tags input:focus-visible { border-color: var(--sb-accent); border-style: solid; }
-.sb-tagging-row__note {
-  border: 1px solid transparent;
-  border-radius: var(--sb-r-md);
-  padding: 5px 8px;
-  margin-left: -8px;
-  font-size: var(--sb-t-caption);
-  color: var(--sb-ink-2);
-  background: transparent;
-}
-.sb-tagging-row__note::placeholder { color: var(--sb-subtle); }
-.sb-tagging-row__note:hover { border-color: var(--sb-n-200); }
-.sb-tagging-row__note:focus-visible {
-  border-color: var(--sb-n-300);
-  background: var(--sb-n-0);
-}
-
-/* 상태 버튼 — 같은 버튼 재클릭 = 미검토로 복귀 */
-.sb-tagging-row__status {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  justify-content: center;
-}
-.sb-tagging-status {
+/* 목록 필터 알약 — 파생 상태(미검토/수정 필요) 기준 */
+.sb-tagging-pill {
   padding: 6px 14px;
   border: 1px solid var(--sb-n-200);
   border-radius: var(--sb-r-pill);
   background: var(--sb-n-0);
   font-size: var(--sb-t-caption);
+  font-weight: 400;
+  color: var(--sb-ink-2);
+  transition: border-color var(--sb-dur) var(--sb-ease), background-color var(--sb-dur) var(--sb-ease), color var(--sb-dur) var(--sb-ease);
+}
+.sb-tagging-pill:hover { border-color: var(--sb-n-400); }
+.sb-tagging-pill.is-on {
+  border-color: var(--sb-ink);
+  background: var(--sb-ink);
+  color: var(--sb-n-0);
+}
+.sb-tagging-pill--unreviewed.is-on {
+  border-color: var(--sb-warn);
+  background: var(--sb-warn);
+}
+.sb-tagging-pill--fix.is-on {
+  border-color: var(--sb-danger);
+  background: var(--sb-danger);
+}
+
+/* 3컬럼 골격 */
+.sb-tagging__cols {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr) 320px;
+  gap: 14px;
+  align-items: start;
+}
+.sb-tagging__side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.sb-tagging__center { min-width: 0; }
+
+/* 공용 패널 */
+.sb-tagging-panel {
+  background: var(--sb-n-0);
+  border: 1px solid var(--sb-n-200);
+  border-radius: var(--sb-r-xl);
+  padding: 14px 16px;
+}
+.sb-tagging-panel__hd {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 10px;
+  font-size: var(--sb-t-caption);
+  font-weight: 500;
+  color: var(--sb-muted);
+}
+.sb-tagging-panel__dim {
+  font-size: var(--sb-t-micro);
+  font-weight: 300;
+  color: var(--sb-subtle);
+}
+.sb-tagging-empty {
+  padding: 12px 4px;
+  font-size: var(--sb-t-caption);
+  color: var(--sb-subtle);
+}
+
+/* 상태 칩 — 작업 단위(승인/반려 포함)와 필드가 공유 */
+.sb-tagging-chip {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: var(--sb-r-pill);
+  font-size: var(--sb-t-micro);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.sb-tagging-chip--done {
+  background: color-mix(in srgb, var(--sb-success) 12%, var(--sb-n-0));
+  color: var(--sb-success);
+}
+.sb-tagging-chip--unreviewed {
+  background: color-mix(in srgb, var(--sb-warn) 16%, var(--sb-n-0));
+  color: color-mix(in srgb, var(--sb-warn) 72%, var(--sb-ink));
+}
+.sb-tagging-chip--fix {
+  background: color-mix(in srgb, var(--sb-danger) 10%, var(--sb-n-0));
+  color: var(--sb-danger);
+}
+.sb-tagging-chip--approved {
+  background: var(--sb-success);
+  color: var(--sb-n-0);
+}
+.sb-tagging-chip--rejected {
+  background: var(--sb-danger);
+  color: var(--sb-n-0);
+}
+
+/* 작업 단위 목록 */
+.sb-tagging-units {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sb-tagging-unit {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid transparent;
+  border-radius: var(--sb-r-lg);
+  text-align: left;
+  transition: background-color var(--sb-dur) var(--sb-ease), border-color var(--sb-dur) var(--sb-ease);
+}
+.sb-tagging-unit:hover { background: var(--sb-n-50); }
+.sb-tagging-unit.is-sel {
+  border-color: var(--sb-accent);
+  background: color-mix(in srgb, var(--sb-accent) 7%, var(--sb-n-0));
+}
+.sb-tagging-unit__thumb {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--sb-r-md);
+  border: 1px solid var(--sb-n-100);
+  background: var(--sb-n-50);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sb-tagging-unit__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.sb-tagging-unit__thumb span { font-size: 17px; }
+.sb-tagging-unit__meta {
+  flex: 1;
+  min-width: 0;
+}
+.sb-tagging-unit__name {
+  display: block;
+  font-size: var(--sb-t-caption);
+  font-weight: 400;
+  color: var(--sb-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sb-tagging-unit__opt {
+  display: block;
+  font-size: var(--sb-t-micro);
   color: var(--sb-muted);
   white-space: nowrap;
-  transition: color var(--sb-dur) var(--sb-ease), border-color var(--sb-dur) var(--sb-ease), background-color var(--sb-dur) var(--sb-ease);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.sb-tagging-status:hover { border-color: var(--sb-n-400); }
-.sb-tagging-status--approved.is-on {
+
+/* 상품 정보 */
+.sb-tagging-pinfo__img {
+  height: 120px;
+  margin-bottom: 10px;
+  border-radius: var(--sb-r-lg);
+  border: 1px solid var(--sb-n-100);
+  background: var(--sb-n-50);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sb-tagging-pinfo__img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.sb-tagging-pinfo__img span { font-size: 40px; }
+.sb-tagging-pinfo__name {
+  font-size: var(--sb-t-body);
+  font-weight: 500;
+  color: var(--sb-ink);
+}
+.sb-tagging-pinfo__brand {
+  margin-bottom: 8px;
+  font-size: var(--sb-t-caption);
+  color: var(--sb-muted);
+}
+.sb-tagging-pinfo dl {
+  display: grid;
+  gap: 2px;
+}
+.sb-tagging-pinfo dt {
+  margin-top: 9px;
+  font-size: var(--sb-t-micro);
+  font-weight: 500;
+  color: var(--sb-subtle);
+}
+.sb-tagging-pinfo dd {
+  font-size: var(--sb-t-caption);
+  color: var(--sb-ink-2);
+  line-height: 1.55;
+}
+.sb-tagging-pinfo code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--sb-muted);
+}
+.sb-tagging-pinfo__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.sb-tagging-pinfo__tags code {
+  padding: 1px 6px;
+  border: 1px solid var(--sb-n-200);
+  border-radius: var(--sb-r-sm);
+  background: var(--sb-n-50);
+}
+
+/* 가운데 — 태깅 편집 */
+.sb-tagging-center-hd {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.sb-tagging-center-hd h2 {
+  font-size: var(--sb-t-title);
+  font-weight: 500;
+  color: var(--sb-ink);
+}
+.sb-tagging-sw {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--sb-t-caption);
+  color: var(--sb-muted);
+  cursor: pointer;
+}
+.sb-tagging-sw input { accent-color: var(--sb-accent); }
+
+.sb-tagging-field {
+  margin-bottom: 10px;
+  padding: 13px 14px;
+  background: var(--sb-n-0);
+  border: 1px solid var(--sb-n-200);
+  border-radius: var(--sb-r-xl);
+}
+.sb-tagging-field--unreviewed {
+  border-color: color-mix(in srgb, var(--sb-warn) 45%, var(--sb-n-200));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sb-warn) 14%, transparent);
+}
+.sb-tagging-field--fix {
+  border-color: color-mix(in srgb, var(--sb-danger) 40%, var(--sb-n-200));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sb-danger) 10%, transparent);
+}
+.sb-tagging-field__hd {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 9px;
+}
+.sb-tagging-field__label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: var(--sb-t-small);
+  font-weight: 500;
+  color: var(--sb-ink);
+}
+.sb-tagging-field__label em {
+  font-style: normal;
+  padding: 1px 5px;
+  border: 1px solid color-mix(in srgb, var(--sb-danger) 40%, var(--sb-n-0));
+  border-radius: var(--sb-r-xs);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--sb-danger);
+}
+.sb-tagging-field__count {
+  font-size: var(--sb-t-micro);
+  font-weight: 300;
+  color: var(--sb-subtle);
+}
+.sb-tagging-field__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* AI 확신도 바 */
+.sb-tagging-conf {
+  position: relative;
+  display: block;
+  width: 74px;
+  height: 14px;
+  border-radius: var(--sb-r-pill);
+  background: var(--sb-n-100);
+  overflow: hidden;
+}
+.sb-tagging-conf i {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: inherit;
+}
+.sb-tagging-conf--ok i { background: color-mix(in srgb, var(--sb-success) 28%, var(--sb-n-0)); }
+.sb-tagging-conf--warn i { background: color-mix(in srgb, var(--sb-warn) 34%, var(--sb-n-0)); }
+.sb-tagging-conf--bad i { background: color-mix(in srgb, var(--sb-danger) 26%, var(--sb-n-0)); }
+.sb-tagging-conf b {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--sb-ink);
+}
+
+/* 출처 배지 — AI 1차 분류 vs 담당자 수정 */
+.sb-tagging-origin {
+  padding: 2px 7px;
+  border-radius: var(--sb-r-xs);
+  background: var(--sb-n-100);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--sb-muted);
+}
+.sb-tagging-origin--human {
+  background: color-mix(in srgb, var(--sb-accent) 12%, var(--sb-n-0));
+  color: var(--sb-accent);
+}
+
+/* 태그 선택 칩 (+대표 ★) */
+.sb-tagging-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.sb-tagging-opt {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--sb-n-200);
+  border-radius: var(--sb-r-md);
+  background: var(--sb-n-0);
+  overflow: hidden;
+  transition: border-color var(--sb-dur) var(--sb-ease), background-color var(--sb-dur) var(--sb-ease);
+}
+.sb-tagging-opt:hover { border-color: var(--sb-n-400); }
+.sb-tagging-opt.is-on {
+  border-color: var(--sb-accent);
+  background: color-mix(in srgb, var(--sb-accent) 8%, var(--sb-n-0));
+}
+.sb-tagging-opt__body {
+  padding: 5px 10px;
+  font-size: var(--sb-t-caption);
+  font-weight: 300;
+  color: var(--sb-ink-2);
+}
+.sb-tagging-opt.is-on .sb-tagging-opt__body {
+  font-weight: 500;
+  color: var(--sb-accent);
+}
+.sb-tagging-opt__star {
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  border-left: 1px dashed color-mix(in srgb, var(--sb-accent) 30%, var(--sb-n-200));
+  font-size: 13px;
+  color: var(--sb-subtle);
+}
+.sb-tagging-opt__star.is-rep { color: var(--sb-warn); }
+.sb-tagging-opt__star.is-auto { cursor: default; }
+
+.sb-tagging-field__ft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 9px;
+}
+.sb-tagging-why {
+  font-size: var(--sb-t-micro);
+  font-weight: 400;
+  color: var(--sb-muted);
+  transition: color var(--sb-dur) var(--sb-ease);
+}
+.sb-tagging-why:hover { color: var(--sb-ink); }
+.sb-tagging-mini {
+  padding: 3px 8px;
+  border: 1px solid var(--sb-n-200);
+  border-radius: var(--sb-r-sm);
+  font-size: var(--sb-t-micro);
+  font-weight: 400;
+  color: var(--sb-muted);
+  transition: border-color var(--sb-dur) var(--sb-ease), color var(--sb-dur) var(--sb-ease), background-color var(--sb-dur) var(--sb-ease);
+}
+.sb-tagging-mini:hover { border-color: var(--sb-n-400); }
+.sb-tagging-mini--ok {
   border-color: var(--sb-success);
+  color: var(--sb-success);
+}
+.sb-tagging-mini--req {
+  border-color: var(--sb-warn);
+  background: var(--sb-warn);
+  color: var(--sb-n-0);
+}
+.sb-tagging-rationale {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: var(--sb-r-md);
+  background: var(--sb-n-50);
+  font-size: var(--sb-t-caption);
+  color: var(--sb-muted);
+  line-height: 1.55;
+}
+
+/* 태그 게이지 — 최소/최대 규칙 시각화 */
+.sb-tagging-gauge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.sb-tagging-gauge__cell {
+  position: relative;
+  flex: 1;
+  height: 16px;
+  border: 1px solid var(--sb-n-200);
+  border-radius: var(--sb-r-xs);
+  background: var(--sb-n-50);
+}
+.sb-tagging-gauge__cell.is-fill {
+  border-color: var(--sb-accent);
+  background: color-mix(in srgb, var(--sb-accent) 55%, var(--sb-n-0));
+}
+.sb-tagging-gauge__cell.is-min::after {
+  content: '';
+  position: absolute;
+  right: -3px;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  background: var(--sb-warn);
+}
+.sb-tagging-gauge__over {
+  font-size: var(--sb-t-micro);
+  font-weight: 500;
+  color: var(--sb-danger);
+}
+.sb-tagging-gauge__txt {
+  margin-top: 7px;
+  font-size: var(--sb-t-caption);
+  font-weight: 400;
+  color: var(--sb-ink);
+}
+.sb-tagging-gauge__txt.is-bad { color: var(--sb-danger); }
+
+/* 최종 적용 태그 */
+.sb-tagging-final {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.sb-tagging-ftag {
+  padding: 4px 8px;
+  border: 1px solid var(--sb-n-200);
+  border-radius: var(--sb-r-md);
+  background: var(--sb-n-50);
+  font-size: var(--sb-t-caption);
+  font-weight: 400;
+  color: var(--sb-ink);
+}
+.sb-tagging-ftag i {
+  margin-left: 5px;
+  font-style: normal;
+  font-size: var(--sb-t-micro);
+  font-weight: 300;
+  color: var(--sb-subtle);
+}
+.sb-tagging-ftag.is-rep {
+  border-color: color-mix(in srgb, var(--sb-warn) 55%, var(--sb-n-200));
+  background: color-mix(in srgb, var(--sb-warn) 10%, var(--sb-n-0));
+}
+
+/* 검증 결과 */
+.sb-tagging-vd {
+  margin-bottom: 6px;
+  padding: 7px 9px;
+  border-radius: var(--sb-r-md);
+  font-size: var(--sb-t-caption);
+  font-weight: 400;
+  line-height: 1.5;
+}
+.sb-tagging-vd:last-child { margin-bottom: 0; }
+.sb-tagging-vd--ok {
   background: color-mix(in srgb, var(--sb-success) 10%, var(--sb-n-0));
   color: var(--sb-success);
 }
-.sb-tagging-status--flagged.is-on {
-  border-color: var(--sb-danger);
-  background: color-mix(in srgb, var(--sb-danger) 8%, var(--sb-n-0));
+.sb-tagging-vd--err {
+  background: color-mix(in srgb, var(--sb-danger) 9%, var(--sb-n-0));
+  color: var(--sb-danger);
+}
+.sb-tagging-vd--warn {
+  background: color-mix(in srgb, var(--sb-warn) 14%, var(--sb-n-0));
+  color: color-mix(in srgb, var(--sb-warn) 72%, var(--sb-ink));
+}
+
+/* 검토 메모 */
+.sb-tagging-note {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--sb-n-200);
+  border-radius: var(--sb-r-md);
+  padding: 8px 10px;
+  font-size: var(--sb-t-caption);
+  color: var(--sb-ink);
+  background: var(--sb-n-0);
+  line-height: 1.5;
+}
+.sb-tagging-note::placeholder { color: var(--sb-subtle); }
+.sb-tagging-note:focus-visible { border-color: var(--sb-accent); }
+
+/* 승인/반려 */
+.sb-tagging-actions {
+  display: flex;
+  gap: 8px;
+}
+.sb-tagging-actions .sb-btn { flex: 1; }
+.sb-tagging-decision {
+  padding: 9px 11px;
+  border-radius: var(--sb-r-lg);
+  font-size: var(--sb-t-caption);
+  font-weight: 400;
+  line-height: 1.5;
+}
+.sb-tagging-decision--approved {
+  background: color-mix(in srgb, var(--sb-success) 10%, var(--sb-n-0));
+  color: var(--sb-success);
+}
+.sb-tagging-decision--rejected {
+  background: color-mix(in srgb, var(--sb-danger) 9%, var(--sb-n-0));
   color: var(--sb-danger);
 }
 
+@media (max-width: 1080px) {
+  .sb-tagging__cols { grid-template-columns: 1fr; }
+}
 @media (max-width: 640px) {
   .sb-tagging { padding: 32px 16px 80px; }
-  .sb-tagging-row { flex-wrap: wrap; }
-  .sb-tagging-row__status { flex-direction: row; width: 100%; }
-  .sb-tagging-progress { margin-left: 0; width: 100%; }
 }
