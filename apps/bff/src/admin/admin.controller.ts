@@ -14,7 +14,6 @@ import {
 import {
   ApiBearerAuth,
   ApiBody,
-  ApiHeader,
   ApiOkResponse,
   ApiOperation,
   ApiParam,
@@ -34,17 +33,10 @@ import {
 } from '@ddak/schema'
 import { CoreClientService } from '../core-client.service'
 import { ServiceTokenGuard } from '../common/service-token.guard'
-import { AdminTokenGuard } from '../common/admin-token.guard'
 import { ParseThreadIdPipe } from '../common/thread-id.pipe'
 import { ZodValidationPipe } from '../common/zod-validation.pipe'
 import { toOpenApi } from '../common/openapi'
 import { DEFAULT_MODEL, LLM_MODEL_SETTING_KEY, LlmService, MODEL_OPTIONS } from '../llm/llm.service'
-
-const ADMIN_HEADER = {
-  name: 'x-admin-token',
-  required: true,
-  description: '관리 토큰 (ADMIN_TOKEN) — 스튜디오 #admin 페이지가 입력받아 보낸다',
-} as const
 
 const THREAD_ID_PARAM = {
   name: 'id',
@@ -53,16 +45,16 @@ const THREAD_ID_PARAM = {
 } as const
 
 /*
- * admin API — 스튜디오 #admin 페이지 전용 (유저 진입점에 노출되지 않는다).
- * 이중 가드: ServiceTokenGuard(스튜디오 프록시 경유 강제) + AdminTokenGuard(사람이 아는 토큰).
+ * admin API — 스튜디오 관리 페이지(#admin) 전용.
+ * 가드는 ServiceTokenGuard(스튜디오 프록시 경유 강제)뿐 — 옛 x-admin-token(사람이 아는
+ * 관리 토큰) 이중 가드는 뗐다. 스튜디오를 열 수 있으면 누구나 관리 페이지도 쓸 수 있다.
  * 쓰레드 "삭제"는 보관(archived) 처리다 — 데이터는 보존하고 사용자 목록에서만 숨긴다.
  */
 @ApiTags('admin')
 @ApiBearerAuth()
-@ApiHeader(ADMIN_HEADER)
-@ApiUnauthorizedResponse({ description: '서비스 토큰 또는 관리 토큰 없음/불일치' })
+@ApiUnauthorizedResponse({ description: '서비스 토큰 없음/불일치' })
 @Controller('api/admin')
-@UseGuards(ServiceTokenGuard, AdminTokenGuard)
+@UseGuards(ServiceTokenGuard)
 export class AdminController {
   constructor(
     private readonly core: CoreClientService,

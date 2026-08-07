@@ -23,7 +23,6 @@ export class AppController {
       service: 'ddak-bff',
       llm: Boolean(process.env.ANTHROPIC_API_KEY) ? 'configured' : 'not_configured',
       core: Boolean(process.env.CORE_URL) ? 'configured' : 'missing',
-      admin: Boolean(process.env.ADMIN_TOKEN) ? 'configured' : 'not_configured',
       now: new Date().toISOString(),
     }
   }

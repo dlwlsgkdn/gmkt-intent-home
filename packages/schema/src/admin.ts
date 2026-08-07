@@ -4,7 +4,7 @@ import { FeedbackScore, ThreadFeedbackComponent } from './thread-flow'
 
 /*
  * 관리(admin) 계약 — 스튜디오 #admin 페이지 ↔ BFF `/api/admin/*` ↔ core 설정 KV.
- * 관리 페이지는 유저 진입점에 노출되지 않으며, x-admin-token 헤더(ADMIN_TOKEN)로 보호된다.
+ * 관리 페이지는 홈 드로어 도구 행에서 진입하며 별도 인증이 없다 (BFF는 서비스 토큰 가드만).
  */
 
 /* ── core 설정 KV (internal API) ─────────────────────────────────────── */

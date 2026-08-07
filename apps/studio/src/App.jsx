@@ -20,7 +20,7 @@ import TaggingStudio from './components/TaggingStudio.jsx'
 export default function App() {
   // route: {name:'home'} | {name:'builder', id} | {name:'player', id, resume}
   //      | {name:'live', query?, resumeThreadId?, runId} | {name:'explore-editor', back}
-  //      | {name:'admin'} — #admin 해시로만 진입 (유저 진입점에 링크 없음)
+  //      | {name:'admin'} — 홈 드로어 도구 행 버튼 또는 #admin 해시로 진입
   const [route, setRoute] = useState(() =>
     typeof location !== 'undefined' && location.hash === '#admin' ? { name: 'admin' } : { name: 'home' }
   )
@@ -202,6 +202,11 @@ export default function App() {
     /* 라이브 생성 체험(BFF) — 자유 검색 진입. runId로 리마운트해 "새로 생성"이 새 쓰레드를 만든다 */
     playLive: (query) => setRoute({ name: 'live', query, runId: Date.now() }),
     resumeLive: (threadId) => setRoute({ name: 'live', resumeThreadId: threadId, runId: Date.now() }),
+    /* thread 관리 페이지 — 해시도 같이 달아 새로고침해도 관리 페이지가 유지된다 */
+    openAdmin: () => {
+      if (location.hash !== '#admin') history.replaceState(null, '', location.pathname + location.search + '#admin')
+      setRoute({ name: 'admin' })
+    },
     /* 관리 페이지 이탈 — #admin 해시를 지워야 새로고침이 홈으로 돌아온다 */
     exitAdmin: () => {
       if (location.hash === '#admin') history.replaceState(null, '', location.pathname + location.search)

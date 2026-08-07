@@ -1,14 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  AdminApiError,
   archiveAdminThread,
   fetchAdminFeedback,
   fetchAdminModel,
   fetchAdminThread,
   fetchAdminThreads,
-  getAdminToken,
   putAdminModel,
-  setAdminToken,
 } from '../lib/adminApi.js'
 import { renderMarkdown, statusLabel, threadMarkdown } from '../lib/adminReport.jsx'
 import { timeAgo } from '../lib/timeAgo.js'
@@ -16,17 +13,12 @@ import AdminFeedback from './AdminFeedback.jsx'
 import AdminThreadPreview, { threadPreviewPages } from './AdminThreadPreview.jsx'
 
 /*
- * thread 관리 페이지 — #admin 해시로만 진입한다 (홈·플레이어 어디에도 링크 없음).
- * 관리 토큰(ADMIN_TOKEN)을 입력해야 API가 응답하고, 입력한 토큰은 localStorage에
- * 보관해 반복 입력을 없앤다. 401이 오면 보관 토큰을 지우고 게이트로 돌아간다.
+ * thread 관리 페이지 — 진입은 홈 드로어 도구 행의 버튼 또는 #admin 해시.
+ * 별도 토큰 게이트 없음 (옛 x-admin-token 입력 검증은 뗐다 — adminApi.js 참고).
  * "삭제"는 보관(archived) 처리 — 데이터는 남고 사용자 목록에서만 숨겨진다.
  */
 
 export default function AdminView({ api }) {
-  const [token, setToken] = useState(getAdminToken)
-  const [tokenInput, setTokenInput] = useState('')
-  const [gateError, setGateError] = useState(null)
-
   const [threads, setThreads] = useState([])
   const [nextCursor, setNextCursor] = useState(null)
   const [listLoading, setListLoading] = useState(false)
@@ -46,94 +38,58 @@ export default function AdminView({ api }) {
   const [confirmArchive, setConfirmArchive] = useState(null) // thread row
   const [archiving, setArchiving] = useState(false)
 
-  /* 401 공통 처리 — 보관 토큰 폐기 후 게이트로 */
   const handleError = useCallback((e, fallback) => {
-    if (e instanceof AdminApiError && e.unauthorized) {
-      setAdminToken('')
-      setToken('')
-      setGateError('토큰이 거부됐어요. 다시 입력해주세요.')
-      return
-    }
     api.showToast(e.message || fallback)
   }, [api])
 
-  const loadList = useCallback(async (activeToken, cursor) => {
+  const loadList = useCallback(async (cursor) => {
     setListLoading(true)
     setListError(null)
     try {
-      const page = await fetchAdminThreads(activeToken, cursor)
+      const page = await fetchAdminThreads(cursor)
       setThreads((prev) => (cursor ? [...prev, ...page.items] : page.items))
       setNextCursor(page.nextCursor)
     } catch (e) {
-      if (e instanceof AdminApiError && e.unauthorized) {
-        setAdminToken('')
-        setToken('')
-        setGateError('토큰이 거부됐어요. 다시 입력해주세요.')
-      } else {
-        setListError(e.message)
-      }
+      setListError(e.message)
     } finally {
       setListLoading(false)
     }
   }, [])
 
-  const loadFeedback = useCallback(async (activeToken) => {
+  const loadFeedback = useCallback(async () => {
     setFeedbackLoading(true)
     setFeedbackError(null)
     try {
-      setFeedback(await fetchAdminFeedback(activeToken))
+      setFeedback(await fetchAdminFeedback())
     } catch (e) {
-      if (e instanceof AdminApiError && e.unauthorized) return // loadList가 게이트 처리
       setFeedbackError(e.message)
     } finally {
       setFeedbackLoading(false)
     }
   }, [])
 
-  const loadModel = useCallback(async (activeToken) => {
+  const loadModel = useCallback(async () => {
     try {
-      const wire = await fetchAdminModel(activeToken)
+      const wire = await fetchAdminModel()
       setModel(wire)
       setModelChoice(wire.configured ?? '')
     } catch (e) {
-      if (e instanceof AdminApiError && e.unauthorized) return // loadList가 게이트 처리
       api.showToast(`모델 설정을 불러오지 못했어요: ${e.message}`)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
-    if (!token) return
-    loadList(token)
-    loadFeedback(token)
-    loadModel(token)
-  }, [token, loadList, loadFeedback, loadModel])
-
-  const submitToken = (event) => {
-    event.preventDefault()
-    const value = tokenInput.trim()
-    if (!value) return
-    setAdminToken(value)
-    setToken(value)
-    setTokenInput('')
-    setGateError(null)
-  }
-
-  const lockOut = () => {
-    setAdminToken('')
-    setToken('')
-    setThreads([])
-    setDetail(null)
-    setModel(null)
-    setFeedback(null)
-    api.showToast('보관된 관리 토큰을 지웠어요.')
-  }
+    loadList()
+    loadFeedback()
+    loadModel()
+  }, [loadList, loadFeedback, loadModel])
 
   const openDetail = async (threadId) => {
     setDetailLoading(true)
     setDetailView('doc')
     try {
-      setDetail(await fetchAdminThread(token, threadId))
+      setDetail(await fetchAdminThread(threadId))
     } catch (e) {
       handleError(e, '쓰레드를 불러오지 못했어요.')
     } finally {
@@ -144,7 +100,7 @@ export default function AdminView({ api }) {
   const applyModel = async () => {
     setModelSaving(true)
     try {
-      const wire = await putAdminModel(token, modelChoice || null)
+      const wire = await putAdminModel(modelChoice || null)
       setModel(wire)
       setModelChoice(wire.configured ?? '')
       api.showToast(`생성 모델: ${wire.current}${wire.configured ? '' : ' (기본값)'} — 새 생성부터 반영돼요.`)
@@ -159,7 +115,7 @@ export default function AdminView({ api }) {
     if (!confirmArchive) return
     setArchiving(true)
     try {
-      const updated = await archiveAdminThread(token, confirmArchive.id)
+      const updated = await archiveAdminThread(confirmArchive.id)
       setThreads((prev) => prev.map((t) => (t.id === updated.id ? { ...t, status: updated.status } : t)))
       if (detail && detail.id === updated.id) setDetail({ ...detail, status: updated.status })
       api.showToast('보관 처리했어요. 사용자 목록에서 숨겨져요.')
@@ -184,30 +140,6 @@ export default function AdminView({ api }) {
   const markdown = useMemo(() => (detail ? threadMarkdown(detail) : ''), [detail])
   const dirty = model && (model.configured ?? '') !== modelChoice
 
-  /* ── 토큰 게이트 ── */
-  if (!token) {
-    return (
-      <section className="sb-admin sb-admin--gate">
-        <form className="sb-admin-gate" onSubmit={submitToken}>
-          <h1>thread 관리</h1>
-          <p>관리 토큰(ADMIN_TOKEN)을 입력해야 접근할 수 있어요. 한 번 입력하면 이 브라우저에 저장돼요.</p>
-          <input
-            type="password"
-            autoFocus
-            placeholder="관리 토큰"
-            value={tokenInput}
-            onChange={(event) => setTokenInput(event.target.value)}
-          />
-          {gateError && <p className="sb-admin-gate__error">{gateError}</p>}
-          <div className="sb-admin-gate__actions">
-            <button type="button" className="sb-btn sb-btn--ghost" onClick={api.exitAdmin}>홈으로</button>
-            <button type="submit" className="sb-btn sb-btn--primary" disabled={!tokenInput.trim()}>입장</button>
-          </div>
-        </form>
-      </section>
-    )
-  }
-
   return (
     <section className="sb-admin">
       <header className="sb-admin__head">
@@ -220,14 +152,11 @@ export default function AdminView({ api }) {
             type="button"
             className="sb-btn sb-btn--ghost sb-btn--small"
             onClick={() => {
-              loadList(token)
-              loadFeedback(token)
+              loadList()
+              loadFeedback()
             }}
           >
             새로고침
-          </button>
-          <button type="button" className="sb-btn sb-btn--ghost sb-btn--small" onClick={lockOut} title="보관된 관리 토큰을 지우고 잠급니다">
-            토큰 지우기
           </button>
           <button type="button" className="sb-btn sb-btn--ghost sb-btn--small" onClick={api.exitAdmin}>홈으로</button>
         </div>
@@ -329,7 +258,7 @@ export default function AdminView({ api }) {
         <div className="sb-admin__list-foot">
           {listLoading && <span className="sb-admin__muted">불러오는 중…</span>}
           {!listLoading && nextCursor && (
-            <button type="button" className="sb-btn sb-btn--ghost sb-btn--small" onClick={() => loadList(token, nextCursor)}>
+            <button type="button" className="sb-btn sb-btn--ghost sb-btn--small" onClick={() => loadList(nextCursor)}>
               더 보기
             </button>
           )}

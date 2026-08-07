@@ -47,47 +47,10 @@
   gap: 10px;
 }
 
-/* 토큰 게이트 */
-.sb-admin--gate {
-  min-height: 70vh;
-  align-items: center;
-  justify-content: center;
-}
-.sb-admin-gate {
-  width: min(380px, 90vw);
-  background: var(--sb-n-0);
-  border: 1px solid var(--sb-n-200);
-  border-radius: var(--sb-r-xl);
-  box-shadow: var(--sb-shadow-lg);
-  padding: 28px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.sb-admin-gate p {
-  font-size: var(--sb-t-small);
-  color: var(--sb-muted);
-  line-height: 1.6;
-}
-.sb-admin-gate input {
-  border: 1px solid var(--sb-n-300);
-  border-radius: var(--sb-r-md);
-  padding: 10px 12px;
-  font-size: var(--sb-t-body);
-  color: var(--sb-ink);
-  background: var(--sb-n-50);
-}
-.sb-admin-gate input:focus-visible {
-  border-color: var(--sb-accent);
-}
+/* 오류 문구 (옛 토큰 게이트 잔재 이름 — 목록 로드 실패 표시에 계속 쓴다) */
 .sb-admin-gate__error {
   color: var(--sb-danger);
   font-size: var(--sb-t-caption);
-}
-.sb-admin-gate__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
 }
 
 /* 모델 설정 */

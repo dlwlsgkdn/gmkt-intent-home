@@ -108,8 +108,8 @@ action 스텝 1개(append)** 라 수정 이력이 로그로 남고, 이어보기
 
 ## 1-1. BFF — admin API (스튜디오 #admin 전용)
 
-Base: `/api/admin/*` (스튜디오 프록시 `/api/bff/admin/*` 경유) · 인증: **서비스 토큰 + `x-admin-token: <ADMIN_TOKEN>`** 이중 가드
-(ADMIN_TOKEN 미설정 시 프로덕션은 전부 401 — fail closed). 진입점은 스튜디오 `#admin` 해시뿐 — 유저 UI에 링크가 없다.
+Base: `/api/admin/*` (스튜디오 프록시 `/api/bff/admin/*` 경유) · 인증: **서비스 토큰**만 (옛 `x-admin-token` 이중 가드는 제거 —
+스튜디오를 열 수 있으면 누구나 접근). 진입점은 홈 드로어 도구 행의 🧵 버튼 또는 `#admin` 해시.
 
 | 메서드 | 경로 | 역할 |
 |---|---|---|
@@ -158,5 +158,5 @@ Base: `https://ddak-core.vercel.app` · 인증: **`Authorization: Bearer <CORE_S
 
 | 프로젝트 | Root Directory | 주요 env |
 |---|---|---|
-| ddak-bff | `apps/bff` | `ANTHROPIC_API_KEY`(없으면 생성 요청이 실패 안내로 응답), `CORE_URL`, `CORE_SERVICE_TOKEN`, **`ADMIN_TOKEN`**(관리 페이지 — 없으면 admin API 전부 401), `NODEJS_HELPERS=0`, `ALLOWED_ORIGINS?` |
+| ddak-bff | `apps/bff` | `ANTHROPIC_API_KEY`(없으면 생성 요청이 실패 안내로 응답), `CORE_URL`, `CORE_SERVICE_TOKEN`, `NODEJS_HELPERS=0`, `ALLOWED_ORIGINS?` |
 | ddak-core | `apps/core` | `DATABASE_URL`(Neon 통합 자동 주입), `CORE_SERVICE_TOKEN`, `NODEJS_HELPERS=0`, `API_DOCS?` |
