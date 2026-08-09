@@ -88,14 +88,20 @@ export class ThreadsController {
     @Param('id', ParseThreadIdPipe) id: string,
     @Body(new ZodValidationPipe(SurveyRequestBody)) body: SurveyRequestBody,
     @Res() res: SseRes,
+    @Headers('x-ddak-engine') engine?: string,
   ) {
     openSse(res)
     sseSend(res, 'status', { message: '질문을 구성하고 있어요…' })
     try {
-      const page = await this.threads.generateSurvey(id, body.profile, {
-        onIntro: (intro) => sseSend(res, 'head', { intro }),
-        onQuestion: (question, index) => sseSend(res, 'question', { index, question }),
-      })
+      const page = await this.threads.generateSurvey(
+        id,
+        body.profile,
+        {
+          onIntro: (intro) => sseSend(res, 'head', { intro }),
+          onQuestion: (question, index) => sseSend(res, 'question', { index, question }),
+        },
+        engine,
+      )
       sseSend(res, 'result', { page })
     } catch (e) {
       this.sendFailure(res, '설문 생성', e)
@@ -122,6 +128,7 @@ export class ThreadsController {
     @Param('id', ParseThreadIdPipe) id: string,
     @Body(new ZodValidationPipe(PlanRequestBody)) body: PlanRequestBody,
     @Res() res: SseRes,
+    @Headers('x-ddak-engine') engine?: string,
   ) {
     openSse(res)
     sseSend(res, 'status', {
@@ -140,6 +147,7 @@ export class ThreadsController {
           onSearch: (query) => sseSend(res, 'status', { message: `웹에서 "${query}" 검색 중…` }),
         },
         body.feedback,
+        engine,
       )
       sseSend(res, 'result', { page })
     } catch (e) {

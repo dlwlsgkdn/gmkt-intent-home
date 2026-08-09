@@ -6,12 +6,16 @@
   "scripts": {
     "build": "nest build",
     "start": "node dist/main.js",
-    "start:dev": "nest start --watch"
+    "start:dev": "nest start --watch",
+    "e2e:mock": "node e2e/langgraph-smoke.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
     "@ddak/pipeline": "*",
     "@ddak/schema": "*",
+    "@langchain/core": "1.1.48",
+    "@langchain/langgraph": "1.4.9",
+    "@langchain/langgraph-checkpoint-postgres": "1.0.4",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",

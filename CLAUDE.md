@@ -9,7 +9,7 @@
 ```
 apps/studio/       ← 스튜디오 소스 (React 18 + Vite 5). 빌드 산출물은 apps/studio/dist (커밋 안 함)
 apps/core/         ← NestJS backend core — 쓰레드 저장·조회 (Drizzle+Neon). 실행·배포는 apps/core/README.md
-apps/bff/          ← NestJS BFF — LLM(설문·계획 생성, 계획은 웹 검색 병행)·core 오케스트레이션. DESIGN-LLM-SERVICE.md §4, API.md §1 참고
+apps/bff/          ← NestJS BFF — LLM(설문·계획 생성, 계획은 웹 검색 병행)·core 오케스트레이션. DESIGN-LLM-SERVICE.md §4, API.md §1 참고. src/engine/ = LangGraph 그래프 엔진(전략 문서 8단계 StateGraph — interrupt/재개·병렬·custom 스트림→SSE 브리지): core KV `engine`(legacy|langgraph, 기본 legacy) + 요청 헤더 `x-ddak-engine`으로 병행 배치, checkpointer는 LANGGRAPH_DATABASE_URL 있으면 Neon lg 스키마·없으면 메모리(유실 시 core 스텝 시딩 복구 — 진실 원천은 언제나 core). 노드 로직은 @ddak/pipeline 순수 함수 소비
 packages/schema/   ← @ddak/schema — 쓰레드 도메인·internal API zod 계약 (install 시 prepare로 dist 빌드)
 packages/pipeline/ ← @ddak/pipeline — LLM 파이프라인 이관 자산: 단계 카탈로그·프롬프트·생성 스키마·결정적 가드(그라운딩·병합·partial)·LlmPort 계약·원장·지식 소스. 프레임워크(LangGraph)·프로바이더 중립 순수 로직만 — bff는 여기서 import. 설계·페이즈는 DESIGN-PIPELINE-LANGGRAPH.md
 api/               ← 스튜디오 서버리스 (Vercel 함수, 루트 고정) — state.js(동기화)·pdp.js(지마켓 PDP iframe 프록시)
@@ -33,6 +33,7 @@ npm run build --workspace=apps/core         # core(NestJS) 빌드
 npm run start:dev --workspace=apps/core     # core 로컬 실행 (환경변수: apps/core/.env.example — 없어도 부팅, DB 라우트만 503)
 npm run db:generate --workspace=apps/core   # core 스키마 → drizzle/ 마이그레이션 SQL (오프라인)
 npm run db:migrate --workspace=apps/core    # 마이그레이션 SQL 순서 적용 — DB 반영은 push(diff·타입 전환 실패)보다 이쪽 (--status·--baseline 지원)
+npm run build --workspace=apps/bff && npm run e2e:mock --workspace=apps/bff  # bff 오프라인 E2E — 모의 core+Anthropic 위에서 LangGraph 엔진·legacy 전 구간 스모크 (네트워크·키 불필요)
 ```
 개발 서버: `.claude/launch.json`의 `scenario-studio` (포트 5173), 정적 검증용 `pages-static` (포트 8899, apps/studio/dist 서빙 — 빌드 후 사용).
 

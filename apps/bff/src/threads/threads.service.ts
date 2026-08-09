@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common'
+import { BadRequestException, Injectable, Logger } from '@nestjs/common'
 import type {
   Answer,
   LlmMeta,
@@ -31,9 +31,9 @@ import {
 } from '@ddak/pipeline'
 import { CoreClientService } from '../core-client.service'
 import { LlmService } from '../llm/llm.service'
-
-/** 스텝 순번 — (thread, seq)가 멱등 키라 단계별 고정 순번을 쓴다 */
-const SEQ = { explore: 1, survey: 2, answers: 3, plan: 4, actionBase: 5 } as const
+import { EngineFlagService } from '../engine/engine-flag.service'
+import { GraphEngineService } from '../engine/graph-engine.service'
+import { SEQ, combineMeta, intentOf } from './thread-io'
 
 /*
  * 부분 스트리밍 핸들러 — 생성 중인 컴포넌트를 SSE로 미리 내보내기 위한 콜백.
@@ -69,6 +69,8 @@ export class ThreadsService {
   constructor(
     private readonly core: CoreClientService,
     private readonly llm: LlmService,
+    private readonly engineFlag: EngineFlagService,
+    private readonly graphEngine: GraphEngineService,
   ) {}
 
   /** 쓰레드 시작 — 생성 + 탐색 스텝(의도·프로필) 기록 */
@@ -92,8 +94,17 @@ export class ThreadsService {
   }
 
   /** 설문 페이지 생성 (LLM #1) — 생성 결과에 BFF가 질문 id를 부여한다.
-   * stream 핸들러가 있으면 질문 하나가 완성될 때마다 미리 내보낸다 (id 부여 규칙 동일 = q{i+1}) */
-  async generateSurvey(threadId: string, profile?: Profile, stream?: SurveyStreamHandlers): Promise<SurveyPageWire> {
+   * stream 핸들러가 있으면 질문 하나가 완성될 때마다 미리 내보낸다 (id 부여 규칙 동일 = q{i+1}).
+   * engineOverride(x-ddak-engine 헤더)·core KV `engine` 플래그가 langgraph면 그래프 엔진에 위임 */
+  async generateSurvey(
+    threadId: string,
+    profile?: Profile,
+    stream?: SurveyStreamHandlers,
+    engineOverride?: string,
+  ): Promise<SurveyPageWire> {
+    if ((await this.engineFlag.resolve(engineOverride)) === 'langgraph') {
+      return this.graphEngine.generateSurvey(threadId, profile, stream)
+    }
     const thread = await this.core.getThread(threadId)
     const intent = intentOf(thread)
     const { content, meta } = await this.llm.generateSurvey(
@@ -156,7 +167,11 @@ export class ThreadsService {
     profile?: Profile,
     stream?: PlanStreamHandlers,
     feedback?: ThreadStageFeedback,
+    engineOverride?: string,
   ): Promise<PlanPageWire> {
+    if ((await this.engineFlag.resolve(engineOverride)) === 'langgraph') {
+      return this.graphEngine.generatePlan(threadId, answers, profile, stream, feedback)
+    }
     const thread = await this.core.getThread(threadId)
     const surveyStep = thread.steps.find((s) => s.seq === SEQ.survey)
     if (!surveyStep) throw new BadRequestException('설문이 아직 생성되지 않았습니다')
@@ -394,23 +409,6 @@ export class ThreadsService {
   }
 }
 
-/** 2단계 메타 결합 — usage는 합산, latency는 병렬이라 max. 단계별 소요는 phases로 남긴다 (admin 진단용) */
-function combineMeta(skeleton: LlmMeta, products: LlmMeta | null): LlmMeta {
-  const sum = (a?: number, b?: number) => (a == null && b == null ? undefined : (a ?? 0) + (b ?? 0))
-  return {
-    model: products?.model ?? skeleton.model,
-    promptVersion: skeleton.promptVersion,
-    usage: {
-      inputTokens: sum(skeleton.usage?.inputTokens, products?.usage?.inputTokens),
-      outputTokens: sum(skeleton.usage?.outputTokens, products?.usage?.outputTokens),
-      cacheReadTokens: sum(skeleton.usage?.cacheReadTokens, products?.usage?.cacheReadTokens),
-      webSearchRequests: products?.usage?.webSearchRequests,
-    },
-    latencyMs: Math.max(skeleton.latencyMs ?? 0, products?.latencyMs ?? 0),
-    phases: { skeletonMs: skeleton.latencyMs ?? null, productsMs: products?.latencyMs ?? null },
-  } as LlmMeta
-}
-
 /** 단계별 최신 피드백 파생 — action 스텝(type='feedback')은 append 로그라 seq 순회의
  * 마지막 유효 제출이 유효본이다. 형태가 어긋난 옛 기록은 조용히 건너뛴다 */
 function latestFeedback(thread: ThreadWithSteps) {
@@ -427,12 +425,4 @@ function latestFeedback(thread: ThreadWithSteps) {
     feedback[parsed.data.stage] = { ...parsed.data, at: p.at ?? parsed.data.at }
   }
   return feedback.survey || feedback.plan ? feedback : null
-}
-
-function intentOf(thread: ThreadWithSteps): string {
-  if (!thread.source) {
-    if (!thread.title) throw new NotFoundException('쓰레드 의도를 알 수 없습니다')
-    return thread.title
-  }
-  return thread.source.query ?? thread.source.chipId ?? thread.title ?? '뷰티 쇼핑'
 }
