@@ -109,10 +109,10 @@ action 스텝 1개(append)** 라 수정 이력이 로그로 남고, 이어보기
 `POST /:id/plan`의 `feedback`으로 실어 **반영 재생성**을 요청한다 (프롬프트는 시스템 고정·가변부에만 실려
 캐시 유지, prompts.ts `PlanRevisionContext`).
 
-## 1-1. BFF — admin API (스튜디오 #admin 전용)
+## 1-1. BFF — admin API (스튜디오 운영 콘솔 #ops 전용)
 
 Base: `/api/admin/*` (스튜디오 프록시 `/api/bff/admin/*` 경유) · 인증: **서비스 토큰**만 (옛 `x-admin-token` 이중 가드는 제거 —
-스튜디오를 열 수 있으면 누구나 접근). 진입점은 홈 드로어 도구 행의 🧵 버튼 또는 `#admin` 해시.
+스튜디오를 열 수 있으면 누구나 접근). 진입점은 홈 드로어 도구 행의 🧵 버튼 또는 `#ops` 해시 (구 `#admin` 호환, 탭은 `#ops/<탭>`).
 
 | 메서드 | 경로 | 역할 |
 |---|---|---|

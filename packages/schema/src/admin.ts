@@ -3,7 +3,7 @@ import { Thread, ThreadId, ThreadStatus, ThreadStep } from './thread'
 import { Answer, FeedbackScore, Profile, SurveyPageWire, ThreadFeedbackComponent } from './thread-flow'
 
 /*
- * 관리(admin) 계약 — 스튜디오 #admin 페이지 ↔ BFF `/api/admin/*` ↔ core 설정 KV.
+ * 관리(admin) 계약 — 스튜디오 운영 콘솔(#ops) ↔ BFF `/api/admin/*` ↔ core 설정 KV.
  * 관리 페이지는 홈 드로어 도구 행에서 진입하며 별도 인증이 없다 (BFF는 서비스 토큰 가드만).
  */
 

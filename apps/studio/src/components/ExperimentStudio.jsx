@@ -132,38 +132,66 @@ export default function ExperimentStudio() {
           유지·가드 통과 동등이면 기본 엔진을 langgraph로 전환.
         </p>
         {metrics && metrics.engines.length === 0 && <p className="sb-admin__muted">아직 표본이 없어요.</p>}
-        {metrics && metrics.engines.length > 0 && (
-          <div className="sb-table sb-admin-table">
-            <div className="sb-table__scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>엔진</th>
-                    <th>표본</th>
-                    <th>평균 지연</th>
-                    <th>뼈대</th>
-                    <th>상품</th>
-                    <th>캐시 적중률</th>
-                    <th>promptVersion</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {metrics.engines.map((m) => (
-                    <tr key={m.engine}>
-                      <td><code>{m.engine}</code></td>
-                      <td>{m.count}</td>
-                      <td>{m.avgLatencyMs != null ? `${(m.avgLatencyMs / 1000).toFixed(1)}s` : '—'}</td>
-                      <td>{m.avgSkeletonMs != null ? `${(m.avgSkeletonMs / 1000).toFixed(1)}s` : '—'}</td>
-                      <td>{m.avgProductsMs != null ? `${(m.avgProductsMs / 1000).toFixed(1)}s` : '—'}</td>
-                      <td>{m.cacheHitRate != null ? `${Math.round(m.cacheHitRate * 100)}%` : '—'}</td>
-                      <td>{m.promptVersions.join(', ') || '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        {metrics && metrics.engines.length > 0 && (() => {
+          /* 지연 3종을 전 엔진 공통 축으로 그린다 — 막대 길이가 곧 비교라 표보다 판정이 빠르다 */
+          const latMax = Math.max(
+            1,
+            ...metrics.engines.flatMap((m) => [m.avgLatencyMs || 0, m.avgSkeletonMs || 0, m.avgProductsMs || 0]),
+          )
+          const latencyBar = (label, value, mod) => (
+            <div className="sb-exp-bar">
+              <span className="sb-exp-bar__label">{label}</span>
+              <span className="sb-exp-bar__track">
+                {value != null && (
+                  <span
+                    className={'sb-exp-bar__fill' + (mod ? ` sb-exp-bar__fill--${mod}` : '')}
+                    style={{ width: `${Math.max(2, Math.round((value / latMax) * 100))}%` }}
+                  />
+                )}
+              </span>
+              <span className="sb-exp-bar__val">{value != null ? `${(value / 1000).toFixed(1)}s` : '—'}</span>
             </div>
-          </div>
-        )}
+          )
+          return (
+            <>
+              <div className="sb-exp-engines">
+                {metrics.engines.map((m) => (
+                  <div key={m.engine} className="sb-exp-engine">
+                    <div className="sb-exp-engine__head">
+                      <code>{m.engine}</code>
+                      <span className="sb-admin__muted">표본 {m.count}개</span>
+                    </div>
+                    {latencyBar('전체', m.avgLatencyMs)}
+                    {latencyBar('뼈대', m.avgSkeletonMs, 'skeleton')}
+                    {latencyBar('상품', m.avgProductsMs, 'products')}
+                    <div className="sb-exp-bar">
+                      <span className="sb-exp-bar__label">캐시</span>
+                      <span className="sb-exp-bar__track">
+                        {m.cacheHitRate != null && (
+                          <span
+                            className="sb-exp-bar__fill sb-exp-bar__fill--cache"
+                            style={{ width: `${Math.round(m.cacheHitRate * 100)}%` }}
+                          />
+                        )}
+                      </span>
+                      <span className="sb-exp-bar__val">
+                        {m.cacheHitRate != null ? `${Math.round(m.cacheHitRate * 100)}%` : '—'}
+                      </span>
+                    </div>
+                    {(m.promptVersions || []).length > 0 && (
+                      <div className="sb-exp-engine__foot">
+                        {m.promptVersions.map((v) => (
+                          <span key={v} className="sb-admin-prompt-chip">{v}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <p className="sb-admin__muted">지연 막대는 짧을수록 좋아요 — 세 지표 모두 엔진 공통 축이라 길이로 바로 비교돼요.</p>
+            </>
+          )
+        })()}
       </div>
 
       {/* 골든 케이스 */}
@@ -189,7 +217,12 @@ export default function ExperimentStudio() {
             onChange={(event) => setOverride(event.target.value)}
           />
         </details>
-        {status && <p className="sb-admin__muted">{status}</p>}
+        {status && (
+          <p className="sb-flow-status">
+            <i className="sb-flow-status__dot" aria-hidden="true" />
+            {status}
+          </p>
+        )}
         {cases && cases.length === 0 && (
           <p className="sb-table__empty">아직 케이스가 없어요 — 쓰레드·평가 탭에서 쓰레드를 열어 「평가 케이스로 저장」을 누르세요.</p>
         )}
@@ -202,6 +235,24 @@ export default function ExperimentStudio() {
                     <b>{c.title || c.intent}</b>
                     {!c.survey && <span className="sb-admin-prompt-chip sb-admin-prompt-chip--warn">설문 스냅샷 없음</span>}
                     {c.sourceThreadId && <code>{c.sourceThreadId}</code>}
+                    {(runsByCase[c.id] || []).length > 0 && (
+                      <span className="sb-exp-trend" title="실행 채점 추이 (왼쪽 = 오래된 실행)">
+                        {[...runsByCase[c.id]].reverse().map((r) => (
+                          <i
+                            key={r.id}
+                            className={
+                              'sb-exp-trend__dot' +
+                              (r.score == null
+                                ? ' sb-exp-trend__dot--none'
+                                : r.score <= 2
+                                  ? ' sb-exp-trend__dot--low'
+                                  : '')
+                            }
+                            title={r.score == null ? '미채점' : `★${r.score}`}
+                          />
+                        ))}
+                      </span>
+                    )}
                   </div>
                   <p className="sb-pipe-stage__note">
                     {c.intent} · {timeShort(c.createdAt)}
@@ -231,6 +282,16 @@ export default function ExperimentStudio() {
                     return (
                       <li key={r.id} className="sb-exp-run">
                         <div className="sb-pipe-stage__title">
+                          {r.score == null ? (
+                            <span className="sb-admin-fb-badge">미채점</span>
+                          ) : r.score === 0 ? (
+                            <span className="sb-admin-fb-badge sb-admin-fb-badge--zero">0점</span>
+                          ) : (
+                            <span className="sb-admin-fb-stars" title={`${r.score}점`}>
+                              {'★'.repeat(r.score)}
+                              <span className="sb-admin-fb-stars__rest">{'★'.repeat(5 - r.score)}</span>
+                            </span>
+                          )}
                           {r.config?.label && <b>{r.config.label}</b>}
                           <span className="sb-admin-prompt-chip">{r.config?.engine || '—'}</span>
                           {r.config?.promptVersion && <span className="sb-admin-prompt-chip">{r.config.promptVersion}</span>}

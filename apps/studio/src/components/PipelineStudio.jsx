@@ -1,33 +1,24 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { dryRunStage, fetchAdminPipeline, putAdminEngine, putAdminKnowledge } from '../lib/adminApi.js'
 import AdminThreadPreview from './AdminThreadPreview.jsx'
+import PipelineFlow, { metaLine } from './PipelineFlow.jsx'
 
 /*
- * 파이프라인 스튜디오 (관리 페이지 "파이프라인" 탭 — DESIGN-PIPELINE-LANGGRAPH.md 페이즈 4).
- * 전략 문서 0~7 단계 카탈로그(@ddak/pipeline PIPELINE_STAGES의 와이어 투영)를 그대로 그리고,
- * 지식 KV(5종+블록리스트)·엔진 플래그를 코드 배포 없이 편집하며, 플레이그라운드에서
- * LLM 단계를 그래프·쓰레드 기록 없이 단독 실행(dry-run)해 결과를 확인한다.
+ * 파이프라인 스튜디오 (운영 콘솔 "파이프라인" 탭 — DESIGN-PIPELINE-LANGGRAPH.md 페이즈 4).
+ * 전략 문서 0~7 단계 카탈로그(@ddak/pipeline PIPELINE_STAGES의 와이어 투영)를 흐름 다이어그램
+ * (PipelineFlow — 노드 클릭 = 상세·프롬프트 진입)으로 그리고, 지식 KV(5종+블록리스트)·엔진
+ * 플래그를 코드 배포 없이 편집하며, 플레이그라운드에서 LLM 단계를 그래프·쓰레드 기록 없이
+ * 단독 실행(dry-run)한다 — 실행 중에는 다이어그램 위로 쿼리 경로가 흐르고 결과 메타가 남는다.
  * 실행 버튼은 진짜 생성이므로 ✦ (스튜디오 왕복 ⇄ 아님 — CLAUDE.md 표기 규칙).
  */
 
 const INJECTION_LABEL = { system: '시스템(캐시)', user: '가변부', guard: '검증 게이트' }
-const KIND_LABEL = { llm: 'LLM', deterministic: '결정적', 'interrupt-boundary': '대기 지점' }
 
-function metaLine(meta) {
-  if (!meta) return null
-  const parts = []
-  if (meta.model) parts.push(meta.model)
-  if (meta.latencyMs != null) parts.push(`${(meta.latencyMs / 1000).toFixed(1)}s`)
-  if (meta.usage?.inputTokens != null) parts.push(`in ${meta.usage.inputTokens.toLocaleString('ko-KR')}`)
-  if (meta.usage?.outputTokens != null) parts.push(`out ${meta.usage.outputTokens.toLocaleString('ko-KR')}`)
-  if (meta.usage?.webSearchRequests) parts.push(`검색 ${meta.usage.webSearchRequests}회`)
-  return parts.join(' · ')
-}
-
-export default function PipelineStudio({ prompts, onOpenPrompt }) {
+export default function PipelineStudio({ prompts, onOpenPrompt, model }) {
   const [wire, setWire] = useState(null) // AdminPipelineWire
   const [error, setError] = useState(null)
   const [engineSaving, setEngineSaving] = useState(false)
+  const [selectedStage, setSelectedStage] = useState(null) // 흐름 다이어그램 선택 노드 id
   const [knowledgeEdit, setKnowledgeEdit] = useState(null) // AdminKnowledgeEntry
   const [knowledgeText, setKnowledgeText] = useState('')
   const [knowledgeSaving, setKnowledgeSaving] = useState(false)
@@ -143,121 +134,84 @@ export default function PipelineStudio({ prompts, onOpenPrompt }) {
 
   const planReady = Boolean(svResult?.survey) && answersList.length > 0
 
+  /* 흐름 다이어그램에 얹는 실행 결과 요약 — 노드의 ✓ 배지·상세 스트립 메타의 원천 */
+  const flowResults = useMemo(() => {
+    const map = {}
+    if (svResult) map.survey = { meta: svResult.meta, custom: svResult.promptCustom }
+    if (skResult) map['plan-skeleton'] = { meta: skResult.meta, custom: skResult.promptCustom }
+    if (prodResult) {
+      map['plan-products'] = { meta: prodResult.meta, custom: prodResult.promptCustom }
+      map.verify = { pass: (prodResult.sections || []).length, drops: (prodResult.dropLog || []).length }
+    }
+    return map
+  }, [svResult, skResult, prodResult])
+
   return (
     <>
       {error && <p className="sb-admin-gate__error">{error}</p>}
 
-      {/* 생성 엔진 플래그 */}
-      <div className="sb-admin-card">
-        <p className="sb-panel-label">생성 엔진</p>
+      {/* 파이프라인 흐름 (히어로) — 전략 문서 0~7 토폴로지 + 엔진 플래그 */}
+      <div className="sb-admin-card sb-flow-card">
+        <div className="sb-flow-head">
+          <p className="sb-panel-label">생성 파이프라인 (전략 문서 0~7)</p>
+          {wire && (
+            <div className="sb-flow-head__side">
+              {model?.current && (
+                <span className="sb-admin-model__current">모델 <b>{model.current}</b></span>
+              )}
+              <span className="sb-admin-model__current">엔진</span>
+              <div className="sb-admin-fb-seg" role="group" aria-label="생성 엔진">
+                {['legacy', 'langgraph'].map((engine) => (
+                  <button
+                    key={engine}
+                    type="button"
+                    className={'sb-admin-fb-seg__btn' + (wire.engine.current === engine ? ' is-on' : '')}
+                    disabled={engineSaving}
+                    onClick={() => saveEngine(engine)}
+                  >
+                    {engine}
+                  </button>
+                ))}
+              </div>
+              {wire.engine.configured ? (
+                <button
+                  type="button"
+                  className="sb-btn sb-btn--ghost sb-btn--tiny"
+                  disabled={engineSaving}
+                  onClick={() => saveEngine(null)}
+                >
+                  기본값(legacy) 복귀
+                </button>
+              ) : (
+                <span className="sb-admin__muted" title="요청 단위 오버라이드: x-ddak-engine 헤더">기본값 사용 중</span>
+              )}
+            </div>
+          )}
+        </div>
         {!wire ? (
           <p className="sb-admin__muted">파이프라인 현황을 불러오는 중…</p>
         ) : (
-          <div className="sb-admin-model">
-            <div className="sb-admin-fb-seg" role="group" aria-label="생성 엔진">
-              {['legacy', 'langgraph'].map((engine) => (
-                <button
-                  key={engine}
-                  type="button"
-                  className={'sb-admin-fb-seg__btn' + (wire.engine.current === engine ? ' is-on' : '')}
-                  disabled={engineSaving}
-                  onClick={() => saveEngine(engine)}
-                >
-                  {engine}
-                </button>
-              ))}
-            </div>
-            {wire.engine.configured ? (
-              <button
-                type="button"
-                className="sb-btn sb-btn--ghost sb-btn--tiny"
-                disabled={engineSaving}
-                onClick={() => saveEngine(null)}
-              >
-                기본값(legacy) 복귀
-              </button>
-            ) : (
-              <span className="sb-admin__muted">기본값 사용 중</span>
+          <>
+            <PipelineFlow
+              stages={wire.stages}
+              running={running}
+              results={flowResults}
+              selectedId={selectedStage}
+              onSelect={setSelectedStage}
+              promptEntryOf={promptEntryOf}
+              onOpenPrompt={onOpenPrompt}
+            />
+            {running && (
+              <p className="sb-flow-status">
+                <i className="sb-flow-status__dot" aria-hidden="true" />
+                {pgStatus || '단계를 실행하고 있어요…'}
+              </p>
             )}
-            <span className="sb-admin-model__current">
-              요청 단위 오버라이드: <code>x-ddak-engine</code> 헤더
-            </span>
-          </div>
+          </>
         )}
       </div>
 
-      {/* 단계 카탈로그 — 전략 문서 0~7 */}
-      <div className="sb-admin-card">
-        <p className="sb-panel-label">파이프라인 단계 (전략 문서 0~7)</p>
-        {wire && (
-          <ul className="sb-pipe-stages">
-            {wire.stages.map((stage) => (
-              <li key={stage.id} className={'sb-pipe-stage' + (stage.status === 'planned' ? ' is-planned' : '')}>
-                <span className="sb-pipe-stage__no">{stage.no}</span>
-                <div className="sb-pipe-stage__main">
-                  <div className="sb-pipe-stage__title">
-                    <b>{stage.label}</b>
-                    <span className="sb-admin-prompt-chip">{KIND_LABEL[stage.kind] || stage.kind}</span>
-                    {stage.status === 'planned' && <span className="sb-admin-prompt-chip">예정</span>}
-                    {stage.effort && <span className="sb-admin-prompt-chip">effort {stage.effort}</span>}
-                    {stage.promptCustom && (
-                      <span className="sb-admin-prompt-chip sb-admin-prompt-chip--custom">프롬프트 재정의</span>
-                    )}
-                  </div>
-                  <p className="sb-pipe-stage__note">{stage.note}</p>
-                </div>
-                {stage.promptId && promptEntryOf(stage.promptId) && (
-                  <button
-                    type="button"
-                    className="sb-btn sb-btn--ghost sb-btn--tiny"
-                    onClick={() => onOpenPrompt(promptEntryOf(stage.promptId))}
-                  >
-                    프롬프트
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {/* 지식 소스 — KV 편집 */}
-      <div className="sb-admin-card">
-        <p className="sb-panel-label">지식 소스 (팀 데이터 v0 — 설정 KV)</p>
-        <p className="sb-admin__muted">
-          DB화 전의 수동 입력 자리예요. 시스템 자리표시자 지식은 프롬프트 캐시에 흡수되고, 가변부·게이트 값은 요청마다
-          실려요. 편집은 새 생성부터 반영돼요 (서버 캐시 최대 30초).
-        </p>
-        {wire && (
-          <ul className="sb-pipe-knowledge">
-            {wire.knowledge.map((entry) => (
-              <li key={entry.id} className="sb-pipe-knowledge__row">
-                <div className="sb-pipe-knowledge__main">
-                  <div className="sb-pipe-stage__title">
-                    <b>{entry.label}</b>
-                    <span className="sb-admin-prompt-chip">{INJECTION_LABEL[entry.injection] || entry.injection}</span>
-                    {entry.placeholder && <code>{entry.placeholder}</code>}
-                    {!entry.editable && <span className="sb-admin-prompt-chip">실데이터 파생</span>}
-                    {entry.editable && entry.value && (
-                      <span className="sb-admin-prompt-chip sb-admin-prompt-chip--custom">값 있음</span>
-                    )}
-                  </div>
-                  <p className="sb-pipe-stage__note">
-                    {entry.editable ? (entry.value ? entry.value.split('\n')[0] : '비어 있음 — 지식 없이 생성돼요') : entry.note}
-                  </p>
-                </div>
-                {entry.editable && (
-                  <button type="button" className="sb-btn sb-btn--ghost sb-btn--tiny" onClick={() => openKnowledge(entry)}>
-                    편집
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {/* 플레이그라운드 — 단계 단독 실행 */}
+      {/* 플레이그라운드 — 단계 단독 실행 (흐름 다이어그램 바로 아래 — 실행이 위 흐름에 비친다) */}
       <div className="sb-admin-card">
         <p className="sb-panel-label">플레이그라운드 (단계 단독 실행 — 쓰레드 기록 없음)</p>
         <div className="sb-pipe-play__intent">
@@ -432,6 +386,42 @@ export default function PipelineStudio({ prompts, onOpenPrompt }) {
               </ul>
             </div>
           </div>
+        )}
+      </div>
+
+      {/* 지식 소스 — KV 편집 */}
+      <div className="sb-admin-card">
+        <p className="sb-panel-label">지식 소스 (팀 데이터 v0 — 설정 KV)</p>
+        <p className="sb-admin__muted">
+          DB화 전의 수동 입력 자리예요. 시스템 자리표시자 지식은 프롬프트 캐시에 흡수되고, 가변부·게이트 값은 요청마다
+          실려요. 편집은 새 생성부터 반영돼요 (서버 캐시 최대 30초).
+        </p>
+        {wire && (
+          <ul className="sb-pipe-knowledge">
+            {wire.knowledge.map((entry) => (
+              <li key={entry.id} className="sb-pipe-knowledge__row">
+                <div className="sb-pipe-knowledge__main">
+                  <div className="sb-pipe-stage__title">
+                    <b>{entry.label}</b>
+                    <span className="sb-admin-prompt-chip">{INJECTION_LABEL[entry.injection] || entry.injection}</span>
+                    {entry.placeholder && <code>{entry.placeholder}</code>}
+                    {!entry.editable && <span className="sb-admin-prompt-chip">실데이터 파생</span>}
+                    {entry.editable && entry.value && (
+                      <span className="sb-admin-prompt-chip sb-admin-prompt-chip--custom">값 있음</span>
+                    )}
+                  </div>
+                  <p className="sb-pipe-stage__note">
+                    {entry.editable ? (entry.value ? entry.value.split('\n')[0] : '비어 있음 — 지식 없이 생성돼요') : entry.note}
+                  </p>
+                </div>
+                {entry.editable && (
+                  <button type="button" className="sb-btn sb-btn--ghost sb-btn--tiny" onClick={() => openKnowledge(entry)}>
+                    편집
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
         )}
       </div>
 

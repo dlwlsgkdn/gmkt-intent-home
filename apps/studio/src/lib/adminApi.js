@@ -1,4 +1,4 @@
-/* 관리 페이지(#admin) 클라이언트 — BFF `/api/admin/*` (API 경로·오리진 규칙은 liveApi.js와 동일).
+/* 운영 콘솔(#ops) 클라이언트 — BFF `/api/admin/*` (API 경로·오리진 규칙은 liveApi.js와 동일).
    별도 인증 없음 — 서비스 토큰은 엣지 미들웨어가 주입하고, 옛 관리 토큰(x-admin-token) 게이트는 뗐다. */
 
 const SAME_ORIGIN =

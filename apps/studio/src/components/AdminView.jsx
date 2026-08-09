@@ -18,17 +18,19 @@ import ExperimentStudio from './ExperimentStudio.jsx'
 import { promoteEvalCase } from '../lib/adminApi.js'
 
 /*
- * thread 관리 페이지 — 진입은 홈 드로어 도구 행의 버튼 또는 #admin 해시.
+ * 운영 콘솔 — 진입은 홈 드로어 도구 행의 버튼 또는 #ops 해시 (구 #admin 호환).
+ * 탭(threads|pipeline|experiment)은 해시가 원천 — App.jsx가 #ops/<탭>으로 라우팅해
+ * 새로고침·앞뒤로가기가 탭을 유지한다. 전환은 api.setAdminTab.
  * 별도 토큰 게이트 없음 (옛 x-admin-token 입력 검증은 뗐다 — adminApi.js 참고).
  * "삭제"는 보관(archived) 처리 — 데이터는 남고 사용자 목록에서만 숨겨진다.
  */
 
-export default function AdminView({ api }) {
-  const [tab, setTab] = useState('threads') // 'threads'(운영) | 'pipeline'(생성 파이프라인)
+export default function AdminView({ api, tab }) {
   const [threads, setThreads] = useState([])
   const [nextCursor, setNextCursor] = useState(null)
   const [listLoading, setListLoading] = useState(false)
   const [listError, setListError] = useState(null)
+  const [statusFilter, setStatusFilter] = useState('all') // 상태 흐름 바의 필터 (칩 재클릭 = 해제)
 
   const [feedback, setFeedback] = useState(null) // AdminFeedbackWire { items, truncated }
   const [feedbackLoading, setFeedbackLoading] = useState(false)
@@ -187,12 +189,38 @@ export default function AdminView({ api }) {
   const markdown = useMemo(() => (detail ? threadMarkdown(detail) : ''), [detail])
   const dirty = model && (model.configured ?? '') !== modelChoice
 
+  /* 상태 흐름 바 — 로드된 행 기준 상태별 개수. 체험 여정(탐색→설문→계획→완료)과
+     종착 상태(이탈·보관)를 파이프라인과 같은 흐름 문법으로 보여주고, 칩 클릭이 목록을 거른다 */
+  const statusCounts = useMemo(() => {
+    const counts = {}
+    for (const t of threads) counts[t.status] = (counts[t.status] || 0) + 1
+    return counts
+  }, [threads])
+  const visibleThreads = useMemo(
+    () => (statusFilter === 'all' ? threads : threads.filter((t) => t.status === statusFilter)),
+    [threads, statusFilter],
+  )
+  const statusChip = (status) => (
+    <button
+      key={status}
+      type="button"
+      className={
+        `sb-thread-flow__chip sb-thread-flow__chip--${status}` + (statusFilter === status ? ' is-on' : '')
+      }
+      title={`${statusLabel(status)} 쓰레드만 보기 (다시 누르면 전체)`}
+      onClick={() => setStatusFilter(statusFilter === status ? 'all' : status)}
+    >
+      <span className="sb-thread-flow__count">{statusCounts[status] || 0}</span>
+      <span className="sb-thread-flow__label">{statusLabel(status)}</span>
+    </button>
+  )
+
   return (
     <section className="sb-admin">
       <header className="sb-admin__head">
         <div>
-          <h1>thread 관리</h1>
-          <p className="sb-admin__sub">core DB의 라이브 쓰레드 전체 — 보관 처리한 쓰레드는 사용자 목록에서 숨겨져요.</p>
+          <h1>운영 콘솔</h1>
+          <p className="sb-admin__sub">라이브 생성 운영 한곳 — 쓰레드·평가 열람, 생성 파이프라인, 실험. 보관한 쓰레드는 사용자 목록에서만 숨겨져요.</p>
         </div>
         <div className="sb-admin__head-actions">
           <button
@@ -223,16 +251,19 @@ export default function AdminView({ api }) {
             role="tab"
             aria-selected={tab === value}
             className={'sb-admin-tabs__btn' + (tab === value ? ' is-on' : '')}
-            onClick={() => setTab(value)}
+            onClick={() => api.setAdminTab(value)}
           >
             {label}
           </button>
         ))}
       </div>
 
-      {/* 파이프라인 탭 — 모델·프롬프트·단계·지식·플레이그라운드 */}
+      {/* 파이프라인 탭 — 흐름 다이어그램·플레이그라운드·지식이 먼저, 모델·프롬프트 설정이 뒤 */}
       {tab === 'pipeline' && (
       <>
+      {/* 파이프라인 흐름(히어로)·엔진·플레이그라운드·지식 KV */}
+      <PipelineStudio prompts={prompts} onOpenPrompt={openPromptEdit} model={model} />
+
       {/* LLM 모델 설정 */}
       <div className="sb-admin-card">
         <p className="sb-panel-label">생성 모델</p>
@@ -321,9 +352,6 @@ export default function AdminView({ api }) {
           </>
         )}
       </div>
-
-      {/* 단계 카탈로그·지식 KV·엔진·플레이그라운드 */}
-      <PipelineStudio prompts={prompts} onOpenPrompt={openPromptEdit} />
       </>
       )}
 
@@ -339,6 +367,17 @@ export default function AdminView({ api }) {
       <div className="sb-admin-card">
         <p className="sb-panel-label">쓰레드 목록 {threads.length > 0 ? `(${threads.length}개 로드됨)` : ''}</p>
         {listError && <p className="sb-admin-gate__error">{listError}</p>}
+        {threads.length > 0 && (
+          <div className="sb-thread-flow" role="group" aria-label="상태별 쓰레드 필터">
+            {['exploring', 'surveying', 'planning', 'done'].map((status, index) => (
+              <React.Fragment key={status}>
+                {index > 0 && <i className="sb-flow__link sb-thread-flow__link" aria-hidden="true" />}
+                {statusChip(status)}
+              </React.Fragment>
+            ))}
+            <span className="sb-thread-flow__side">{['abandoned', 'archived'].map(statusChip)}</span>
+          </div>
+        )}
         <div className="sb-table sb-admin-table">
           <div className="sb-table__scroll">
             <table>
@@ -353,7 +392,7 @@ export default function AdminView({ api }) {
                 </tr>
               </thead>
               <tbody>
-                {threads.map((t) => (
+                {visibleThreads.map((t) => (
                   <tr key={t.id} className={t.status === 'archived' ? 'sb-admin-row--archived' : undefined}>
                     <td><code>{t.id}</code></td>
                     <td className="sb-admin-table__title">{t.title || (t.source && t.source.query) || '—'}</td>
@@ -382,6 +421,9 @@ export default function AdminView({ api }) {
             </table>
             {threads.length === 0 && !listLoading && (
               <p className="sb-table__empty">쓰레드가 없어요. 홈에서 라이브 생성 체험을 하면 여기에 쌓여요.</p>
+            )}
+            {threads.length > 0 && visibleThreads.length === 0 && (
+              <p className="sb-table__empty">「{statusLabel(statusFilter)}」 상태의 쓰레드가 없어요.</p>
             )}
           </div>
         </div>

@@ -1,4 +1,4 @@
-/* ── thread 관리 페이지 (#admin) — 토큰 게이트 · 목록 · 마크다운 문서 뷰 ──
+/* ── 운영 콘솔 (#ops — 구 #admin) — 쓰레드·평가 · 파이프라인 · 실험 ──
    유저 진입점에 링크가 없는 관리 전용 화면. 토큰은 base.css의 디자인 토큰만 사용. */
 
 .sb-admin {
@@ -940,4 +940,459 @@
 .sb-exp-score input {
   flex: 1;
   min-width: 0;
+}
+
+/* ── 파이프라인 흐름 다이어그램 (PipelineFlow.jsx — 파이프라인 탭 히어로) ────────
+   전략 문서 0~7 토폴로지를 노드·연결선으로 그린다. 노드 높이는 76px 고정 —
+   병렬 블록의 분기·합류 세로선(::before/::after) 오프셋이 이 값(절반 38px)에 묶인다. */
+
+.sb-flow-card {
+  background: linear-gradient(180deg, var(--sb-n-0), var(--sb-n-50));
+}
+.sb-flow-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.sb-flow-head__side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sb-flow-wrap {
+  overflow-x: auto;
+  margin: 0 -12px;
+  padding: 10px 12px 6px;
+}
+.sb-flow {
+  display: flex;
+  align-items: center;
+  min-width: max-content;
+}
+.sb-flow__node {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  width: 100px;
+  height: 76px;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  flex: 0 0 auto;
+  border: 1px solid var(--sb-n-200);
+  border-radius: var(--sb-r-lg);
+  background: var(--sb-n-0);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color var(--sb-dur) var(--sb-ease), box-shadow var(--sb-dur) var(--sb-ease);
+}
+.sb-flow__node:hover {
+  border-color: var(--sb-n-300);
+  box-shadow: var(--sb-shadow-sm);
+}
+.sb-flow__node--llm {
+  border-color: var(--sb-ai-line);
+  background: linear-gradient(180deg, var(--sb-n-0), var(--sb-ai-soft));
+}
+.sb-flow__node--planned {
+  border-style: dashed;
+  opacity: 0.55;
+}
+.sb-flow__node.is-on {
+  border-color: var(--sb-info);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sb-info) 30%, transparent);
+}
+.sb-flow__node.is-path {
+  border-color: color-mix(in srgb, var(--sb-ai) 45%, var(--sb-n-200));
+  opacity: 1;
+}
+.sb-flow__node.is-live {
+  border-color: var(--sb-ai);
+  animation: sb-flow-pulse 1.3s ease-out infinite;
+}
+@keyframes sb-flow-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--sb-ai) 35%, transparent); }
+  100% { box-shadow: 0 0 0 9px color-mix(in srgb, var(--sb-ai) 0%, transparent); }
+}
+.sb-flow__no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: var(--sb-r-pill);
+  background: var(--sb-n-100);
+  color: var(--sb-ink-2);
+  font-size: var(--sb-t-micro);
+  font-weight: 500;
+}
+.sb-flow__node--llm .sb-flow__no {
+  background: color-mix(in srgb, var(--sb-ai) 12%, transparent);
+  color: var(--sb-ai);
+}
+.sb-flow__label {
+  font-size: var(--sb-t-small);
+  font-weight: 500;
+  color: var(--sb-ink);
+  white-space: nowrap;
+}
+.sb-flow__sub {
+  font-size: var(--sb-t-micro);
+  color: var(--sb-subtle);
+  white-space: nowrap;
+}
+.sb-flow__sub--ok {
+  color: var(--sb-success, var(--sb-ink-2));
+}
+.sb-flow__flag {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--sb-info);
+}
+/* 연결선 — 평시에도 중립색 대시가 천천히 흘러 "데이터가 지나는 관"임을 보여주고,
+   실행(is-live) 중에는 보라(ai) 대시가 빠르게 흐른다 */
+.sb-flow__link {
+  flex: 0 0 14px;
+  height: 2px;
+  background: repeating-linear-gradient(90deg, var(--sb-n-300) 0 6px, var(--sb-n-100) 6px 12px);
+  border-radius: 1px;
+  animation: sb-flow-dash 1.9s linear infinite;
+}
+.sb-flow__link--stub {
+  flex-basis: 10px;
+}
+.sb-flow__link--grow {
+  flex: 1 1 10px;
+  min-width: 10px;
+}
+.sb-flow__link.is-live {
+  background: repeating-linear-gradient(90deg, var(--sb-ai) 0 6px, transparent 6px 12px);
+  animation: sb-flow-dash 0.55s linear infinite;
+}
+@keyframes sb-flow-dash {
+  to { background-position: 12px 0; }
+}
+/* 답변 대기 interrupt — 라벨 달린 대기 점선 (설문→계획 연결선을 겸한다) */
+.sb-flow__gate {
+  position: relative;
+  flex: 0 0 60px;
+  height: 76px;
+}
+.sb-flow__gate::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  margin-top: -1px;
+  background: repeating-linear-gradient(90deg, var(--sb-n-300) 0 5px, transparent 5px 12px);
+  animation: sb-flow-dash 1.9s linear infinite;
+}
+.sb-flow__gate.is-live::before {
+  background: repeating-linear-gradient(90deg, var(--sb-ai) 0 5px, transparent 5px 12px);
+  animation: sb-flow-dash 0.55s linear infinite;
+}
+.sb-flow__gate-label {
+  position: absolute;
+  left: 50%;
+  bottom: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 7px;
+  font-size: var(--sb-t-micro);
+  color: var(--sb-muted);
+  white-space: nowrap;
+}
+/* 병렬 블록 — 위 5a 뼈대 / 아래 4 근거 + 5b 상품·콘텐츠, 좌우 세로선이 분기·합류 버스 */
+.sb-flow__par {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 0 0 auto;
+}
+.sb-flow__par::before,
+.sb-flow__par::after {
+  content: '';
+  position: absolute;
+  top: 38px;
+  bottom: 38px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--sb-n-200);
+}
+.sb-flow__par::before { left: 0; }
+.sb-flow__par::after { right: 0; }
+.sb-flow__lane {
+  display: flex;
+  align-items: center;
+}
+.sb-flow-legend {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: var(--sb-t-micro);
+  color: var(--sb-subtle);
+}
+.sb-flow-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.sb-flow-legend__sw {
+  width: 10px;
+  height: 10px;
+  box-sizing: border-box;
+  border: 1px solid var(--sb-n-300);
+  border-radius: 3px;
+  background: var(--sb-n-0);
+}
+.sb-flow-legend__sw--llm {
+  border-color: var(--sb-ai-line);
+  background: var(--sb-ai-soft);
+}
+.sb-flow-legend__sw--planned {
+  border-style: dashed;
+  opacity: 0.55;
+}
+.sb-flow-legend__sw--live {
+  border: none;
+  height: 2px;
+  border-radius: 1px;
+  background: repeating-linear-gradient(90deg, var(--sb-ai) 0 3px, transparent 3px 6px);
+}
+.sb-flow-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: var(--sb-t-caption);
+  color: var(--sb-ai);
+}
+.sb-flow-status__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--sb-ai);
+  animation: sb-flow-blink 1.1s ease-in-out infinite;
+}
+@keyframes sb-flow-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+.sb-flow-detail {
+  border-top: 1px dashed var(--sb-n-200);
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.sb-flow-detail__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sb-flow-detail__head b {
+  font-weight: 500;
+  font-size: var(--sb-t-body);
+  color: var(--sb-ink);
+}
+.sb-flow-hint {
+  font-size: var(--sb-t-caption);
+  color: var(--sb-subtle);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sb-flow__node.is-live,
+  .sb-flow__link,
+  .sb-flow__link.is-live,
+  .sb-flow__gate::before,
+  .sb-flow__gate.is-live::before,
+  .sb-flow-status__dot {
+    animation: none;
+  }
+}
+
+/* ── 쓰레드 상태 흐름 바 (AdminView 쓰레드 목록) ───────────────────────────
+   체험 여정(탐색→설문→계획→완료)을 파이프라인과 같은 흐름 문법으로 — 칩 클릭 = 목록 필터 */
+
+.sb-thread-flow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 2px 0 4px;
+}
+.sb-thread-flow__chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  border: 1px solid var(--sb-n-200);
+  border-radius: var(--sb-r-lg);
+  background: var(--sb-n-0);
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: border-color var(--sb-dur) var(--sb-ease), box-shadow var(--sb-dur) var(--sb-ease);
+}
+.sb-thread-flow__chip:hover {
+  border-color: var(--sb-n-300);
+}
+.sb-thread-flow__chip.is-on {
+  border-color: var(--sb-info);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sb-info) 30%, transparent);
+}
+.sb-thread-flow__count {
+  font-size: var(--sb-t-title);
+  font-weight: 400;
+  color: var(--sb-ink);
+}
+.sb-thread-flow__label {
+  font-size: var(--sb-t-caption);
+  color: var(--sb-muted);
+  white-space: nowrap;
+}
+.sb-thread-flow__chip--done .sb-thread-flow__count {
+  color: var(--sb-success, var(--sb-ink));
+}
+.sb-thread-flow__chip--abandoned .sb-thread-flow__count {
+  color: var(--sb-warn, var(--sb-ink));
+}
+.sb-thread-flow__chip--archived {
+  opacity: 0.6;
+}
+.sb-thread-flow__link {
+  flex: 0 0 14px;
+}
+.sb-thread-flow__side {
+  display: flex;
+  gap: 8px;
+  margin-left: 6px;
+  padding-left: 14px;
+  border-left: 1px dashed var(--sb-n-200);
+}
+
+/* 평가 리더보드 — 평균 별점 미터 (텍스트 대신 막대 길이로 비교) */
+.sb-admin-fb-rank__meter {
+  flex: 0 0 64px;
+  height: 6px;
+  background: var(--sb-n-100);
+  border-radius: var(--sb-r-pill);
+  overflow: hidden;
+}
+.sb-admin-fb-rank__meter-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--sb-r-pill);
+  background: var(--sb-info);
+  opacity: 0.75;
+}
+.sb-admin-fb-rank__meter-fill--low {
+  background: var(--sb-danger);
+}
+
+/* ── 실험 탭 — 엔진 비교 카드 (전환 판정 계기판) ───────────────────────────
+   지연 3종은 전 엔진 공통 축의 가로 막대 — 표 대신 길이로 판정한다 */
+
+.sb-exp-engines {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.sb-exp-engine {
+  flex: 1 1 280px;
+  min-width: 260px;
+  border: 1px solid var(--sb-n-150, var(--sb-n-200));
+  border-radius: var(--sb-r-lg);
+  background: var(--sb-n-50);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.sb-exp-engine__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.sb-exp-engine__head code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: var(--sb-ink);
+}
+.sb-exp-engine__foot {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.sb-exp-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sb-exp-bar__label {
+  flex: 0 0 32px;
+  font-size: var(--sb-t-caption);
+  color: var(--sb-muted);
+  text-align: right;
+}
+.sb-exp-bar__track {
+  flex: 1;
+  height: 8px;
+  background: var(--sb-n-150, var(--sb-n-200));
+  border-radius: var(--sb-r-pill);
+  overflow: hidden;
+}
+.sb-exp-bar__fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--sb-r-pill);
+  background: var(--sb-info);
+  opacity: 0.75;
+}
+.sb-exp-bar__fill--skeleton {
+  background: var(--sb-accent);
+}
+.sb-exp-bar__fill--products {
+  background: var(--sb-ai);
+}
+.sb-exp-bar__fill--cache {
+  background: var(--sb-success, var(--sb-info));
+}
+.sb-exp-bar__val {
+  flex: 0 0 44px;
+  font-size: var(--sb-t-caption);
+  color: var(--sb-ink-2);
+}
+
+/* 골든 케이스 — 실행 채점 추이 점 (왼쪽 = 오래된 실행) */
+.sb-exp-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.sb-exp-trend__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sb-info);
+  opacity: 0.75;
+}
+.sb-exp-trend__dot--low {
+  background: var(--sb-danger);
+}
+.sb-exp-trend__dot--none {
+  background: transparent;
+  border: 1px solid var(--sb-n-300);
+  box-sizing: border-box;
+  opacity: 1;
 }

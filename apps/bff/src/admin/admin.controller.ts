@@ -83,7 +83,7 @@ const THREAD_ID_PARAM = {
 } as const
 
 /*
- * admin API — 스튜디오 관리 페이지(#admin) 전용.
+ * admin API — 스튜디오 운영 콘솔(#ops) 전용.
  * 가드는 ServiceTokenGuard(스튜디오 프록시 경유 강제)뿐 — 옛 x-admin-token(사람이 아는
  * 관리 토큰) 이중 가드는 뗐다. 스튜디오를 열 수 있으면 누구나 관리 페이지도 쓸 수 있다.
  * 쓰레드 "삭제"는 보관(archived) 처리다 — 데이터는 보존하고 사용자 목록에서만 숨긴다.

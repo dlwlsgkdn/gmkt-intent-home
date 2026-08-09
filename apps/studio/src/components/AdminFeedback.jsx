@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { timeAgo } from '../lib/timeAgo.js'
 
 /*
- * 평가 모아보기 — 관리 페이지(#admin)의 피드백 대시보드 카드.
+ * 평가 모아보기 — 운영 콘솔(#ops)의 피드백 대시보드 카드.
  * 데이터는 BFF `/api/admin/feedback` 한 응답(제출 1회 = 항목 1개, 최신순, latest=유효본)이고,
  * 집계(평균·분포·낮은 평가)는 여기서 latest 항목만으로 계산한다 — 페이지네이션이 없어
  * 전체가 실려 오기 때문(서버 상한에 걸리면 truncated 안내를 띄운다).
@@ -236,6 +236,18 @@ export default function AdminFeedback({ wire, loading, error, onOpenThread }) {
                     {row.threadStatus === 'archived' && (
                       <span className="sb-admin-status sb-admin-status--archived">보관됨</span>
                     )}
+                    {/* 평균 미터 — 순위를 텍스트가 아니라 막대 길이로 한눈에 비교 */}
+                    <span className="sb-admin-fb-rank__meter" aria-hidden="true">
+                      {row.average != null && (
+                        <span
+                          className={
+                            'sb-admin-fb-rank__meter-fill' +
+                            (row.average <= LOW_SCORE ? ' sb-admin-fb-rank__meter-fill--low' : '')
+                          }
+                          style={{ width: `${Math.round((row.average / 5) * 100)}%` }}
+                        />
+                      )}
+                    </span>
                     <span className="sb-admin-fb-rank__avg">
                       {row.average == null ? <span className="sb-admin-fb-badge">별점 없음</span> : fmtAvg(row.average)}
                     </span>

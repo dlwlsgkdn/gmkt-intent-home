@@ -346,8 +346,8 @@ export default function HomeView({ api }) {
               <button type="button" title="AI 실시간 생성이 상품을 고르는 근거(카탈로그 특징 태그)를 검토해요 (이 브라우저에만 저장)" onClick={api.openTaggingStudio}>
                 🏷️ 상품 태깅 검토
               </button>
-              <button type="button" title="라이브 생성 쓰레드 전체 열람·보관과 생성 모델 설정 (core DB)" onClick={api.openAdmin}>
-                🧵 thread 관리
+              <button type="button" title="라이브 생성 쓰레드·평가 열람과 파이프라인·실험 관리 (core DB)" onClick={api.openAdmin}>
+                🧵 운영 콘솔
               </button>
               <button type="button" onClick={() => setJsonDialog({ mode: 'export' })}>
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16" /></svg>

@@ -18,7 +18,8 @@ import TaggingStudio from './components/TaggingStudio.jsx'
  * lib/scenarioOps가 담당한다. 여기서는 "무엇을 보여줄지"만 결정한다.
  *
  * 페이지형 화면은 해시 URL이 원천이다 — #builder/<sid>(시나리오 스튜디오),
- * #explore-editor(프로필·키워드 사전), #tagging(상품 태깅 검토), #admin(thread 관리).
+ * #explore-editor(프로필·키워드 사전), #tagging(상품 태깅 검토), #ops[/<탭>](운영 콘솔 —
+ * 쓰레드·평가/파이프라인/실험 탭까지 해시로 딥링크, 구 #admin 주소도 계속 받는다).
  * 진입은 location.hash 푸시(히스토리 엔트리 생성), 적용은 hashchange 핸들러 한 곳 —
  * 그래서 브라우저 앞/뒤로가기·새로고침·주소 직접 입력이 전부 동작한다.
  * player/live는 체험 1회의 일시 상태라 해시 없이 route 상태로만 산다 (공유는 #s= 별도).
@@ -26,7 +27,9 @@ import TaggingStudio from './components/TaggingStudio.jsx'
 
 /** 해시 → 페이지 라우트 (모르는 해시·#s= 공유 링크는 null = 홈/공유 모드 처리) */
 function routeFromHash(hash) {
-  if (hash === '#admin') return { name: 'admin' }
+  const ops = hash.match(/^#ops(?:\/(threads|pipeline|experiment))?$/)
+  if (ops) return { name: 'admin', tab: ops[1] || 'threads' }
+  if (hash === '#admin') return { name: 'admin', tab: 'threads' } // 구 주소 호환
   if (hash === '#tagging') return { name: 'tagging' }
   if (hash === '#explore-editor') return { name: 'explore-editor' }
   const builder = hash.match(/^#builder\/(.+)$/)
@@ -37,7 +40,7 @@ function routeFromHash(hash) {
 export default function App() {
   // route: {name:'home'} | {name:'builder', id} | {name:'player', id, resume}
   //      | {name:'live', query?, resumeThreadId?, runId} | {name:'explore-editor'}
-  //      | {name:'tagging'} | {name:'admin'}
+  //      | {name:'tagging'} | {name:'admin', tab}
   // 초기값: 데이터 게이트가 없는 해시는 즉시 반영, #builder/*는 하이드레이션 뒤 초기 효과가 연다
   const [route, setRoute] = useState(() => {
     if (typeof location === 'undefined') return { name: 'home' }
@@ -266,7 +269,9 @@ export default function App() {
     playLive: (query) => setRoute({ name: 'live', query, runId: Date.now() }),
     resumeLive: (threadId) => setRoute({ name: 'live', resumeThreadId: threadId, runId: Date.now() }),
     /* 페이지형 화면 진입·이탈 — 전부 해시 히스토리 엔트리라 브라우저 앞/뒤로가기가 동작한다 */
-    openAdmin: () => pushRoute('#admin', { name: 'admin' }),
+    openAdmin: () => pushRoute('#ops', { name: 'admin', tab: 'threads' }),
+    /* 운영 콘솔 탭 전환도 해시 엔트리 — 새로고침·앞뒤로가기가 탭을 유지한다 */
+    setAdminTab: (tab) => pushRoute(tab === 'threads' ? '#ops' : `#ops/${tab}`, { name: 'admin', tab }),
     exitAdmin: goHome,
     openExploreEditor: () => pushRoute('#explore-editor', { name: 'explore-editor' }),
     closeExploreEditor: goHome,
@@ -339,7 +344,7 @@ export default function App() {
         /* key: 같은 검색어라도 runId마다 새 쓰레드로 다시 생성한다 */
         <LivePlayer key={route.runId} api={api} query={route.query} resumeThreadId={route.resumeThreadId} />
       )}
-      {route.name === 'admin' && <AdminView api={api} />}
+      {route.name === 'admin' && <AdminView api={api} tab={route.tab || 'threads'} />}
       {route.name === 'tagging' && <TaggingStudio api={api} />}
       {route.name !== 'home' && route.name !== 'explore-editor' && route.name !== 'live' && route.name !== 'admin' && route.name !== 'tagging' && !current && <HomeView api={api} />}
 

@@ -123,7 +123,7 @@ ${CATALOG_PLACEHOLDER}
 - 확인한 콘텐츠가 없으면 콘텐츠 섹션을 만들지 않는다 — 상품 섹션만 반환해도 된다.
 {{CRITERIA}}`
 
-/* ── 시스템 프롬프트 카탈로그 — 관리 페이지(#admin) 조회·재정의의 원천.
+/* ── 시스템 프롬프트 카탈로그 — 운영 콘솔(#ops) 조회·재정의의 원천.
  * template은 자리표시자({{CATALOG}}) 포함 원문이고, 실제 호출값은 renderSystemTemplate을
  * 거친다. 재정의는 core 설정 KV(`llm-prompt-<id>`)에 원문으로 저장된다 (llm.service). */
 
