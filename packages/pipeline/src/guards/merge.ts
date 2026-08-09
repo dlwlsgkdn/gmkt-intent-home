@@ -1,5 +1,5 @@
 import type { PlanSectionWire } from '@ddak/schema'
-import type { PlanSkeletonSectionGen } from '../llm/gen-schemas'
+import type { PlanSkeletonSectionGen } from '../schemas'
 
 /*
  * 2단계 계획 병합 규칙 (§9-1) — 뼈대의 상품/콘텐츠 "자리"를 검색 단계 결과로 채운다.

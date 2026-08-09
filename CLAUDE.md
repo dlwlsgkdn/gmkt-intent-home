@@ -11,6 +11,7 @@ apps/studio/       ← 스튜디오 소스 (React 18 + Vite 5). 빌드 산출물
 apps/core/         ← NestJS backend core — 쓰레드 저장·조회 (Drizzle+Neon). 실행·배포는 apps/core/README.md
 apps/bff/          ← NestJS BFF — LLM(설문·계획 생성, 계획은 웹 검색 병행)·core 오케스트레이션. DESIGN-LLM-SERVICE.md §4, API.md §1 참고
 packages/schema/   ← @ddak/schema — 쓰레드 도메인·internal API zod 계약 (install 시 prepare로 dist 빌드)
+packages/pipeline/ ← @ddak/pipeline — LLM 파이프라인 이관 자산: 단계 카탈로그·프롬프트·생성 스키마·결정적 가드(그라운딩·병합·partial)·LlmPort 계약·원장·지식 소스. 프레임워크(LangGraph)·프로바이더 중립 순수 로직만 — bff는 여기서 import. 설계·페이즈는 DESIGN-PIPELINE-LANGGRAPH.md
 api/               ← 스튜디오 서버리스 (Vercel 함수, 루트 고정) — state.js(동기화)·pdp.js(지마켓 PDP iframe 프록시)
 middleware.js      ← 스튜디오 엣지 미들웨어 (루트 고정) — /api/bff/* 를 BFF로 rewrite + BFF_SERVICE_TOKEN 주입 (FE는 bff URL을 직접 안 부름. 스튜디오 프로젝트 환경변수 BFF_URL·BFF_SERVICE_TOKEN 필요)
 legacy/            ← 옛 HTML 프로토타입 원본 (빌드 시 apps/studio/dist/legacy 로 복사됨)
@@ -35,7 +36,7 @@ npm run db:migrate --workspace=apps/core    # 마이그레이션 SQL 순서 적�
 ```
 개발 서버: `.claude/launch.json`의 `scenario-studio` (포트 5173), 정적 검증용 `pages-static` (포트 8899, apps/studio/dist 서빙 — 빌드 후 사용).
 
-워크스페이스 주의: `@ddak/schema`를 수정하면 소비자가 dist를 보므로 `npm run build --workspace=@ddak/schema`로 재빌드할 것(설치 시엔 prepare가 자동 빌드). **루트 devDependencies의 drizzle-orm은 지우지 말 것** — npm이 orm을 apps/core 아래로 중첩 배치해 루트에 호이스팅된 drizzle-kit가 못 찾는 문제를, 루트 선언으로 호이스팅을 강제해 해결한 것이다(core와 버전 범위를 항상 맞출 것).
+워크스페이스 주의: `@ddak/schema`·`@ddak/pipeline`을 수정하면 소비자가 dist를 보므로 `npm run build --workspace=@ddak/schema`(또는 `--workspace=@ddak/pipeline`)로 재빌드할 것(설치 시엔 prepare가 자동 빌드). **루트 devDependencies의 drizzle-orm은 지우지 말 것** — npm이 orm을 apps/core 아래로 중첩 배치해 루트에 호이스팅된 drizzle-kit가 못 찾는 문제를, 루트 선언으로 호이스팅을 강제해 해결한 것이다(core와 버전 범위를 항상 맞출 것).
 
 **데이터 프로필** (`lib/remote.js`): 개발 서버 = `local`(localStorage 전용, 서버 동기화 없음), 빌드 산출물 = `prod`(localStorage + Neon DB 미러링). 로컬에서 운영 DB에 붙으려면 `VITE_DATA_PROFILE=prod npm run dev`. 콘솔 `[remote] 데이터 프로필:` 로그로 확인. 서버 미러링을 운영 DB 없이 검증하려면 목 API(+`VITE_API_PROXY`)를 쓰는 `scenario-studio-mockdb`(포트 5174) 참고.
 

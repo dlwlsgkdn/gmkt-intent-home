@@ -1,10 +1,8 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common'
 import type {
   Answer,
-  CatalogProduct,
   LlmMeta,
   ThreadEventBody,
-  PlanContentItem,
   PlanPageWire,
   PlanSectionWire,
   Profile,
@@ -15,22 +13,24 @@ import type {
   ThreadWithSteps,
 } from '@ddak/schema'
 import { ThreadStageFeedback } from '@ddak/schema'
-import { CoreClientService } from '../core-client.service'
-import { LlmService } from '../llm/llm.service'
-import { CATALOG_BY_ID } from '../llm/catalog'
 import {
-  ContentItemGen,
   ContentsSectionGen,
+  GeneratedIndexAllocator,
   PlanSearchSectionGen,
-  PlanSearchSectionPartialGen,
   PlanSectionPartialGen,
   PlanSkeletonSectionGen,
   ProductsSectionGen,
   SurveyQuestionGen,
   SurveyQuestionPartialGen,
-  WebProductGen,
-} from '../llm/gen-schemas'
-import { GeneratedIndexAllocator, isSlotKind, mergePlanSections, slotIndexesOf } from './plan-merge'
+  completeSearchSection,
+  groundContentsSection,
+  groundProductsSection,
+  isSlotKind,
+  mergePlanSections,
+  slotIndexesOf,
+} from '@ddak/pipeline'
+import { CoreClientService } from '../core-client.service'
+import { LlmService } from '../llm/llm.service'
 
 /** 스텝 순번 — (thread, seq)가 멱등 키라 단계별 고정 순번을 쓴다 */
 const SEQ = { explore: 1, survey: 2, answers: 3, plan: 4, actionBase: 5 } as const
@@ -328,69 +328,20 @@ export class ThreadsService {
     return page
   }
 
-  /** 상품 섹션 그라운딩 검증 — 카탈로그 밖 id는 버리고, 웹 상품은 URL(http/https+PDP) 검증 통과분만 채택.
-   * 상세 페이지(url) 없는 상품은 카탈로그 상품이라도 추천하지 않는다 — 상세보기가 열리는 상품만 싣는다.
-   * 상품이 하나도 안 남으면 null(드롭). 결정적이라 스트림 조각과 최종 결과가 일치한다 (§4-3) */
+  /** 상품 섹션 그라운딩 검증 — 가드(@ddak/pipeline groundProductsSection)에 위임하고 드롭 사유를 로깅한다.
+   * 결정적이라 스트림 조각과 최종 결과가 일치한다 (§4-3). quiet=부분 스트리밍 재호출(로그 중복 방지).
+   * 드롭 사유의 스텝 payload(dropLog) 기록은 페이즈 3 */
   private resolveProductsSection(s: ProductsSectionGen, sectionIndex: number, quiet = false): PlanSectionWire | null {
-    const catalogProducts: CatalogProduct[] = s.productIds
-      .map((id) => CATALOG_BY_ID.get(id))
-      .filter((p): p is NonNullable<ReturnType<typeof CATALOG_BY_ID.get>> => Boolean(p && p.url))
-    if (!quiet && catalogProducts.length < s.productIds.length) {
-      this.logger.warn(`카탈로그 밖이거나 PDP url 없는 상품 id ${s.productIds.length - catalogProducts.length}건 드롭`)
-    }
-    // 외부몰 우선 정책: 웹 상품(올리브영 등)을 앞에 싣고 카탈로그(지마켓)는 뒤에 보조로 붙인다
-    const products: CatalogProduct[] = []
-    s.webProducts.forEach((w, webIndex) => {
-      const url = parseHttpUrl(w.url)
-      if (!url) {
-        if (!quiet) this.logger.warn(`웹 상품 URL 검증 실패로 드롭: ${w.name} (${w.url})`)
-        return
-      }
-      if (isSearchLikeUrl(url)) {
-        if (!quiet) this.logger.warn(`웹 상품 URL이 검색/목록 페이지로 보여 드롭 (PDP만 허용): ${w.name} (${w.url})`)
-        return
-      }
-      // 썸네일도 http(s) 검증 통과분만 — 실패해도 상품은 싣는다 (FE가 이모지 목업 폴백)
-      const imageUrl = parseHttpUrl(w.imageUrl) ? w.imageUrl : undefined
-      products.push({
-        id: `web-${sectionIndex}-${webIndex}`,
-        name: w.name,
-        brand: w.brand,
-        price: w.price,
-        tags: w.tags,
-        url: w.url,
-        mall: w.mall.trim() || '외부몰',
-        ...(imageUrl ? { imageUrl } : {}),
-      })
-    })
-    products.push(...catalogProducts)
-    return products.length ? { kind: 'products', title: s.title, reason: s.reason, products } : null
+    const { section, drops } = groundProductsSection(s, sectionIndex)
+    if (!quiet) drops.forEach((d) => this.logger.warn(d.message))
+    return section
   }
 
-  /** 참고 콘텐츠 섹션 그라운딩 검증 — url이 http(s)이고 검색/목록 페이지가 아닌 항목만 채택.
-   * 항목이 하나도 안 남으면 null(드롭). 결정적이라 스트림 조각과 최종 결과가 일치한다 */
+  /** 참고 콘텐츠 섹션 그라운딩 검증 — 가드(@ddak/pipeline groundContentsSection) 위임 + 드롭 사유 로깅 */
   private resolveContentsSection(s: ContentsSectionGen, quiet = false): PlanSectionWire | null {
-    const items: PlanContentItem[] = []
-    s.items.forEach((c) => {
-      const url = parseHttpUrl(c.url)
-      if (!url || isSearchLikeUrl(url)) {
-        if (!quiet) this.logger.warn(`콘텐츠 URL 검증 실패로 드롭: ${c.title} (${c.url})`)
-        return
-      }
-      // 썸네일도 http(s) 검증 통과분만 — 실패해도 항목은 싣는다 (FE가 폴백 이미지)
-      const imageUrl = parseHttpUrl(c.imageUrl) ? c.imageUrl : undefined
-      items.push({
-        type: c.type,
-        source: c.source.trim() || (c.type === 'video' ? '영상' : '게시글'),
-        title: c.title,
-        url: c.url,
-        ...(imageUrl ? { imageUrl } : {}),
-        ...(c.meta.trim() ? { meta: c.meta.trim() } : {}),
-        ...(c.snippet.trim() ? { snippet: c.snippet.trim() } : {}),
-        ...(c.duration.trim() ? { duration: c.duration.trim() } : {}),
-      })
-    })
-    return items.length ? { kind: 'contents', title: s.title, reason: s.reason, items } : null
+    const { section, drops } = groundContentsSection(s)
+    if (!quiet) drops.forEach((d) => this.logger.warn(d.message))
+    return section
   }
 
   /** 담기/완료 등 행동 기록 — 다음 빈 seq에 기록, complete면 상태 갱신 */
@@ -458,56 +409,6 @@ function combineMeta(skeleton: LlmMeta, products: LlmMeta | null): LlmMeta {
     latencyMs: Math.max(skeleton.latencyMs ?? 0, products?.latencyMs ?? 0),
     phases: { skeletonMs: skeleton.latencyMs ?? null, productsMs: products?.latencyMs ?? null },
   } as LlmMeta
-}
-
-/** 자라는 중인 검색 섹션 조각 → 완성된 항목만 남긴 본 스키마 형태 (상품·콘텐츠 항목 단위 증분).
- * 복구 파싱은 열린 괄호를 닫아 만든 것이라 버퍼상 마지막 키의 값만 잘렸을 수 있다 — 그 키가
- * 배열이면 마지막 원소를 무조건 버리고(앞 원소들은 이미 닫힌 완전한 JSON — stream-parse §안전 근거),
- * 남은 항목을 항목 스키마로 개별 검증한다. 버린 원소는 다음 조각이나 완성 시점(onElement)에 실린다 */
-export function completeSearchSection(element: unknown): PlanSearchSectionGen | null {
-  const parsed = PlanSearchSectionPartialGen.safeParse(element)
-  if (!parsed.success) return null
-  const s = parsed.data
-  if (!s.title || s.reason === undefined) return null
-  const keys = Object.keys(element as Record<string, unknown>)
-  const openKey = keys[keys.length - 1] // JSON.parse가 버퍼 키 순서를 보존한다 — 마지막 키만 미완성 후보
-  const settled = (key: string, list: unknown[] | undefined): unknown[] =>
-    key === openKey ? (list ?? []).slice(0, -1) : (list ?? [])
-  if (s.kind === 'products') {
-    return {
-      kind: 'products',
-      title: s.title,
-      reason: s.reason,
-      productIds: settled('productIds', s.productIds).filter((v): v is string => typeof v === 'string'),
-      webProducts: settled('webProducts', s.webProducts)
-        .map((v) => WebProductGen.safeParse(v))
-        .flatMap((r) => (r.success ? [r.data] : [])),
-    }
-  }
-  const items = settled('items', s.items)
-    .map((v) => ContentItemGen.safeParse(v))
-    .flatMap((r) => (r.success ? [r.data] : []))
-  return items.length ? { kind: 'contents', title: s.title, reason: s.reason, items } : null
-}
-
-function parseHttpUrl(raw: string): URL | null {
-  try {
-    const url = new URL(raw)
-    return ['http:', 'https:'].includes(url.protocol) ? url : null
-  } catch {
-    return null
-  }
-}
-
-/** 검색 결과·목록 페이지로 보이는 URL 판정 — 상세보기는 PDP만 허용한다 (프롬프트 지시의 서버측 가드).
- * 검색어 쿼리 키나 /search 경로가 있으면 검색 페이지로 본다 — PDP는 보통 상품 번호 키(goodsNo 등)를 쓴다 */
-const SEARCH_QUERY_KEYS = new Set(['q', 'query', 'keyword', 'kwd', 'searchterm', 'searchkeyword', 'searchword', 'search_query', 'sq', 'k'])
-function isSearchLikeUrl(url: URL): boolean {
-  if (/\/(search|srchall|category|display)\b/i.test(url.pathname)) return true
-  for (const key of url.searchParams.keys()) {
-    if (SEARCH_QUERY_KEYS.has(key.toLowerCase())) return true
-  }
-  return false
 }
 
 /** 단계별 최신 피드백 파생 — action 스텝(type='feedback')은 append 로그라 seq 순회의

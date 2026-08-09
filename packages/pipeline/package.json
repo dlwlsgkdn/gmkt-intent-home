@@ -1,0 +1,22 @@
+{
+  "name": "@ddak/pipeline",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DDAK LLM 파이프라인 이관 자산 — 단계 카탈로그·프롬프트·생성 스키마·결정적 가드·원장·지식 소스 (프레임워크·프로바이더 중립)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepare": "npm run build"
+  },
+  "dependencies": {
+    "@ddak/schema": "*",
+    "zod": "^4.4.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}

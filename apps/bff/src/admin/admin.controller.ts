@@ -40,7 +40,7 @@ import { ParseThreadIdPipe } from '../common/thread-id.pipe'
 import { ZodValidationPipe } from '../common/zod-validation.pipe'
 import { toOpenApi } from '../common/openapi'
 import { DEFAULT_MODEL, LLM_MODEL_SETTING_KEY, LlmService, MODEL_OPTIONS, promptSettingKey } from '../llm/llm.service'
-import { PROMPT_DEFS, PROMPT_VERSION } from '../llm/prompts'
+import { PROMPT_DEFS, PROMPT_VERSION } from '@ddak/pipeline'
 
 const THREAD_ID_PARAM = {
   name: 'id',

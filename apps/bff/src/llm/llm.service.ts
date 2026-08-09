@@ -3,19 +3,27 @@ import Anthropic from '@anthropic-ai/sdk'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import type { z } from 'zod'
 import type { AdminModelOption, Answer, LlmMeta, Profile, SurveyPageWire } from '@ddak/schema'
-import { CoreClientService } from '../core-client.service'
-import { PlanProductsGen, PlanSkeletonGen, SurveyGen } from './gen-schemas'
 import {
+  LlmGenerationError,
   PROMPT_DEFS,
   PROMPT_VERSION,
+  PlanProductsGen,
+  PlanSkeletonGen,
+  StructuredStreamParser,
+  SurveyGen,
   buildPlanProductsRequest,
   buildPlanSkeletonRequest,
   buildSurveyRequest,
   renderSystemTemplate,
+  type GenResult,
+  type LlmGenerateRequest,
+  type LlmPort,
+  type LlmStreamHandlers,
   type PlanRevisionContext,
   type PromptDefId,
-} from './prompts'
-import { StructuredStreamParser } from './stream-parse'
+  type ResolvedSystem,
+} from '@ddak/pipeline'
+import { CoreClientService } from '../core-client.service'
 
 export const DEFAULT_MODEL = 'claude-opus-5'
 
@@ -42,44 +50,16 @@ const WEB_SEARCH_MAX_USES = 4
 /** 서버 도구 루프가 pause_turn으로 멈췄을 때 이어붙이는 최대 횟수 */
 const MAX_CONTINUATIONS = 3
 
-export type GenResult<T> = { content: T; meta: LlmMeta }
-
-/** 조회를 마친 시스템 프롬프트 — custom이면 llmMeta.promptVersion에 `+custom`을 남긴다 */
-type ResolvedSystem = { text: string; custom: boolean }
-
-/** 부분 스트리밍 핸들러 — 원소는 원시 JSON 조각으로 전달되고, 검증·투영은 호출자(threads.service) 몫.
- * *Partial은 자라는 중인 값의 토큰 단위 미리보기(같은 키/인덱스 반복 호출 — 완성 시 onHead/onElement가 최종본).
- * onSearch는 웹 검색 서버 도구의 실행을 알린다 (진행 문구용) */
-export type LlmStreamHandlers = {
-  arrayKey: string
-  headKeys?: string[]
-  onHead?: (key: string, value: string) => void
-  onElement?: (element: unknown, index: number) => void
-  onHeadPartial?: (key: string, value: string) => void
-  onElementPartial?: (element: unknown, index: number) => void
-  onSearch?: (query: string) => void
-}
-
-/** LLM 생성 실패 — 컨트롤러가 SSE error 이벤트(실패 안내)로 변환한다 */
-export class LlmGenerationError extends Error {
-  constructor(
-    readonly code: 'llm_not_configured' | 'llm_refused' | 'llm_failed',
-    message: string,
-    readonly retryable: boolean,
-  ) {
-    super(message)
-  }
-}
-
 /*
- * Claude 호출 계층 — 구조화 출력(parse) + 프롬프트 캐싱 + refusal 처리.
+ * Claude 호출 계층 — LlmPort의 1차(Anthropic) 구현. 구조화 출력(parse) + 프롬프트 캐싱 + refusal 처리.
+ * 계약 타입(GenResult·LlmStreamHandlers·LlmGenerationError)은 @ddak/pipeline llm-port가 소유한다.
  * 실패 정책은 "실패 안내"다: 가짜 맞춤 콘텐츠(폴백 템플릿)를 지어내지 않고
  * LlmGenerationError를 던져 FE가 사용자에게 상태를 정직하게 보여주게 한다.
  * (캐시 재서빙·스튜디오 시나리오 폴백 등 강등 사다리는 인프라 마련 후 백로그 —
  *  DESIGN-LLM-SERVICE.md §4-2 참고. 일시 장애 재시도는 SDK 기본 2회에 맡긴다)
  */
 @Injectable()
-export class LlmService {
+export class LlmService implements LlmPort {
   private readonly logger = new Logger(LlmService.name)
   private client: Anthropic | null | undefined
   private modelCache: { value: string; at: number } | null = null
@@ -201,16 +181,10 @@ export class LlmService {
     })
   }
 
-  private async generate<S extends z.ZodTypeAny>(
+  async generate<S extends z.ZodTypeAny>(
     label: string,
     schema: S,
-    req: {
-      system: ResolvedSystem
-      effort: 'low' | 'medium' | 'high'
-      user: string
-      webSearch?: boolean
-      stream?: LlmStreamHandlers
-    },
+    req: LlmGenerateRequest,
   ): Promise<GenResult<S['_output']>> {
     const client = this.requireClient()
     const model = await this.resolveModel()

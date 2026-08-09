@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
+    "@ddak/pipeline": "*",
     "@ddak/schema": "*",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",

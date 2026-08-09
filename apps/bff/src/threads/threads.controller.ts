@@ -25,7 +25,7 @@ import { ServiceTokenGuard } from '../common/service-token.guard'
 import { ZodValidationPipe } from '../common/zod-validation.pipe'
 import { ParseThreadIdPipe } from '../common/thread-id.pipe'
 import { toOpenApi } from '../common/openapi'
-import { LlmGenerationError } from '../llm/llm.service'
+import { LlmGenerationError } from '@ddak/pipeline'
 import { ThreadsService } from './threads.service'
 import { openSse, sseClose, sseSend, type SseRes } from './sse'
 
