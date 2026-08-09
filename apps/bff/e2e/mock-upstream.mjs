@@ -6,8 +6,9 @@ import http from 'node:http'
 const PORT = Number(process.env.MOCK_PORT ?? 19799)
 
 const threads = new Map() // id -> { thread, steps: Map<seq, step> }
+const settings = new Map() // key -> value (core 설정 KV 모의 — 지식·가드·엔진 플래그)
 let nextId = 2195943212345678900n
-export const llmCalls = [] // { type: 'survey'|'skeleton'|'products' }
+export const llmCalls = [] // { type, system, user } — e2e가 프롬프트 주입을 검증한다
 
 const SURVEY_JSON = JSON.stringify({
   intro: '모의 인트로입니다. 여름 쿠션을 찾아볼게요.',
@@ -44,6 +45,16 @@ const PRODUCTS_JSON = JSON.stringify({
           url: 'https://www.oliveyoung.co.kr/store/goods/getGoodsDetail.do?goodsNo=A000000001',
           imageUrl: '',
           tags: ['지속력', '세미매트'],
+        },
+        // 의학 단정 차단 대상 — 이름에 '치료' (guard 있을 때만 드롭 — legacy 경로는 통과)
+        {
+          name: '여드름 치료 크림',
+          brand: '모의브랜드',
+          price: 15000,
+          mall: '올리브영',
+          url: 'https://www.oliveyoung.co.kr/store/goods/getGoodsDetail.do?goodsNo=A000000002',
+          imageUrl: '',
+          tags: ['진정'],
         },
       ],
     },
@@ -88,17 +99,20 @@ const server = http.createServer(async (req, res) => {
   // ── 모의 Anthropic ──────────────────────────────────────────────
   if (url === '/v1/messages' && req.method === 'POST') {
     const system = (body.system ?? []).map((b) => b.text ?? '').join('\n')
+    const user = (body.messages ?? [])
+      .map((m) => (typeof m.content === 'string' ? m.content : ''))
+      .join('\n')
     // 판별 순서 주의: 상품 시스템에도 '뼈대', 뼈대 시스템에도 '설문' 문구가 있다 —
     // 상품 고유 마커(productIds) → 뼈대 → 설문 순으로 좁힌다
     if (system.includes('productIds')) {
-      llmCalls.push({ type: 'products' })
+      llmCalls.push({ type: 'products', system, user })
       return streamAnthropic(res, PRODUCTS_JSON, { delayMs: 10, chunkSize: 24 }) // 뼈대보다 늦게 끝나게
     }
     if (system.includes('뼈대')) {
-      llmCalls.push({ type: 'skeleton' })
+      llmCalls.push({ type: 'skeleton', system, user })
       return streamAnthropic(res, SKELETON_JSON, { delayMs: 4, chunkSize: 18 })
     }
-    llmCalls.push({ type: 'survey' })
+    llmCalls.push({ type: 'survey', system, user })
     return streamAnthropic(res, SURVEY_JSON, { delayMs: 4, chunkSize: 18 })
   }
 
@@ -134,7 +148,26 @@ const server = http.createServer(async (req, res) => {
     Object.assign(t.thread, body, { updatedAt: new Date().toISOString() })
     return send(200, t.thread)
   }
-  if (url.startsWith('/internal/settings/') && req.method === 'GET') return send(404, { message: 'no setting' })
+  if ((m = url.match(/^\/internal\/settings\/([^/]+)$/)) && req.method === 'GET') {
+    const key = decodeURIComponent(m[1])
+    if (!settings.has(key)) return send(404, { message: 'no setting' })
+    return send(200, { key, value: settings.get(key), updatedAt: new Date().toISOString() })
+  }
+  if ((m = url.match(/^\/internal\/settings\/([^/]+)$/)) && req.method === 'PUT') {
+    const key = decodeURIComponent(m[1])
+    settings.set(key, body.value)
+    return send(200, { key, value: body.value, updatedAt: new Date().toISOString() })
+  }
+  if (url.startsWith('/internal/feedback-steps') && req.method === 'GET') {
+    const items = []
+    for (const t of threads.values()) {
+      for (const step of t.steps.values()) {
+        if (step.stage === 'action' && step.payload?.type === 'feedback') items.push({ thread: t.thread, step })
+      }
+    }
+    items.reverse() // 최신 제출 먼저 (삽입 역순 근사)
+    return send(200, { items, truncated: false })
+  }
   if (url === '/internal/llm-calls' && req.method === 'GET') return send(200, llmCalls)
   if ((m = url.match(/^\/internal\/dump\/(\d+)$/)) && req.method === 'GET') {
     const t = threads.get(m[1])

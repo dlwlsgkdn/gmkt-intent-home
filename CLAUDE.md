@@ -9,7 +9,7 @@
 ```
 apps/studio/       ← 스튜디오 소스 (React 18 + Vite 5). 빌드 산출물은 apps/studio/dist (커밋 안 함)
 apps/core/         ← NestJS backend core — 쓰레드 저장·조회 (Drizzle+Neon). 실행·배포는 apps/core/README.md
-apps/bff/          ← NestJS BFF — LLM(설문·계획 생성, 계획은 웹 검색 병행)·core 오케스트레이션. DESIGN-LLM-SERVICE.md §4, API.md §1 참고. src/engine/ = LangGraph 그래프 엔진(전략 문서 8단계 StateGraph — interrupt/재개·병렬·custom 스트림→SSE 브리지): core KV `engine`(legacy|langgraph, 기본 legacy) + 요청 헤더 `x-ddak-engine`으로 병행 배치, checkpointer는 LANGGRAPH_DATABASE_URL 있으면 Neon lg 스키마·없으면 메모리(유실 시 core 스텝 시딩 복구 — 진실 원천은 언제나 core). 노드 로직은 @ddak/pipeline 순수 함수 소비
+apps/bff/          ← NestJS BFF — LLM(설문·계획 생성, 계획은 웹 검색 병행)·core 오케스트레이션. DESIGN-LLM-SERVICE.md §4, API.md §1 참고. src/engine/ = LangGraph 그래프 엔진(전략 문서 8단계 StateGraph — interrupt/재개·병렬·custom 스트림→SSE 브리지): core KV `engine`(legacy|langgraph, 기본 legacy) + 요청 헤더 `x-ddak-engine`으로 병행 배치, checkpointer는 LANGGRAPH_DATABASE_URL 있으면 Neon lg 스키마·없으면 메모리(유실 시 core 스텝 시딩 복구 — 진실 원천은 언제나 core). 노드 로직은 @ddak/pipeline 순수 함수 소비. 지식 5종·블록리스트는 core 설정 KV(knowledge-*·guard-blocklist, 30s 캐시)로 주입 — 시스템 자리표시자({{VOCAB}} 등, 캐시 흡수)와 원장 가변부로 갈라 싣고, 검증 게이트(블록리스트·의학 단정·원장 역대조) 드롭 사유와 원장 스냅샷은 plan 스텝 payload(dropLog·ledger)에 남는다
 packages/schema/   ← @ddak/schema — 쓰레드 도메인·internal API zod 계약 (install 시 prepare로 dist 빌드)
 packages/pipeline/ ← @ddak/pipeline — LLM 파이프라인 이관 자산: 단계 카탈로그·프롬프트·생성 스키마·결정적 가드(그라운딩·병합·partial)·LlmPort 계약·원장·지식 소스. 프레임워크(LangGraph)·프로바이더 중립 순수 로직만 — bff는 여기서 import. 설계·페이즈는 DESIGN-PIPELINE-LANGGRAPH.md
 api/               ← 스튜디오 서버리스 (Vercel 함수, 루트 고정) — state.js(동기화)·pdp.js(지마켓 PDP iframe 프록시)

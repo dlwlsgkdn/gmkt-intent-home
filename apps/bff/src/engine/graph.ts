@@ -14,9 +14,12 @@ import {
   groundProductsSection,
   isSlotKind,
   mergePlanSections,
+  type GroundingDrop,
+  type GuardContext,
   type PlanRevisionContext,
 } from '@ddak/pipeline'
 import type { CoreClientService } from '../core-client.service'
+import type { KnowledgeService } from '../llm/knowledge.service'
 import type { LlmService } from '../llm/llm.service'
 import { SEQ, combineMeta } from '../threads/thread-io'
 import { ThreadGraphState, type ThreadGraphStateType } from './state'
@@ -39,7 +42,7 @@ import type { ChunkWriter, PlanStreamCoordinator } from './stream'
 /** awaitAnswers interrupt의 재개 값 — 계획 요청 본문이 그대로 실린다 */
 export type PlanResume = { answers: Answer[]; profile?: Profile; feedback?: ThreadStageFeedback }
 
-export type GraphDeps = { llm: LlmService; core: CoreClientService }
+export type GraphDeps = { llm: LlmService; core: CoreClientService; knowledge: KnowledgeService }
 
 const logger = new Logger('ThreadGraph')
 
@@ -58,22 +61,49 @@ async function persistAll(label: string, ops: Promise<unknown>[]) {
   }
 }
 
-/** 검색 섹션 그라운딩 + 드롭 로깅 — quiet는 부분 스트리밍 재호출(로그 중복 방지) */
-function groundLogged(s: PlanSearchSectionGen, index: number, quiet: boolean): PlanSectionWire | null {
-  const { section, drops } = s.kind === 'contents' ? groundContentsSection(s) : groundProductsSection(s, index)
-  if (!quiet) drops.forEach((d) => logger.warn(d.message))
+/** 검색 섹션 그라운딩 + 드롭 로깅 — quiet는 부분 스트리밍 재호출(로그 중복 방지).
+ * onDrop이 있으면 드롭 사유를 수집한다 (verify 노드의 dropLog 재료) */
+function groundLogged(
+  s: PlanSearchSectionGen,
+  index: number,
+  quiet: boolean,
+  guard?: GuardContext,
+  onDrop?: (d: GroundingDrop) => void,
+): PlanSectionWire | null {
+  const { section, drops } =
+    s.kind === 'contents' ? groundContentsSection(s, guard) : groundProductsSection(s, index, guard)
+  drops.forEach((d) => {
+    if (!quiet) logger.warn(d.message)
+    onDrop?.(d)
+  })
   return section
 }
 
+/** 상태에서 확장 게이트 컨텍스트 구성 — 스트리밍(products)과 최종 검증(verify)이 같은 값을 본다 */
+function guardOf(state: ThreadGraphStateType): GuardContext {
+  return { blocklist: state.blocklist ?? [], ledger: state.ledger ?? null }
+}
+
 export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSaver) {
-  /** 2단계: 제약 원장 조립 — 페이즈 2에선 프로필(+답변)만, 지식 소스 주입은 페이즈 3 */
-  const ledgerNode = (state: ThreadGraphStateType) => ({
-    ledger: assembleLedger({
-      profile: state.profile ?? undefined,
-      survey: state.survey ?? undefined,
-      answers: state.answers ?? undefined,
-    }),
-  })
+  /** 2단계: 제약 원장 조립 — 프로필·답변 + 지식 소스(트렌드 키워드 KV·직전 쓰레드 피드백 압축).
+   * 블록리스트도 여기서 굳혀 스트리밍·최종 검증이 같은 목록을 본다 */
+  const ledgerNode = async (state: ThreadGraphStateType) => {
+    const [trendKeywords, recentFeedback, blocklist] = await Promise.all([
+      deps.knowledge.trendKeywords(),
+      deps.knowledge.recentFeedbackFor(state.userId, state.threadId),
+      deps.knowledge.blocklist(),
+    ])
+    return {
+      ledger: assembleLedger({
+        profile: state.profile ?? undefined,
+        survey: state.survey ?? undefined,
+        answers: state.answers ?? undefined,
+        trendKeywords,
+        recentFeedback,
+      }),
+      blocklist,
+    }
+  }
 
   /** 3단계: 설문 생성 (LLM) — 이미 있으면 건너뛴다 (재시도 멱등·복구 시딩) */
   const surveyNode = async (state: ThreadGraphStateType, config: LangGraphRunnableConfig) => {
@@ -114,6 +144,7 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
           })
         },
       },
+      state.ledger,
     )
     const page: SurveyPageWire = {
       intro: content.intro,
@@ -173,6 +204,7 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
         },
       },
       revision,
+      state.ledger,
     )
     // 자리 인덱스는 스트림 조각이 아니라 최종 검증본 기준으로 확정한다 (조각 파싱 누락 보정)
     coord?.skeletonReady(result.content)
@@ -197,20 +229,21 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
           onElement: (element, index) => {
             const parsed = PlanSearchSectionGen.safeParse(element)
             if (!parsed.success) return
-            // 스트림 조각도 최종과 같은 그라운딩을 통과시킨다 — 결정적이라 result와 어긋나지 않는다
-            const section = groundLogged(parsed.data, index, false)
+            // 스트림 조각도 최종과 같은 그라운딩·확장 게이트를 통과시킨다 — 결정적이라 result와 어긋나지 않는다
+            const section = groundLogged(parsed.data, index, false, guardOf(state))
             if (section) coord.searchArrived(section, index)
           },
           // 자라는 중인 검색 섹션 — 완성된 항목만 추려 같은 자리에 증분 재전송한다
           onElementPartial: (element, index) => {
             const gen = completeSearchSection(element)
             if (!gen) return
-            const section = groundLogged(gen, index, true)
+            const section = groundLogged(gen, index, true, guardOf(state))
             if (section) coord.searchPartial(section, index)
           },
           onSearch: (query) => coord.search(query),
         },
         revision,
+        state.ledger,
       )
       return { searchSections: result.content.sections, productsMeta: result.meta, productsFailed: null }
     } catch (e) {
@@ -220,21 +253,24 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
     }
   }
 
-  /** 6단계: 검증 게이트 — 그라운딩 통과분만 뼈대 자리에 병합 (결정적) */
+  /** 6단계: 검증 게이트 — 그라운딩+확장 게이트(블록리스트·의학 단정·원장 역대조) 통과분만
+   * 뼈대 자리에 병합 (결정적). 드롭 사유는 dropLog로 수집 — "드롭 사유는 그대로 품질 로그로" */
   const verifyNode = (state: ThreadGraphStateType) => {
     const skeleton = state.skeleton
     if (!skeleton) throw new Error('계획 뼈대가 없습니다 — skeleton 노드가 실패했는데 verify에 도달했습니다')
+    const dropLog: GroundingDrop[] = []
     const generated = (state.searchSections ?? [])
-      .map((s, i) => groundLogged(s, i, false))
+      .map((s, i) => groundLogged(s, i, false, guardOf(state), (d) => dropLog.push(d)))
       .filter((s): s is PlanSectionWire => s !== null)
     const sections = mergePlanSections(skeleton.sections, generated)
     if (!sections.length) {
       sections.push({ kind: 'guide', title: '준비된 안내', body: skeleton.summary })
     }
-    return { page: { headline: skeleton.headline, summary: skeleton.summary, sections } }
+    return { page: { headline: skeleton.headline, summary: skeleton.summary, sections }, dropLog }
   }
 
-  /** 7단계: 쓰레드 기록 — 화면에 흘러간 조각과 저장 결과 일치가 불변식 */
+  /** 7단계: 쓰레드 기록 — 화면에 흘러간 조각과 저장 결과 일치가 불변식.
+   * 원장 스냅샷·dropLog를 payload에 함께 남긴다 (관리 페이지·평가의 품질 로그 재료) */
   const recordNode = async (state: ThreadGraphStateType) => {
     await persistAll('plan', [
       deps.core.upsertStep(state.threadId, SEQ.answers, {
@@ -243,7 +279,7 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
       }),
       deps.core.upsertStep(state.threadId, SEQ.plan, {
         stage: 'plan',
-        payload: { page: state.page },
+        payload: { page: state.page, ledger: state.ledger ?? null, dropLog: state.dropLog ?? [] },
         llmMeta: combineMeta(state.skeletonMeta!, state.productsMeta ?? null),
       }),
       deps.core.updateThread(state.threadId, { status: 'planning' }),

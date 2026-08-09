@@ -15,6 +15,7 @@ import {
   buildPlanSkeletonRequest,
   buildSurveyRequest,
   renderSystemTemplate,
+  type ConstraintLedger,
   type GenResult,
   type LlmGenerateRequest,
   type LlmPort,
@@ -24,6 +25,7 @@ import {
   type ResolvedSystem,
 } from '@ddak/pipeline'
 import { CoreClientService } from '../core-client.service'
+import { KnowledgeService } from './knowledge.service'
 
 export const DEFAULT_MODEL = 'claude-opus-5'
 
@@ -65,7 +67,10 @@ export class LlmService implements LlmPort {
   private modelCache: { value: string; at: number } | null = null
   private promptCache = new Map<PromptDefId, { value: ResolvedSystem; at: number }>()
 
-  constructor(private readonly core: CoreClientService) {}
+  constructor(
+    private readonly core: CoreClientService,
+    private readonly knowledge: KnowledgeService,
+  ) {}
 
   /** 지금 생성에 쓸 모델 — core 설정(llm-model) 우선, 없거나 조회 실패면 기본값.
    * 짧은 캐시(30s)로 생성 1회당 core 왕복을 줄인다. 카탈로그 밖 값은 무시한다 */
@@ -90,18 +95,20 @@ export class LlmService implements LlmPort {
   }
 
   /** 지금 생성에 쓸 시스템 프롬프트 — core 설정(llm-prompt-<id>) 재정의 우선, 없거나 조회
-   * 실패면 코드 기본값. 모델과 같은 30s 캐시. 재정의도 자리표시자 치환(renderSystemTemplate)을
-   * 거치며, 저장값이 고정인 한 결과도 바이트 고정이라 프롬프트 캐시는 계속 적중한다 */
+   * 실패면 코드 기본값. 모델과 같은 30s 캐시. 재정의·기본값 모두 자리표시자 치환
+   * (renderSystemTemplate — {{CATALOG}} + 지식 4종 {{VOCAB}}/{{RULES}}/{{CRITERIA}}/{{FEWSHOT}})을
+   * 거치며, 저장값·지식 KV가 고정인 한 결과도 바이트 고정이라 프롬프트 캐시는 계속 적중한다 */
   async resolveSystem(id: PromptDefId): Promise<ResolvedSystem> {
     const cached = this.promptCache.get(id)
     if (cached && Date.now() - cached.at < MODEL_CACHE_MS) return cached.value
     const def = PROMPT_DEFS.find((d) => d.id === id)
     if (!def) throw new Error(`알 수 없는 프롬프트 id: ${id}`)
-    let value: ResolvedSystem = { text: renderSystemTemplate(def.template), custom: false }
+    const knowledge = await this.knowledge.systemKnowledge()
+    let value: ResolvedSystem = { text: renderSystemTemplate(def.template, knowledge), custom: false }
     try {
       const setting = await this.core.getSetting(promptSettingKey(id))
       const configured = typeof setting?.value === 'string' ? setting.value : null
-      if (configured?.trim()) value = { text: renderSystemTemplate(configured), custom: true }
+      if (configured?.trim()) value = { text: renderSystemTemplate(configured, knowledge), custom: true }
     } catch (e) {
       this.logger.warn(`프롬프트 설정 조회 실패(${id}) — 기본값 사용: ${(e as Error).message}`)
     }
@@ -132,14 +139,19 @@ export class LlmService implements LlmPort {
     return this.client
   }
 
-  async generateSurvey(intent: string, profile?: Profile, stream?: LlmStreamHandlers): Promise<GenResult<SurveyGen>> {
+  async generateSurvey(
+    intent: string,
+    profile?: Profile,
+    stream?: LlmStreamHandlers,
+    ledger?: ConstraintLedger | null,
+  ): Promise<GenResult<SurveyGen>> {
     return this.generate('설문 생성', SurveyGen, {
       system: await this.resolveSystem('survey'),
       // low인 이유: Opus 5는 thinking을 빼면 적응형 사고가 기본으로 켜져 첫 토큰 전
       // 사고 구간이 effort에 비례해 길어진다(4.8까지는 생략 = 사고 없음). 질문 5개
       // 생성은 low로 충분하고, 사고를 끄는 것보다 effort를 낮추는 쪽이 안전하다
       effort: 'low' as const,
-      user: buildSurveyRequest(intent, profile),
+      user: buildSurveyRequest(intent, profile, ledger),
       stream,
     })
   }
@@ -153,11 +165,12 @@ export class LlmService implements LlmPort {
     profile?: Profile,
     stream?: LlmStreamHandlers,
     revision?: PlanRevisionContext,
+    ledger?: ConstraintLedger | null,
   ): Promise<GenResult<PlanSkeletonGen>> {
     return this.generate('계획 뼈대 생성', PlanSkeletonGen, {
       system: await this.resolveSystem('plan-skeleton'),
       effort: 'medium' as const, // 속도가 목적 — 텍스트 뼈대는 medium으로 충분
-      user: buildPlanSkeletonRequest(intent, survey, answers, profile, revision),
+      user: buildPlanSkeletonRequest(intent, survey, answers, profile, revision, ledger),
       stream,
     })
   }
@@ -171,11 +184,12 @@ export class LlmService implements LlmPort {
     profile?: Profile,
     stream?: LlmStreamHandlers,
     revision?: PlanRevisionContext,
+    ledger?: ConstraintLedger | null,
   ): Promise<GenResult<PlanProductsGen>> {
     return this.generate('계획 상품 생성', PlanProductsGen, {
       system: await this.resolveSystem('plan-products'),
       effort: 'high' as const,
-      user: buildPlanProductsRequest(intent, survey, answers, profile, revision),
+      user: buildPlanProductsRequest(intent, survey, answers, profile, revision, ledger),
       webSearch: true,
       stream,
     })

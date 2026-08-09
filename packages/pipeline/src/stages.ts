@@ -55,8 +55,8 @@ export const PIPELINE_STAGES: PipelineStageDef[] = [
     no: '2',
     label: '제약 원장 조립',
     kind: 'deterministic',
-    status: 'planned',
-    note: '프로필+답변+직전 피드백+트렌드 키워드 → ConstraintLedger. 4단계 검색 필터·6단계 역대조가 같은 값을 본다.',
+    status: 'active',
+    note: '프로필+답변+직전 쓰레드 피드백+트렌드 키워드(KV) → ConstraintLedger. 가변부 주입·6단계 역대조가 같은 값을 보고, plan 스텝 payload에 스냅샷이 남는다.',
   },
   {
     id: 'survey',
@@ -102,7 +102,7 @@ export const PIPELINE_STAGES: PipelineStageDef[] = [
     label: '검증 게이트',
     kind: 'deterministic',
     status: 'active',
-    note: '그라운딩 가드(카탈로그 대조·URL/PDP 검증) 활성. 블록리스트·의학 단정·원장 역대조·dropLog 기록은 페이즈 3.',
+    note: '그라운딩(카탈로그 대조·URL/PDP) + 블록리스트 정확 매칭(KV guard-blocklist) + 의학 단정 차단 + 원장 역대조(예산·기피). 드롭 사유는 plan 스텝 payload.dropLog로 기록.',
   },
   {
     id: 'record',

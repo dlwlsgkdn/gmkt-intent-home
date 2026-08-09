@@ -1,7 +1,8 @@
 import type { Answer, PlanPageWire, Profile, SurveyPageWire, ThreadStageFeedback } from '@ddak/schema'
 import { CATALOG } from './catalog'
+import type { ConstraintLedger } from './ledger'
 
-export const PROMPT_VERSION = 'v13'
+export const PROMPT_VERSION = 'v14'
 
 /*
  * 프롬프트 조립 — 안정 prefix(시스템)와 가변부(사용자 메시지)를 분리한다.
@@ -16,7 +17,8 @@ export const SURVEY_SYSTEM = `너는 지마켓 뷰티의 AI 쇼핑 플래너다.
 - 첫 질문은 의도의 핵심 축(용도·고민·대상), 마지막 질문은 예산이나 선호로 마무리한다.
 - 프로필에 이미 있는 정보는 다시 묻지 않는다.
 - 말투는 친근한 존댓말, 이모지 없이 담백하게.
-- 선택지에 "기타"나 "잘 모르겠어요"를 남발하지 않는다 (필요한 질문 하나에만).`
+- 선택지에 "기타"나 "잘 모르겠어요"를 남발하지 않는다 (필요한 질문 하나에만).
+{{VOCAB}}{{RULES}}`
 
 const CATALOG_BLOCK = CATALOG.map(
   (p) => `${p.id} | ${p.brand} ${p.name} | ${p.price.toLocaleString('ko-KR')}원 | ${p.tags.join(',')}`,
@@ -26,9 +28,49 @@ const CATALOG_BLOCK = CATALOG.map(
  * 관리 페이지 재정의도 이 자리표시자를 그대로 쓴다 (카탈로그 변경이 프롬프트 저장값과 분리되게) */
 export const CATALOG_PLACEHOLDER = '{{CATALOG}}'
 
+/* ── 지식 자리표시자 (전략 문서 p.3 "캐시가 흡수하는 시스템 자리") ─────────────
+ * 값의 원천은 core 설정 KV(knowledge/sources.ts) — 값이 있으면 제목 붙은 블록으로,
+ * 없으면 빈 문자열로 치환된다. KV가 고정인 한 결과도 바이트 고정이라 캐시가 적중하고,
+ * KV 변경 시에만 1회 미스 후 재적중한다. 관리 재정의 프롬프트도 같은 자리표시자를 쓸 수 있다. */
+
+export type SystemKnowledge = {
+  vocab?: string | null // knowledge-consumer-vocab — 소비자 어휘 사전
+  rules?: string | null // knowledge-survey-rules — 설문조사 증류 규칙
+  criteria?: string | null // knowledge-selection-criteria — 선택 기준 브리프
+  fewshot?: string | null // knowledge-fewshot — 모범 예시 쌍
+}
+
+export const KNOWLEDGE_PLACEHOLDERS: Record<keyof SystemKnowledge, { token: string; heading: string }> = {
+  vocab: { token: '{{VOCAB}}', heading: '소비자 어휘 사전 — 사용자가 쓰는 말을 생성물에도 그대로 쓴다:' },
+  rules: { token: '{{RULES}}', heading: '서비스 설문조사에서 증류한 규칙:' },
+  criteria: { token: '{{CRITERIA}}', heading: '선택 기준 지식 (트렌드 인터뷰 브리프):' },
+  fewshot: { token: '{{FEWSHOT}}', heading: '모범 예시 (평가 상위 케이스):' },
+}
+
 /** 템플릿 → 실제 시스템 프롬프트. 치환값이 같으면 결과도 바이트 고정이라 캐시 적중에 문제없다 */
-export function renderSystemTemplate(template: string): string {
-  return template.split(CATALOG_PLACEHOLDER).join(CATALOG_BLOCK)
+export function renderSystemTemplate(template: string, knowledge?: SystemKnowledge): string {
+  let text = template.split(CATALOG_PLACEHOLDER).join(CATALOG_BLOCK)
+  for (const key of Object.keys(KNOWLEDGE_PLACEHOLDERS) as (keyof SystemKnowledge)[]) {
+    const { token, heading } = KNOWLEDGE_PLACEHOLDERS[key]
+    const value = knowledge?.[key]?.trim()
+    text = text.split(token).join(value ? `\n${heading}\n${value}\n` : '')
+  }
+  return text
+}
+
+/** 원장의 빠르게 변하는 신호를 사용자 메시지 가변부로 — 시스템(캐시 대상)에 넣지 않는다 (p.3 규칙).
+ * 원장이 없거나 전부 비면 빈 문자열 — legacy 경로와 바이트 동일하다 */
+export function ledgerBlock(ledger?: ConstraintLedger | null): string {
+  if (!ledger) return ''
+  const lines: string[] = []
+  if (ledger.trendKeywords.length) {
+    lines.push(`- 지금 뜨는 키워드: ${ledger.trendKeywords.join(', ')} (어울리는 곳에만 자연스럽게 반영)`)
+  }
+  if (ledger.recentFeedback.length) {
+    lines.push(`- 이 사용자의 최근 평가 메모: ${ledger.recentFeedback.join(' / ')} (부정 평가된 특성은 피한다)`)
+  }
+  if (ledger.avoid.length) lines.push(`- 기피 항목: ${ledger.avoid.join(', ')} (반드시 피한다)`)
+  return lines.length ? `\n\n참고 신호:\n${lines.join('\n')}` : ''
 }
 
 /* 계획 = 2단계 병렬 생성 (§9-1): 뼈대(검색 없음, 빠름)가 페이지 레이아웃을 확정하고,
@@ -42,7 +84,8 @@ export const PLAN_SKELETON_SYSTEM = `너는 지마켓 뷰티의 AI 쇼핑 플래
 - 섹션 구성: [단계 안내(guide) → 그 단계의 상품 자리(products — 제목과 "고를 기준" reason만)] 묶음을 단계 순서대로 이어 가고, 마지막에 참고 콘텐츠 자리(contents — 제목·기준만) 0~1개 → 사용 순서(steps)로 닫는 것이 기본 골격이다. **상품 자리는 반드시 그 상품이 필요한 단계 안내 바로 뒤**에 둔다 — 상품이 필요 없는 단계는 자리를 생략한다(상품 자리 총 1~2개). 상품 자리를 단계들과 떨어뜨려 끝에 몰아 두지 않는다.
 - 구체 상품명·브랜드명·콘텐츠 제목은 어디에도 쓰지 않는다 — 검색 단계가 채운다. 안내와 순서는 성분·제형·사용법 같은 기준 중심으로 쓴다.
 - 사용자의 답변을 근거로 구체적으로 쓴다 ("지성 피부를 고르셨으니…").
-- 말투는 친근한 존댓말, 이모지 없이 담백하게.`
+- 말투는 친근한 존댓말, 이모지 없이 담백하게.
+{{VOCAB}}{{CRITERIA}}{{FEWSHOT}}`
 
 export const PLAN_PRODUCTS_SYSTEM = `너는 지마켓 뷰티의 AI 쇼핑 플래너다. 설문 응답에 맞는 **추천 상품 섹션**(1~2개)과, 가능하면 **참고 콘텐츠 섹션**(0~1개 — 웹 게시글·영상)을 만든다. 페이지의 안내·순서는 별도 단계가 작성하고 있으니 상품·콘텐츠 선정에 집중한다.
 
@@ -64,7 +107,8 @@ ${CATALOG_PLACEHOLDER}
 참고 콘텐츠 규칙:
 - 참고 콘텐츠 섹션(kind=contents)은 0~1개다. 상품 검색 결과에 함께 실려 온 게시글·영상을 우선 활용하고, 필요하면 콘텐츠용 검색을 1회만 추가한다.
 - 반드시 웹 검색 결과에서 확인한 실제 게시글(블로그·커뮤니티)이나 영상(유튜브 등)만 넣는다: url은 검색 결과의 주소 그대로(지어내기·변형 금지), imageUrl·meta·duration도 검색 결과에서 확인한 값만(못 확인했으면 빈 문자열).
-- 확인한 콘텐츠가 없으면 콘텐츠 섹션을 만들지 않는다 — 상품 섹션만 반환해도 된다.`
+- 확인한 콘텐츠가 없으면 콘텐츠 섹션을 만들지 않는다 — 상품 섹션만 반환해도 된다.
+{{CRITERIA}}`
 
 /* ── 시스템 프롬프트 카탈로그 — 관리 페이지(#admin) 조회·재정의의 원천.
  * template은 자리표시자({{CATALOG}}) 포함 원문이고, 실제 호출값은 renderSystemTemplate을
@@ -76,19 +120,19 @@ export const PROMPT_DEFS: { id: PromptDefId; label: string; note: string; templa
   {
     id: 'survey',
     label: '설문 생성',
-    note: '검색 진입 직후 설문 페이지를 만드는 프롬프트 — 질문 수·선택지 규칙·말투를 정한다.',
+    note: '검색 진입 직후 설문 페이지를 만드는 프롬프트 — 질문 수·선택지 규칙·말투를 정한다. {{VOCAB}}·{{RULES}} 자리표시자는 지식 KV로 치환된다 (비면 사라짐).',
     template: SURVEY_SYSTEM,
   },
   {
     id: 'plan-skeleton',
     label: '계획 뼈대 생성',
-    note: '계획 1단계(검색 없음) — 단계 안내·순서와 상품/콘텐츠 자리를 확정한다. 구체 상품명 금지 규칙 포함.',
+    note: '계획 1단계(검색 없음) — 단계 안내·순서와 상품/콘텐츠 자리를 확정한다. 구체 상품명 금지 규칙 포함. {{VOCAB}}·{{CRITERIA}}·{{FEWSHOT}} 자리표시자는 지식 KV로 치환된다.',
     template: PLAN_SKELETON_SYSTEM,
   },
   {
     id: 'plan-products',
     label: '계획 상품 생성',
-    note: `계획 2단계(웹 검색 포함) — 상품·참고 콘텐츠 섹션을 채운다. ${CATALOG_PLACEHOLDER} 자리표시자가 상품 카탈로그 목록으로 치환되므로 지우지 말 것.`,
+    note: `계획 2단계(웹 검색 포함) — 상품·참고 콘텐츠 섹션을 채운다. ${CATALOG_PLACEHOLDER} 자리표시자가 상품 카탈로그 목록으로 치환되므로 지우지 말 것. {{CRITERIA}}는 지식 KV로 치환된다.`,
     template: PLAN_PRODUCTS_SYSTEM,
   },
 ]
@@ -96,16 +140,22 @@ export const PROMPT_DEFS: { id: PromptDefId; label: string; note: string; templa
 const profileBlock = (profile?: Profile) =>
   profile?.length ? profile.map((p) => `- ${p.label}: ${p.value}`).join('\n') : '(없음)'
 
-export function buildSurveyRequest(intent: string, profile?: Profile): string {
+export function buildSurveyRequest(intent: string, profile?: Profile, ledger?: ConstraintLedger | null): string {
   return `사용자 의도: ${intent}
 
 사용자 프로필:
-${profileBlock(profile)}
+${profileBlock(profile)}${ledgerBlock(ledger)}
 
 이 의도에 맞는 설문 페이지를 만들어 주세요.`
 }
 
-function planContext(intent: string, survey: SurveyPageWire, answers: Answer[], profile?: Profile): string {
+function planContext(
+  intent: string,
+  survey: SurveyPageWire,
+  answers: Answer[],
+  profile?: Profile,
+  ledger?: ConstraintLedger | null,
+): string {
   const qa = answers
     .map((a) => {
       const q = survey.questions.find((x) => x.id === a.questionId)
@@ -118,7 +168,7 @@ function planContext(intent: string, survey: SurveyPageWire, answers: Answer[], 
 ${profileBlock(profile)}
 
 설문 응답:
-${qa}`
+${qa}${ledgerBlock(ledger)}`
 }
 
 /* ── 피드백 반영 재생성 — 직전 계획 + 사용자 피드백을 가변부(사용자 메시지)에 싣는다.
@@ -167,13 +217,14 @@ export function buildPlanSkeletonRequest(
   answers: Answer[],
   profile?: Profile,
   revision?: PlanRevisionContext,
+  ledger?: ConstraintLedger | null,
 ): string {
   if (!revision) {
-    return `${planContext(intent, survey, answers, profile)}
+    return `${planContext(intent, survey, answers, profile, ledger)}
 
 이 응답에 맞는 쇼핑 계획 페이지의 뼈대를 만들어 주세요.`
   }
-  return `${planContext(intent, survey, answers, profile)}
+  return `${planContext(intent, survey, answers, profile, ledger)}
 
 ${feedbackBlock(revision)}
 
@@ -186,13 +237,14 @@ export function buildPlanProductsRequest(
   answers: Answer[],
   profile?: Profile,
   revision?: PlanRevisionContext,
+  ledger?: ConstraintLedger | null,
 ): string {
   if (!revision) {
-    return `${planContext(intent, survey, answers, profile)}
+    return `${planContext(intent, survey, answers, profile, ledger)}
 
 이 응답에 맞는 추천 상품 섹션과, 참고할 만한 게시글·영상이 검색에서 확인되면 참고 콘텐츠 섹션을 만들어 주세요.`
   }
-  return `${planContext(intent, survey, answers, profile)}
+  return `${planContext(intent, survey, answers, profile, ledger)}
 
 ${feedbackBlock(revision)}
 

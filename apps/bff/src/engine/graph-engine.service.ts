@@ -3,6 +3,7 @@ import { Command } from '@langchain/langgraph'
 import type { Answer, PlanPageWire, Profile, SurveyPageWire, ThreadStageFeedback } from '@ddak/schema'
 import { LlmGenerationError } from '@ddak/pipeline'
 import { CoreClientService } from '../core-client.service'
+import { KnowledgeService } from '../llm/knowledge.service'
 import { LlmService } from '../llm/llm.service'
 import { SEQ, intentOf } from '../threads/thread-io'
 import type { PlanStreamHandlers, SurveyStreamHandlers } from '../threads/threads.service'
@@ -29,12 +30,13 @@ export class GraphEngineService {
   constructor(
     private readonly core: CoreClientService,
     private readonly llm: LlmService,
+    private readonly knowledge: KnowledgeService,
   ) {}
 
   private getGraph(): Promise<ThreadGraph> {
     if (!this.compiledP) {
       this.compiledP = getCheckpointer().then((checkpointer) =>
-        buildThreadGraph({ llm: this.llm, core: this.core }, checkpointer),
+        buildThreadGraph({ llm: this.llm, core: this.core, knowledge: this.knowledge }, checkpointer),
       )
     }
     return this.compiledP
@@ -64,10 +66,19 @@ export class GraphEngineService {
     if (pending && existing) return existing
 
     const thread = await this.core.getThread(threadId)
-    // core에 이미 설문 스텝이 있으면 시딩 — survey 노드가 건너뛴다 (콜드 스타트 재시도 멱등)
+    // 멱등 재응답 2: core에 설문이 있으면 그래프 실행 없이 그대로 돌려준다 — 설문은 쓰레드당
+    // 1회 생성으로 불변이고, 완주한 쓰레드를 START부터 재실행하면 잔존 answers 채널 때문에
+    // awaitAnswers가 통과해 계획까지 몰래 재생성되는 사고를 막는다
     const coreSurvey =
       (thread.steps.find((s) => s.seq === SEQ.survey)?.payload as { page?: SurveyPageWire } | undefined)?.page ?? null
-    const input = { threadId, intent: intentOf(thread), profile: profile ?? null, survey: coreSurvey }
+    if (coreSurvey) return coreSurvey
+    const input = {
+      threadId,
+      userId: thread.userId,
+      intent: intentOf(thread),
+      profile: profile ?? null,
+      survey: null,
+    }
     try {
       const chunks = await graph.stream(input, { ...config, streamMode: 'custom' as const })
       for await (const chunk of chunks) this.onSurveyChunk(chunk as GraphStreamChunk, stream)
@@ -110,6 +121,7 @@ export class GraphEngineService {
         : null
       runInput = {
         threadId,
+        userId: thread.userId,
         intent: intentOf(thread),
         survey,
         answers,

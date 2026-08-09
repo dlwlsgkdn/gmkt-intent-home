@@ -1,6 +1,7 @@
 import { Controller, Get, Module, Redirect } from '@nestjs/common'
 import { ApiExcludeEndpoint, ApiOperation, ApiTags } from '@nestjs/swagger'
 import { CoreClientService } from './core-client.service'
+import { KnowledgeService } from './llm/knowledge.service'
 import { LlmService } from './llm/llm.service'
 import { AdminController } from './admin/admin.controller'
 import { EngineFlagService } from './engine/engine-flag.service'
@@ -32,6 +33,6 @@ export class AppController {
 
 @Module({
   controllers: [AppController, ThreadsController, AdminController],
-  providers: [CoreClientService, LlmService, EngineFlagService, GraphEngineService, ThreadsService],
+  providers: [CoreClientService, KnowledgeService, LlmService, EngineFlagService, GraphEngineService, ThreadsService],
 })
 export class AppModule {}

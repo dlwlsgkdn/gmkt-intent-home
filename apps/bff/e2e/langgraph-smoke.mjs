@@ -74,6 +74,17 @@ try {
   await waitFor(MOCK + '/internal/llm-calls')
   await waitFor(BFF + '/healthz')
 
+  // ── 0. 지식·가드 KV 시딩 (페이즈 3 — 관리 편집 모의) ──
+  const putSetting = (key, value) =>
+    fetch(`${MOCK}/internal/settings/${encodeURIComponent(key)}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ value }),
+    })
+  await putSetting('knowledge-trend-keywords', '스킨플러딩')
+  await putSetting('knowledge-consumer-vocab', '무너짐: 지속력 저하를 뜻하는 소비자 말 (내부 태그 durability_low)')
+  await putSetting('guard-blocklist', '모의브랜드 모의 세미매트 쿠션')
+
   // ── 1. 쓰레드 시작 ──
   const start = await fetch(BFF + '/api/threads', {
     method: 'POST',
@@ -93,6 +104,11 @@ try {
   ok(count(sv, 'question') >= 3, `question 부분 스트리밍 ${count(sv, 'question')}회`)
   ok(count(sv, 'head') >= 1, `head(intro) 스트리밍 ${count(sv, 'head')}회`)
   ok(!last(sv, 'error'), '오류 없음')
+  {
+    const surveyCall = (await llmCalls()).find((c) => c.type === 'survey')
+    ok(surveyCall?.system?.includes('무너짐'), '지식 KV(어휘 사전)가 시스템 자리표시자로 주입')
+    ok(surveyCall?.user?.includes('스킨플러딩'), '트렌드 키워드가 원장 경유 가변부로 주입')
+  }
 
   // ── 3. 계획 생성 — 살아 있는 interrupt를 Command로 재개 ──
   console.log('3) 계획 생성 (graph — Command 재개)')
@@ -102,8 +118,11 @@ try {
   ok(planPage?.headline === '모의 여름 쿠션 계획', `headline (${planPage?.headline})`)
   ok(planPage?.sections?.length === 3, `섹션 3개 병합 (${planPage?.sections?.length})`)
   const prodSection = planPage?.sections?.find((s) => s.kind === 'products')
-  ok(prodSection?.products?.length === 2, `상품 그라운딩 통과 2개 — 웹+카탈로그 (${prodSection?.products?.length})`)
-  ok(prodSection?.products?.[0]?.mall === '올리브영', '웹 상품이 앞자리')
+  ok(
+    prodSection?.products?.length === 1,
+    `확장 게이트 통과 1개 — 블록리스트·의학 단정 드롭 후 카탈로그만 (${prodSection?.products?.length})`,
+  )
+  ok(prodSection?.products?.[0]?.id === 'p-012', '남은 상품은 카탈로그 p-012')
   const sk = last(plan, 'skeleton')?.data
   ok(!!sk && sk.pending?.length === 1 && sk.pending[0] === 1, `skeleton 조기 확정 + pending [1] (${JSON.stringify(sk?.pending)})`)
   const secFinal = plan.filter((e) => e.event === 'section' && e.data.final)
@@ -123,6 +142,11 @@ try {
   ok(seqs === '1,2,3,4', `스텝 seq 1~4 기록 (${seqs})`)
   const planStep = dump?.steps?.find((s) => s.seq === 4)
   ok(planStep?.llmMeta?.phases?.skeletonMs != null, 'llmMeta.phases 결합 기록')
+  const dropCodes = (planStep?.payload?.dropLog ?? []).map((d) => d.code)
+  ok(dropCodes.includes('blocklist'), `dropLog에 블록리스트 드롭 기록 (${dropCodes.join(',')})`)
+  ok(dropCodes.includes('medical-claim'), 'dropLog에 의학 단정 드롭 기록')
+  ok(planStep?.payload?.ledger?.trendKeywords?.includes('스킨플러딩'), '원장 스냅샷이 payload에 기록')
+  ok((planStep?.payload?.ledger?.facts ?? []).some((f) => f.source === 'answer'), '원장 facts에 설문 답변 반영')
 
   // ── 5. 피드백 반영 재생성 — 완주한 쓰레드 재실행 (survey 재생성 없어야 함) ──
   console.log('5) 피드백 반영 재생성 (graph — 재실행 경로)')
@@ -146,9 +170,35 @@ try {
   ok(last(sv2, 'result')?.data?.page?.questions?.length === 3, '기존 설문 재응답')
   calls = await llmCalls()
   ok(calls.filter((c) => c.type === 'survey').length === 1, 'survey LLM 재호출 없음')
+  ok(calls.filter((c) => c.type === 'skeleton').length === 2, '설문 재요청이 계획을 재생성하지 않음')
 
-  // ── 7. legacy 경로 무영향 (헤더 없음 = 기본 legacy) ──
-  console.log('7) legacy 엔진 회귀 확인')
+  // ── 7. 직전 쓰레드 피드백 압축 — 같은 사용자의 새 쓰레드 가변부에 실린다 ──
+  console.log('7) 직전 쓰레드 피드백 → 새 쓰레드 원장')
+  await fetch(`${BFF}/api/threads/${tid}/events`, {
+    method: 'POST',
+    headers: H,
+    body: JSON.stringify({
+      type: 'feedback',
+      data: { stage: 'plan', review: { score: 1, feedback: '향 강한 제품은 별로였어요' }, components: [] },
+    }),
+  })
+  const startC = await fetch(BFF + '/api/threads', {
+    method: 'POST',
+    headers: H,
+    body: JSON.stringify({ query: '가을 파운데이션 추천' }),
+  }).then((r) => r.json())
+  const svC = await sse(`/api/threads/${startC.threadId}/survey`, {}, H)
+  ok(!!last(svC, 'result')?.data?.page, '새 쓰레드 설문 생성')
+  {
+    const surveyCallsAll = (await llmCalls()).filter((c) => c.type === 'survey')
+    ok(surveyCallsAll.length === 2, `survey LLM 총 2회 (${surveyCallsAll.length})`)
+    const lastSurvey = surveyCallsAll.at(-1)
+    ok(lastSurvey?.user?.includes('향 강한'), '직전 쓰레드 피드백 압축이 가변부에 주입')
+    ok(lastSurvey?.user?.includes('★1'), '별점 압축 표기(★1)')
+  }
+
+  // ── 8. legacy 경로 무영향 (헤더 없음 = 기본 legacy) ──
+  console.log('8) legacy 엔진 회귀 확인')
   const plain = { 'content-type': 'application/json' }
   const startB = await fetch(BFF + '/api/threads', {
     method: 'POST',

@@ -67,7 +67,8 @@ export function parseBudgetKrw(value: string): number | null {
   return null
 }
 
-/** 원장 조립 — 있는 소스만 굳힌다. 프로필·답변은 facts로, 예산 라벨은 budgetKrw로 파생 */
+/** 원장 조립 — 있는 소스만 굳힌다. 프로필·답변은 facts로, 예산 라벨은 budgetKrw로,
+ * 기피 라벨(기피/피하-)은 avoid 목록으로 파생 — 검증 게이트 역대조가 같은 값을 본다 */
 export function assembleLedger(inputs: LedgerInputs): ConstraintLedger {
   const facts: LedgerFact[] = []
   for (const p of inputs.profile ?? []) {
@@ -78,10 +79,18 @@ export function assembleLedger(inputs: LedgerInputs): ConstraintLedger {
     facts.push({ label: q?.question ?? a.questionId, value: a.choices.join(', '), source: 'answer' })
   }
   const budgetFact = facts.find((f) => /예산|가격대/.test(f.label))
+  const avoid: string[] = []
+  for (const f of facts) {
+    if (!/기피|피하/.test(f.label)) continue
+    for (const token of f.value.split(/[,·/]/)) {
+      const t = token.trim()
+      if (t && !avoid.includes(t)) avoid.push(t)
+    }
+  }
   return {
     facts,
     budgetKrw: budgetFact ? parseBudgetKrw(budgetFact.value) : null,
-    avoid: [],
+    avoid,
     recentFeedback: inputs.recentFeedback ?? [],
     trendKeywords: inputs.trendKeywords ?? [],
     selectionSignals: inputs.selectionSignals ?? [],
