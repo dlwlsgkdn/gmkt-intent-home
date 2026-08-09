@@ -106,3 +106,32 @@ KV 변경 시에만 캐시 1회 미스. 빠르게 변하는 것은 사용자 메
 - **이중 상태 드리프트**: "화면·기록은 core, 재개는 checkpoint" 규칙을 record 노드가 강제.
 - **버전 변동**: LangGraph 버전 고정, 업그레이드는 실험 탭 골든 케이스 통과 조건.
 - **롤백**: engine 플래그 한 줄로 legacy 복귀 (페이즈 5 전까지 legacy 경로 유지).
+
+## 6. 프로덕션 이관 명세 (페이즈 7)
+
+**컨테이너**: `docker build -f apps/bff/Dockerfile -t ddak-bff .` (컨텍스트 = 리포 루트).
+node:22-alpine 2스테이지 — 워크스페이스 루트 락파일로 설치(`packages/*`는 npm ci의
+워크스페이스 prepare가 빌드 — pipeline prepare가 schema를 먼저 빌드해 알파벳 순서 함정을
+피한다), bff만 빌드해 러너로. dev 의존성 프루닝은 최적화 단계로 보류(현재 ~590MB).
+검증 완료: 컨테이너 안에서 healthz·admin pipeline·그래프 엔진 전 플로우(설문 interrupt →
+Command 재개 → 계획) 동작, production 모드에선 BFF_SERVICE_TOKEN 필수(가드 정상).
+
+**환경변수** (컨테이너 = Vercel과 동일 계약): `PORT`(기본 8788) · `CORE_URL` ·
+`CORE_SERVICE_TOKEN` · `ANTHROPIC_API_KEY`(+선택 `ANTHROPIC_BASE_URL`) ·
+`BFF_SERVICE_TOKEN`(production 필수) · `LANGGRAPH_DATABASE_URL`(선택 — 없으면 MemorySaver
++ core 시딩 복구) · `ALLOWED_ORIGINS`.
+
+**프로덕션 빌드가 소비하는 이관 자산**:
+1. `@ddak/pipeline` — 단계 카탈로그(그래프 명세)·프롬프트·생성 스키마·가드·원장·지식 소스·
+   LlmPort·CandidateProvider. 프레임워크·프로바이더 중립 — LangGraph를 유지하든 바꾸든 소비 가능
+2. `apps/bff/src/engine/` — LangGraph 참조 구현 (노드 = 카탈로그 id와 1:1, 컨테이너 검증 완료)
+3. core `eval_cases`·`eval_runs` — 회귀 셋 씨앗. 프롬프트는 core 설정 KV가 원천(데이터로 이관)
+4. `apps/bff/e2e/` — 오프라인 스모크(66+ 어서션): 프레임워크 교체·업그레이드의 회귀 게이트
+
+**남은 교체 지점** (데이터 도착 후): CandidateProvider 실검색 구현(candidates.ts 주석의
+3단계 절차 — 후보를 시스템 캐시에서 사용자 메시지로 옮기며 캐시 경제성 재평가), 지식 KV →
+DB/RAG(KnowledgeService 조회만 교체), 2차 LlmPort(프로바이더 비교 실험 잡힐 때).
+
+**전환 게이트 운영**: 실주행 트래픽을 `x-ddak-engine: langgraph`(또는 KV engine)로 흘리고
+실험 탭 전환 판정 계기판에서 legacy 대비 지연 +20% 이내·캐시 적중 유지·가드 통과 동등을
+확인 → 파이프라인 탭 엔진 토글로 기본 전환 → 안정 후 legacy 경로 제거.

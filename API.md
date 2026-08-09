@@ -134,6 +134,18 @@ Base: `/api/admin/*` (스튜디오 프록시 `/api/bff/admin/*` 경유) · 인�
 | PUT | `/api/admin/engine` | 생성 엔진 플래그 — `{ engine: legacy\|langgraph\|null }` (null=기본값 legacy 복귀). core `settings.engine` 저장. 요청 단위 오버라이드는 `x-ddak-engine` 헤더 |
 | POST | `/api/admin/pipeline/dry-run` | **LLM 단계 단독 실행** (플레이그라운드, SSE) — `{ stageId: survey\|plan-skeleton\|plan-products, intent, profile?, survey?, answers?, promptOverride? }`. 그래프·쓰레드·core 기록 없이 같은 빌더·스키마·가드로 실행, promptOverride는 저장 없는 what-if. SSE: `status` → `result`(DryRunResult — survey 페이지 \| skeleton 원본 \| 검증 통과 sections+dropLog, 공통 ledger·meta·promptCustom) \| `error` |
 
+평가·실험 (관리 페이지 "실험" 탭 — 페이즈 5):
+
+| 메서드 | 경로 | 설명 |
+|---|---|---|
+| GET | `/api/admin/eval/cases` | 골든 케이스 목록 (`EvalCasesWire`) |
+| POST | `/api/admin/eval/cases` | 쓰레드 → 케이스 승격 — `{ threadId }`, 스텝에서 의도·프로필·설문·답변 스냅샷 추출 |
+| POST | `/api/admin/eval/cases/:id/run` | **케이스 실행** (SSE) — 뼈대+상품 dry-run 순차 실행 → 병합 페이지·dropLog·결합 메타를 eval_runs에 기록. `{ promptOverride?, label? }` |
+| GET | `/api/admin/eval/cases/:id/runs` | 실행 기록 (채점 포함, 최신순) |
+| DELETE | `/api/admin/eval/cases/:id` | 케이스 삭제 (실행 기록 cascade) |
+| PATCH | `/api/admin/eval/runs/:id` | 채점 — `{ score: 0~5|null, comment }` |
+| GET | `/api/admin/metrics/engines` | **전환 판정 계기판** — 실주행 plan 스텝 llmMeta(engine 각인) 엔진별 집계: 표본·평균 지연·뼈대/상품·캐시 적중률·promptVersion |
+
 ## 2. Core — internal API (BFF 전용, 비공개)
 
 Base: `https://ddak-core.vercel.app` · 인증: **`Authorization: Bearer <CORE_SERVICE_TOKEN>`** (healthz·docs 제외)
@@ -148,6 +160,9 @@ Base: `https://ddak-core.vercel.app` · 인증: **`Authorization: Bearer <CORE_S
 | GET | `/internal/threads?cursor=&limit=` | 전체 목록 (관리용) — archived 포함, id 키셋 커서 |
 | GET | `/internal/users/:uid/threads?cursor=&limit=` | 사용자 쓰레드 목록 (updatedAt 키셋 커서) — **archived 제외** |
 | GET | `/internal/feedback-steps?limit=` | 피드백 스텝 나열 (`FeedbackStepsWire`) — action 스텝 중 `payload.type='feedback'`만 쓰레드 메타와 함께 최신순. core는 payload를 해석하지 않는다(jsonb 최상위 type 필터만) — 파싱·집계는 BFF admin 몫 |
+| GET | `/internal/plan-metas?limit=` | plan 스텝 llmMeta 최신순 (`PlanMetasWire`) — 전환 판정 계기판 원천 |
+| POST/GET/DELETE | `/internal/eval/cases[...]` | 평가 케이스 CRUD (`eval_cases`) — id는 core 스노우플레이크 발급 |
+| POST/GET | `/internal/eval/cases/:id/runs` · PATCH `/internal/eval/runs/:id` | 실행 기록 저장·조회·채점 (`eval_runs`, 케이스 cascade) — core는 내용 해석 안 함 |
 | GET | `/internal/settings/:key` · PUT · DELETE | 운영 설정 KV (jsonb — core는 해석 안 함). 예: `llm-model` |
 | GET | `/healthz` | 헬스체크 (가드 밖) |
 

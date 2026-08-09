@@ -6,6 +6,7 @@
 
 export * from './stages'
 export * from './ledger'
+export * from './candidates'
 export * from './llm-port'
 export * from './prompts'
 export * from './schemas'
