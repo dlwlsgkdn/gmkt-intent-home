@@ -209,6 +209,18 @@ try {
   ok(last(svB, 'result')?.data?.page?.questions?.length === 3, 'legacy 설문 생성 정상')
   const planB = await sse(`/api/threads/${startB.threadId}/plan`, { answers: [{ questionId: 'q1', choices: ['건성'] }] }, plain)
   ok(last(planB, 'result')?.data?.page?.sections?.length === 3, 'legacy 계획 생성 정상')
+
+  // ── 9. 파이프라인 스튜디오 API (페이즈 4) ──
+  console.log('9) 파이프라인 스튜디오 API')
+  const pipe = await fetch(BFF + '/api/admin/pipeline').then((r) => r.json())
+  ok(pipe?.stages?.length === 9, `단계 카탈로그 9개 (${pipe?.stages?.length})`)
+  ok(pipe?.stages?.some((s) => s.no === '5a') && pipe?.stages?.some((s) => s.no === '5b'), '병렬 5a/5b 표기')
+  ok(pipe?.knowledge?.some((k) => k.id === 'guard-blocklist' && k.value), '블록리스트 KV가 지식 목록에 노출')
+  const dr = await sse('/api/admin/pipeline/dry-run', { stageId: 'survey', intent: '가을 파운데이션 추천' }, plain)
+  const drResult = last(dr, 'result')?.data
+  ok(drResult?.survey?.questions?.length === 3, `dry-run 설문 3문항 (${drResult?.survey?.questions?.length})`)
+  ok(drResult?.ledger?.trendKeywords?.includes('스킨플러딩'), 'dry-run 원장에 트렌드 키워드 주입')
+  ok(!last(dr, 'error'), 'dry-run 오류 없음')
 } finally {
   shutdown()
 }

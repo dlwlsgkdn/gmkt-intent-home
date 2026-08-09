@@ -80,3 +80,71 @@ export function fetchAdminPrompts() {
 export function putAdminPrompt(id, text) {
   return req('PUT', `/prompts/${encodeURIComponent(id)}`, { text })
 }
+
+/** 파이프라인 현황 — { engine, stages(전략 문서 0~7 카탈로그), knowledge(지식 KV+블록리스트) } */
+export function fetchAdminPipeline() {
+  return req('GET', '/pipeline')
+}
+
+/** 지식 KV 편집 — value: 원문 또는 null(설정 삭제 = 지식 없음). 응답은 갱신된 pipeline wire */
+export function putAdminKnowledge(id, value) {
+  return req('PUT', `/knowledge/${encodeURIComponent(id)}`, { value })
+}
+
+/** 생성 엔진 플래그 — engine: 'legacy' | 'langgraph' | null(기본값 legacy 복귀) */
+export function putAdminEngine(engine) {
+  return req('PUT', '/engine', { engine })
+}
+
+/** LLM 단계 단독 실행 (플레이그라운드, SSE) — 그래프·쓰레드·core 기록 없음.
+ * body: { stageId, intent, profile?, survey?, answers?, promptOverride? } → DryRunResult.
+ * onStatus로 진행 문구(웹 검색 등)를 받는다. 실패는 AdminApiError(code 부착)로 던진다 */
+export async function dryRunStage(body, { onStatus } = {}) {
+  let res
+  try {
+    res = await fetch(`${BASE}/pipeline/dry-run`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+  } catch {
+    throw new AdminApiError(0, '관리 서버에 연결하지 못했어요. 네트워크 상태를 확인해주세요.')
+  }
+  if (!res.ok || !res.body) throw new AdminApiError(res.status, `요청에 실패했어요. (HTTP ${res.status})`)
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let result = null
+  let error = null
+  const handle = (block) => {
+    const ev = block.match(/^event: (.+)$/m)?.[1]
+    const dataLine = block.match(/^data: (.+)$/m)?.[1]
+    if (!ev || !dataLine) return
+    let data
+    try {
+      data = JSON.parse(dataLine)
+    } catch {
+      return
+    }
+    if (ev === 'status') onStatus?.(data.message)
+    else if (ev === 'result') result = data
+    else if (ev === 'error') error = data
+  }
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (value) buffer += decoder.decode(value, { stream: true })
+    let idx
+    while ((idx = buffer.indexOf('\n\n')) >= 0) {
+      handle(buffer.slice(0, idx))
+      buffer = buffer.slice(idx + 2)
+    }
+    if (done) break
+  }
+  if (error) {
+    const e = new AdminApiError(0, error.message || 'dry-run에 실패했어요.')
+    e.code = error.code
+    throw e
+  }
+  if (!result) throw new AdminApiError(0, '결과를 받지 못했어요. 잠시 후 다시 시도해 주세요.')
+  return result
+}

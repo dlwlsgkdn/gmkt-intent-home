@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { Thread, ThreadId, ThreadStatus, ThreadStep } from './thread'
-import { FeedbackScore, ThreadFeedbackComponent } from './thread-flow'
+import { Answer, FeedbackScore, Profile, SurveyPageWire, ThreadFeedbackComponent } from './thread-flow'
 
 /*
  * 관리(admin) 계약 — 스튜디오 #admin 페이지 ↔ BFF `/api/admin/*` ↔ core 설정 KV.
@@ -133,3 +133,77 @@ export const AdminFeedbackWire = z.object({
   truncated: z.boolean(),
 })
 export type AdminFeedbackWire = z.infer<typeof AdminFeedbackWire>
+
+/* ── BFF admin — 파이프라인 스튜디오 (DESIGN-PIPELINE-LANGGRAPH.md 페이즈 4) ────────
+ * 단계 카탈로그·지식 KV·엔진 플래그의 열람/편집 + 단계 단독 실행(dry-run).
+ * 단계 정의의 원천은 @ddak/pipeline PIPELINE_STAGES — 여기는 그 와이어 투영이다. */
+
+export const AdminEngineId = z.enum(['legacy', 'langgraph'])
+export type AdminEngineId = z.infer<typeof AdminEngineId>
+
+export const AdminPipelineStage = z.object({
+  id: z.string(),
+  /** 전략 문서 단계 번호 — 병렬 단계는 '5a'/'5b' */
+  no: z.string(),
+  label: z.string(),
+  kind: z.enum(['llm', 'deterministic', 'interrupt-boundary']),
+  status: z.enum(['active', 'planned']),
+  note: z.string(),
+  /** LLM 단계의 시스템 프롬프트 id (PROMPT_DEFS) — 비 LLM 단계는 null */
+  promptId: AdminPromptId.nullable(),
+  effort: z.string().nullable(),
+  /** LLM 단계의 프롬프트 재정의 사용 여부 — 비 LLM 단계는 null */
+  promptCustom: z.boolean().nullable(),
+})
+export type AdminPipelineStage = z.infer<typeof AdminPipelineStage>
+
+export const AdminKnowledgeEntry = z.object({
+  id: z.string(),
+  label: z.string(),
+  /** kv = 설정 KV 수동 편집(editable), core = 실데이터 파생(읽기 전용) */
+  backing: z.enum(['kv', 'core']),
+  /** system = 시스템 자리표시자(캐시 흡수), user = 원장 경유 가변부, guard = 검증 게이트 */
+  injection: z.enum(['system', 'user', 'guard']),
+  placeholder: z.string().nullable(),
+  note: z.string(),
+  editable: z.boolean(),
+  /** 현재 KV 원문 (없거나 core 파생이면 null) */
+  value: z.string().nullable(),
+})
+export type AdminKnowledgeEntry = z.infer<typeof AdminKnowledgeEntry>
+
+export const AdminPipelineWire = z.object({
+  engine: z.object({ current: AdminEngineId, configured: z.string().nullable() }),
+  stages: z.array(AdminPipelineStage),
+  knowledge: z.array(AdminKnowledgeEntry),
+})
+export type AdminPipelineWire = z.infer<typeof AdminPipelineWire>
+
+export const PutAdminKnowledgeBody = z.object({
+  /** KV 원문 — null/공백이면 설정을 지운다 (지식 없음) */
+  value: z.string().max(20000).nullable(),
+})
+export type PutAdminKnowledgeBody = z.infer<typeof PutAdminKnowledgeBody>
+
+export const PutAdminEngineBody = z.object({
+  /** null = 설정을 지우고 기본값(legacy) 복귀 */
+  engine: AdminEngineId.nullable(),
+})
+export type PutAdminEngineBody = z.infer<typeof PutAdminEngineBody>
+
+/** dry-run 대상 — LLM 단계만 (결정적 단계는 실행할 LLM이 없다. 검증 게이트는 products 결과에 포함) */
+export const AdminDryRunStageId = z.enum(['survey', 'plan-skeleton', 'plan-products'])
+export type AdminDryRunStageId = z.infer<typeof AdminDryRunStageId>
+
+export const AdminDryRunBody = z.object({
+  stageId: AdminDryRunStageId,
+  /** 한 줄 의도 — 파이프라인의 유일한 씨앗 (전략 문서 0단계) */
+  intent: z.string().min(1).max(500),
+  profile: Profile.optional(),
+  /** plan-* 단계 필수 — 보통 survey dry-run 결과를 그대로 싣는다 */
+  survey: SurveyPageWire.optional(),
+  answers: z.array(Answer).optional(),
+  /** what-if: 저장하지 않은 임시 시스템 프롬프트로 실행 (자리표시자 치환은 동일 적용) */
+  promptOverride: z.string().max(20000).optional(),
+})
+export type AdminDryRunBody = z.infer<typeof AdminDryRunBody>

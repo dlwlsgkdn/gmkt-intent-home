@@ -50,6 +50,11 @@ export class KnowledgeService {
     return value
   }
 
+  /** 관리 페이지가 지식 KV를 바꾼 직후 캐시를 비워 즉시 반영한다 (같은 인스턴스 한정) */
+  invalidate() {
+    this.cache.clear()
+  }
+
   /** 시스템 자리표시자 4종 — resolveSystem(렌더)에서 소비 */
   async systemKnowledge(): Promise<SystemKnowledge> {
     const [vocab, rules, criteria, fewshot] = await Promise.all([

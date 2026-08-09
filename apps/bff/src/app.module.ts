@@ -6,6 +6,7 @@ import { LlmService } from './llm/llm.service'
 import { AdminController } from './admin/admin.controller'
 import { EngineFlagService } from './engine/engine-flag.service'
 import { GraphEngineService } from './engine/graph-engine.service'
+import { PipelineDryRunService } from './engine/dry-run.service'
 import { ThreadsController } from './threads/threads.controller'
 import { ThreadsService } from './threads/threads.service'
 
@@ -33,6 +34,14 @@ export class AppController {
 
 @Module({
   controllers: [AppController, ThreadsController, AdminController],
-  providers: [CoreClientService, KnowledgeService, LlmService, EngineFlagService, GraphEngineService, ThreadsService],
+  providers: [
+    CoreClientService,
+    KnowledgeService,
+    LlmService,
+    EngineFlagService,
+    GraphEngineService,
+    PipelineDryRunService,
+    ThreadsService,
+  ],
 })
 export class AppModule {}

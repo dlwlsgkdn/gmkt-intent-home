@@ -125,6 +125,15 @@ Base: `/api/admin/*` (스튜디오 프록시 `/api/bff/admin/*` 경유) · 인�
 | GET | `/api/admin/prompts` | LLM 시스템 프롬프트 — `{ promptVersion, prompts[] }` (단계별 `defaultText`·`configured`). 카탈로그(3종: survey·plan-skeleton·plan-products)는 BFF `prompts.ts` 소유, `{{CATALOG}}` 자리표시자는 호출 시점 치환 |
 | PUT | `/api/admin/prompts/:id` | 프롬프트 재정의 — `{ text }` (null/공백/기본값과 동일이면 설정 삭제 = 기본값 복귀, 카탈로그 밖 id 400). core `settings.llm-prompt-<id>`에 원문 저장, 새 생성부터 반영(인스턴스 캐시 ≤30s). 재정의로 생성된 스텝은 `llmMeta.promptVersion`에 `+custom` 접미 |
 
+파이프라인 스튜디오 (관리 페이지 "파이프라인" 탭 — DESIGN-PIPELINE-LANGGRAPH.md 페이즈 4):
+
+| 메서드 | 경로 | 설명 |
+|---|---|---|
+| GET | `/api/admin/pipeline` | 파이프라인 현황 — `{ engine, stages[], knowledge[] }`. 단계 카탈로그는 @ddak/pipeline `PIPELINE_STAGES`의 와이어 투영(전략 문서 0~7 번호, 병렬은 5a/5b, active/planned), LLM 단계엔 `promptCustom`. knowledge = 지식 5종(KV 4 + core 실데이터 1) + `guard-blocklist` |
+| PUT | `/api/admin/knowledge/:id` | 지식 KV 편집 — `{ value }` (null/공백이면 설정 삭제 = 지식 없음, kv 지원분·guard-blocklist만). core `settings.knowledge-<id>`/`guard-blocklist` 저장, 새 생성부터 반영(≤30s). 시스템 자리표시자 지식 변경은 프롬프트 캐시 1회 미스 후 재적중 |
+| PUT | `/api/admin/engine` | 생성 엔진 플래그 — `{ engine: legacy\|langgraph\|null }` (null=기본값 legacy 복귀). core `settings.engine` 저장. 요청 단위 오버라이드는 `x-ddak-engine` 헤더 |
+| POST | `/api/admin/pipeline/dry-run` | **LLM 단계 단독 실행** (플레이그라운드, SSE) — `{ stageId: survey\|plan-skeleton\|plan-products, intent, profile?, survey?, answers?, promptOverride? }`. 그래프·쓰레드·core 기록 없이 같은 빌더·스키마·가드로 실행, promptOverride는 저장 없는 what-if. SSE: `status` → `result`(DryRunResult — survey 페이지 \| skeleton 원본 \| 검증 통과 sections+dropLog, 공통 ledger·meta·promptCustom) \| `error` |
+
 ## 2. Core — internal API (BFF 전용, 비공개)
 
 Base: `https://ddak-core.vercel.app` · 인증: **`Authorization: Bearer <CORE_SERVICE_TOKEN>`** (healthz·docs 제외)

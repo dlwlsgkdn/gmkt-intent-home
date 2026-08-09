@@ -13,6 +13,7 @@ import { renderMarkdown, statusLabel, threadMarkdown } from '../lib/adminReport.
 import { timeAgo } from '../lib/timeAgo.js'
 import AdminFeedback from './AdminFeedback.jsx'
 import AdminThreadPreview, { threadPreviewPages } from './AdminThreadPreview.jsx'
+import PipelineStudio from './PipelineStudio.jsx'
 
 /*
  * thread 관리 페이지 — 진입은 홈 드로어 도구 행의 버튼 또는 #admin 해시.
@@ -21,6 +22,7 @@ import AdminThreadPreview, { threadPreviewPages } from './AdminThreadPreview.jsx
  */
 
 export default function AdminView({ api }) {
+  const [tab, setTab] = useState('threads') // 'threads'(운영) | 'pipeline'(생성 파이프라인)
   const [threads, setThreads] = useState([])
   const [nextCursor, setNextCursor] = useState(null)
   const [listLoading, setListLoading] = useState(false)
@@ -206,6 +208,28 @@ export default function AdminView({ api }) {
         </div>
       </header>
 
+      {/* 탭 — 운영(쓰레드·평가) / 파이프라인(단계·프롬프트·지식·플레이그라운드) */}
+      <div className="sb-admin-tabs" role="tablist" aria-label="관리 영역">
+        {[
+          ['threads', '쓰레드·평가'],
+          ['pipeline', '파이프라인'],
+        ].map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            role="tab"
+            aria-selected={tab === value}
+            className={'sb-admin-tabs__btn' + (tab === value ? ' is-on' : '')}
+            onClick={() => setTab(value)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* 파이프라인 탭 — 모델·프롬프트·단계·지식·플레이그라운드 */}
+      {tab === 'pipeline' && (
+      <>
       {/* LLM 모델 설정 */}
       <div className="sb-admin-card">
         <p className="sb-panel-label">생성 모델</p>
@@ -295,6 +319,13 @@ export default function AdminView({ api }) {
         )}
       </div>
 
+      {/* 단계 카탈로그·지식 KV·엔진·플레이그라운드 */}
+      <PipelineStudio prompts={prompts} onOpenPrompt={openPromptEdit} />
+      </>
+      )}
+
+      {tab === 'threads' && (
+      <>
       {/* 평가 모아보기 — 피드백 제출 대시보드 */}
       <AdminFeedback wire={feedback} loading={feedbackLoading} error={feedbackError} onOpenThread={openDetail} />
 
@@ -357,6 +388,8 @@ export default function AdminView({ api }) {
           )}
         </div>
       </div>
+      </>
+      )}
 
       {/* 쓰레드 상세 — 마크다운 문서 */}
       {(detail || detailLoading) && (

@@ -36,4 +36,9 @@ export class EngineFlagService {
     this.cache = { value, at: Date.now() }
     return value
   }
+
+  /** 관리 페이지가 플래그를 바꾼 직후 캐시를 비워 즉시 반영한다 (같은 인스턴스 한정 — 다른 인스턴스는 TTL로 따라온다) */
+  invalidate() {
+    this.cache = null
+  }
 }
