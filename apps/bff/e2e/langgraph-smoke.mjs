@@ -105,9 +105,13 @@ try {
   ok(count(sv, 'head') >= 1, `head(intro) 스트리밍 ${count(sv, 'head')}회`)
   ok(!last(sv, 'error'), '오류 없음')
   {
-    const surveyCall = (await llmCalls()).find((c) => c.type === 'survey')
+    const calls0 = await llmCalls()
+    const surveyCall = calls0.find((c) => c.type === 'survey')
     ok(surveyCall?.system?.includes('무너짐'), '지식 KV(어휘 사전)가 시스템 자리표시자로 주입')
     ok(surveyCall?.user?.includes('스킨플러딩'), '트렌드 키워드가 원장 경유 가변부로 주입')
+    ok(calls0.filter((c) => c.type === 'intent').length === 1, '의도 정규화(1단계) LLM 1회')
+    ok(surveyCall?.user?.includes('의도 해석'), '의도 해석이 설문 가변부에 주입')
+    ok(surveyCall?.user?.includes('여름 지속력'), '의도 목적(goal)이 원장 경유로 실림')
   }
 
   // ── 3. 계획 생성 — 살아 있는 interrupt를 Command로 재개 ──
@@ -162,6 +166,7 @@ try {
   ok(!last(regen, 'error'), '오류 없음')
   calls = await llmCalls()
   ok(calls.filter((c) => c.type === 'survey').length === 1, '재생성에서 survey 재호출 없음 (멱등 스킵)')
+  ok(calls.filter((c) => c.type === 'intent').length === 1, '재생성에서 intent 재호출 없음 (멱등 스킵)')
   ok(calls.filter((c) => c.type === 'skeleton').length === 2, 'skeleton 2회(초회+재생성)')
 
   // ── 6. 설문 재요청 멱등 — 재생성 없이 core 시딩으로 재응답 ──
@@ -195,6 +200,22 @@ try {
     const lastSurvey = surveyCallsAll.at(-1)
     ok(lastSurvey?.user?.includes('향 강한'), '직전 쓰레드 피드백 압축이 가변부에 주입')
     ok(lastSurvey?.user?.includes('★1'), '별점 압축 표기(★1)')
+  }
+
+  // ── 7.5 목적어 가드 (0단계) — 막연한 발화는 LLM 호출 전에 되돌린다 ──
+  console.log('7.5) 목적어 가드 (graph)')
+  const startVague = await fetch(BFF + '/api/threads', {
+    method: 'POST',
+    headers: H,
+    body: JSON.stringify({ query: '예뻐지고 싶어' }),
+  }).then((r) => r.json())
+  const svVague = await sse(`/api/threads/${startVague.threadId}/survey`, {}, H)
+  const vagueError = last(svVague, 'error')?.data
+  ok(vagueError?.code === 'llm_refused' && !vagueError?.retryable, '막연 발화 → llm_refused 비재시도')
+  ok((vagueError?.message || '').includes('구체적'), '유도 문구 포함')
+  {
+    const callsAfterVague = await llmCalls()
+    ok(callsAfterVague.filter((c) => c.type === 'intent').length === 2, '가드 차단 시 LLM 미호출 (intent 2회 유지)')
   }
 
   // ── 8. legacy 경로 무영향 (헤더 없음 = 기본 legacy) ──

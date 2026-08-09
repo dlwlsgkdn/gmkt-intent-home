@@ -12,8 +12,8 @@ export const LedgerFact = z.object({
   /** 사람이 읽는 라벨 (예: 피부타입, 예산) */
   label: z.string(),
   value: z.string(),
-  /** 값의 출처 — 설문 중복 방지·검증 근거 표시용 */
-  source: z.enum(['profile', 'answer', 'feedback', 'signal']),
+  /** 값의 출처 — 설문 중복 방지·검증 근거 표시용. intent = 1단계 의도 정규화 산출 */
+  source: z.enum(['profile', 'answer', 'feedback', 'signal', 'intent']),
 })
 export type LedgerFact = z.infer<typeof LedgerFact>
 
@@ -53,6 +53,8 @@ export type LedgerInputs = {
   profile?: Profile
   survey?: SurveyPageWire
   answers?: Answer[]
+  /** 1단계 의도 정규화 산출 — facts(source='intent')로 굳는다 */
+  intentProfile?: { template: string; goal: string; timing: string; audience: string } | null
   recentFeedback?: string[]
   trendKeywords?: string[]
   selectionSignals?: SelectionSignal[]
@@ -71,6 +73,12 @@ export function parseBudgetKrw(value: string): number | null {
  * 기피 라벨(기피/피하-)은 avoid 목록으로 파생 — 검증 게이트 역대조가 같은 값을 본다 */
 export function assembleLedger(inputs: LedgerInputs): ConstraintLedger {
   const facts: LedgerFact[] = []
+  if (inputs.intentProfile) {
+    facts.push({ label: '의도 유형', value: inputs.intentProfile.template, source: 'intent' })
+    facts.push({ label: '목적', value: inputs.intentProfile.goal, source: 'intent' })
+    facts.push({ label: '시점', value: inputs.intentProfile.timing, source: 'intent' })
+    facts.push({ label: '대상', value: inputs.intentProfile.audience, source: 'intent' })
+  }
   for (const p of inputs.profile ?? []) {
     facts.push({ label: p.label, value: p.value, source: 'profile' })
   }

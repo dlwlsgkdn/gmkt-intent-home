@@ -3,12 +3,14 @@ import { END, START, StateGraph, getWriter, interrupt } from '@langchain/langgra
 import type { BaseCheckpointSaver, LangGraphRunnableConfig } from '@langchain/langgraph'
 import type { Answer, PlanSectionWire, Profile, SurveyPageWire, ThreadStageFeedback } from '@ddak/schema'
 import {
+  LlmGenerationError,
   PlanSearchSectionGen,
   PlanSectionPartialGen,
   PlanSkeletonSectionGen,
   SurveyQuestionGen,
   SurveyQuestionPartialGen,
   assembleLedger,
+  checkObjective,
   completeSearchSection,
   groundContentsSection,
   groundProductsSection,
@@ -85,8 +87,27 @@ function guardOf(state: ThreadGraphStateType): GuardContext {
 }
 
 export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSaver) {
-  /** 2단계: 제약 원장 조립 — 프로필·답변 + 지식 소스(트렌드 키워드 KV·직전 쓰레드 피드백 압축).
-   * 블록리스트도 여기서 굳혀 스트리밍·최종 검증이 같은 목록을 본다 */
+  /** 0단계: 목적어 가드 — 명백히 쓸 수 없는 발화는 LLM 호출 전에 되돌린다 (규칙 기반, 보수적) */
+  const objectiveNode = (state: ThreadGraphStateType) => {
+    const check = checkObjective(state.intent)
+    if (!check.ok) throw new LlmGenerationError('llm_refused', check.message, false)
+    return {}
+  }
+
+  /** 1단계: 의도 정규화 (LLM, low) — 이미 있으면 건너뛴다. 실패해도 플로우는 계속(fail-open) */
+  const intentNode = async (state: ThreadGraphStateType) => {
+    if (state.intentProfile) return {}
+    try {
+      const { content } = await deps.llm.generateIntent(state.intent)
+      return { intentProfile: content }
+    } catch (e) {
+      logger.warn(`의도 정규화 실패 — 없이 진행: ${(e as Error).message}`)
+      return { intentProfile: null }
+    }
+  }
+
+  /** 2단계: 제약 원장 조립 — 의도 해석·프로필·답변 + 지식 소스(트렌드 키워드 KV·직전 쓰레드
+   * 피드백 압축). 블록리스트도 여기서 굳혀 스트리밍·최종 검증이 같은 목록을 본다 */
   const ledgerNode = async (state: ThreadGraphStateType) => {
     const [trendKeywords, recentFeedback, blocklist] = await Promise.all([
       deps.knowledge.trendKeywords(),
@@ -98,6 +119,7 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
         profile: state.profile ?? undefined,
         survey: state.survey ?? undefined,
         answers: state.answers ?? undefined,
+        intentProfile: state.intentProfile ?? undefined,
         trendKeywords,
         recentFeedback,
       }),
@@ -290,6 +312,8 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
   // 노드 이름은 전략 문서 단계 번호를 접두로 쓴다 — 상태 채널 이름(ledger·survey…)과
   // 겹치면 LangGraph가 거부하고, 스튜디오(페이즈 4)가 이 이름을 단계 카드로 그대로 보여준다
   return new StateGraph(ThreadGraphState)
+    .addNode('s0-objective', objectiveNode)
+    .addNode('s1-intent', intentNode)
     .addNode('s2-ledger', ledgerNode)
     .addNode('s3-survey', surveyNode)
     .addNode('await-answers', awaitAnswersNode)
@@ -298,7 +322,9 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
     .addNode('s5b-products', productsNode)
     .addNode('s6-verify', verifyNode)
     .addNode('s7-record', recordNode)
-    .addEdge(START, 's2-ledger')
+    .addEdge(START, 's0-objective')
+    .addEdge('s0-objective', 's1-intent')
+    .addEdge('s1-intent', 's2-ledger')
     .addEdge('s2-ledger', 's3-survey')
     .addEdge('s3-survey', 'await-answers')
     .addEdge('await-answers', 's2-ledger-update')

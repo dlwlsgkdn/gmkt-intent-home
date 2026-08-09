@@ -4,6 +4,7 @@ import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import type { z } from 'zod'
 import type { AdminModelOption, Answer, LlmMeta, Profile, SurveyPageWire } from '@ddak/schema'
 import {
+  IntentGen,
   LlmGenerationError,
   PROMPT_DEFS,
   PROMPT_VERSION,
@@ -11,6 +12,7 @@ import {
   PlanSkeletonGen,
   StructuredStreamParser,
   SurveyGen,
+  buildIntentRequest,
   buildPlanProductsRequest,
   buildPlanSkeletonRequest,
   buildSurveyRequest,
@@ -137,6 +139,15 @@ export class LlmService implements LlmPort {
       )
     }
     return this.client
+  }
+
+  /** 1단계 의도 정규화 — 작고 빠른 구조화 호출 (스트리밍 없음). 실패 처리는 호출자(fail-open) */
+  async generateIntent(intent: string): Promise<GenResult<IntentGen>> {
+    return this.generate('의도 정규화', IntentGen, {
+      system: await this.resolveSystem('intent'),
+      effort: 'low' as const,
+      user: buildIntentRequest(intent),
+    })
   }
 
   async generateSurvey(

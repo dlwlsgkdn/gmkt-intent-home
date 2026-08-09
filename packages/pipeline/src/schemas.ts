@@ -16,9 +16,31 @@ export type SurveyQuestionGen = z.infer<typeof SurveyQuestionGen>
 
 export const SurveyGen = z.object({
   intro: z.string().describe('설문 페이지 머리 문구 — 사용자의 의도를 되짚는 한두 문장'),
-  questions: z.array(SurveyQuestionGen).min(3).max(5),
+  // 전략 문서 3단계: 꼭 필요한 질문만 — 0문항(설문 스킵)은 FE 플로우 변경이 필요해 하한 1
+  questions: z.array(SurveyQuestionGen).min(1).max(3),
 })
 export type SurveyGen = z.infer<typeof SurveyGen>
+
+/* 1단계 의도 정규화 (전략 문서 STEP 1) — 발화를 구조로. 템플릿 밖 추측 금지, 결과는
+ * 원장 facts(source='intent')로 흘러 가변부에 "의도 해석"으로 실린다. */
+
+export const INTENT_TEMPLATES = [
+  '제품 추천',
+  '제품 비교',
+  '고민 해결',
+  '사용법·루틴',
+  '선물 추천',
+  '트렌드 탐색',
+  '재구매·확인',
+] as const
+
+export const IntentGen = z.object({
+  template: z.enum(INTENT_TEMPLATES).describe('7개 의도 템플릿 중 가장 가까운 하나'),
+  goal: z.string().describe('목적 한 구 — 사용자의 말을 그대로 살려서 (예: 여름 지속력)'),
+  timing: z.string().describe('시점 — 예: 지금 바로, 여름 대비, 다음 달 행사. 모르면 "지금 바로"'),
+  audience: z.string().describe('대상 — 예: 본인, 어머니 선물. 모르면 "본인"'),
+})
+export type IntentGen = z.infer<typeof IntentGen>
 
 /*
  * 계획은 2단계 병렬 생성이다 (DESIGN-LLM-SERVICE.md §9-1):

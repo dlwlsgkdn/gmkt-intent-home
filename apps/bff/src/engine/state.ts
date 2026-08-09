@@ -1,6 +1,6 @@
 import { Annotation } from '@langchain/langgraph'
 import type { Answer, LlmMeta, PlanPageWire, Profile, SurveyPageWire, ThreadStageFeedback } from '@ddak/schema'
-import type { ConstraintLedger, GroundingDrop, PlanSearchSectionGen, PlanSkeletonGen } from '@ddak/pipeline'
+import type { ConstraintLedger, GroundingDrop, IntentGen, PlanSearchSectionGen, PlanSkeletonGen } from '@ddak/pipeline'
 
 /*
  * 쓰레드 그래프 상태 (DESIGN-PIPELINE-LANGGRAPH.md §1) — 체크포인트로 직렬화되므로
@@ -14,6 +14,8 @@ export const ThreadGraphState = Annotation.Root({
   /** 쓰레드 소유자(deviceId) — 직전 쓰레드 피드백 압축 조회에 쓴다 */
   userId: Annotation<string>(),
   intent: Annotation<string>(),
+  /** 1단계 의도 정규화 산출 — 원장 facts(source=intent)의 원천. 실패 시 null(fail-open) */
+  intentProfile: Annotation<IntentGen | null>(),
   profile: Annotation<Profile | null>(),
   /** 제약 원장 — 가변부 주입(프롬프트)과 6단계 역대조가 같은 값을 본다. plan 스텝에 스냅샷 기록 */
   ledger: Annotation<ConstraintLedger | null>(),

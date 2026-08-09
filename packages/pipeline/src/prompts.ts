@@ -2,7 +2,7 @@ import type { Answer, PlanPageWire, Profile, SurveyPageWire, ThreadStageFeedback
 import { CATALOG } from './catalog'
 import type { ConstraintLedger } from './ledger'
 
-export const PROMPT_VERSION = 'v14'
+export const PROMPT_VERSION = 'v15'
 
 /*
  * 프롬프트 조립 — 안정 prefix(시스템)와 가변부(사용자 메시지)를 분리한다.
@@ -13,12 +13,21 @@ export const PROMPT_VERSION = 'v14'
 export const SURVEY_SYSTEM = `너는 지마켓 뷰티의 AI 쇼핑 플래너다. 사용자의 쇼핑 의도를 파악하기 위한 짧은 설문 페이지를 만든다.
 
 규칙:
-- 질문은 3~5개. 사용자가 고르기 쉬운 짧은 선택지 2~6개씩.
+- 질문은 **꼭 필요한 1~3개만** — 답이 계획을 실제로 바꾸는 질문만 만들고, 이미 아는 것(프로필·의도 해석·참고 신호에 있는 정보)은 절대 다시 묻지 않는다.
+- 사용자가 고르기 쉬운 짧은 선택지 2~6개씩.
 - 첫 질문은 의도의 핵심 축(용도·고민·대상), 마지막 질문은 예산이나 선호로 마무리한다.
-- 프로필에 이미 있는 정보는 다시 묻지 않는다.
 - 말투는 친근한 존댓말, 이모지 없이 담백하게.
 - 선택지에 "기타"나 "잘 모르겠어요"를 남발하지 않는다 (필요한 질문 하나에만).
 {{VOCAB}}{{RULES}}`
+
+/* 1단계 의도 정규화 (전략 문서 STEP 1) — 발화를 7템플릿 구조로. 스키마 100% 준수는
+   구조화 출력이 보장하고, 이 프롬프트는 추측 금지·소비자 어휘 보존만 지시한다. */
+export const INTENT_SYSTEM = `너는 지마켓 뷰티의 AI 쇼핑 플래너다. 사용자의 한 줄 발화를 의도 구조(7개 의도 템플릿 중 하나 + 목적·시점·대상)로 정규화한다.
+
+규칙:
+- 발화에 없는 정보를 추측하지 않는다 — 시점을 모르면 "지금 바로", 대상을 모르면 "본인".
+- 목적(goal)은 사용자가 쓴 말을 그대로 살린다 (내부 용어로 바꾸지 않는다 — "무너짐"은 "무너짐"으로).
+{{VOCAB}}`
 
 const CATALOG_BLOCK = CATALOG.map(
   (p) => `${p.id} | ${p.brand} ${p.name} | ${p.price.toLocaleString('ko-KR')}원 | ${p.tags.join(',')}`,
@@ -63,6 +72,10 @@ export function renderSystemTemplate(template: string, knowledge?: SystemKnowled
 export function ledgerBlock(ledger?: ConstraintLedger | null): string {
   if (!ledger) return ''
   const lines: string[] = []
+  const intentFacts = ledger.facts.filter((f) => f.source === 'intent')
+  if (intentFacts.length) {
+    lines.push(`- 의도 해석: ${intentFacts.map((f) => `${f.label} ${f.value}`).join(' · ')}`)
+  }
   if (ledger.trendKeywords.length) {
     lines.push(`- 지금 뜨는 키워드: ${ledger.trendKeywords.join(', ')} (어울리는 곳에만 자연스럽게 반영)`)
   }
@@ -114,9 +127,15 @@ ${CATALOG_PLACEHOLDER}
  * template은 자리표시자({{CATALOG}}) 포함 원문이고, 실제 호출값은 renderSystemTemplate을
  * 거친다. 재정의는 core 설정 KV(`llm-prompt-<id>`)에 원문으로 저장된다 (llm.service). */
 
-export type PromptDefId = 'survey' | 'plan-skeleton' | 'plan-products'
+export type PromptDefId = 'intent' | 'survey' | 'plan-skeleton' | 'plan-products'
 
 export const PROMPT_DEFS: { id: PromptDefId; label: string; note: string; template: string }[] = [
+  {
+    id: 'intent',
+    label: '의도 정규화',
+    note: '1단계 — 발화를 7개 의도 템플릿 + 목적·시점·대상 구조로. 실패해도 플로우는 계속된다(fail-open). {{VOCAB}} 자리표시자는 지식 KV로 치환된다.',
+    template: INTENT_SYSTEM,
+  },
   {
     id: 'survey',
     label: '설문 생성',
@@ -139,6 +158,12 @@ export const PROMPT_DEFS: { id: PromptDefId; label: string; note: string; templa
 
 const profileBlock = (profile?: Profile) =>
   profile?.length ? profile.map((p) => `- ${p.label}: ${p.value}`).join('\n') : '(없음)'
+
+export function buildIntentRequest(intent: string): string {
+  return `사용자 발화: ${intent}
+
+이 발화를 의도 구조로 정규화해 주세요.`
+}
 
 export function buildSurveyRequest(intent: string, profile?: Profile, ledger?: ConstraintLedger | null): string {
   return `사용자 의도: ${intent}

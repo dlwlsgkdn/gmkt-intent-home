@@ -29,6 +29,13 @@ const SKELETON_JSON = JSON.stringify({
   ],
 })
 
+const INTENT_JSON = JSON.stringify({
+  template: '제품 추천',
+  goal: '여름 지속력',
+  timing: '지금 바로',
+  audience: '본인',
+})
+
 const PRODUCTS_JSON = JSON.stringify({
   sections: [
     {
@@ -111,6 +118,10 @@ const server = http.createServer(async (req, res) => {
     if (system.includes('뼈대')) {
       llmCalls.push({ type: 'skeleton', system, user })
       return streamAnthropic(res, SKELETON_JSON, { delayMs: 4, chunkSize: 18 })
+    }
+    if (system.includes('정규화한다')) {
+      llmCalls.push({ type: 'intent', system, user })
+      return streamAnthropic(res, INTENT_JSON, { delayMs: 2, chunkSize: 30 })
     }
     llmCalls.push({ type: 'survey', system, user })
     return streamAnthropic(res, SURVEY_JSON, { delayMs: 4, chunkSize: 18 })
