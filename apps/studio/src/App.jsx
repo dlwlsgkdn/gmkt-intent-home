@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { createScenario, normalizeScenario } from './lib/store.js'
 import { readShareFromHash, clearShareHash } from './lib/share.js'
 import { adoptSharedScenario, duplicateScenario, scenariosFromImport } from './lib/scenarioOps.js'
@@ -16,17 +16,43 @@ import TaggingStudio from './components/TaggingStudio.jsx'
  *
  * 워크스페이스 상태와 저장은 useWorkspace가, 시나리오 복사·가져오기 규칙은
  * lib/scenarioOps가 담당한다. 여기서는 "무엇을 보여줄지"만 결정한다.
+ *
+ * 페이지형 화면은 해시 URL이 원천이다 — #builder/<sid>(시나리오 스튜디오),
+ * #explore-editor(프로필·키워드 사전), #tagging(상품 태깅 검토), #admin(thread 관리).
+ * 진입은 location.hash 푸시(히스토리 엔트리 생성), 적용은 hashchange 핸들러 한 곳 —
+ * 그래서 브라우저 앞/뒤로가기·새로고침·주소 직접 입력이 전부 동작한다.
+ * player/live는 체험 1회의 일시 상태라 해시 없이 route 상태로만 산다 (공유는 #s= 별도).
  */
+
+/** 해시 → 페이지 라우트 (모르는 해시·#s= 공유 링크는 null = 홈/공유 모드 처리) */
+function routeFromHash(hash) {
+  if (hash === '#admin') return { name: 'admin' }
+  if (hash === '#tagging') return { name: 'tagging' }
+  if (hash === '#explore-editor') return { name: 'explore-editor' }
+  const builder = hash.match(/^#builder\/(.+)$/)
+  if (builder) return { name: 'builder', id: decodeURIComponent(builder[1]) }
+  return null
+}
+
 export default function App() {
   // route: {name:'home'} | {name:'builder', id} | {name:'player', id, resume}
-  //      | {name:'live', query?, resumeThreadId?, runId} | {name:'explore-editor', back}
-  //      | {name:'admin'} — 홈 드로어 도구 행 버튼 또는 #admin 해시로 진입
-  const [route, setRoute] = useState(() =>
-    typeof location !== 'undefined' && location.hash === '#admin' ? { name: 'admin' } : { name: 'home' }
-  )
+  //      | {name:'live', query?, resumeThreadId?, runId} | {name:'explore-editor'}
+  //      | {name:'tagging'} | {name:'admin'}
+  // 초기값: 데이터 게이트가 없는 해시는 즉시 반영, #builder/*는 하이드레이션 뒤 초기 효과가 연다
+  const [route, setRoute] = useState(() => {
+    if (typeof location === 'undefined') return { name: 'home' }
+    const fromHash = routeFromHash(location.hash)
+    return fromHash && fromHash.name !== 'builder' ? fromHash : { name: 'home' }
+  })
   const [toast, setToast] = useState(null)
   const showToast = (message) => setToast(message)
-  const goHome = () => setRoute({ name: 'home' })
+  /* 홈 복귀 — 해시를 지운 새 히스토리 엔트리를 만들어 뒤로가기로 이전 페이지에 돌아갈 수 있다 */
+  const goHome = () => {
+    if (typeof location !== 'undefined' && location.hash) {
+      history.pushState(null, '', location.pathname + location.search)
+    }
+    setRoute({ name: 'home' })
+  }
 
   const workspace = useWorkspace({ showToast, onReset: goHome })
   const { scenarios, setScenarios, requestAutoSync } = workspace
@@ -59,12 +85,38 @@ export default function App() {
     return () => clearTimeout(timer)
   }, [toast])
 
-  /* 관리 페이지 — 주소창에 #admin을 치면 (새로고침 없이도) 진입한다 */
-  useEffect(() => {
-    const onHash = () => {
-      if (location.hash === '#admin') setRoute({ name: 'admin' })
+  /* 해시 적용 지점 (단일) — 주소 직접 입력·앞/뒤로가기·해시 푸시 전부 여기로 모인다.
+     빌더는 콘텐츠+버전 스냅샷을 맞춘 뒤 열고, 없는 시나리오면 홈으로 되돌린다 */
+  const routeRef = useRef(route)
+  routeRef.current = route
+  const applyHashRef = useRef(() => {})
+  applyHashRef.current = () => {
+    if (readShareFromHash()) return // 공유 링크(#s=)는 별도 모드가 받는다
+    const next = routeFromHash(location.hash)
+    if (!next) {
+      if (routeRef.current.name !== 'home') setRoute({ name: 'home' })
+      return
     }
+    if (next.name !== 'builder') {
+      setRoute(next)
+      return
+    }
+    if (routeRef.current.name === 'builder' && routeRef.current.id === next.id) return
+    openSynced(workspace.ensureStudioSynced(next.id), () => {
+      if (workspace.getFreshActiveScenarios().some((scenario) => scenario.id === next.id)) {
+        setRoute({ name: 'builder', id: next.id })
+      } else {
+        showToast('이 계정에 없는 시나리오예요 — 홈으로 이동해요.')
+        history.replaceState(null, '', location.pathname + location.search)
+        setRoute({ name: 'home' })
+      }
+    })
+  }
+  useEffect(() => {
+    const onHash = () => applyHashRef.current()
     window.addEventListener('hashchange', onHash)
+    // 초기 진입: #builder/* 등 데이터 게이트가 필요한 해시를 마운트 후 1회 적용
+    applyHashRef.current()
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
 
@@ -98,9 +150,18 @@ export default function App() {
   const isStarterSource = (scenario) => workspace.starterEntries.some((entry) =>
     entry.sourceAccountId === workspace.activeAccountId && entry.sourceScenarioId === scenario.id)
 
+  /* 페이지 진입 — 해시 엔트리를 푸시하고 라우트를 연다. pushState는 hashchange를 발화하지
+     않으므로(같은 해시 재적용·상태 레이스 방지) 적용은 여기서 직접, URL 주도 진입만 핸들러 몫 */
+  const pushRoute = (hash, next) => {
+    if (typeof location !== 'undefined' && location.hash !== hash) {
+      history.pushState(null, '', location.pathname + location.search + hash)
+    }
+    setRoute(next)
+  }
+
   const registerScenario = (scenario) => {
     setScenarios((prev) => [...prev, scenario])
-    setRoute({ name: 'builder', id: scenario.id })
+    pushRoute(`#builder/${encodeURIComponent(scenario.id)}`, { name: 'builder', id: scenario.id })
     requestAutoSync()
     return scenario
   }
@@ -195,28 +256,23 @@ export default function App() {
     remoteSync: workspace.remoteSync,
     goHome,
     /* 빌더는 콘텐츠+버전 스냅샷을 맞춘 뒤 연다 — 버전은 스튜디오 진입 시에만 로드 */
-    openBuilder: (id) => openSynced(workspace.ensureStudioSynced(id), () => setRoute({ name: 'builder', id })),
+    openBuilder: (id) =>
+      openSynced(workspace.ensureStudioSynced(id), () =>
+        pushRoute(`#builder/${encodeURIComponent(id)}`, { name: 'builder', id })),
     /* resume = { threadId, stage } — 기존 쓰레드를 이어서 해당 단계부터.
        칩 클릭 체험은 시나리오 콘텐츠(stages·planCases)를 맞춘 뒤 시작한다 */
     playScenario: (id, resume) => openSynced(workspace.ensureScenarioSynced(id), () => setRoute({ name: 'player', id, resume })),
     /* 라이브 생성 체험(BFF) — 자유 검색 진입. runId로 리마운트해 "새로 생성"이 새 쓰레드를 만든다 */
     playLive: (query) => setRoute({ name: 'live', query, runId: Date.now() }),
     resumeLive: (threadId) => setRoute({ name: 'live', resumeThreadId: threadId, runId: Date.now() }),
-    /* thread 관리 페이지 — 해시도 같이 달아 새로고침해도 관리 페이지가 유지된다 */
-    openAdmin: () => {
-      if (location.hash !== '#admin') history.replaceState(null, '', location.pathname + location.search + '#admin')
-      setRoute({ name: 'admin' })
-    },
-    /* 관리 페이지 이탈 — #admin 해시를 지워야 새로고침이 홈으로 돌아온다 */
-    exitAdmin: () => {
-      if (location.hash === '#admin') history.replaceState(null, '', location.pathname + location.search)
-      goHome()
-    },
-    openExploreEditor: () => setRoute((prev) => ({ name: 'explore-editor', back: prev })),
-    closeExploreEditor: () => setRoute((prev) => prev.back || { name: 'home' }),
+    /* 페이지형 화면 진입·이탈 — 전부 해시 히스토리 엔트리라 브라우저 앞/뒤로가기가 동작한다 */
+    openAdmin: () => pushRoute('#admin', { name: 'admin' }),
+    exitAdmin: goHome,
+    openExploreEditor: () => pushRoute('#explore-editor', { name: 'explore-editor' }),
+    closeExploreEditor: goHome,
     /* 상품 태깅 검토 스튜디오 — 라이브 생성 카탈로그 태그 검토 (진입은 홈 드로어 도구 행) */
-    openTaggingStudio: () => setRoute((prev) => ({ name: 'tagging', back: prev })),
-    closeTaggingStudio: () => setRoute((prev) => prev.back || { name: 'home' }),
+    openTaggingStudio: () => pushRoute('#tagging', { name: 'tagging' }),
+    closeTaggingStudio: goHome,
     explore: workspace.explore,
     updateExplore: workspace.setExplore,
     profile: workspace.profile,
@@ -253,7 +309,7 @@ export default function App() {
       const scenario = adoptSharedScenario(shared)
       setScenarios((prev) => [...prev, scenario])
       exitShared()
-      setRoute({ name: 'builder', id: scenario.id })
+      pushRoute(`#builder/${encodeURIComponent(scenario.id)}`, { name: 'builder', id: scenario.id })
       requestAutoSync()
       showToast('공유받은 시나리오를 내 스튜디오로 가져왔어요.')
     }

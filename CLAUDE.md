@@ -45,7 +45,7 @@ npm run build --workspace=apps/bff && npm run e2e:mock --workspace=apps/bff  # b
 
 ## 아키텍처 (apps/studio/src)
 
-- `App.jsx` — **앱 셸**: 라우팅(home/builder/player/explore-editor + 공유 링크 모드)과 토스트, 그리고 화면들이 쓰는 `api` 객체 조립. 시나리오 CRUD는 여기, 그 밖은 아래로 위임
+- `App.jsx` — **앱 셸**: 라우팅과 토스트, 그리고 화면들이 쓰는 `api` 객체 조립. 시나리오 CRUD는 여기, 그 밖은 아래로 위임. **페이지형 화면은 해시 URL이 원천** — `#builder/<sid>`(빌더)·`#explore-editor`·`#tagging`·`#admin`: 진입 함수는 pushState로 해시 엔트리를 만들며 직접 열고(생성 직후 상태 레이스 방지 — pushState는 hashchange 미발화), 주소 입력·앞/뒤로가기는 hashchange 핸들러 한 곳이 받는다(빌더는 ensureStudioSynced 게이트 후 열고 없는 시나리오면 홈 복귀). 이탈(goHome)은 해시 없는 pushState라 뒤로가기로 복귀 가능. player/live는 체험 1회의 일시 상태라 해시 없음, 공유 링크는 `#s=` 별도 모드
 - `hooks/useWorkspace.js` — **계정(프로필별 워크스페이스) 상태의 원본**: 로컬 상태·patchActive(무변경 참조 스킵)·localStorage 자동 저장·프로필 관리·전체 백업. 서버 쪽에는 stateRef·세터만 내어 준다
 - `hooks/remote/` — **서버 미러링 한 벌** (위 "서버 동기화" 항목의 구현): `useRemoteSync.js`(공유 ref·동기화 상태·업로드 흐름 배선 — 반환하는 `remoteSync` 한 벌을 useWorkspace가 그대로 노출), `rowAdoption.js`(서버 행 채택 — 행→메모리 병합+기준선), `onDemandSync.js`(필요 시점 로드 syncRow·ensure*), `hydration.js`(부트 1왕복+백그라운드+구형 이관 — 시딩 가드 포함), `push.js`(미저장 감지 accountDirty + 업로드 코어 pushCore — 행 단위 게이트·명시적 삭제·충돌 처리), `starterSync.js`(기본 시나리오 라이브러리 미러링 — 즉시 쓰기·설치 직전 스냅샷 로드)
 - `lib/scenarioOps.js` — 시나리오 통째 복사(복제·가져오기·공유 채택)의 **id 재발급 규칙**. 아이템 id는 parentId·계획 조건 questionId·평가 기록 키 세 곳에서 참조되므로 한 곳에서 다시 매단다
