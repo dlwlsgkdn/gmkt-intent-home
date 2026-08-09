@@ -19,13 +19,16 @@ import { CoreClientService } from '../core-client.service'
 import { LlmService } from '../llm/llm.service'
 import { CATALOG_BY_ID } from '../llm/catalog'
 import {
+  ContentItemGen,
   ContentsSectionGen,
   PlanSearchSectionGen,
+  PlanSearchSectionPartialGen,
   PlanSectionPartialGen,
   PlanSkeletonSectionGen,
   ProductsSectionGen,
   SurveyQuestionGen,
   SurveyQuestionPartialGen,
+  WebProductGen,
 } from '../llm/gen-schemas'
 import { GeneratedIndexAllocator, isSlotKind, mergePlanSections, slotIndexesOf } from './plan-merge'
 
@@ -53,7 +56,9 @@ export type PlanSkeletonPageWire = {
 export type PlanStreamHandlers = {
   onHead?: (patch: { headline?: string; summary?: string }) => void
   onSkeleton?: (page: PlanSkeletonPageWire, pending: number[]) => void
-  onSection?: (section: PlanSectionWire, index: number) => void
+  /** final=false는 자라는 중인 재전송(상품·콘텐츠 항목 단위 증분) — FE는 최종본(final=true)
+   * 이 올 때까지 그 자리를 pending(재생성 게이트)으로 유지한다 */
+  onSection?: (section: PlanSectionWire, index: number, final: boolean) => void
   onSearch?: (query: string) => void
 }
 
@@ -139,8 +144,10 @@ export class ThreadsService {
    * 뼈대(검색 없음, 수 초)가 제목·단계 안내·순서와 상품/콘텐츠 "자리"를 확정해 먼저
    * 스트리밍되고, 뼈대가 끝나면 onSkeleton으로 **조기 확정**을 알린다 — FE는 이 시점에
    * 계획을 확정 렌더하고 자리에 로딩 카드를 둔다. 검색 단계(상품+참고 콘텐츠, 웹 검색
-   * 포함)는 병렬로 돌아 자리를 나중에 비동기로 채운다. 검색 섹션 스트림은 뼈대 완료로
-   * 자리 인덱스가 확정된 뒤 내보낸다 — 실측상 뼈대가 항상 훨씬 먼저 끝난다.
+   * 포함)는 병렬로 돌아 자리를 나중에 비동기로 채운다 — 섹션 완성을 기다리지 않고
+   * 완성·그라운딩 통과한 항목부터 같은 자리에 증분 재전송(final=false)하고, 섹션이 닫히면
+   * 최종본(final=true)으로 마감한다. 검색 섹션 스트림은 뼈대 완료로 자리 인덱스가 확정된 뒤
+   * 내보낸다 — 실측상 뼈대가 항상 훨씬 먼저 끝난다.
    * feedback(stage='plan')이 오면 피드백 반영 재생성: 저장된 직전 계획과 피드백을 프롬프트에
    * 실어, 지적된 상품은 빼고 웹 검색으로 대안을 찾는다 (카탈로그 밖 상품도 webProducts로) */
   async generatePlan(
@@ -166,13 +173,24 @@ export class ThreadsService {
       : undefined
 
     let allocator: GeneratedIndexAllocator | null = null // null = 뼈대 미완 — 검색 섹션은 대기열에 쌓인다
-    const arrivedSections: PlanSectionWire[] = [] // 그라운딩 통과분 (도착 순)
+    const arrivedSections: { section: PlanSectionWire; streamIndex: number }[] = [] // 그라운딩 통과분 (도착 순)
+    // 검색 스트림 원소 index → 자리 index. 첫 방출(대개 partial)에 배정하고 재전송·최종본이 같은 자리를 쓴다.
+    // 검색 스트림은 원소를 순차로 내보내므로 첫 방출 순서 = 완성 순서 — 도착 순 배정 규칙이 유지된다
+    const slotByStream = new Map<number, number>()
+    const slotFor = (streamIndex: number, kind: string): number => {
+      let slot = slotByStream.get(streamIndex)
+      if (slot === undefined) {
+        slot = (allocator as GeneratedIndexAllocator).next(kind === 'contents' ? 'contents' : 'products')
+        slotByStream.set(streamIndex, slot)
+      }
+      return slot
+    }
     let emitted = 0
     const flushGenerated = () => {
       if (!allocator || !stream?.onSection) return
       while (emitted < arrivedSections.length) {
-        const section = arrivedSections[emitted]
-        stream.onSection(section, allocator.next(section.kind === 'contents' ? 'contents' : 'products'))
+        const { section, streamIndex } = arrivedSections[emitted]
+        stream.onSection(section, slotFor(streamIndex, section.kind), true)
         emitted += 1
       }
     }
@@ -192,7 +210,7 @@ export class ThreadsService {
             const parsed = PlanSkeletonSectionGen.safeParse(element)
             if (!parsed.success) return
             // 상품·콘텐츠 자리는 내보내지 않는다 — 검색 단계 결과가 이 인덱스를 차지한다
-            if (!isSlotKind(parsed.data.kind)) stream.onSection?.(parsed.data as PlanSectionWire, index)
+            if (!isSlotKind(parsed.data.kind)) stream.onSection?.(parsed.data as PlanSectionWire, index, true)
           },
           // 자라는 중인 섹션 — 제목이 나오기 시작하면 토큰 단위로 같은 index에 재전송한다
           onElementPartial: (element, index) => {
@@ -200,9 +218,10 @@ export class ThreadsService {
             if (!parsed.success) return
             const s = parsed.data
             if (!s.title) return
-            if (s.kind === 'guide') stream.onSection?.({ kind: 'guide', title: s.title, body: s.body ?? '' }, index)
+            if (s.kind === 'guide')
+              stream.onSection?.({ kind: 'guide', title: s.title, body: s.body ?? '' }, index, false)
             else if (s.kind === 'steps')
-              stream.onSection?.({ kind: 'steps', title: s.title, steps: (s.steps ?? []).filter(Boolean) }, index)
+              stream.onSection?.({ kind: 'steps', title: s.title, steps: (s.steps ?? []).filter(Boolean) }, index, false)
             // products·contents 자리는 부분도 내보내지 않는다 — 검색 단계 결과가 차지할 인덱스
           },
         },
@@ -247,9 +266,22 @@ export class ThreadsService {
               ? this.resolveContentsSection(parsed.data)
               : this.resolveProductsSection(parsed.data, index)
           if (section) {
-            arrivedSections.push(section)
+            arrivedSections.push({ section, streamIndex: index })
             flushGenerated()
           }
+        },
+        // 자라는 중인 검색 섹션 — 완성된 항목(상품·콘텐츠)만 추려 같은 자리에 증분 재전송한다.
+        // 그라운딩이 결정적이고 항목은 앞에서부터 확정되므로, 한 번 나간 카드는 최종본에서 사라지지 않는다
+        onElementPartial: (element, index) => {
+          // 뼈대 완료(allocator) 전 조각은 버린다 — FE에 아직 자리 카드가 없다 (완성본은 대기열이 보전)
+          if (!allocator || !stream.onSection) return
+          const gen = completeSearchSection(element)
+          if (!gen) return
+          const section =
+            gen.kind === 'contents'
+              ? this.resolveContentsSection(gen, true)
+              : this.resolveProductsSection(gen, index, true)
+          if (section) stream.onSection(section, slotFor(index, section.kind), false)
         },
         onSearch: stream.onSearch,
       },
@@ -299,11 +331,11 @@ export class ThreadsService {
   /** 상품 섹션 그라운딩 검증 — 카탈로그 밖 id는 버리고, 웹 상품은 URL(http/https+PDP) 검증 통과분만 채택.
    * 상세 페이지(url) 없는 상품은 카탈로그 상품이라도 추천하지 않는다 — 상세보기가 열리는 상품만 싣는다.
    * 상품이 하나도 안 남으면 null(드롭). 결정적이라 스트림 조각과 최종 결과가 일치한다 (§4-3) */
-  private resolveProductsSection(s: ProductsSectionGen, sectionIndex: number): PlanSectionWire | null {
+  private resolveProductsSection(s: ProductsSectionGen, sectionIndex: number, quiet = false): PlanSectionWire | null {
     const catalogProducts: CatalogProduct[] = s.productIds
       .map((id) => CATALOG_BY_ID.get(id))
       .filter((p): p is NonNullable<ReturnType<typeof CATALOG_BY_ID.get>> => Boolean(p && p.url))
-    if (catalogProducts.length < s.productIds.length) {
+    if (!quiet && catalogProducts.length < s.productIds.length) {
       this.logger.warn(`카탈로그 밖이거나 PDP url 없는 상품 id ${s.productIds.length - catalogProducts.length}건 드롭`)
     }
     // 외부몰 우선 정책: 웹 상품(올리브영 등)을 앞에 싣고 카탈로그(지마켓)는 뒤에 보조로 붙인다
@@ -311,11 +343,11 @@ export class ThreadsService {
     s.webProducts.forEach((w, webIndex) => {
       const url = parseHttpUrl(w.url)
       if (!url) {
-        this.logger.warn(`웹 상품 URL 검증 실패로 드롭: ${w.name} (${w.url})`)
+        if (!quiet) this.logger.warn(`웹 상품 URL 검증 실패로 드롭: ${w.name} (${w.url})`)
         return
       }
       if (isSearchLikeUrl(url)) {
-        this.logger.warn(`웹 상품 URL이 검색/목록 페이지로 보여 드롭 (PDP만 허용): ${w.name} (${w.url})`)
+        if (!quiet) this.logger.warn(`웹 상품 URL이 검색/목록 페이지로 보여 드롭 (PDP만 허용): ${w.name} (${w.url})`)
         return
       }
       // 썸네일도 http(s) 검증 통과분만 — 실패해도 상품은 싣는다 (FE가 이모지 목업 폴백)
@@ -337,12 +369,12 @@ export class ThreadsService {
 
   /** 참고 콘텐츠 섹션 그라운딩 검증 — url이 http(s)이고 검색/목록 페이지가 아닌 항목만 채택.
    * 항목이 하나도 안 남으면 null(드롭). 결정적이라 스트림 조각과 최종 결과가 일치한다 */
-  private resolveContentsSection(s: ContentsSectionGen): PlanSectionWire | null {
+  private resolveContentsSection(s: ContentsSectionGen, quiet = false): PlanSectionWire | null {
     const items: PlanContentItem[] = []
     s.items.forEach((c) => {
       const url = parseHttpUrl(c.url)
       if (!url || isSearchLikeUrl(url)) {
-        this.logger.warn(`콘텐츠 URL 검증 실패로 드롭: ${c.title} (${c.url})`)
+        if (!quiet) this.logger.warn(`콘텐츠 URL 검증 실패로 드롭: ${c.title} (${c.url})`)
         return
       }
       // 썸네일도 http(s) 검증 통과분만 — 실패해도 항목은 싣는다 (FE가 폴백 이미지)
@@ -426,6 +458,36 @@ function combineMeta(skeleton: LlmMeta, products: LlmMeta | null): LlmMeta {
     latencyMs: Math.max(skeleton.latencyMs ?? 0, products?.latencyMs ?? 0),
     phases: { skeletonMs: skeleton.latencyMs ?? null, productsMs: products?.latencyMs ?? null },
   } as LlmMeta
+}
+
+/** 자라는 중인 검색 섹션 조각 → 완성된 항목만 남긴 본 스키마 형태 (상품·콘텐츠 항목 단위 증분).
+ * 복구 파싱은 열린 괄호를 닫아 만든 것이라 버퍼상 마지막 키의 값만 잘렸을 수 있다 — 그 키가
+ * 배열이면 마지막 원소를 무조건 버리고(앞 원소들은 이미 닫힌 완전한 JSON — stream-parse §안전 근거),
+ * 남은 항목을 항목 스키마로 개별 검증한다. 버린 원소는 다음 조각이나 완성 시점(onElement)에 실린다 */
+export function completeSearchSection(element: unknown): PlanSearchSectionGen | null {
+  const parsed = PlanSearchSectionPartialGen.safeParse(element)
+  if (!parsed.success) return null
+  const s = parsed.data
+  if (!s.title || s.reason === undefined) return null
+  const keys = Object.keys(element as Record<string, unknown>)
+  const openKey = keys[keys.length - 1] // JSON.parse가 버퍼 키 순서를 보존한다 — 마지막 키만 미완성 후보
+  const settled = (key: string, list: unknown[] | undefined): unknown[] =>
+    key === openKey ? (list ?? []).slice(0, -1) : (list ?? [])
+  if (s.kind === 'products') {
+    return {
+      kind: 'products',
+      title: s.title,
+      reason: s.reason,
+      productIds: settled('productIds', s.productIds).filter((v): v is string => typeof v === 'string'),
+      webProducts: settled('webProducts', s.webProducts)
+        .map((v) => WebProductGen.safeParse(v))
+        .flatMap((r) => (r.success ? [r.data] : [])),
+    }
+  }
+  const items = settled('items', s.items)
+    .map((v) => ContentItemGen.safeParse(v))
+    .flatMap((r) => (r.success ? [r.data] : []))
+  return items.length ? { kind: 'contents', title: s.title, reason: s.reason, items } : null
 }
 
 function parseHttpUrl(raw: string): URL | null {

@@ -150,7 +150,9 @@ async function consumeSse(res, handlers) {
       // 이후 section 이벤트가 자리를 비동기로 채우고, result(권위)가 최종본으로 마감한다
       if (handlers.onSkeleton && payload.page) handlers.onSkeleton(payload.page, payload.pending || [])
     } else if (event === 'section') {
-      if (handlers.onSection && payload.section) handlers.onSection(payload.section, payload.index)
+      // final !== false = 최종본 (플래그 없는 구버전 BFF 포함) — 자라는 중 증분(final:false)은
+      // 같은 index로 반복 도착하며, 자리(pending) 해제는 최종본에서만 한다
+      if (handlers.onSection && payload.section) handlers.onSection(payload.section, payload.index, payload.final !== false)
     } else if (event === 'result') {
       terminal = true
       handlers.onResult(payload.page)
@@ -207,7 +209,8 @@ export function streamLiveSurvey(threadId, body, handlers) {
 
 /* 응답 제출 → 계획 페이지 생성 (LLM #2) — handlers: { onStatus, onHead({headline?, summary?}),
    onSkeleton(page, pending[]) — 뼈대 조기 확정(자리는 null·pending 인덱스),
-   onSection(PlanSectionWire, index), onResult(PlanPageWire), onError } */
+   onSection(PlanSectionWire, index, final) — final=false는 항목 단위 증분(같은 index 재도착),
+   onResult(PlanPageWire), onError } */
 export function streamLivePlan(threadId, body, handlers) {
   return streamGeneration(`/threads/${encodeURIComponent(threadId)}/plan`, body, handlers)
 }

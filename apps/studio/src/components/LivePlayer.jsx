@@ -266,10 +266,11 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         setStageKey('plan')
         window.scrollTo(0, 0)
       },
-      onSection: (section, index) => {
+      onSection: (section, index, final = true) => {
         if (!active()) return
         if (skeletonDoneRef.current) {
-          // 조기 확정 뒤 도착한 상품·콘텐츠 — 확정 페이지의 자리를 직접 채운다 (등장 페이드인)
+          // 조기 확정 뒤 도착한 상품·콘텐츠 — 확정 페이지의 자리를 직접 채운다 (등장 페이드인).
+          // 항목 단위 증분(final=false)은 같은 index로 반복 도착하며 섹션을 그대로 덮어쓴다
           lateIdsRef.current.add(`live-plan-s${index}`)
           lateIdsRef.current.add(`live-plan-s${index}-reason`)
           setPlanPage((prev) => {
@@ -278,7 +279,9 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
             sections[index] = section
             return { ...prev, sections }
           })
-          setPendingSlots((prev) => prev.filter((i) => i !== index))
+          // pending은 재생성 게이트(저장 경합 방지) — 자라는 중에는 유지하고 최종본에서만 푼다.
+          // 로딩 카드는 섹션이 채워지는 즉시 사라진다 (livePlanItems가 null 자리에만 그린다)
+          if (final) setPendingSlots((prev) => prev.filter((i) => i !== index))
           return
         }
         pushPartial((prev) => {

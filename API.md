@@ -50,17 +50,20 @@ event: status   → { message: "질문을 구성하고 있어요…" }         (
 event: head     → { intro } | { headline } | { summary }         (머리 필드 — 자라는 값 반복 발송 + 완성본)
 event: question → { index, question: SurveyQuestionWire }        (설문 — 자라는 질문을 같은 index로 반복 발송)
 event: skeleton → { page, pending: number[] }                    (계획 — 뼈대 조기 확정: page.sections의 상품·콘텐츠 자리는 null, pending이 그 인덱스)
-event: section  → { index, section: PlanSectionWire }            (계획 — 자라는 섹션을 같은 index로 반복 발송)
+event: section  → { index, section: PlanSectionWire, final }     (계획 — 자라는 섹션을 같은 index로 반복 발송, final:true·생략=최종본)
 event: result   → { page: SurveyPageWire | PlanPageWire }        (완성 페이지 — 권위·저장 기준, 종료)
 event: error    → { code, message, retryable }                   (실패 안내 — 종료)
 ```
 
 부분 이벤트(head/question/section)는 **미리보기**다: 컴포넌트 안 텍스트가 토큰 단위로 자라며
 같은 키/index로 반복 전송되고(FE는 슬롯 덮어쓰기 — 스로틀 ~120ms), 원소가 완성되면 검증·그라운딩을
-통과한 최종본이 같은 index로 한 번 더 나간다(검증 실패로 드롭된 원소는 index가 건너뛴다 — 상품·콘텐츠
-섹션은 부분 전송 없이 완성·그라운딩 통과분만). **`skeleton`은 계획 전용 조기 확정**이다: 뼈대(텍스트)가
+통과한 최종본이 같은 index로 한 번 더 나간다(검증 실패로 드롭된 원소는 index가 건너뛴다). 상품·콘텐츠
+섹션도 **항목 단위 증분**으로 나간다: 완성·그라운딩 통과한 항목만 실은 섹션이 `final:false`로 같은
+index에 반복 전송되고(항목 목록은 언제나 최종본의 접두 — 한 번 나간 카드는 사라지지 않는다), 섹션이
+닫히면 `final:true`(생략 시 true — 구버전 BFF 호환)로 마감한다. FE는 최종본까지 그 자리를
+pending(재생성 게이트)으로 유지한다. **`skeleton`은 계획 전용 조기 확정**이다: 뼈대(텍스트)가
 끝나는 즉시 완성 텍스트 섹션 + 자리(null·pending 인덱스)를 보내고, FE는 이 시점에 계획을 확정
-렌더하며 자리에 로딩 카드를 둔다 — 이후 `section` 이벤트(웹 검색 완료분)가 자리를 비동기로 채우고,
+렌더하며 자리에 로딩 카드를 둔다 — 이후 `section` 이벤트가 자리를 비동기로 채우고,
 검색 단계가 못 채운 자리는 `result`에서 빠진다(이때만 뒤 섹션 인덱스가 당겨진다). 확정·저장은 언제나
 `result`의 전체 페이지다. 모르는 이벤트는 무시해도 안전하다 — 구버전 FE ↔ 신버전 BFF 조합에서도
 스켈레톤→result 동작으로 자연 강등된다.

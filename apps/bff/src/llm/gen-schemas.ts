@@ -38,28 +38,27 @@ const StepsSectionGen = z.object({
   steps: z.array(z.string()).min(2).max(6).describe('실행 순서 — 아침/저녁 루틴 등'),
 })
 
+/** 웹 검색 상품 항목 — 부분 스트리밍이 완성된 항목만 개별 검증하는 데도 재사용한다 (threads.service) */
+export const WebProductGen = z.object({
+  name: z.string().describe('상품명 — 검색 결과에 나온 실제 상품명'),
+  brand: z.string().describe('브랜드'),
+  price: z.number().int().describe('판매가 (원 단위 정수) — 검색 결과에서 확인한 값'),
+  mall: z.string().describe('판매처 이름 (예: 올리브영, 쿠팡)'),
+  url: z.string().describe('상품 상세 페이지(PDP) URL — 검색 결과의 주소 그대로. 검색 결과·목록 페이지 금지'),
+  imageUrl: z
+    .string()
+    .describe('상품 썸네일 이미지 URL — 검색 결과에서 확인한 경우만, 없으면 빈 문자열 (지어내기 금지)'),
+  tags: z.array(z.string()).max(5).describe('특징 태그'),
+})
+export type WebProductGen = z.infer<typeof WebProductGen>
+
 export const ProductsSectionGen = z.object({
   kind: z.literal('products'),
   title: z.string(),
   reason: z.string().describe('이 상품들을 고른 이유 한두 문장 — 답변을 근거로'),
   productIds: z.array(z.string()).max(4).describe('카탈로그에서 고른 상품 id (없으면 빈 배열)'),
   // 웹 검색 그라운딩: 검색 결과에서 확인한 상품만 — url은 BFF가 http(s)+PDP 검증 후 채택한다
-  webProducts: z
-    .array(
-      z.object({
-        name: z.string().describe('상품명 — 검색 결과에 나온 실제 상품명'),
-        brand: z.string().describe('브랜드'),
-        price: z.number().int().describe('판매가 (원 단위 정수) — 검색 결과에서 확인한 값'),
-        mall: z.string().describe('판매처 이름 (예: 올리브영, 쿠팡)'),
-        url: z.string().describe('상품 상세 페이지(PDP) URL — 검색 결과의 주소 그대로. 검색 결과·목록 페이지 금지'),
-        imageUrl: z
-          .string()
-          .describe('상품 썸네일 이미지 URL — 검색 결과에서 확인한 경우만, 없으면 빈 문자열 (지어내기 금지)'),
-        tags: z.array(z.string()).max(5).describe('특징 태그'),
-      }),
-    )
-    .max(4)
-    .describe('웹 검색으로 찾은 상품 (없으면 빈 배열)'),
+  webProducts: z.array(WebProductGen).max(4).describe('웹 검색으로 찾은 상품 (없으면 빈 배열)'),
 })
 export type ProductsSectionGen = z.infer<typeof ProductsSectionGen>
 
@@ -145,3 +144,15 @@ export const PlanSectionPartialGen = z.object({
   steps: z.array(z.string()).optional(),
 })
 export type PlanSectionPartialGen = z.infer<typeof PlanSectionPartialGen>
+
+/** 검색 섹션(상품·콘텐츠)의 부분 스트리밍용 느슨한 스키마 — 항목 배열은 unknown으로 받고,
+ * 완성된 항목만 항목 스키마(WebProductGen·ContentItemGen)로 개별 검증한다 (threads.service) */
+export const PlanSearchSectionPartialGen = z.object({
+  kind: z.enum(['products', 'contents']),
+  title: z.string().optional(),
+  reason: z.string().optional(),
+  productIds: z.array(z.unknown()).optional(),
+  webProducts: z.array(z.unknown()).optional(),
+  items: z.array(z.unknown()).optional(),
+})
+export type PlanSearchSectionPartialGen = z.infer<typeof PlanSearchSectionPartialGen>
