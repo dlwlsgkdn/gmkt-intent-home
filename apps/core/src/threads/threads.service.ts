@@ -118,6 +118,17 @@ export class ThreadsService {
     return { items, truncated: rows.length > limit }
   }
 
+  /** 전환 판정 계기판의 원천 — 실주행 plan 스텝의 llmMeta만 최신순으로 (엔진·지연·캐시 집계는 BFF 몫) */
+  async listPlanMetas(limit = 200) {
+    const rows = await this.conn()
+      .select({ threadId: threadSteps.threadId, createdAt: threadSteps.createdAt, llmMeta: threadSteps.llmMeta })
+      .from(threadSteps)
+      .where(eq(threadSteps.stage, 'plan'))
+      .orderBy(desc(threadSteps.createdAt))
+      .limit(limit)
+    return { items: rows }
+  }
+
   /** 관리 페이지용 전체 목록 — archived 포함, id(스노우플레이크) 키셋 커서.
    * id는 유니크·시간 단조라 updatedAt과 달리 동점 없이 깔끔하게 페이징된다 (생성 최신순) */
   async listAll(cursor?: string, limit = 20) {

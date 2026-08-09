@@ -302,7 +302,7 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
       deps.core.upsertStep(state.threadId, SEQ.plan, {
         stage: 'plan',
         payload: { page: state.page, ledger: state.ledger ?? null, dropLog: state.dropLog ?? [] },
-        llmMeta: combineMeta(state.skeletonMeta!, state.productsMeta ?? null),
+        llmMeta: combineMeta(state.skeletonMeta!, state.productsMeta ?? null, 'langgraph'),
       }),
       deps.core.updateThread(state.threadId, { status: 'planning' }),
     ])

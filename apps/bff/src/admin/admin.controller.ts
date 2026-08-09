@@ -3,10 +3,12 @@ import {
   Body,
   Controller,
   DefaultValuePipe,
+  Delete,
   Get,
   Logger,
   Param,
   ParseIntPipe,
+  Patch,
   Post,
   Put,
   Query,
@@ -26,6 +28,7 @@ import {
 } from '@nestjs/swagger'
 import {
   AdminDryRunBody,
+  AdminEngineMetricsWire,
   AdminFeedbackEntry,
   AdminFeedbackWire,
   AdminKnowledgeEntry,
@@ -33,14 +36,23 @@ import {
   AdminPipelineWire,
   AdminPromptId,
   AdminPromptsWire,
+  EvalCasesWire,
+  EvalRunsWire,
+  PromoteEvalCaseBody,
   PutAdminEngineBody,
   PutAdminKnowledgeBody,
   PutAdminModelBody,
   PutAdminPromptBody,
+  RunEvalCaseBody,
+  ScoreEvalRunBody,
   Thread,
   ThreadListPage,
   ThreadStageFeedback,
   ThreadWithSteps,
+  type Answer,
+  type PlanPageWire,
+  type Profile,
+  type SurveyPageWire,
 } from '@ddak/schema'
 import { CoreClientService } from '../core-client.service'
 import { ServiceTokenGuard } from '../common/service-token.guard'
@@ -56,7 +68,9 @@ import {
   PROMPT_DEFS,
   PROMPT_VERSION,
   knowledgeSettingKey,
+  mergePlanSections,
 } from '@ddak/pipeline'
+import { SEQ, combineMeta, intentOf } from '../threads/thread-io'
 import { KnowledgeService } from '../llm/knowledge.service'
 import { ENGINE_SETTING_KEY, EngineFlagService } from '../engine/engine-flag.service'
 import { PipelineDryRunService } from '../engine/dry-run.service'
@@ -367,20 +381,196 @@ export class AdminController {
       })
       sseSend(res, 'result', result)
     } catch (e) {
-      if (e instanceof LlmGenerationError) {
-        this.logger.warn(`dry-run 실패 안내 — code=${e.code}`)
-        sseSend(res, 'error', { code: e.code, message: e.message, retryable: e.retryable })
-      } else if (e instanceof BadRequestException) {
-        sseSend(res, 'error', { code: 'bad_request', message: e.message, retryable: false })
-      } else {
-        this.logger.error(`dry-run 오류: ${(e as Error).message}`)
-        sseSend(res, 'error', {
-          code: 'internal',
-          message: '일시적인 문제로 dry-run에 실패했어요. 잠시 후 다시 시도해 주세요.',
-          retryable: true,
-        })
-      }
+      this.sendSseFailure(res, 'dry-run', e)
     }
     sseClose(res)
+  }
+
+  private sendSseFailure(res: SseRes, label: string, e: unknown) {
+    if (e instanceof LlmGenerationError) {
+      this.logger.warn(`${label} 실패 안내 — code=${e.code}`)
+      sseSend(res, 'error', { code: e.code, message: e.message, retryable: e.retryable })
+    } else if (e instanceof BadRequestException) {
+      sseSend(res, 'error', { code: 'bad_request', message: e.message, retryable: false })
+    } else {
+      this.logger.error(`${label} 오류: ${(e as Error).message}`)
+      sseSend(res, 'error', {
+        code: 'internal',
+        message: `일시적인 문제로 ${label}에 실패했어요. 잠시 후 다시 시도해 주세요.`,
+        retryable: true,
+      })
+    }
+  }
+
+  /* ── 평가·실험 (DESIGN-PIPELINE-LANGGRAPH.md 페이즈 5) ────────────────── */
+
+  @Get('eval/cases')
+  @ApiOperation({ summary: '평가 케이스 목록 — 생성 최신순 (골든 케이스 셋)' })
+  @ApiOkResponse({ schema: toOpenApi(EvalCasesWire) })
+  listEvalCases(): Promise<EvalCasesWire> {
+    return this.core.listEvalCases() as Promise<EvalCasesWire>
+  }
+
+  @Post('eval/cases')
+  @ApiOperation({
+    summary: '쓰레드 → 평가 케이스 승격 — 입력 스냅샷(의도·프로필·설문·답변)을 굳힌다',
+    description: '"나쁜 실행을 본 그 자리에서 케이스로" 루프 (쓰레드 상세의 버튼). 설문·답변이 없는 쓰레드도 승격은 되지만 실행에는 설문·답변이 필요하다.',
+  })
+  @ApiBody({ schema: toOpenApi(PromoteEvalCaseBody) })
+  async promoteEvalCase(@Body(new ZodValidationPipe(PromoteEvalCaseBody)) body: PromoteEvalCaseBody) {
+    const thread = await this.core.getThread(body.threadId)
+    const step = (seq: number) => thread.steps.find((s) => s.seq === seq)
+    const profile =
+      ((step(SEQ.explore)?.payload as { profile?: Profile } | undefined)?.profile ??
+        (step(SEQ.answers)?.payload as { profile?: Profile } | undefined)?.profile) ?? null
+    return this.core.createEvalCase({
+      title: thread.title,
+      intent: intentOf(thread),
+      profile,
+      survey: (step(SEQ.survey)?.payload as { page?: SurveyPageWire } | undefined)?.page ?? null,
+      answers: (step(SEQ.answers)?.payload as { answers?: Answer[] } | undefined)?.answers ?? null,
+      sourceThreadId: thread.id,
+    })
+  }
+
+  @Post('eval/cases/:id/run')
+  @ApiOperation({
+    summary: '케이스 실행 (SSE) — 뼈대+상품 dry-run을 순차 실행해 병합 결과·메트릭을 기록',
+    description:
+      '그래프 노드와 같은 빌더·스키마·가드로 실행하고(쓰레드·core 스텝 기록 없음), 결과는 eval_runs에 저장된다. ' +
+      'promptOverride는 저장 없는 what-if (두 단계 모두 적용). SSE: status → result({ run }) | error.',
+  })
+  @ApiParam({ name: 'id', description: '평가 케이스 id' })
+  @ApiBody({ schema: toOpenApi(RunEvalCaseBody) })
+  @ApiProduces('text/event-stream')
+  @ApiOkResponse({ description: 'SSE 스트림 — result: { run: EvalRun }' })
+  async runEvalCase(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(RunEvalCaseBody)) body: RunEvalCaseBody,
+    @Res() res: SseRes,
+  ) {
+    openSse(res)
+    try {
+      const cases = await this.core.listEvalCases()
+      const evalCase = cases.items.find((c) => c.id === id)
+      if (!evalCase) throw new BadRequestException('평가 케이스가 없습니다')
+      if (!evalCase.survey || !evalCase.answers?.length) {
+        throw new BadRequestException('이 케이스에는 설문·답변 스냅샷이 없어 계획 실행을 할 수 없습니다')
+      }
+      sseSend(res, 'status', { message: '계획 뼈대를 실행하고 있어요…' })
+      const skeleton = await this.dryRunService.run({
+        stageId: 'plan-skeleton',
+        intent: evalCase.intent,
+        profile: evalCase.profile ?? undefined,
+        survey: evalCase.survey,
+        answers: evalCase.answers,
+        promptOverride: body.promptOverride,
+      })
+      sseSend(res, 'status', { message: '상품·콘텐츠를 실행하고 있어요…' })
+      const products = await this.dryRunService.run(
+        {
+          stageId: 'plan-products',
+          intent: evalCase.intent,
+          profile: evalCase.profile ?? undefined,
+          survey: evalCase.survey,
+          answers: evalCase.answers,
+          promptOverride: body.promptOverride,
+        },
+        { onStatus: (message) => sseSend(res, 'status', { message }) },
+      )
+      const sections = mergePlanSections(skeleton.skeleton!.sections, products.sections ?? [])
+      const page: PlanPageWire = {
+        headline: skeleton.skeleton!.headline,
+        summary: skeleton.skeleton!.summary,
+        sections,
+      }
+      const meta = combineMeta(skeleton.meta, products.meta, 'dry-run')
+      const run = await this.core.createEvalRun(id, {
+        config: {
+          engine: 'dry-run',
+          model: meta.model,
+          promptVersion: meta.promptVersion,
+          promptOverride: Boolean(body.promptOverride?.trim()),
+          ...(body.label?.trim() ? { label: body.label.trim() } : {}),
+        },
+        page,
+        dropLog: products.dropLog ?? [],
+        meta,
+      })
+      sseSend(res, 'result', { run })
+    } catch (e) {
+      this.sendSseFailure(res, '케이스 실행', e)
+    }
+    sseClose(res)
+  }
+
+  @Get('eval/cases/:id/runs')
+  @ApiOperation({ summary: '케이스의 실행 기록 — 최신순 (채점 포함)' })
+  @ApiParam({ name: 'id' })
+  @ApiOkResponse({ schema: toOpenApi(EvalRunsWire) })
+  listEvalRuns(@Param('id') id: string): Promise<EvalRunsWire> {
+    return this.core.listEvalRuns(id) as Promise<EvalRunsWire>
+  }
+
+  @Delete('eval/cases/:id')
+  @ApiOperation({ summary: '평가 케이스 삭제 — 실행 기록도 함께' })
+  @ApiParam({ name: 'id' })
+  deleteEvalCase(@Param('id') id: string) {
+    return this.core.deleteEvalCase(id)
+  }
+
+  @Patch('eval/runs/:id')
+  @ApiOperation({ summary: '실행 채점 — 별점 0~5(null=미채점)·코멘트 (평가 스튜디오 문법)' })
+  @ApiParam({ name: 'id' })
+  @ApiBody({ schema: toOpenApi(ScoreEvalRunBody) })
+  scoreEvalRun(@Param('id') id: string, @Body(new ZodValidationPipe(ScoreEvalRunBody)) body: ScoreEvalRunBody) {
+    return this.core.scoreEvalRun(id, body)
+  }
+
+  @Get('metrics/engines')
+  @ApiOperation({
+    summary: '전환 판정 계기판 — 실주행 plan 스텝 llmMeta를 엔진별 집계',
+    description:
+      '최근 plan 스텝 N개의 llmMeta(engine 각인)를 엔진별로 묶어 지연·단계별 소요·캐시 적중률·promptVersion을 비교한다. ' +
+      'engine 미각인 구 기록은 legacy로 집계. 페이즈 5 전환 게이트(TTFT +20%·캐시 유지)의 실측 재료.',
+  })
+  @ApiQuery({ name: 'limit', required: false, type: 'integer', example: 200 })
+  @ApiOkResponse({ schema: toOpenApi(AdminEngineMetricsWire) })
+  async engineMetrics(
+    @Query('limit', new DefaultValuePipe(200), ParseIntPipe) limit: number,
+  ): Promise<AdminEngineMetricsWire> {
+    const { items } = await this.core.listPlanMetas(limit)
+    const buckets = new Map<string, { latencies: number[]; skeletons: number[]; products: number[]; cacheHits: number; cacheKnown: number; versions: Set<string> }>()
+    for (const row of items) {
+      const meta = row.llmMeta as (Record<string, unknown> & { usage?: { cacheReadTokens?: number }; phases?: { skeletonMs?: number | null; productsMs?: number | null } }) | null
+      if (!meta) continue
+      const engine = typeof meta.engine === 'string' ? meta.engine : 'legacy'
+      let bucket = buckets.get(engine)
+      if (!bucket) {
+        bucket = { latencies: [], skeletons: [], products: [], cacheHits: 0, cacheKnown: 0, versions: new Set() }
+        buckets.set(engine, bucket)
+      }
+      if (typeof meta.latencyMs === 'number') bucket.latencies.push(meta.latencyMs)
+      if (typeof meta.phases?.skeletonMs === 'number') bucket.skeletons.push(meta.phases.skeletonMs)
+      if (typeof meta.phases?.productsMs === 'number') bucket.products.push(meta.phases.productsMs)
+      if (meta.usage && meta.usage.cacheReadTokens !== undefined) {
+        bucket.cacheKnown += 1
+        if ((meta.usage.cacheReadTokens ?? 0) > 0) bucket.cacheHits += 1
+      }
+      if (typeof meta.promptVersion === 'string') bucket.versions.add(meta.promptVersion)
+    }
+    const avg = (arr: number[]) => (arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null)
+    return {
+      sampled: items.length,
+      engines: [...buckets.entries()].map(([engine, b]) => ({
+        engine,
+        count: b.latencies.length,
+        avgLatencyMs: avg(b.latencies),
+        avgSkeletonMs: avg(b.skeletons),
+        avgProductsMs: avg(b.products),
+        cacheHitRate: b.cacheKnown ? Math.round((b.cacheHits / b.cacheKnown) * 100) / 100 : null,
+        promptVersions: [...b.versions].sort(),
+      })),
+    }
   }
 }

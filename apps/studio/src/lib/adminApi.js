@@ -96,13 +96,12 @@ export function putAdminEngine(engine) {
   return req('PUT', '/engine', { engine })
 }
 
-/** LLM 단계 단독 실행 (플레이그라운드, SSE) — 그래프·쓰레드·core 기록 없음.
- * body: { stageId, intent, profile?, survey?, answers?, promptOverride? } → DryRunResult.
- * onStatus로 진행 문구(웹 검색 등)를 받는다. 실패는 AdminApiError(code 부착)로 던진다 */
-export async function dryRunStage(body, { onStatus } = {}) {
+
+/** SSE POST 공용 소비자 — status(진행 문구) 콜백 + 마지막 result 반환, error 이벤트는 예외로 */
+async function ssePost(path, body, { onStatus } = {}) {
   let res
   try {
-    res = await fetch(`${BASE}/pipeline/dry-run`, {
+    res = await fetch(`${BASE}${path}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
@@ -141,10 +140,52 @@ export async function dryRunStage(body, { onStatus } = {}) {
     if (done) break
   }
   if (error) {
-    const e = new AdminApiError(0, error.message || 'dry-run에 실패했어요.')
+    const e = new AdminApiError(0, error.message || '실행에 실패했어요.')
     e.code = error.code
     throw e
   }
   if (!result) throw new AdminApiError(0, '결과를 받지 못했어요. 잠시 후 다시 시도해 주세요.')
   return result
+}
+
+/** LLM 단계 단독 실행 (플레이그라운드, SSE) — 그래프·쓰레드·core 기록 없음.
+ * body: { stageId, intent, profile?, survey?, answers?, promptOverride? } → DryRunResult */
+export function dryRunStage(body, opts) {
+  return ssePost('/pipeline/dry-run', body, opts)
+}
+
+/* ── 평가·실험 (페이즈 5) ── */
+
+/** 골든 케이스 목록 — { items: EvalCase[] } */
+export function fetchEvalCases() {
+  return req('GET', '/eval/cases')
+}
+
+/** 쓰레드 → 케이스 승격 — 입력 스냅샷을 굳힌다 (쓰레드 상세의 버튼) */
+export function promoteEvalCase(threadId) {
+  return req('POST', '/eval/cases', { threadId })
+}
+
+export function deleteEvalCase(id) {
+  return req('DELETE', `/eval/cases/${encodeURIComponent(id)}`)
+}
+
+/** 케이스 실행 (SSE) — 뼈대+상품 dry-run 순차 실행·기록. → { run: EvalRun } */
+export function runEvalCase(id, body, opts) {
+  return ssePost(`/eval/cases/${encodeURIComponent(id)}/run`, body || {}, opts)
+}
+
+/** 케이스의 실행 기록 — { items: EvalRun[] } (최신순) */
+export function fetchEvalRuns(caseId) {
+  return req('GET', `/eval/cases/${encodeURIComponent(caseId)}/runs`)
+}
+
+/** 실행 채점 — score 0~5 | null(미채점), comment */
+export function scoreEvalRun(id, score, comment) {
+  return req('PATCH', `/eval/runs/${encodeURIComponent(id)}`, { score, comment })
+}
+
+/** 전환 판정 계기판 — 실주행 plan 스텝 llmMeta 엔진별 집계 */
+export function fetchEngineMetrics() {
+  return req('GET', '/metrics/engines')
 }

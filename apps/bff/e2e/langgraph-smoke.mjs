@@ -242,6 +242,37 @@ try {
   ok(drResult?.survey?.questions?.length === 3, `dry-run 설문 3문항 (${drResult?.survey?.questions?.length})`)
   ok(drResult?.ledger?.trendKeywords?.includes('스킨플러딩'), 'dry-run 원장에 트렌드 키워드 주입')
   ok(!last(dr, 'error'), 'dry-run 오류 없음')
+
+  // ── 10. 평가·실험 API (페이즈 5) ──
+  console.log('10) 평가·실험 API')
+  const promo = await fetch(BFF + '/api/admin/eval/cases', {
+    method: 'POST',
+    headers: plain,
+    body: JSON.stringify({ threadId: tid }),
+  }).then((r) => r.json())
+  ok(/^\d{19}$/.test(promo?.id ?? ''), '쓰레드 → 케이스 승격')
+  ok(promo?.survey?.questions?.length === 3, '설문 스냅샷 포함')
+  ok((promo?.answers || []).length >= 1, '답변 스냅샷 포함')
+  const runEvents = await sse(`/api/admin/eval/cases/${promo.id}/run`, { label: '기본 설정' }, plain)
+  const run = last(runEvents, 'result')?.data?.run
+  ok(run?.page?.sections?.length === 3, `케이스 실행 — 병합 페이지 (${run?.page?.sections?.length})`)
+  ok(run?.config?.engine === 'dry-run' && run?.config?.label === '기본 설정', '실행 config 스냅샷')
+  ok((run?.dropLog || []).some((d) => d.code === 'blocklist'), '실행 dropLog에 검증 게이트 기록')
+  ok(run?.meta?.phases?.skeletonMs != null, '실행 meta phases 결합')
+  const scored = await fetch(BFF + `/api/admin/eval/runs/${run.id}`, {
+    method: 'PATCH',
+    headers: plain,
+    body: JSON.stringify({ score: 4, comment: '기본 설정 무난' }),
+  }).then((r) => r.json())
+  ok(scored?.score === 4 && scored?.comment === '기본 설정 무난', '채점 저장')
+  const runsWire = await fetch(BFF + `/api/admin/eval/cases/${promo.id}/runs`).then((r) => r.json())
+  ok(runsWire?.items?.length === 1 && runsWire.items[0].score === 4, '실행 기록 목록 + 채점 반영')
+  const engineMetrics = await fetch(BFF + '/api/admin/metrics/engines').then((r) => r.json())
+  const lg = engineMetrics?.engines?.find((e) => e.engine === 'langgraph')
+  const legacyM = engineMetrics?.engines?.find((e) => e.engine === 'legacy')
+  ok(lg?.count >= 1, `전환 계기판 — langgraph 표본 (${lg?.count})`)
+  ok(legacyM?.count >= 1, `전환 계기판 — legacy 표본 (${legacyM?.count})`)
+  ok(lg?.promptVersions?.includes('v15'), 'promptVersion 각인 (v15)')
 } finally {
   shutdown()
 }

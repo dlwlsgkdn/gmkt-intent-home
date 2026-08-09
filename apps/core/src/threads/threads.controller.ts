@@ -127,6 +127,16 @@ export class ThreadsController {
     return this.threads.listFeedbackSteps(limit)
   }
 
+  @Get('plan-metas')
+  @ApiOperation({
+    summary: '실주행 plan 스텝 llmMeta 나열 (전환 판정 계기판용)',
+    description: 'stage=plan 스텝의 llmMeta만 최신순으로 — 엔진별 지연·캐시 집계는 BFF admin이 맡는다.',
+  })
+  @ApiQuery({ name: 'limit', required: false, type: 'integer', example: 200 })
+  listPlanMetas(@Query('limit', new DefaultValuePipe(200), ParseIntPipe) limit?: number) {
+    return this.threads.listPlanMetas(limit)
+  }
+
   @Get('threads')
   @ApiOperation({
     summary: '전체 쓰레드 목록 (관리용)',

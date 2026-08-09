@@ -7,6 +7,8 @@ const PORT = Number(process.env.MOCK_PORT ?? 19799)
 
 const threads = new Map() // id -> { thread, steps: Map<seq, step> }
 const settings = new Map() // key -> value (core 설정 KV 모의 — 지식·가드·엔진 플래그)
+const evalCases = new Map() // id -> case row
+const evalRuns = new Map() // id -> run row
 let nextId = 2195943212345678900n
 export const llmCalls = [] // { type, system, user } — e2e가 프롬프트 주입을 검증한다
 
@@ -178,6 +180,45 @@ const server = http.createServer(async (req, res) => {
     }
     items.reverse() // 최신 제출 먼저 (삽입 역순 근사)
     return send(200, { items, truncated: false })
+  }
+  // ── 평가·실험 (페이즈 5) ──
+  if (url.startsWith('/internal/eval/cases') || url.startsWith('/internal/eval/runs')) {
+    if (url === '/internal/eval/cases' && req.method === 'POST') {
+      const row = { id: String(nextId++), title: body.title ?? null, intent: body.intent, profile: body.profile ?? null, survey: body.survey ?? null, answers: body.answers ?? null, sourceThreadId: body.sourceThreadId ?? null, createdAt: new Date().toISOString() }
+      evalCases.set(row.id, row)
+      return send(201, row)
+    }
+    if (url.startsWith('/internal/eval/cases?') || url === '/internal/eval/cases') {
+      return send(200, { items: [...evalCases.values()].reverse() })
+    }
+    if ((m = url.match(/^\/internal\/eval\/cases\/(\d+)\/runs$/)) && req.method === 'POST') {
+      const row = { id: String(nextId++), caseId: m[1], config: body.config, page: body.page ?? null, dropLog: body.dropLog ?? [], meta: body.meta ?? null, score: null, comment: '', createdAt: new Date().toISOString() }
+      evalRuns.set(row.id, row)
+      return send(201, row)
+    }
+    if ((m = url.match(/^\/internal\/eval\/cases\/(\d+)\/runs$/)) && req.method === 'GET') {
+      return send(200, { items: [...evalRuns.values()].filter((r) => r.caseId === m[1]).reverse() })
+    }
+    if ((m = url.match(/^\/internal\/eval\/cases\/(\d+)$/)) && req.method === 'DELETE') {
+      evalCases.delete(m[1])
+      return send(200, { ok: true })
+    }
+    if ((m = url.match(/^\/internal\/eval\/runs\/(\d+)$/)) && req.method === 'PATCH') {
+      const row = evalRuns.get(m[1])
+      if (!row) return send(404, { message: 'no run' })
+      row.score = body.score
+      if (body.comment !== undefined) row.comment = body.comment
+      return send(200, row)
+    }
+  }
+  if (url.startsWith('/internal/plan-metas') && req.method === 'GET') {
+    const items = []
+    for (const t of threads.values()) {
+      for (const step of t.steps.values()) {
+        if (step.stage === 'plan') items.push({ threadId: t.thread.id, createdAt: new Date().toISOString(), llmMeta: step.llmMeta ?? null })
+      }
+    }
+    return send(200, { items })
   }
   if (url === '/internal/llm-calls' && req.method === 'GET') return send(200, llmCalls)
   if ((m = url.match(/^\/internal\/dump\/(\d+)$/)) && req.method === 'GET') {

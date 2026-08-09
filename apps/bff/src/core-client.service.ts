@@ -1,7 +1,15 @@
 import { HttpException, Injectable, ServiceUnavailableException } from '@nestjs/common'
 import type {
+  CreateEvalCaseBody,
+  CreateEvalRunBody,
   CreateThreadBody,
+  EvalCase,
+  EvalCasesWire,
+  EvalRun,
+  EvalRunsWire,
   FeedbackStepsWire,
+  PlanMetasWire,
+  ScoreEvalRunBody,
   SettingWire,
   Thread,
   ThreadListPage,
@@ -76,6 +84,30 @@ export class CoreClientService {
   listFeedbackSteps(limit?: number) {
     const qs = limit ? `?limit=${limit}` : ''
     return this.req<FeedbackStepsWire>('GET', `/internal/feedback-steps${qs}`)
+  }
+
+  /* ── 평가·실험 (페이즈 5) ── */
+  createEvalCase(body: CreateEvalCaseBody) {
+    return this.req<EvalCase>('POST', '/internal/eval/cases', body)
+  }
+  listEvalCases(limit?: number) {
+    return this.req<EvalCasesWire>('GET', `/internal/eval/cases${limit ? `?limit=${limit}` : ''}`)
+  }
+  deleteEvalCase(id: string) {
+    return this.req<{ ok: boolean }>('DELETE', `/internal/eval/cases/${encodeURIComponent(id)}`)
+  }
+  createEvalRun(caseId: string, body: CreateEvalRunBody) {
+    return this.req<EvalRun>('POST', `/internal/eval/cases/${encodeURIComponent(caseId)}/runs`, body)
+  }
+  listEvalRuns(caseId: string) {
+    return this.req<EvalRunsWire>('GET', `/internal/eval/cases/${encodeURIComponent(caseId)}/runs`)
+  }
+  scoreEvalRun(id: string, body: ScoreEvalRunBody) {
+    return this.req<EvalRun>('PATCH', `/internal/eval/runs/${encodeURIComponent(id)}`, body)
+  }
+  /** 실주행 plan 스텝 llmMeta — 전환 판정 계기판의 원천 */
+  listPlanMetas(limit?: number) {
+    return this.req<PlanMetasWire>('GET', `/internal/plan-metas${limit ? `?limit=${limit}` : ''}`)
   }
 
   /** 설정 KV — 없는 키는 null (404를 삼킨다) */

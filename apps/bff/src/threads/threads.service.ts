@@ -336,7 +336,7 @@ export class ThreadsService {
       this.core.upsertStep(threadId, SEQ.plan, {
         stage: 'plan',
         payload: { page },
-        llmMeta: combineMeta(skeleton.meta, productsMeta),
+        llmMeta: combineMeta(skeleton.meta, productsMeta, 'legacy'),
       }),
       this.core.updateThread(threadId, { status: 'planning' }),
     )

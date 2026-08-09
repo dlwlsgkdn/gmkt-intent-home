@@ -14,6 +14,8 @@ import { timeAgo } from '../lib/timeAgo.js'
 import AdminFeedback from './AdminFeedback.jsx'
 import AdminThreadPreview, { threadPreviewPages } from './AdminThreadPreview.jsx'
 import PipelineStudio from './PipelineStudio.jsx'
+import ExperimentStudio from './ExperimentStudio.jsx'
+import { promoteEvalCase } from '../lib/adminApi.js'
 
 /*
  * thread 관리 페이지 — 진입은 홈 드로어 도구 행의 버튼 또는 #admin 해시.
@@ -213,6 +215,7 @@ export default function AdminView({ api }) {
         {[
           ['threads', '쓰레드·평가'],
           ['pipeline', '파이프라인'],
+          ['experiment', '실험'],
         ].map(([value, label]) => (
           <button
             key={value}
@@ -324,6 +327,9 @@ export default function AdminView({ api }) {
       </>
       )}
 
+      {/* 실험 탭 — 골든 케이스 실행·채점 + 전환 판정 계기판 */}
+      {tab === 'experiment' && <ExperimentStudio />}
+
       {tab === 'threads' && (
       <>
       {/* 평가 모아보기 — 피드백 제출 대시보드 */}
@@ -426,6 +432,21 @@ export default function AdminView({ api }) {
                     </div>
                     <button type="button" className="sb-btn sb-btn--ghost sb-btn--small" onClick={copyMarkdown}>
                       마크다운 복사
+                    </button>
+                    <button
+                      type="button"
+                      className="sb-btn sb-btn--ghost sb-btn--small"
+                      title="입력 스냅샷(의도·프로필·설문·답변)을 실험 탭의 골든 케이스로 굳혀요"
+                      onClick={async () => {
+                        try {
+                          await promoteEvalCase(detail.id)
+                          api.showToast('평가 케이스로 저장했어요 — 실험 탭에서 실행하세요.')
+                        } catch (e) {
+                          api.showToast(`케이스 저장 실패: ${e.message}`)
+                        }
+                      }}
+                    >
+                      평가 케이스로 저장
                     </button>
                     {detail.status !== 'archived' && (
                       <button

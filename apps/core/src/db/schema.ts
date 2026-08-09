@@ -46,6 +46,44 @@ export const settings = pgTable('settings', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
+/* ── 평가·실험 (페이즈 5) — 골든 케이스와 실행 기록. core는 내용을 해석하지 않는다 ── */
+
+export const evalCases = pgTable('eval_cases', {
+  /** 스노우플레이크 — 쓰레드 id와 같은 체계 (앱 발급) */
+  id: text('id').primaryKey(),
+  title: text('title'),
+  intent: text('intent').notNull(),
+  profile: jsonb('profile').$type<unknown>(),
+  survey: jsonb('survey').$type<unknown>(),
+  answers: jsonb('answers').$type<unknown>(),
+  /** 승격 원본 쓰레드 (수동 생성이면 null) — FK 없음: 쓰레드가 지워져도 케이스는 남는다 */
+  sourceThreadId: text('source_thread_id'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const evalRuns = pgTable(
+  'eval_runs',
+  {
+    id: text('id').primaryKey(),
+    caseId: text('case_id')
+      .notNull()
+      .references(() => evalCases.id, { onDelete: 'cascade' }),
+    /** 실행 설정 스냅샷 (engine·model·promptVersion·promptOverride…) — 비교 축 */
+    config: jsonb('config').$type<Record<string, unknown>>().notNull(),
+    /** 계획 결과(병합본)·드롭 로그·메타 — 결과 재현용 스냅샷 */
+    page: jsonb('page').$type<unknown>(),
+    dropLog: jsonb('drop_log').$type<unknown>().notNull().default([]),
+    meta: jsonb('meta').$type<LlmMeta | null>(),
+    /** 사람 채점 — null = 미채점 (0점과 구분) */
+    score: integer('score'),
+    comment: text('comment').notNull().default(''),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('eval_runs_case_idx').on(t.caseId, t.createdAt)],
+)
+
 export type ThreadRow = typeof threads.$inferSelect
 export type ThreadStepRow = typeof threadSteps.$inferSelect
 export type SettingRow = typeof settings.$inferSelect
+export type EvalCaseRow = typeof evalCases.$inferSelect
+export type EvalRunRow = typeof evalRuns.$inferSelect
