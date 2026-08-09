@@ -9,7 +9,7 @@ import { z } from 'zod'
 
 export const SurveyQuestionGen = z.object({
   question: z.string().describe('질문 문구'),
-  options: z.array(z.string()).min(2).max(6).describe('선택지 2~6개, 짧은 명사구'),
+  options: z.array(z.string()).min(2).max(8).describe('선택지 2~6개, 짧은 명사구'),
   multi: z.boolean().describe('복수 선택 허용 여부'),
 })
 export type SurveyQuestionGen = z.infer<typeof SurveyQuestionGen>
@@ -17,7 +17,7 @@ export type SurveyQuestionGen = z.infer<typeof SurveyQuestionGen>
 export const SurveyGen = z.object({
   intro: z.string().describe('설문 페이지 머리 문구 — 사용자의 의도를 되짚는 한두 문장'),
   // 전략 문서 3단계: 꼭 필요한 질문만 — 0문항(설문 스킵)은 FE 플로우 변경이 필요해 하한 1
-  questions: z.array(SurveyQuestionGen).min(1).max(3),
+  questions: z.array(SurveyQuestionGen).min(1).max(6),
 })
 export type SurveyGen = z.infer<typeof SurveyGen>
 
@@ -57,7 +57,7 @@ const GuideSectionGen = z.object({
 const StepsSectionGen = z.object({
   kind: z.literal('steps'),
   title: z.string(),
-  steps: z.array(z.string()).min(2).max(6).describe('실행 순서 — 아침/저녁 루틴 등'),
+  steps: z.array(z.string()).min(2).max(8).describe('실행 순서 — 아침/저녁 루틴 등'),
 })
 
 /** 웹 검색 상품 항목 — 부분 스트리밍이 완성된 항목만 개별 검증하는 데도 재사용한다 (threads.service) */
@@ -134,7 +134,7 @@ export type PlanSkeletonSectionGen = z.infer<typeof PlanSkeletonSectionGen>
 export const PlanSkeletonGen = z.object({
   headline: z.string().describe('계획 페이지 제목 — 설문 결과를 반영한 맞춤 문구'),
   summary: z.string().describe('추천 방향 요약 두세 문장'),
-  sections: z.array(PlanSkeletonSectionGen).min(2).max(7),
+  sections: z.array(PlanSkeletonSectionGen).min(2).max(10),
 })
 export type PlanSkeletonGen = z.infer<typeof PlanSkeletonGen>
 
@@ -142,7 +142,7 @@ export const PlanProductsGen = z.object({
   sections: z
     .array(PlanSearchSectionGen)
     .min(1)
-    .max(3)
+    .max(5)
     .describe('추천 상품 섹션 1~2개 + 참고 콘텐츠 섹션 0~1개'),
 })
 export type PlanProductsGen = z.infer<typeof PlanProductsGen>
