@@ -53,30 +53,7 @@
   font-size: var(--sb-t-caption);
 }
 
-/* 모델 설정 */
-.sb-admin-model {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.sb-admin-model select {
-  border: 1px solid var(--sb-n-300);
-  border-radius: var(--sb-r-md);
-  padding: 8px 10px;
-  font-size: var(--sb-t-small);
-  color: var(--sb-ink);
-  background: var(--sb-n-0);
-  min-width: 260px;
-}
-.sb-admin-model__current {
-  font-size: var(--sb-t-caption);
-  color: var(--sb-muted);
-}
-.sb-admin-model__current b {
-  font-weight: 500;
-  color: var(--sb-ink-2);
-}
+/* 모델 설명 목록 — 파이프라인 흐름 카드의 런타임 설정 접기(.sb-flow-config__more) 안 */
 .sb-admin-model__notes {
   display: flex;
   flex-direction: column;
@@ -551,63 +528,7 @@
   flex: 0 0 auto;
 }
 
-/* 시스템 프롬프트 — 카드 목록 + 열람·수정 다이얼로그 */
-.sb-admin-prompts {
-  display: flex;
-  flex-direction: column;
-}
-.sb-admin-prompts__row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--sb-n-150, var(--sb-n-200));
-}
-.sb-admin-prompts__row:last-child {
-  border-bottom: 0;
-}
-.sb-admin-prompts__main {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-}
-.sb-admin-prompts__title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.sb-admin-prompts__title b {
-  font-weight: 500;
-  font-size: var(--sb-t-small);
-  color: var(--sb-ink);
-}
-.sb-admin-prompts__title code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
-  color: var(--sb-subtle);
-}
-.sb-admin-prompts__note {
-  font-size: var(--sb-t-caption);
-  color: var(--sb-muted);
-}
-.sb-admin-prompts__preview {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
-  color: var(--sb-subtle);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 520px;
-}
-.sb-admin-prompts__actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 0 0 auto;
-}
+/* 시스템 프롬프트 — 상태 칩 + 열람·수정 편집기 (단계 레이어 모달·지식 다이얼로그가 공유) */
 .sb-admin-prompt-chip {
   display: inline-flex;
   align-items: center;
@@ -661,7 +582,27 @@
   flex-wrap: wrap;
 }
 
-/* ── 파이프라인 스튜디오 (관리 페이지 "파이프라인" 탭 — 페이즈 4) ─────────────── */
+/* ── 파이프라인 스튜디오 (관리 페이지 "파이프라인" 탭 — 페이즈 4) ───────────────
+   왼쪽 = 세로 흐름 다이어그램 카드(레일), 오른쪽 = 플레이그라운드·지식 카드 스택.
+   실행이 왼쪽 흐름에 비치도록 나란히 둔다 — 좁은 화면에선 위(다이어그램)→아래로 쌓인다 */
+
+.sb-pipe-layout {
+  display: grid;
+  grid-template-columns: 420px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.sb-pipe-side {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+@media (max-width: 1000px) {
+  .sb-pipe-layout {
+    grid-template-columns: 1fr;
+  }
+}
 
 .sb-admin-tabs {
   display: inline-flex;
@@ -801,16 +742,12 @@
   font-size: var(--sb-t-body);
   color: var(--sb-ink-2);
 }
+/* 오른쪽 컬럼 폭이 좁아 답변 선택 위 → 실렌더 미리보기 아래로 쌓는다 */
 .sb-pipe-play__grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 380px);
+  grid-template-columns: 1fr;
   gap: 16px;
   align-items: start;
-}
-@media (max-width: 900px) {
-  .sb-pipe-play__grid {
-    grid-template-columns: 1fr;
-  }
 }
 .sb-pipe-play__q > p {
   margin: 8px 0 4px;
@@ -943,46 +880,72 @@
 }
 
 /* ── 파이프라인 흐름 다이어그램 (PipelineFlow.jsx — 파이프라인 탭 히어로) ────────
-   전략 문서 0~7 토폴로지를 노드·연결선으로 그린다. 노드 높이는 76px 고정 —
-   병렬 블록의 분기·합류 세로선(::before/::after) 오프셋이 이 값(절반 38px)에 묶인다. */
+   전략 문서 0~7 토폴로지를 위→아래 세로로 그린다. 병렬 블록만 좌우 두 레인.
+   노드 폭은 170px 고정 — 병렬 블록의 분기·합류 가로 버스(::before/::after)
+   오프셋이 이 값(절반 85px = 레인 중심)에 묶인다. */
 
 .sb-flow-card {
   background: linear-gradient(180deg, var(--sb-n-0), var(--sb-n-50));
 }
-.sb-flow-head {
+/* 런타임 설정 (엔진·모델) — 다이어그램 머리의 한 상자 */
+.sb-flow-config {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--sb-n-200);
+  border-radius: var(--sb-r-lg);
+  background: var(--sb-n-0);
 }
-.sb-flow-head__side {
+.sb-flow-config__row {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
 }
+.sb-flow-config__label {
+  flex: 0 0 30px;
+  font-size: var(--sb-t-caption);
+  color: var(--sb-muted);
+}
+.sb-flow-config__row select {
+  flex: 1 1 140px;
+  min-width: 0;
+  border: 1px solid var(--sb-n-300);
+  border-radius: var(--sb-r-md);
+  padding: 6px 8px;
+  font-size: var(--sb-t-caption);
+  color: var(--sb-ink);
+  background: var(--sb-n-0);
+}
+.sb-flow-config__more summary {
+  font-size: var(--sb-t-caption);
+  color: var(--sb-subtle);
+  cursor: pointer;
+}
+.sb-flow-config__more[open] summary {
+  margin-bottom: 6px;
+}
 .sb-flow-wrap {
   overflow-x: auto;
-  margin: 0 -12px;
-  padding: 10px 12px 6px;
+  display: flex;
+  justify-content: center;
+  padding: 10px 0 4px;
 }
 .sb-flow {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  min-width: max-content;
 }
 .sb-flow__node {
   position: relative;
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 2px;
-  width: 100px;
-  height: 76px;
+  align-items: center;
+  gap: 9px;
+  width: 170px;
+  min-height: 52px;
   box-sizing: border-box;
-  padding: 8px 10px;
+  padding: 8px 12px;
   flex: 0 0 auto;
   border: 1px solid var(--sb-n-200);
   border-radius: var(--sb-r-lg);
@@ -990,6 +953,12 @@
   cursor: pointer;
   text-align: left;
   transition: border-color var(--sb-dur) var(--sb-ease), box-shadow var(--sb-dur) var(--sb-ease);
+}
+.sb-flow__text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
 }
 .sb-flow__node:hover {
   border-color: var(--sb-n-300);
@@ -1060,81 +1029,81 @@
   background: var(--sb-info);
 }
 /* 연결선 — 평시에도 중립색 대시가 천천히 흘러 "데이터가 지나는 관"임을 보여주고,
-   실행(is-live) 중에는 보라(ai) 대시가 빠르게 흐른다 */
+   실행(is-live) 중에는 보라(ai) 대시가 빠르게 흐른다 (세로 — 위→아래) */
 .sb-flow__link {
-  flex: 0 0 14px;
-  height: 2px;
-  background: repeating-linear-gradient(90deg, var(--sb-n-300) 0 6px, var(--sb-n-100) 6px 12px);
+  flex: 0 0 16px;
+  width: 2px;
+  background: repeating-linear-gradient(180deg, var(--sb-n-300) 0 6px, var(--sb-n-100) 6px 12px);
   border-radius: 1px;
   animation: sb-flow-dash 1.9s linear infinite;
 }
 .sb-flow__link--stub {
-  flex-basis: 10px;
+  flex-basis: 12px;
 }
 .sb-flow__link--grow {
-  flex: 1 1 10px;
-  min-width: 10px;
+  flex: 1 1 12px;
+  min-height: 12px;
 }
 .sb-flow__link.is-live {
-  background: repeating-linear-gradient(90deg, var(--sb-ai) 0 6px, transparent 6px 12px);
+  background: repeating-linear-gradient(180deg, var(--sb-ai) 0 6px, transparent 6px 12px);
   animation: sb-flow-dash 0.55s linear infinite;
 }
 @keyframes sb-flow-dash {
-  to { background-position: 12px 0; }
+  to { background-position: 0 12px; }
 }
-/* 답변 대기 interrupt — 라벨 달린 대기 점선 (설문→계획 연결선을 겸한다) */
+/* 답변 대기 interrupt — 라벨 달린 세로 대기 점선 (설문→계획 연결선을 겸한다) */
 .sb-flow__gate {
   position: relative;
-  flex: 0 0 60px;
-  height: 76px;
+  flex: 0 0 44px;
+  width: 100%;
 }
 .sb-flow__gate::before {
   content: '';
   position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  height: 2px;
-  margin-top: -1px;
-  background: repeating-linear-gradient(90deg, var(--sb-n-300) 0 5px, transparent 5px 12px);
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  margin-left: -1px;
+  background: repeating-linear-gradient(180deg, var(--sb-n-300) 0 5px, transparent 5px 12px);
   animation: sb-flow-dash 1.9s linear infinite;
 }
 .sb-flow__gate.is-live::before {
-  background: repeating-linear-gradient(90deg, var(--sb-ai) 0 5px, transparent 5px 12px);
+  background: repeating-linear-gradient(180deg, var(--sb-ai) 0 5px, transparent 5px 12px);
   animation: sb-flow-dash 0.55s linear infinite;
 }
 .sb-flow__gate-label {
   position: absolute;
+  top: 50%;
   left: 50%;
-  bottom: 50%;
-  transform: translateX(-50%);
-  margin-bottom: 7px;
+  transform: translateY(-50%);
+  margin-left: 12px;
   font-size: var(--sb-t-micro);
   color: var(--sb-muted);
   white-space: nowrap;
 }
-/* 병렬 블록 — 위 5a 뼈대 / 아래 4 근거 + 5b 상품·콘텐츠, 좌우 세로선이 분기·합류 버스 */
+/* 병렬 블록 — 왼쪽 5a 뼈대 / 오른쪽 4 근거 + 5b 상품·콘텐츠, 상하 가로선이 분기·합류 버스 */
 .sb-flow__par {
   position: relative;
   display: flex;
-  flex-direction: column;
-  gap: 16px;
+  gap: 20px;
   flex: 0 0 auto;
 }
 .sb-flow__par::before,
 .sb-flow__par::after {
   content: '';
   position: absolute;
-  top: 38px;
-  bottom: 38px;
-  width: 2px;
+  left: 85px;
+  right: 85px;
+  height: 2px;
   border-radius: 1px;
   background: var(--sb-n-200);
 }
-.sb-flow__par::before { left: 0; }
-.sb-flow__par::after { right: 0; }
+.sb-flow__par::before { top: 0; }
+.sb-flow__par::after { bottom: 0; }
 .sb-flow__lane {
   display: flex;
+  flex-direction: column;
   align-items: center;
 }
 .sb-flow-legend {
@@ -1190,23 +1159,40 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.25; }
 }
-.sb-flow-detail {
-  border-top: 1px dashed var(--sb-n-200);
-  padding-top: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
+/* 단계 레이어 모달 — 노드 클릭 시 설명·최근 실행·시스템 프롬프트 (PipelineStudio) */
+.sb-stage-dialog__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
-.sb-flow-detail__head {
+.sb-stage-dialog__chips {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
 }
-.sb-flow-detail__head b {
+.sb-stage-dialog__prompt-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--sb-n-200);
+}
+.sb-stage-dialog__prompt-head b {
   font-weight: 500;
-  font-size: var(--sb-t-body);
+  font-size: var(--sb-t-small);
   color: var(--sb-ink);
+}
+.sb-stage-dialog__prompt-head code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--sb-subtle);
+}
+/* 프롬프트 없는 단계는 내용이 짧다 — 고정 높이 대신 내용 높이 */
+.sb-stage-dialog {
+  width: min(560px, 94vw);
 }
 .sb-flow-hint {
   font-size: var(--sb-t-caption);
@@ -1218,7 +1204,8 @@
   .sb-flow__link.is-live,
   .sb-flow__gate::before,
   .sb-flow__gate.is-live::before,
-  .sb-flow-status__dot {
+  .sb-flow-status__dot,
+  .sb-thread-flow__link {
     animation: none;
   }
 }
@@ -1270,8 +1257,16 @@
 .sb-thread-flow__chip--archived {
   opacity: 0.6;
 }
+/* 파이프라인 연결선(.sb-flow__link)이 세로가 된 뒤에도 여기는 가로 — 전부 재정의한다 */
 .sb-thread-flow__link {
   flex: 0 0 14px;
+  width: 14px;
+  height: 2px;
+  background: repeating-linear-gradient(90deg, var(--sb-n-300) 0 6px, var(--sb-n-100) 6px 12px);
+  animation: sb-thread-flow-dash 1.9s linear infinite;
+}
+@keyframes sb-thread-flow-dash {
+  to { background-position: 12px 0; }
 }
 .sb-thread-flow__side {
   display: flex;

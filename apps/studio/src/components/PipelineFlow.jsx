@@ -2,16 +2,17 @@ import React, { useMemo } from 'react'
 
 /*
  * 생성 파이프라인 흐름 다이어그램 (운영 콘솔 "파이프라인" 탭 히어로 — PipelineStudio가 배선).
- * PIPELINE_STAGES 와이어(전략 문서 0~7)를 실제 실행 토폴로지로 그린다:
- *   0 → 1 → 2 → 3 → ⏸ 답변 대기 → ( 5a ∥ 4·5b ) → 6 → 7
- * 노드 클릭 = 아래 상세 스트립(설명·effort·프롬프트 열람 진입), 플레이그라운드 실행(running)
- * 동안 그 경로의 연결선에 대시가 흐르고 실행 중인 LLM 노드가 맥동한다. 결과가 도착하면
- * 노드에 ✓ 지연·검증 통과/드롭 요약이 남는다. 표현 전용 — 상태는 전부 PipelineStudio 소유.
+ * PIPELINE_STAGES 와이어(전략 문서 0~7)를 실제 실행 토폴로지로 **위→아래 세로**로 그린다:
+ *   0 ↓ 1 ↓ 2 ↓ 3 ↓ ⏸ 답변 대기 ↓ ( 5a ∥ 4·5b ) ↓ 6 ↓ 7
+ * 병렬 블록만 좌우 두 레인으로 갈라지고, 분기·합류 버스는 가로선이다.
+ * 노드 클릭 = 단계 레이어 모달(설명·최근 실행·시스템 프롬프트 열람·수정 — PipelineStudio 소유).
+ * 플레이그라운드 실행(running) 동안 그 경로의 연결선에 대시가 흐르고 실행 중인 LLM 노드가
+ * 맥동한다. 결과가 도착하면 노드에 ✓ 지연·검증 통과/드롭 요약이 남는다. 표현 전용.
  */
 
-const KIND_LABEL = { llm: 'LLM', deterministic: '결정적', 'interrupt-boundary': '대기 지점' }
+export const KIND_LABEL = { llm: 'LLM', deterministic: '결정적', 'interrupt-boundary': '대기 지점' }
 
-/** 노드 폭에 맞춘 짧은 표시 라벨 (상세 스트립은 와이어의 전체 라벨) */
+/** 노드 폭에 맞춘 짧은 표시 라벨 (레이어 모달은 와이어의 전체 라벨) */
 const SHORT_LABEL = {
   objective: '목적어 입력',
   intent: '의도 정규화',
@@ -48,9 +49,7 @@ export default function PipelineFlow({
   running, // 실행 중 dry-run stageId | null
   results, // { [stageId]: { meta?, custom?, pass?, drops? } } — 플레이그라운드 결과 요약
   selectedId,
-  onSelect,
-  promptEntryOf, // promptId → AdminPromptEntry (프롬프트 열람 진입)
-  onOpenPrompt,
+  onSelect, // 노드 클릭 → 단계 레이어 모달 열기 (PipelineStudio)
 }) {
   const byId = useMemo(() => new Map((stages || []).map((stage) => [stage.id, stage])), [stages])
   const run = running ? RUN_PATHS[running] : null
@@ -87,13 +86,16 @@ export default function PipelineFlow({
         type="button"
         className={cls.join(' ')}
         title={stage.note}
+        aria-haspopup="dialog"
         aria-pressed={selectedId === id}
-        onClick={() => onSelect(selectedId === id ? null : id)}
+        onClick={() => onSelect(id)}
       >
         {(stage.promptCustom || result?.custom) && <i className="sb-flow__flag" title="프롬프트 재정의 사용 중" />}
         <span className="sb-flow__no">{stage.no}</span>
-        <span className="sb-flow__label">{SHORT_LABEL[id] || stage.label}</span>
-        <span className={'sb-flow__sub' + (done && !isLive ? ' sb-flow__sub--ok' : '')}>{sub}</span>
+        <span className="sb-flow__text">
+          <span className="sb-flow__label">{SHORT_LABEL[id] || stage.label}</span>
+          <span className={'sb-flow__sub' + (done && !isLive ? ' sb-flow__sub--ok' : '')}>{sub}</span>
+        </span>
       </button>
     )
   }
@@ -105,10 +107,6 @@ export default function PipelineFlow({
       className={'sb-flow__link' + (extra ? ` ${extra}` : '') + (run?.links.includes(id) ? ' is-live' : '')}
     />
   )
-
-  const selected = selectedId ? byId.get(selectedId) : null
-  const selectedResult = selected ? results?.[selected.id] : null
-  const selectedPrompt = selected?.promptId ? promptEntryOf?.(selected.promptId) : null
 
   return (
     <>
@@ -127,7 +125,7 @@ export default function PipelineFlow({
           >
             <span className="sb-flow__gate-label">⏸ 답변 대기</span>
           </span>
-          {/* 5 병렬 — 위: 뼈대(조기 확정 스트리밍), 아래: 근거 수집(예정) + 상품·콘텐츠(웹 검색 병행) */}
+          {/* 5 병렬 — 왼쪽: 뼈대(조기 확정 스트리밍), 오른쪽: 근거 수집(예정) + 상품·콘텐츠(웹 검색 병행) */}
           <div className="sb-flow__par">
             <div className="sb-flow__lane">
               {link('lt-in', 'sb-flow__link--stub')}
@@ -154,32 +152,7 @@ export default function PipelineFlow({
         <span><i className="sb-flow-legend__sw sb-flow-legend__sw--planned" /> 예정</span>
         <span><i className="sb-flow-legend__sw sb-flow-legend__sw--live" /> 실행 흐름</span>
       </div>
-      {selected ? (
-        <div className="sb-flow-detail">
-          <div className="sb-flow-detail__head">
-            <span className="sb-pipe-stage__no">{selected.no}</span>
-            <b>{selected.label}</b>
-            <span className="sb-admin-prompt-chip">{KIND_LABEL[selected.kind] || selected.kind}</span>
-            {selected.effort && <span className="sb-admin-prompt-chip">effort {selected.effort}</span>}
-            {selected.status === 'planned' && <span className="sb-admin-prompt-chip">예정</span>}
-            {(selected.promptCustom || selectedResult?.custom) && (
-              <span className="sb-admin-prompt-chip sb-admin-prompt-chip--custom">프롬프트 재정의</span>
-            )}
-            {selectedPrompt && (
-              <button type="button" className="sb-btn sb-btn--ghost sb-btn--tiny" onClick={() => onOpenPrompt(selectedPrompt)}>
-                프롬프트 열람·수정
-              </button>
-            )}
-          </div>
-          <p className="sb-pipe-stage__note">{selected.note}</p>
-          {selectedResult?.meta && <p className="sb-admin__muted">최근 실행: {metaLine(selectedResult.meta)}</p>}
-          {selectedResult?.pass != null && (
-            <p className="sb-admin__muted">최근 게이트: 섹션 {selectedResult.pass}개 통과 · {selectedResult.drops}건 드롭</p>
-          )}
-        </div>
-      ) : (
-        <p className="sb-flow-hint">단계를 누르면 설명과 프롬프트가 열려요. 플레이그라운드 실행이 이 흐름 위에서 그대로 보여요.</p>
-      )}
+      <p className="sb-flow-hint">단계를 누르면 설명·시스템 프롬프트가 레이어로 열려요. 플레이그라운드 실행이 이 흐름 위에 그대로 비쳐요.</p>
     </>
   )
 }

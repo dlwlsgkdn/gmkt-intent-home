@@ -2,12 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   archiveAdminThread,
   fetchAdminFeedback,
-  fetchAdminModel,
-  fetchAdminPrompts,
   fetchAdminThread,
   fetchAdminThreads,
-  putAdminModel,
-  putAdminPrompt,
 } from '../lib/adminApi.js'
 import { renderMarkdown, statusLabel, threadMarkdown } from '../lib/adminReport.jsx'
 import { timeAgo } from '../lib/timeAgo.js'
@@ -35,16 +31,6 @@ export default function AdminView({ api, tab }) {
   const [feedback, setFeedback] = useState(null) // AdminFeedbackWire { items, truncated }
   const [feedbackLoading, setFeedbackLoading] = useState(false)
   const [feedbackError, setFeedbackError] = useState(null)
-
-  const [model, setModel] = useState(null) // { current, defaultModel, configured, options }
-  const [modelChoice, setModelChoice] = useState('')
-  const [modelSaving, setModelSaving] = useState(false)
-
-  const [prompts, setPrompts] = useState(null) // AdminPromptsWire { promptVersion, prompts }
-  const [promptsError, setPromptsError] = useState(null)
-  const [promptEdit, setPromptEdit] = useState(null) // AdminPromptEntry (편집 다이얼로그)
-  const [promptText, setPromptText] = useState('')
-  const [promptSaving, setPromptSaving] = useState(false)
 
   const [detail, setDetail] = useState(null) // ThreadWithSteps
   const [detailView, setDetailView] = useState('doc') // 'doc' | 'survey' | 'plan'
@@ -82,32 +68,10 @@ export default function AdminView({ api, tab }) {
     }
   }, [])
 
-  const loadModel = useCallback(async () => {
-    try {
-      const wire = await fetchAdminModel()
-      setModel(wire)
-      setModelChoice(wire.configured ?? '')
-    } catch (e) {
-      api.showToast(`모델 설정을 불러오지 못했어요: ${e.message}`)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const loadPrompts = useCallback(async () => {
-    setPromptsError(null)
-    try {
-      setPrompts(await fetchAdminPrompts())
-    } catch (e) {
-      setPromptsError(e.message)
-    }
-  }, [])
-
   useEffect(() => {
     loadList()
     loadFeedback()
-    loadModel()
-    loadPrompts()
-  }, [loadList, loadFeedback, loadModel, loadPrompts])
+  }, [loadList, loadFeedback])
 
   const openDetail = async (threadId) => {
     setDetailLoading(true)
@@ -118,45 +82,6 @@ export default function AdminView({ api, tab }) {
       handleError(e, '쓰레드를 불러오지 못했어요.')
     } finally {
       setDetailLoading(false)
-    }
-  }
-
-  const applyModel = async () => {
-    setModelSaving(true)
-    try {
-      const wire = await putAdminModel(modelChoice || null)
-      setModel(wire)
-      setModelChoice(wire.configured ?? '')
-      api.showToast(`생성 모델: ${wire.current}${wire.configured ? '' : ' (기본값)'} — 새 생성부터 반영돼요.`)
-    } catch (e) {
-      handleError(e, '모델을 변경하지 못했어요.')
-    } finally {
-      setModelSaving(false)
-    }
-  }
-
-  const openPromptEdit = (entry) => {
-    setPromptEdit(entry)
-    setPromptText(entry.configured ?? entry.defaultText)
-  }
-
-  const savePrompt = async (textOrNull) => {
-    if (!promptEdit) return
-    setPromptSaving(true)
-    try {
-      const wire = await putAdminPrompt(promptEdit.id, textOrNull)
-      setPrompts(wire)
-      const updated = wire.prompts.find((p) => p.id === promptEdit.id)
-      api.showToast(
-        updated?.configured
-          ? `「${promptEdit.label}」 프롬프트를 재정의했어요 — 새 생성부터 반영돼요.`
-          : `「${promptEdit.label}」 프롬프트를 기본값으로 되돌렸어요.`,
-      )
-      setPromptEdit(null)
-    } catch (e) {
-      handleError(e, '프롬프트를 저장하지 못했어요.')
-    } finally {
-      setPromptSaving(false)
     }
   }
 
@@ -187,7 +112,6 @@ export default function AdminView({ api, tab }) {
   }
 
   const markdown = useMemo(() => (detail ? threadMarkdown(detail) : ''), [detail])
-  const dirty = model && (model.configured ?? '') !== modelChoice
 
   /* 상태 흐름 바 — 로드된 행 기준 상태별 개수. 체험 여정(탐색→설문→계획→완료)과
      종착 상태(이탈·보관)를 파이프라인과 같은 흐름 문법으로 보여주고, 칩 클릭이 목록을 거른다 */
@@ -229,7 +153,6 @@ export default function AdminView({ api, tab }) {
             onClick={() => {
               loadList()
               loadFeedback()
-              loadPrompts()
             }}
           >
             새로고침
@@ -258,102 +181,9 @@ export default function AdminView({ api, tab }) {
         ))}
       </div>
 
-      {/* 파이프라인 탭 — 흐름 다이어그램·플레이그라운드·지식이 먼저, 모델·프롬프트 설정이 뒤 */}
-      {tab === 'pipeline' && (
-      <>
-      {/* 파이프라인 흐름(히어로)·엔진·플레이그라운드·지식 KV */}
-      <PipelineStudio prompts={prompts} onOpenPrompt={openPromptEdit} model={model} />
-
-      {/* LLM 모델 설정 */}
-      <div className="sb-admin-card">
-        <p className="sb-panel-label">생성 모델</p>
-        {!model ? (
-          <p className="sb-admin__muted">모델 설정을 불러오는 중…</p>
-        ) : (
-          <>
-            <div className="sb-admin-model">
-              <select value={modelChoice} onChange={(event) => setModelChoice(event.target.value)}>
-                <option value="">기본값 사용 — {model.defaultModel}</option>
-                {model.options.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label} ({option.id})
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                className="sb-btn sb-btn--primary sb-btn--small"
-                disabled={!dirty || modelSaving}
-                onClick={applyModel}
-              >
-                {modelSaving ? '적용 중…' : '적용'}
-              </button>
-              <span className="sb-admin-model__current">
-                현재: <b>{model.current}</b>{model.configured ? '' : ' (기본값)'}
-              </span>
-            </div>
-            <ul className="sb-admin-model__notes">
-              {model.options.map((option) => (
-                <li key={option.id}>
-                  <b>{option.label}</b>{option.note ? ` — ${option.note}` : ''}
-                </li>
-              ))}
-            </ul>
-            <p className="sb-admin__muted">변경은 core 설정(llm-model)에 저장되고 새 생성부터 반영돼요 (서버 캐시 최대 30초).</p>
-          </>
-        )}
-      </div>
-
-      {/* LLM 시스템 프롬프트 — 단계별 기본값·재정의 관리 */}
-      <div className="sb-admin-card">
-        <p className="sb-panel-label">
-          시스템 프롬프트{prompts ? ` (기본 ${prompts.promptVersion})` : ''}
-        </p>
-        {promptsError && <p className="sb-admin-gate__error">{promptsError}</p>}
-        {!prompts && !promptsError && <p className="sb-admin__muted">프롬프트를 불러오는 중…</p>}
-        {prompts && (
-          <>
-            <ul className="sb-admin-prompts">
-              {prompts.prompts.map((entry) => {
-                const effective = entry.configured ?? entry.defaultText
-                return (
-                  <li key={entry.id} className="sb-admin-prompts__row">
-                    <div className="sb-admin-prompts__main">
-                      <div className="sb-admin-prompts__title">
-                        <b>{entry.label}</b>
-                        <code>{entry.id}</code>
-                        {entry.configured ? (
-                          <span className="sb-admin-prompt-chip sb-admin-prompt-chip--custom">재정의 사용 중</span>
-                        ) : (
-                          <span className="sb-admin-prompt-chip">기본값</span>
-                        )}
-                      </div>
-                      <p className="sb-admin-prompts__note">{entry.note}</p>
-                      <p className="sb-admin-prompts__preview">{effective.split('\n')[0]}</p>
-                    </div>
-                    <div className="sb-admin-prompts__actions">
-                      <span className="sb-admin__muted">{effective.length.toLocaleString('ko-KR')}자</span>
-                      <button
-                        type="button"
-                        className="sb-btn sb-btn--ghost sb-btn--tiny"
-                        onClick={() => openPromptEdit(entry)}
-                      >
-                        열람·수정
-                      </button>
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
-            <p className="sb-admin__muted">
-              재정의는 core 설정(llm-prompt-*)에 저장되고 새 생성부터 반영돼요 (서버 캐시 최대 30초).
-              재정의로 생성된 스텝은 llmMeta.promptVersion에 +custom이 붙어요.
-            </p>
-          </>
-        )}
-      </div>
-      </>
-      )}
+      {/* 파이프라인 탭 — 세로 흐름 다이어그램(엔진·모델 설정 포함) ∥ 플레이그라운드·지식.
+          시스템 프롬프트는 별도 카드 없이 다이어그램의 단계 레이어 모달에서 열람·수정한다 */}
+      {tab === 'pipeline' && <PipelineStudio api={api} />}
 
       {/* 실험 탭 — 골든 케이스 실행·채점 + 전환 판정 계기판 */}
       {tab === 'experiment' && <ExperimentStudio />}
@@ -509,89 +339,6 @@ export default function AdminView({ api, tab }) {
           </section>
         </div>
       )}
-
-      {/* 시스템 프롬프트 열람·수정 */}
-      {promptEdit && (() => {
-        const isDefaultText = promptText === promptEdit.defaultText
-        const saved = promptEdit.configured ?? promptEdit.defaultText
-        const dirtyPrompt = promptText !== saved
-        const missingCatalog = promptEdit.id === 'plan-products' && !promptText.includes('{{CATALOG}}')
-        return (
-          <div
-            className="sb-llm-modal"
-            role="presentation"
-            onMouseDown={(event) => {
-              if (event.target === event.currentTarget && !promptSaving) setPromptEdit(null)
-            }}
-          >
-            <section
-              className="sb-llm-dialog sb-admin-dialog sb-admin-prompt-dialog"
-              role="dialog"
-              aria-modal="true"
-              aria-label="시스템 프롬프트 열람·수정"
-            >
-              <div className="sb-admin-dialog__head">
-                <h2>시스템 프롬프트 — {promptEdit.label}</h2>
-                <div className="sb-admin-dialog__actions">
-                  <button type="button" className="sb-icon-btn" aria-label="닫기" onClick={() => setPromptEdit(null)}>×</button>
-                </div>
-              </div>
-              <div className="sb-admin-prompt-dialog__body">
-                <p className="sb-admin__muted">{promptEdit.note}</p>
-                <textarea
-                  className="sb-admin-prompt-dialog__editor"
-                  value={promptText}
-                  spellCheck={false}
-                  onChange={(event) => setPromptText(event.target.value)}
-                />
-                <div className="sb-admin-prompt-dialog__meta">
-                  <span className="sb-admin__muted">{promptText.length.toLocaleString('ko-KR')}자</span>
-                  {isDefaultText && <span className="sb-admin-prompt-chip">기본값과 동일 — 저장하면 기본값 추종으로 돌아가요</span>}
-                  {!isDefaultText && promptEdit.configured && !dirtyPrompt && (
-                    <span className="sb-admin-prompt-chip sb-admin-prompt-chip--custom">재정의 사용 중</span>
-                  )}
-                  {missingCatalog && (
-                    <span className="sb-admin-prompt-chip sb-admin-prompt-chip--warn">
-                      {'{{CATALOG}}'} 자리표시자가 없어요 — 상품 카탈로그 목록이 프롬프트에서 빠져요
-                    </span>
-                  )}
-                </div>
-                <div className="sb-json-dialog__actions">
-                  {promptEdit.configured && (
-                    <button
-                      type="button"
-                      className="sb-btn sb-btn--ghost"
-                      disabled={promptSaving}
-                      onClick={() => savePrompt(null)}
-                    >
-                      기본값으로 되돌리기
-                    </button>
-                  )}
-                  {!isDefaultText && !promptEdit.configured && (
-                    <button
-                      type="button"
-                      className="sb-btn sb-btn--ghost"
-                      disabled={promptSaving}
-                      onClick={() => setPromptText(promptEdit.defaultText)}
-                    >
-                      기본값 원문으로 채우기
-                    </button>
-                  )}
-                  <button type="button" className="sb-btn sb-btn--ghost" onClick={() => setPromptEdit(null)}>취소</button>
-                  <button
-                    type="button"
-                    className="sb-btn sb-btn--primary"
-                    disabled={!dirtyPrompt || promptSaving || !promptText.trim()}
-                    onClick={() => savePrompt(promptText)}
-                  >
-                    {promptSaving ? '저장 중…' : '저장'}
-                  </button>
-                </div>
-              </div>
-            </section>
-          </div>
-        )
-      })()}
 
       {/* 보관 확인 */}
       {confirmArchive && (
