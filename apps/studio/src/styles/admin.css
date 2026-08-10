@@ -1,36 +1,19 @@
 /* ── 운영 콘솔 (#ops — 구 #admin) — 쓰레드·평가 · 파이프라인 · 실험 ──
    유저 진입점에 링크가 없는 관리 전용 화면. 토큰은 base.css의 디자인 토큰만 사용. */
 
+/* 페이지 상단바는 빌더·프로필 편집기와 같은 .sb-topbar (builder-frame.css) —
+   AdminView가 .sb-builder로 감싸 배경·sticky 상단바를 그대로 물려받는다 */
 .sb-admin {
   position: relative;
   z-index: 10;
+  width: 100%;
   max-width: 1040px;
+  box-sizing: border-box;
   margin: 0 auto;
-  padding: 48px 24px 96px;
+  padding: 24px 24px 96px;
   display: flex;
   flex-direction: column;
   gap: 20px;
-}
-.sb-admin h1 {
-  font-size: 22px;
-  font-weight: 500;
-  color: var(--sb-ink);
-}
-.sb-admin__sub {
-  margin-top: 4px;
-  font-size: var(--sb-t-small);
-  color: var(--sb-muted);
-}
-.sb-admin__head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.sb-admin__head-actions {
-  display: flex;
-  gap: 6px;
 }
 .sb-admin__muted {
   font-size: var(--sb-t-caption);

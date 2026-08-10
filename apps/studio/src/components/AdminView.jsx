@@ -140,26 +140,34 @@ export default function AdminView({ api, tab }) {
   )
 
   return (
-    <section className="sb-admin">
-      <header className="sb-admin__head">
-        <div>
-          <h1>운영 콘솔</h1>
-          <p className="sb-admin__sub">라이브 생성 운영 한곳 — 쓰레드·평가 열람, 생성 파이프라인, 실험. 보관한 쓰레드는 사용자 목록에서만 숨겨져요.</p>
-        </div>
-        <div className="sb-admin__head-actions">
-          <button
-            type="button"
-            className="sb-btn sb-btn--ghost sb-btn--small"
-            onClick={() => {
-              loadList()
-              loadFeedback()
-            }}
-          >
-            새로고침
+    <div className="sb-builder">
+      {/* 페이지형 화면 공통 상단바 — 프로필·키워드 사전 편집기(ExploreEditor)와 같은 문법:
+          ← 이전 화면 · 이모지 타이틀 · 상태 문구 · 우측 액션. 탭 3곳(해시) 모두에 걸린다 */}
+      <div className="sb-topbar">
+        <div className="sb-topbar__row">
+          <button type="button" className="sb-icon-btn" onClick={api.exitAdmin} aria-label="이전 화면으로">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M15 19l-7-7 7-7" /></svg>
           </button>
-          <button type="button" className="sb-btn sb-btn--ghost sb-btn--small" onClick={api.exitAdmin}>홈으로</button>
+          <div className="sb-topbar__meta">
+            <span className="sb-title-static">🧵 운영 콘솔</span>
+          </div>
+          <span className="sb-autosave">라이브 생성 운영 한곳 — 쓰레드·평가 · 파이프라인 · 실험</span>
+          <div className="sb-topbar__actions">
+            <button
+              type="button"
+              className="sb-btn sb-btn--ghost sb-btn--small"
+              onClick={() => {
+                loadList()
+                loadFeedback()
+              }}
+            >
+              새로고침
+            </button>
+          </div>
         </div>
-      </header>
+      </div>
+
+    <section className="sb-admin">
 
       {/* 탭 — 운영(쓰레드·평가) / 파이프라인(단계·프롬프트·지식·플레이그라운드) */}
       <div className="sb-admin-tabs" role="tablist" aria-label="관리 영역">
@@ -372,5 +380,6 @@ export default function AdminView({ api, tab }) {
         </div>
       )}
     </section>
+    </div>
   )
 }
