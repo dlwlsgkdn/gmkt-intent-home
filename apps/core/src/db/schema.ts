@@ -74,9 +74,13 @@ export const evalRuns = pgTable(
     page: jsonb('page').$type<unknown>(),
     dropLog: jsonb('drop_log').$type<unknown>().notNull().default([]),
     meta: jsonb('meta').$type<LlmMeta | null>(),
-    /** 사람 채점 — null = 미채점 (0점과 구분) */
+    /** 사람 채점(전체) — null = 미채점 (0점과 구분) */
     score: integer('score'),
     comment: text('comment').notNull().default(''),
+    /** 사람 채점(항목별) — ThreadFeedbackComponent[] 모양이지만 core는 해석하지 않는다 */
+    components: jsonb('components').$type<unknown>().notNull().default([]),
+    /** 자동 채점(judge) 판정 — 사람 채점과 분리 저장 (BFF가 굳힌 EvalJudgeVerdict, core는 해석 안 함) */
+    judge: jsonb('judge').$type<unknown>(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('eval_runs_case_idx').on(t.caseId, t.createdAt)],

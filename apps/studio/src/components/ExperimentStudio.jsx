@@ -1,18 +1,22 @@
 import React, { useEffect, useState } from 'react'
 import {
   deleteEvalCase,
+  fetchAdminPrompts,
   fetchEngineMetrics,
   fetchEvalCases,
   fetchEvalRuns,
+  judgeEvalRun,
+  putAdminPrompt,
   runEvalCase,
   scoreEvalRun,
 } from '../lib/adminApi.js'
 
 /*
  * 실험 탭 (관리 페이지 — DESIGN-PIPELINE-LANGGRAPH.md 페이즈 5).
- * 골든 케이스(쓰레드 상세에서 승격한 입력 스냅샷)에 설정을 바꿔 가며 실행하고,
- * 사람이 별점으로 채점해 프롬프트·설정 변경의 회귀를 잰다. 전환 판정 카드는 실주행
- * plan 스텝 llmMeta(engine 각인)를 엔진별로 집계 — legacy↔langgraph 게이트의 실측 재료.
+ * 골든 케이스(쓰레드 상세에서 승격한 입력 스냅샷)에 설정을 바꿔 가며 실행하고 채점해
+ * 프롬프트·설정 변경의 회귀를 잰다. 채점은 평가 레코드 문법 한 벌(라이브 피드백과 동일):
+ * 사람 = 전체 별점·코멘트 + 섹션별 components, 자동 = judge(루브릭 4차원 — source 축 분리,
+ * 절대 합산·덮어쓰기 없음). 전환 판정 카드는 실주행 plan 스텝 llmMeta(engine 각인) 집계.
  */
 
 const timeShort = (iso) => (iso ? iso.slice(5, 16).replace('T', ' ') : '—')
@@ -27,6 +31,28 @@ function metaLine(meta) {
   return parts.join(' · ')
 }
 
+const SECTION_KIND_LABEL = { guide: '안내', products: '상품', contents: '콘텐츠', steps: '순서' }
+
+/** 실행 페이지 → 섹션 앵커 목록 — 채점 components의 id(sec-<index>)·label 원천.
+ * 실행 결과 페이지는 불변 스냅샷이라 앵커도 안정적이다 (label은 재해석용으로 함께 저장) */
+const runAnchors = (run) =>
+  (run.page?.sections || []).map((s, i) => ({
+    id: `sec-${i}`,
+    label: `${SECTION_KIND_LABEL[s.kind] || s.kind} · ${s.title}`,
+  }))
+
+/** 별점 표시 한 조각 — 미채점/0점 배지 구분은 평가 스튜디오 문법 그대로 */
+function ScoreBadge({ score }) {
+  if (score == null) return <span className="sb-admin-fb-badge">미채점</span>
+  if (score === 0) return <span className="sb-admin-fb-badge sb-admin-fb-badge--zero">0점</span>
+  return (
+    <span className="sb-admin-fb-stars" title={`${score}점`}>
+      {'★'.repeat(score)}
+      <span className="sb-admin-fb-stars__rest">{'★'.repeat(5 - score)}</span>
+    </span>
+  )
+}
+
 export default function ExperimentStudio() {
   const [cases, setCases] = useState(null)
   const [metrics, setMetrics] = useState(null)
@@ -37,7 +63,12 @@ export default function ExperimentStudio() {
   const [status, setStatus] = useState(null)
   const [override, setOverride] = useState('')
   const [label, setLabel] = useState('')
-  const [scoreDraft, setScoreDraft] = useState({}) // runId -> { score, comment, saving }
+  const [scoreDraft, setScoreDraft] = useState({}) // runId -> { score, comment, components: {id: {score, feedback}}, saving }
+  const [detailOpen, setDetailOpen] = useState({}) // runId -> bool (섹션별 채점 펼침)
+  const [judging, setJudging] = useState(null) // 자동 채점 중 runId
+  const [judgePrompt, setJudgePrompt] = useState(null) // AdminPromptEntry (id='judge')
+  const [judgeDraft, setJudgeDraft] = useState('')
+  const [judgeSaving, setJudgeSaving] = useState(false)
 
   const load = async () => {
     setError(null)
@@ -47,6 +78,15 @@ export default function ExperimentStudio() {
       setMetrics(metricWire)
     } catch (e) {
       setError(e.message)
+    }
+    // judge 프롬프트는 부가 기능 — 조회 실패해도 탭은 동작한다
+    try {
+      const wire = await fetchAdminPrompts()
+      const entry = wire.prompts.find((p) => p.id === 'judge') || null
+      setJudgePrompt(entry)
+      setJudgeDraft(entry ? entry.configured ?? entry.defaultText : '')
+    } catch {
+      setJudgePrompt(null)
     }
   }
   useEffect(() => {
@@ -91,14 +131,47 @@ export default function ExperimentStudio() {
     }
   }
 
+  const savedComponentsMap = (runRow) => {
+    const map = {}
+    for (const c of runRow.components || []) map[c.id] = { score: c.score, feedback: c.feedback || '' }
+    return map
+  }
+
   const draftOf = (runRow) =>
-    scoreDraft[runRow.id] ?? { score: runRow.score, comment: runRow.comment || '', saving: false }
+    scoreDraft[runRow.id] ?? {
+      score: runRow.score,
+      comment: runRow.comment || '',
+      components: savedComponentsMap(runRow),
+      saving: false,
+    }
+
+  const patchComponentDraft = (runRow, anchorId, patch) => {
+    const draft = draftOf(runRow)
+    const cur = draft.components[anchorId] ?? { score: null, feedback: '' }
+    setScoreDraft((prev) => ({
+      ...prev,
+      [runRow.id]: { ...draft, components: { ...draft.components, [anchorId]: { ...cur, ...patch } } },
+    }))
+  }
+
+  /** 드래프트 → 전송 payload — 별점이나 코멘트가 있는 항목만 싣는다 (라이브 피드백과 같은 규칙) */
+  const componentsPayload = (runRow, draft) =>
+    runAnchors(runRow)
+      .map((a) => ({ anchor: a, entry: draft.components[a.id] }))
+      .filter(({ entry }) => entry && (entry.score != null || entry.feedback.trim()))
+      .map(({ anchor, entry }) => ({ id: anchor.id, label: anchor.label, score: entry.score, feedback: entry.feedback }))
+
+  const scoreDirty = (runRow, draft) =>
+    draft.score !== runRow.score ||
+    draft.comment !== (runRow.comment || '') ||
+    JSON.stringify(componentsPayload(runRow, draft)) !==
+      JSON.stringify(componentsPayload(runRow, { components: savedComponentsMap(runRow) }))
 
   const saveScore = async (runRow, caseId) => {
     const draft = draftOf(runRow)
     setScoreDraft((prev) => ({ ...prev, [runRow.id]: { ...draft, saving: true } }))
     try {
-      await scoreEvalRun(runRow.id, draft.score, draft.comment)
+      await scoreEvalRun(runRow.id, draft.score, draft.comment, componentsPayload(runRow, draft))
       setScoreDraft((prev) => {
         const next = { ...prev }
         delete next[runRow.id]
@@ -108,6 +181,38 @@ export default function ExperimentStudio() {
     } catch (e) {
       setError(e.message)
       setScoreDraft((prev) => ({ ...prev, [runRow.id]: { ...draft, saving: false } }))
+    }
+  }
+
+  const judge = async (runRow, caseId) => {
+    if (judging) return
+    setJudging(runRow.id)
+    setError(null)
+    try {
+      await judgeEvalRun(runRow.id, { onStatus: setStatus })
+      await loadRuns(caseId)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setJudging(null)
+      setStatus(null)
+    }
+  }
+
+  const judgePromptDirty = judgePrompt ? judgeDraft !== (judgePrompt.configured ?? judgePrompt.defaultText) : false
+
+  const saveJudgePrompt = async (text) => {
+    setJudgeSaving(true)
+    setError(null)
+    try {
+      const wire = await putAdminPrompt('judge', text)
+      const entry = wire.prompts.find((p) => p.id === 'judge') || null
+      setJudgePrompt(entry)
+      setJudgeDraft(entry ? entry.configured ?? entry.defaultText : '')
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setJudgeSaving(false)
     }
   }
 
@@ -199,7 +304,8 @@ export default function ExperimentStudio() {
         <p className="sb-panel-label">골든 케이스 {cases ? `(${cases.length})` : ''}</p>
         <p className="sb-admin__muted">
           쓰레드 상세의 「평가 케이스로 저장」이 여기로 쌓여요. 실행은 뼈대+상품 dry-run(쓰레드 기록 없음) —
-          같은 케이스를 설정만 바꿔 다시 돌리고 별점으로 비교하세요.
+          같은 케이스를 설정만 바꿔 다시 돌리고 채점으로 비교하세요. 채점은 전체 별점·코멘트에 섹션별 채점을
+          더할 수 있고, 자동 채점(판정)은 별도 축으로 나란히 쌓여요.
         </p>
         <details className="sb-pipe-play__override">
           <summary>실행 설정 — 임시 프롬프트(what-if)·라벨 (다음 실행에 적용)</summary>
@@ -217,6 +323,36 @@ export default function ExperimentStudio() {
             onChange={(event) => setOverride(event.target.value)}
           />
         </details>
+        {judgePrompt && (
+          <details className="sb-pipe-play__override">
+            <summary>
+              자동 채점 기준 (judge 프롬프트)
+              {judgePrompt.configured != null && (
+                <span className="sb-admin-prompt-chip sb-admin-prompt-chip--custom">재정의</span>
+              )}
+            </summary>
+            <p className="sb-admin__muted">{judgePrompt.note}</p>
+            <textarea value={judgeDraft} spellCheck={false} onChange={(event) => setJudgeDraft(event.target.value)} />
+            <div className="sb-exp-judge-prompt__actions">
+              <button
+                type="button"
+                className="sb-btn sb-btn--primary sb-btn--tiny"
+                disabled={!judgePromptDirty || judgeSaving}
+                onClick={() => saveJudgePrompt(judgeDraft)}
+              >
+                {judgeSaving ? '저장 중…' : '저장'}
+              </button>
+              <button
+                type="button"
+                className="sb-btn sb-btn--ghost sb-btn--tiny"
+                disabled={judgeSaving || judgePrompt.configured == null}
+                onClick={() => saveJudgePrompt(null)}
+              >
+                기본값 복귀
+              </button>
+            </div>
+          </details>
+        )}
         {status && (
           <p className="sb-flow-status">
             <i className="sb-flow-status__dot" aria-hidden="true" />
@@ -278,18 +414,19 @@ export default function ExperimentStudio() {
                 <ul className="sb-exp-runs">
                   {(runsByCase[c.id] || []).map((r) => {
                     const draft = draftOf(r)
-                    const dirty = draft.score !== r.score || draft.comment !== (r.comment || '')
+                    const dirty = scoreDirty(r, draft)
+                    const anchors = runAnchors(r)
+                    const savedCompCount = (r.components || []).length
                     return (
                       <li key={r.id} className="sb-exp-run">
                         <div className="sb-pipe-stage__title">
-                          {r.score == null ? (
-                            <span className="sb-admin-fb-badge">미채점</span>
-                          ) : r.score === 0 ? (
-                            <span className="sb-admin-fb-badge sb-admin-fb-badge--zero">0점</span>
-                          ) : (
-                            <span className="sb-admin-fb-stars" title={`${r.score}점`}>
-                              {'★'.repeat(r.score)}
-                              <span className="sb-admin-fb-stars__rest">{'★'.repeat(5 - r.score)}</span>
+                          <ScoreBadge score={r.score} />
+                          {r.judge && (
+                            <span
+                              className="sb-exp-judge-chip"
+                              title={`자동 채점(judge) ${r.judge.score}점 — 사람 채점과 별도 축`}
+                            >
+                              판정 ★{r.judge.score}
                             </span>
                           )}
                           {r.config?.label && <b>{r.config.label}</b>}
@@ -306,6 +443,18 @@ export default function ExperimentStudio() {
                           <p className="sb-pipe-stage__note">
                             {r.page.headline} — 섹션 {r.page.sections.length}개
                           </p>
+                        )}
+                        {r.judge && (
+                          <div className="sb-exp-judge">
+                            <div className="sb-exp-judge__rubric">
+                              {(r.judge.rubric || []).map((axis) => (
+                                <span key={axis.key} className="sb-exp-judge__axis" title={axis.note}>
+                                  {axis.label} <b>★{axis.score}</b>
+                                </span>
+                              ))}
+                            </div>
+                            <p className="sb-exp-judge__verdict">{r.judge.verdict}</p>
+                          </div>
                         )}
                         <div className="sb-exp-score">
                           <select
@@ -324,12 +473,21 @@ export default function ExperimentStudio() {
                           </select>
                           <input
                             type="text"
-                            placeholder="코멘트"
+                            placeholder="전체 코멘트"
                             value={draft.comment}
                             onChange={(event) =>
                               setScoreDraft((prev) => ({ ...prev, [r.id]: { ...draft, comment: event.target.value } }))
                             }
                           />
+                          {anchors.length > 0 && (
+                            <button
+                              type="button"
+                              className="sb-btn sb-btn--ghost sb-btn--tiny"
+                              onClick={() => setDetailOpen((prev) => ({ ...prev, [r.id]: !prev[r.id] }))}
+                            >
+                              섹션별 채점{savedCompCount ? ` ${savedCompCount}` : ''}
+                            </button>
+                          )}
                           <button
                             type="button"
                             className="sb-btn sb-btn--primary sb-btn--tiny"
@@ -338,7 +496,49 @@ export default function ExperimentStudio() {
                           >
                             {draft.saving ? '저장 중…' : '채점 저장'}
                           </button>
+                          <button
+                            type="button"
+                            className="sb-btn sb-btn--ai sb-btn--tiny"
+                            disabled={judging !== null || !r.page}
+                            title="LLM 심사관이 루브릭 4차원(근거 충실·맞춤성·단계 구성·실행 가능성)으로 채점해요 — 사람 채점과 별도로 저장돼요"
+                            onClick={() => judge(r, c.id)}
+                          >
+                            {judging === r.id ? '채점 중…' : r.judge ? '✦ 다시 판정' : '✦ 자동 채점'}
+                          </button>
                         </div>
+                        {detailOpen[r.id] && anchors.length > 0 && (
+                          <ul className="sb-exp-comps">
+                            {anchors.map((anchor) => {
+                              const entry = draft.components[anchor.id] ?? { score: null, feedback: '' }
+                              return (
+                                <li key={anchor.id} className="sb-exp-comp">
+                                  <span className="sb-exp-comp__label" title={anchor.label}>
+                                    {anchor.label}
+                                  </span>
+                                  <select
+                                    value={entry.score == null ? '' : String(entry.score)}
+                                    onChange={(event) =>
+                                      patchComponentDraft(r, anchor.id, {
+                                        score: event.target.value === '' ? null : Number(event.target.value),
+                                      })
+                                    }
+                                  >
+                                    <option value="">미채점</option>
+                                    {[5, 4, 3, 2, 1, 0].map((n) => (
+                                      <option key={n} value={n}>{'★'.repeat(n) || '0점'}</option>
+                                    ))}
+                                  </select>
+                                  <input
+                                    type="text"
+                                    placeholder="이 섹션에 대한 코멘트"
+                                    value={entry.feedback}
+                                    onChange={(event) => patchComponentDraft(r, anchor.id, { feedback: event.target.value })}
+                                  />
+                                </li>
+                              )
+                            })}
+                          </ul>
+                        )}
                       </li>
                     )
                   })}

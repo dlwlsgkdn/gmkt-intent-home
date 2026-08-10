@@ -62,7 +62,7 @@ export type PutAdminModelBody = z.infer<typeof PutAdminModelBody>
  * 프롬프트는 캐시 적중을 위해 바이트 고정이어야 하므로 저장값 자체가 곧 시스템 프롬프트다
  * (plan-products의 카탈로그 목록만 {{CATALOG}} 자리표시자로 호출 시점에 치환). */
 
-export const AdminPromptId = z.enum(['intent', 'survey', 'plan-skeleton', 'plan-products'])
+export const AdminPromptId = z.enum(['intent', 'survey', 'plan-skeleton', 'plan-products', 'judge'])
 export type AdminPromptId = z.infer<typeof AdminPromptId>
 
 export const AdminPromptEntry = z.object({

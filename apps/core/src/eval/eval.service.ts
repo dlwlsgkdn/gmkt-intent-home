@@ -1,6 +1,6 @@
 import { Inject, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common'
 import { desc, eq } from 'drizzle-orm'
-import type { CreateEvalCaseBody, CreateEvalRunBody, ScoreEvalRunBody } from '@ddak/schema'
+import type { CreateEvalCaseBody, CreateEvalRunBody, JudgeEvalRunBody, ScoreEvalRunBody } from '@ddak/schema'
 import { DB, type DbOrNull } from '../db/db.module'
 import type { Db } from '../db/client'
 import { snowflake } from '../common/snowflake'
@@ -76,10 +76,34 @@ export class EvalService {
       .limit(limit)
   }
 
+  /** 실행 단건 + 소속 케이스 — 자동 채점(BFF)이 케이스 입력을 함께 쓴다 */
+  async getRun(id: string) {
+    const [run] = await this.conn().select().from(evalRuns).where(eq(evalRuns.id, id))
+    if (!run) throw new NotFoundException('평가 실행이 없습니다')
+    const evalCase = await this.getCase(run.caseId)
+    return { run, case: evalCase }
+  }
+
+  /** 사람 채점 — 전체(score·comment) + 항목별(components). judge는 건드리지 않는다 (source 분리) */
   async scoreRun(id: string, body: ScoreEvalRunBody) {
     const [row] = await this.conn()
       .update(evalRuns)
-      .set({ score: body.score, ...(body.comment !== undefined ? { comment: body.comment } : {}) })
+      .set({
+        score: body.score,
+        ...(body.comment !== undefined ? { comment: body.comment } : {}),
+        ...(body.components !== undefined ? { components: body.components } : {}),
+      })
+      .where(eq(evalRuns.id, id))
+      .returning()
+    if (!row) throw new NotFoundException('평가 실행이 없습니다')
+    return row
+  }
+
+  /** 자동 채점 판정 저장 — 사람 채점(score·comment·components)은 건드리지 않는다 (source 분리) */
+  async setJudge(id: string, body: JudgeEvalRunBody) {
+    const [row] = await this.conn()
+      .update(evalRuns)
+      .set({ judge: body.judge })
       .where(eq(evalRuns.id, id))
       .returning()
     if (!row) throw new NotFoundException('평가 실행이 없습니다')

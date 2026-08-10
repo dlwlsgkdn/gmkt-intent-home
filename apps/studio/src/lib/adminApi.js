@@ -180,9 +180,20 @@ export function fetchEvalRuns(caseId) {
   return req('GET', `/eval/cases/${encodeURIComponent(caseId)}/runs`)
 }
 
-/** 실행 채점 — score 0~5 | null(미채점), comment */
-export function scoreEvalRun(id, score, comment) {
-  return req('PATCH', `/eval/runs/${encodeURIComponent(id)}`, { score, comment })
+/** 사람 채점 — 전체(score 0~5 | null(미채점), comment) + 항목별 components(생략 시 유지).
+ * 라이브 피드백과 같은 평가 레코드 문법 — components: [{ id, label, score, feedback }] */
+export function scoreEvalRun(id, score, comment, components) {
+  return req('PATCH', `/eval/runs/${encodeURIComponent(id)}`, {
+    score,
+    comment,
+    ...(components !== undefined ? { components } : {}),
+  })
+}
+
+/** 자동 채점 (SSE) — LLM 심사관이 루브릭 4차원으로 채점해 run.judge에 저장. → { run: EvalRun }
+ * 사람 채점과 절대 섞이지 않는다 (source 축) */
+export function judgeEvalRun(id, opts) {
+  return ssePost(`/eval/runs/${encodeURIComponent(id)}/judge`, {}, opts)
 }
 
 /** 전환 판정 계기판 — 실주행 plan 스텝 llmMeta 엔진별 집계 */

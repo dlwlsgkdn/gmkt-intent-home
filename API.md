@@ -143,7 +143,8 @@ Base: `/api/admin/*` (스튜디오 프록시 `/api/bff/admin/*` 경유) · 인�
 | POST | `/api/admin/eval/cases/:id/run` | **케이스 실행** (SSE) — 뼈대+상품 dry-run 순차 실행 → 병합 페이지·dropLog·결합 메타를 eval_runs에 기록. `{ promptOverride?, label? }` |
 | GET | `/api/admin/eval/cases/:id/runs` | 실행 기록 (채점 포함, 최신순) |
 | DELETE | `/api/admin/eval/cases/:id` | 케이스 삭제 (실행 기록 cascade) |
-| PATCH | `/api/admin/eval/runs/:id` | 채점 — `{ score: 0~5|null, comment }` |
+| PATCH | `/api/admin/eval/runs/:id` | **사람 채점** — `{ score: 0~5\|null, comment, components? }`. components는 섹션별 채점(`[{ id: sec-<index>, label, score, feedback }]` — 라이브 피드백과 같은 평가 레코드 문법, 생략=유지·빈 배열=비움). judge는 이 경로로 못 건드린다 |
+| POST | `/api/admin/eval/runs/:id/judge` | **자동 채점** (SSE) — LLM 심사관이 케이스 입력과 실행 결과(page·dropLog)를 대조해 루브릭 4차원(근거 충실·맞춤성·단계 구성·실행 가능성)으로 채점, `run.judge`에 저장. 사람 채점과 절대 안 섞인다(source 축). 프롬프트는 PROMPT_DEFS `judge`(재정의 `llm-prompt-judge`). SSE: `status` → `result({ run })` \| `error` |
 | GET | `/api/admin/metrics/engines` | **전환 판정 계기판** — 실주행 plan 스텝 llmMeta(engine 각인) 엔진별 집계: 표본·평균 지연·뼈대/상품·캐시 적중률·promptVersion |
 
 ## 2. Core — internal API (BFF 전용, 비공개)
@@ -162,7 +163,8 @@ Base: `https://ddak-core.vercel.app` · 인증: **`Authorization: Bearer <CORE_S
 | GET | `/internal/feedback-steps?limit=` | 피드백 스텝 나열 (`FeedbackStepsWire`) — action 스텝 중 `payload.type='feedback'`만 쓰레드 메타와 함께 최신순. core는 payload를 해석하지 않는다(jsonb 최상위 type 필터만) — 파싱·집계는 BFF admin 몫 |
 | GET | `/internal/plan-metas?limit=` | plan 스텝 llmMeta 최신순 (`PlanMetasWire`) — 전환 판정 계기판 원천 |
 | POST/GET/DELETE | `/internal/eval/cases[...]` | 평가 케이스 CRUD (`eval_cases`) — id는 core 스노우플레이크 발급 |
-| POST/GET | `/internal/eval/cases/:id/runs` · PATCH `/internal/eval/runs/:id` | 실행 기록 저장·조회·채점 (`eval_runs`, 케이스 cascade) — core는 내용 해석 안 함 |
+| POST/GET | `/internal/eval/cases/:id/runs` · GET/PATCH `/internal/eval/runs/:id` | 실행 기록 저장·조회·사람 채점(score·comment·components) (`eval_runs`, 케이스 cascade) — core는 내용 해석 안 함. 단건 GET은 `{ run, case }`(자동 채점이 케이스 입력을 함께 쓴다) |
+| PUT | `/internal/eval/runs/:id/judge` | 자동 채점 판정 저장 (`{ judge: EvalJudgeVerdict }`) — 사람 채점 필드는 불변 (source 축 분리) |
 | GET | `/internal/settings/:key` · PUT · DELETE | 운영 설정 KV (jsonb — core는 해석 안 함). 예: `llm-model` |
 | GET | `/healthz` | 헬스체크 (가드 밖) |
 

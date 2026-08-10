@@ -123,11 +123,29 @@ ${CATALOG_PLACEHOLDER}
 - 확인한 콘텐츠가 없으면 콘텐츠 섹션을 만들지 않는다 — 상품 섹션만 반환해도 된다.
 {{CRITERIA}}`
 
+/* 자동 채점(judge) — 실험 탭 실행 결과를 사용자 입력과 대조해 루브릭 4차원으로 심사한다.
+   생성 파이프라인의 단계가 아니라 평가 계층의 판정자(source='judge')다: 사람 채점을 대체하지
+   않고 별도 레코드로 저장된다. 채점 눈금·차원 정의는 schemas.ts JUDGE_DIMENSIONS와 한 벌.
+   주의: 모의 Anthropic(e2e)이 시스템 문구로 호출을 판별한다 — "품질 심사관" 마커 유지. */
+export const JUDGE_SYSTEM = `너는 지마켓 뷰티 AI 쇼핑 플래너의 **품질 심사관**이다. 생성된 쇼핑 계획 페이지를 사용자 입력(의도·프로필·설문 답변)과 대조해 루브릭 4개 차원으로 채점한다.
+
+채점 원칙:
+- 점수는 0~5 정수 — 5=흠잡을 데 없음, 4=좋음(사소한 아쉬움), 3=쓸 만하지만 아쉬움, 2=문제가 눈에 띔, 1=크게 부족, 0=쓸 수 없음.
+- 관대하게 주지 않는다: 근거 없이 4 이상을 주지 말고, 페이지에서 확인되지 않는 장점은 점수에 반영하지 않는다.
+- 각 차원의 note에는 점수 근거를 한두 문장으로, 구체 섹션 제목·상품명을 들어 쓴다.
+- verdict는 종합 심사평 2~3문장 — 가장 큰 감점 요인과 개선 방향을 짚는다. overall은 차원 평균이 아니라 종합 판단이다.
+
+루브릭:
+- grounding (근거 충실): 상품·콘텐츠가 실제 확인된 것인가. 검증 게이트 드롭이 많거나, 상품 자리가 비었거나, 근거(reason)가 상품과 어긋나면 감점.
+- personalization (맞춤성): 프로필·설문 답변이 안내 문구와 상품 선정 근거에 실제로 반영됐는가. 답변과 무관한 일반론이면 감점.
+- structure (단계 구성): 안내가 2~3개 단계 흐름으로 나뉘고 상품 섹션이 해당 단계 안내 뒤에 붙었는가, 사용 순서로 닫히는가.
+- actionability (실행 가능성): 안내가 구체적이어서 그대로 따라 할 수 있는가. 추상적 조언만 있으면 감점.`
+
 /* ── 시스템 프롬프트 카탈로그 — 운영 콘솔(#ops) 조회·재정의의 원천.
  * template은 자리표시자({{CATALOG}}) 포함 원문이고, 실제 호출값은 renderSystemTemplate을
  * 거친다. 재정의는 core 설정 KV(`llm-prompt-<id>`)에 원문으로 저장된다 (llm.service). */
 
-export type PromptDefId = 'intent' | 'survey' | 'plan-skeleton' | 'plan-products'
+export type PromptDefId = 'intent' | 'survey' | 'plan-skeleton' | 'plan-products' | 'judge'
 
 export const PROMPT_DEFS: { id: PromptDefId; label: string; note: string; template: string }[] = [
   {
@@ -153,6 +171,12 @@ export const PROMPT_DEFS: { id: PromptDefId; label: string; note: string; templa
     label: '계획 상품 생성',
     note: `계획 2단계(웹 검색 포함) — 상품·참고 콘텐츠 섹션을 채운다. ${CATALOG_PLACEHOLDER} 자리표시자가 상품 카탈로그 목록으로 치환되므로 지우지 말 것. {{CRITERIA}}는 지식 KV로 치환된다.`,
     template: PLAN_PRODUCTS_SYSTEM,
+  },
+  {
+    id: 'judge',
+    label: '자동 채점 (judge)',
+    note: '실험 탭 실행 결과를 루브릭 4차원(근거 충실·맞춤성·단계 구성·실행 가능성)으로 심사하는 판정자 프롬프트. 사람 채점과 별도 저장되며(source 축), 생성 파이프라인 단계가 아니다.',
+    template: JUDGE_SYSTEM,
   },
 ]
 
@@ -254,6 +278,52 @@ export function buildPlanSkeletonRequest(
 ${feedbackBlock(revision)}
 
 피드백을 반영해 쇼핑 계획 페이지의 뼈대를 다시 만들어 주세요. 안내·순서·섹션 구성에 대한 피드백을 고치고, 지적이 없던 부분의 구성은 유지합니다. 상품 자체에 대한 피드백은 상품 단계가 반영하니, 너는 상품 섹션의 제목·reason에 반영할 것만 손봅니다.`
+}
+
+/* ── 자동 채점 요청 — 케이스 입력(비교 기준) + 생성 결과 전문 + 검증 게이트 드롭 로그.
+   prevPlanBlock(요약)과 달리 안내 본문·상품 상세까지 싣는다 — 심사는 전문을 봐야 한다. */
+
+export type JudgeInput = {
+  intent: string
+  profile?: Profile
+  survey: SurveyPageWire
+  answers: Answer[]
+  page: PlanPageWire
+  dropLog: { code: string; message: string }[]
+}
+
+function judgePageBlock(page: PlanPageWire): string {
+  const lines = page.sections.map((s, i) => {
+    if (s.kind === 'guide') return `${i + 1}. [안내] ${s.title}\n   ${s.body}`
+    if (s.kind === 'products') {
+      const items = s.products
+        .map((p) => `   - ${p.brand} ${p.name} · ${p.price.toLocaleString('ko-KR')}원 · ${p.mall ?? '지마켓'}`)
+        .join('\n')
+      return `${i + 1}. [상품] ${s.title} — ${s.reason}\n${items || '   (상품 없음)'}`
+    }
+    if (s.kind === 'contents') {
+      const items = s.items.map((c) => `   - [${c.type}] ${c.title} (${c.source})`).join('\n')
+      return `${i + 1}. [콘텐츠] ${s.title} — ${s.reason}\n${items}`
+    }
+    return `${i + 1}. [순서] ${s.title}\n${s.steps.map((step) => `   - ${step}`).join('\n')}`
+  })
+  return `생성된 계획 페이지 (심사 대상):
+- 제목: ${page.headline}
+- 요약: ${page.summary}
+${lines.join('\n')}`
+}
+
+export function buildJudgeRequest(input: JudgeInput): string {
+  const drops = input.dropLog.length
+    ? `\n\n검증 게이트 드롭 로그 (생성 중 탈락한 항목 — grounding 판단 재료):\n${input.dropLog
+        .map((d) => `- [${d.code}] ${d.message}`)
+        .join('\n')}`
+    : ''
+  return `${planContext(input.intent, input.survey, input.answers, input.profile)}
+
+${judgePageBlock(input.page)}${drops}
+
+이 계획 페이지를 루브릭 4개 차원으로 채점해 주세요.`
 }
 
 export function buildPlanProductsRequest(

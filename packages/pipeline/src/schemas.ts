@@ -148,6 +148,40 @@ export const PlanProductsGen = z.object({
 export type PlanProductsGen = z.infer<typeof PlanProductsGen>
 
 /*
+ * 자동 채점(judge) — 실험 탭 실행 결과를 루브릭 4차원으로 심사하는 구조화 출력.
+ * 차원을 고정 키 객체로 강제한다(배열이면 누락·중복을 스키마가 못 막는다).
+ * 루브릭 차원 강제는 자동 채점 전용 — 사람 채점은 자유 코멘트다 (평가 레코드 문법의 source 축).
+ */
+
+export const JUDGE_DIMENSIONS = [
+  { key: 'grounding', label: '근거 충실' },
+  { key: 'personalization', label: '맞춤성' },
+  { key: 'structure', label: '단계 구성' },
+  { key: 'actionability', label: '실행 가능성' },
+] as const
+export type JudgeDimensionKey = (typeof JUDGE_DIMENSIONS)[number]['key']
+
+const JudgeAxisGen = z.object({
+  score: z.number().int().min(0).max(5).describe('0~5 정수 — 5=흠잡을 데 없음, 3=쓸 만하지만 아쉬움, 0=쓸 수 없음'),
+  note: z.string().describe('점수 근거 한두 문장 — 구체 섹션·상품명을 들어서'),
+})
+
+export const JudgeGen = z.object({
+  grounding: JudgeAxisGen.describe('근거 충실 — 상품·콘텐츠가 실제 확인된 것인가, 드롭·빈 자리가 없는가'),
+  personalization: JudgeAxisGen.describe('맞춤성 — 프로필·설문 답변이 안내와 선정 근거에 실제로 반영됐는가'),
+  structure: JudgeAxisGen.describe('단계 구성 — 안내가 단계 흐름으로 나뉘고 상품 자리가 제 단계에 붙었는가'),
+  actionability: JudgeAxisGen.describe('실행 가능성 — 안내가 구체적이어서 그대로 따라 할 수 있는가'),
+  overall: z.number().int().min(0).max(5).describe('종합 별점 0~5 — 차원 평균이 아니라 심사관의 종합 판단'),
+  verdict: z.string().describe('종합 심사평 2~3문장 — 가장 큰 감점 요인과 개선 방향'),
+})
+export type JudgeGen = z.infer<typeof JudgeGen>
+
+/** JudgeGen(고정 키) → 저장·표시용 루브릭 배열 [{key, label, score, note}] */
+export function judgeRubricEntries(gen: JudgeGen) {
+  return JUDGE_DIMENSIONS.map(({ key, label }) => ({ key, label, score: gen[key].score, note: gen[key].note }))
+}
+
+/*
  * 부분 스트리밍(토큰 단위 미리보기)용 느슨한 스키마 — 자라는 중(미완성)인 원소라
  * 필수·개수 제약을 걷어낸다. 확정 검증은 언제나 위의 본 스키마가 맡는다 (threads.service).
  * kind만 필수: 종류를 알아야 wire 섹션으로 투영할 수 있다 (kind 도착 전 조각은 스킵).

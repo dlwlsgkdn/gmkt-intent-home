@@ -62,11 +62,14 @@ import { toOpenApi } from '../common/openapi'
 import { DEFAULT_MODEL, LLM_MODEL_SETTING_KEY, LlmService, MODEL_OPTIONS, promptSettingKey } from '../llm/llm.service'
 import {
   GUARD_BLOCKLIST_SETTING_KEY,
+  JudgeGen,
   KNOWLEDGE_SOURCES,
   LlmGenerationError,
   PIPELINE_STAGES,
   PROMPT_DEFS,
   PROMPT_VERSION,
+  buildJudgeRequest,
+  judgeRubricEntries,
   knowledgeSettingKey,
   mergePlanSections,
 } from '@ddak/pipeline'
@@ -520,11 +523,64 @@ export class AdminController {
   }
 
   @Patch('eval/runs/:id')
-  @ApiOperation({ summary: '실행 채점 — 별점 0~5(null=미채점)·코멘트 (평가 스튜디오 문법)' })
+  @ApiOperation({
+    summary: '사람 채점 — 전체(별점 0~5·null=미채점, 코멘트) + 항목별 components (평가 레코드 문법)',
+    description:
+      'components의 id는 페이지 섹션 앵커(sec-<index>), label을 함께 저장해 재생성 후에도 해석 가능하다. ' +
+      '자동 채점(judge)은 이 경로로 건드릴 수 없다 — source 축 분리.',
+  })
   @ApiParam({ name: 'id' })
   @ApiBody({ schema: toOpenApi(ScoreEvalRunBody) })
   scoreEvalRun(@Param('id') id: string, @Body(new ZodValidationPipe(ScoreEvalRunBody)) body: ScoreEvalRunBody) {
     return this.core.scoreEvalRun(id, body)
+  }
+
+  @Post('eval/runs/:id/judge')
+  @ApiOperation({
+    summary: '자동 채점 (SSE) — 실행 결과를 LLM 심사관이 루브릭 4차원으로 채점해 판정을 저장',
+    description:
+      "케이스 입력(의도·프로필·설문·답변)과 실행 결과(page·dropLog)를 대조해 채점한다. 판정은 run.judge에 " +
+      "저장되며 사람 채점(score·comment·components)과 절대 섞이지 않는다 — source='judge' 레코드. " +
+      "프롬프트는 PROMPT_DEFS 'judge' (재정의 가능 — llm-prompt-judge). SSE: status → result({ run }) | error.",
+  })
+  @ApiParam({ name: 'id', description: '평가 실행 id' })
+  @ApiProduces('text/event-stream')
+  @ApiOkResponse({ description: 'SSE 스트림 — result: { run: EvalRun }' })
+  async judgeEvalRun(@Param('id') id: string, @Res() res: SseRes) {
+    openSse(res)
+    try {
+      const { run, case: evalCase } = await this.core.getEvalRun(id)
+      if (!run.page) throw new BadRequestException('결과 페이지가 없는 실행은 채점할 수 없습니다')
+      if (!evalCase.survey || !evalCase.answers?.length) {
+        throw new BadRequestException('케이스에 설문·답변 스냅샷이 없어 대조 채점을 할 수 없습니다')
+      }
+      sseSend(res, 'status', { message: '자동 채점을 실행하고 있어요…' })
+      const { content, meta } = await this.llm.generate('자동 채점', JudgeGen, {
+        system: await this.llm.resolveSystem('judge'),
+        effort: 'medium' as const,
+        user: buildJudgeRequest({
+          intent: evalCase.intent,
+          profile: evalCase.profile ?? undefined,
+          survey: evalCase.survey,
+          answers: evalCase.answers,
+          page: run.page,
+          dropLog: (run.dropLog ?? []) as { code: string; message: string }[],
+        }),
+      })
+      const updated = await this.core.setEvalRunJudge(id, {
+        judge: {
+          score: content.overall,
+          rubric: judgeRubricEntries(content),
+          verdict: content.verdict,
+          meta,
+          at: new Date().toISOString(),
+        },
+      })
+      sseSend(res, 'result', { run: updated })
+    } catch (e) {
+      this.sendSseFailure(res, '자동 채점', e)
+    }
+    sseClose(res)
   }
 
   @Get('metrics/engines')

@@ -38,6 +38,15 @@ const INTENT_JSON = JSON.stringify({
   audience: '본인',
 })
 
+const JUDGE_JSON = JSON.stringify({
+  grounding: { score: 4, note: '추천 쿠션 섹션의 상품이 카탈로그로 확인되나 드롭이 있었습니다.' },
+  personalization: { score: 5, note: '지성 답변이 안내와 선정 근거에 반영됐습니다.' },
+  structure: { score: 4, note: '안내 → 상품 → 순서 흐름이 유지됩니다.' },
+  actionability: { score: 3, note: '사용 순서가 짧아 아침·저녁 구분이 없습니다.' },
+  overall: 4,
+  verdict: '모의 심사평: 맞춤성은 좋으나 드롭된 상품 자리를 보완하면 좋겠습니다.',
+})
+
 const PRODUCTS_JSON = JSON.stringify({
   sections: [
     {
@@ -113,6 +122,10 @@ const server = http.createServer(async (req, res) => {
       .join('\n')
     // 판별 순서 주의: 상품 시스템에도 '뼈대', 뼈대 시스템에도 '설문' 문구가 있다 —
     // 상품 고유 마커(productIds) → 뼈대 → 설문 순으로 좁힌다
+    if (system.includes('품질 심사관')) {
+      llmCalls.push({ type: 'judge', system, user })
+      return streamAnthropic(res, JUDGE_JSON, { delayMs: 2, chunkSize: 40 })
+    }
     if (system.includes('productIds')) {
       llmCalls.push({ type: 'products', system, user })
       return streamAnthropic(res, PRODUCTS_JSON, { delayMs: 10, chunkSize: 24 }) // 뼈대보다 늦게 끝나게
@@ -192,7 +205,7 @@ const server = http.createServer(async (req, res) => {
       return send(200, { items: [...evalCases.values()].reverse() })
     }
     if ((m = url.match(/^\/internal\/eval\/cases\/(\d+)\/runs$/)) && req.method === 'POST') {
-      const row = { id: String(nextId++), caseId: m[1], config: body.config, page: body.page ?? null, dropLog: body.dropLog ?? [], meta: body.meta ?? null, score: null, comment: '', createdAt: new Date().toISOString() }
+      const row = { id: String(nextId++), caseId: m[1], config: body.config, page: body.page ?? null, dropLog: body.dropLog ?? [], meta: body.meta ?? null, score: null, comment: '', components: [], judge: null, createdAt: new Date().toISOString() }
       evalRuns.set(row.id, row)
       return send(201, row)
     }
@@ -203,11 +216,23 @@ const server = http.createServer(async (req, res) => {
       evalCases.delete(m[1])
       return send(200, { ok: true })
     }
+    if ((m = url.match(/^\/internal\/eval\/runs\/(\d+)$/)) && req.method === 'GET') {
+      const row = evalRuns.get(m[1])
+      if (!row) return send(404, { message: 'no run' })
+      return send(200, { run: row, case: evalCases.get(row.caseId) ?? null })
+    }
     if ((m = url.match(/^\/internal\/eval\/runs\/(\d+)$/)) && req.method === 'PATCH') {
       const row = evalRuns.get(m[1])
       if (!row) return send(404, { message: 'no run' })
       row.score = body.score
       if (body.comment !== undefined) row.comment = body.comment
+      if (body.components !== undefined) row.components = body.components
+      return send(200, row)
+    }
+    if ((m = url.match(/^\/internal\/eval\/runs\/(\d+)\/judge$/)) && req.method === 'PUT') {
+      const row = evalRuns.get(m[1])
+      if (!row) return send(404, { message: 'no run' })
+      row.judge = body.judge
       return send(200, row)
     }
   }

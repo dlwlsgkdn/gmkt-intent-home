@@ -262,11 +262,32 @@ try {
   const scored = await fetch(BFF + `/api/admin/eval/runs/${run.id}`, {
     method: 'PATCH',
     headers: plain,
-    body: JSON.stringify({ score: 4, comment: '기본 설정 무난' }),
+    body: JSON.stringify({
+      score: 4,
+      comment: '기본 설정 무난',
+      components: [{ id: 'sec-1', label: '상품 · 추천 쿠션', score: 3, feedback: '상품 폭이 좁아요' }],
+    }),
   }).then((r) => r.json())
   ok(scored?.score === 4 && scored?.comment === '기본 설정 무난', '채점 저장')
+  ok(scored?.components?.length === 1 && scored.components[0].id === 'sec-1', '섹션별 채점(components) 저장')
   const runsWire = await fetch(BFF + `/api/admin/eval/cases/${promo.id}/runs`).then((r) => r.json())
   ok(runsWire?.items?.length === 1 && runsWire.items[0].score === 4, '실행 기록 목록 + 채점 반영')
+
+  // ── 10.5 자동 채점 (judge) — 평가 레코드 문법의 source 축 ──
+  console.log('10.5) 자동 채점 (judge)')
+  const judgeEvents = await sse(`/api/admin/eval/runs/${run.id}/judge`, {}, plain)
+  const judged = last(judgeEvents, 'result')?.data?.run
+  ok(judged?.judge?.score === 4, `judge 종합 별점 저장 (${judged?.judge?.score})`)
+  ok((judged?.judge?.rubric || []).length === 4, `루브릭 4차원 (${judged?.judge?.rubric?.length})`)
+  ok(judged?.judge?.rubric?.[0]?.key === 'grounding' && judged.judge.rubric[0].label === '근거 충실', '루브릭 key·label 매핑')
+  ok(judged?.score === 4 && judged?.components?.length === 1, 'judge가 사람 채점을 덮지 않음 (source 분리)')
+  ok(judged?.judge?.meta?.model != null, 'judge 호출 메타 기록')
+  {
+    const judgeCalls = (await llmCalls()).filter((c) => c.type === 'judge')
+    ok(judgeCalls.length === 1, 'judge LLM 1회 호출')
+    ok(judgeCalls[0]?.user?.includes('심사 대상'), '심사 요청에 결과 페이지 전문 포함')
+    ok(judgeCalls[0]?.user?.includes('드롭 로그'), '심사 요청에 검증 게이트 드롭 로그 포함')
+  }
   const engineMetrics = await fetch(BFF + '/api/admin/metrics/engines').then((r) => r.json())
   const lg = engineMetrics?.engines?.find((e) => e.engine === 'langgraph')
   const legacyM = engineMetrics?.engines?.find((e) => e.engine === 'legacy')

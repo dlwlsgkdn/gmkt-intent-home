@@ -1374,3 +1374,88 @@
   box-sizing: border-box;
   opacity: 1;
 }
+
+/* ── 실험 탭 — 평가 레코드 문법 확장: 자동 채점(judge)·섹션별 채점 ──────────
+   judge는 사람 채점과 별도 축이다: 배지·루브릭·심사평을 --sb-ai 계열로 구분해
+   사람 별점(--sb-info 계열)과 시각적으로도 섞이지 않게 한다. */
+.sb-exp-judge-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--sb-r-pill);
+  font-size: var(--sb-t-micro);
+  font-weight: 500;
+  color: var(--sb-ai);
+  background: color-mix(in srgb, var(--sb-ai) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sb-ai) 30%, transparent);
+  white-space: nowrap;
+}
+.sb-exp-judge {
+  margin: 6px 0 2px;
+  padding: 8px 10px;
+  border-left: 2px solid color-mix(in srgb, var(--sb-ai) 40%, transparent);
+  background: color-mix(in srgb, var(--sb-ai) 4%, transparent);
+  border-radius: 0 var(--sb-r-sm) var(--sb-r-sm) 0;
+}
+.sb-exp-judge__rubric {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.sb-exp-judge__axis {
+  font-size: var(--sb-t-caption);
+  color: var(--sb-ink-2);
+  cursor: help;
+}
+.sb-exp-judge__axis b {
+  font-weight: 500;
+  color: var(--sb-ai);
+}
+.sb-exp-judge__verdict {
+  margin: 6px 0 0;
+  font-size: var(--sb-t-caption);
+  color: var(--sb-muted);
+  line-height: 1.5;
+}
+.sb-exp-judge-prompt__actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+/* 섹션별 채점 — 실행 페이지 섹션 앵커(sec-<index>)별 별점·코멘트 행 */
+.sb-exp-comps {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.sb-exp-comp {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sb-exp-comp__label {
+  flex: 0 0 180px;
+  font-size: var(--sb-t-caption);
+  color: var(--sb-ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sb-exp-comp select {
+  border: 1px solid var(--sb-n-200);
+  border-radius: var(--sb-r-sm);
+  padding: 4px 6px;
+  font-size: var(--sb-t-caption);
+  background: var(--sb-n-0);
+}
+.sb-exp-comp input {
+  flex: 1;
+  border: 1px solid var(--sb-n-200);
+  border-radius: var(--sb-r-sm);
+  padding: 4px 8px;
+  font-size: var(--sb-t-caption);
+  min-width: 0;
+}

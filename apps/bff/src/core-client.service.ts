@@ -7,7 +7,9 @@ import type {
   EvalCasesWire,
   EvalRun,
   EvalRunsWire,
+  EvalRunWithCase,
   FeedbackStepsWire,
+  JudgeEvalRunBody,
   PlanMetasWire,
   ScoreEvalRunBody,
   SettingWire,
@@ -104,6 +106,14 @@ export class CoreClientService {
   }
   scoreEvalRun(id: string, body: ScoreEvalRunBody) {
     return this.req<EvalRun>('PATCH', `/internal/eval/runs/${encodeURIComponent(id)}`, body)
+  }
+  /** 실행 단건 + 소속 케이스 — 자동 채점이 케이스 입력을 함께 쓴다 */
+  getEvalRun(id: string) {
+    return this.req<EvalRunWithCase>('GET', `/internal/eval/runs/${encodeURIComponent(id)}`)
+  }
+  /** 자동 채점 판정 저장 — 사람 채점과 분리 (source 축) */
+  setEvalRunJudge(id: string, body: JudgeEvalRunBody) {
+    return this.req<EvalRun>('PUT', `/internal/eval/runs/${encodeURIComponent(id)}/judge`, body)
   }
   /** 실주행 plan 스텝 llmMeta — 전환 판정 계기판의 원천 */
   listPlanMetas(limit?: number) {
