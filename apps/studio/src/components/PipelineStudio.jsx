@@ -32,6 +32,17 @@ import PipelineFlow, { KIND_LABEL, metaLine } from './PipelineFlow.jsx'
 
 const INJECTION_LABEL = { system: '시스템(캐시)', user: '가변부', guard: '검증 게이트' }
 
+/** 플레이그라운드 프로필 속성(고정 설문) 저장 키 — 계정 서버 동기화 기계 밖 로컬 실험 조건
+ * (태깅 검토 스튜디오와 같은 문법). 실행 본문의 profile로 실려 원장 facts가 된다 */
+const PROFILE_LS_KEY = 'ddak-ops-pg-profile'
+
+/** 프로필 예시 — 빈 손으로 실험을 시작하는 운영자용 한 번 채우기 */
+const PROFILE_PRESET = [
+  { label: '피부 타입', value: '지성' },
+  { label: '나이대', value: '30대' },
+  { label: '예산 성향', value: '가성비 위주' },
+]
+
 /** 플로우 실행 로그 타임라인 표시 순서 — 'gate'는 다이어그램 밖 interrupt 표식 */
 const FLOW_LOG_ORDER = ['objective', 'intent', 'ledger', 'survey', 'gate', 'plan-skeleton', 'plan-products', 'verify', 'record']
 
@@ -126,6 +137,33 @@ export default function PipelineStudio({ api }) {
   const [pgTab, setPgTab] = useState('stage') // 'stage'(단계 단독 dry-run) | 'flow'(전체 플로우)
   const [pgIntent, setPgIntent] = useState('여름에 무너지지 않는 쿠션 찾아줘')
   const [pgOverride, setPgOverride] = useState('')
+  /* 프로필 속성(고정 설문) — 실험 조건. 실행 본문 profile로 실려 원장 facts가 되고,
+     실렌더 미리보기의 프로필 패널·설문 요약에도 그대로 그려진다. localStorage 지속 */
+  const [pgProfile, setPgProfile] = useState(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem(PROFILE_LS_KEY) || '[]')
+      return Array.isArray(raw)
+        ? raw
+            .filter((row) => row && typeof row.label === 'string')
+            .map((row) => ({ label: row.label, value: String(row.value ?? '') }))
+        : []
+    } catch {
+      return []
+    }
+  })
+  useEffect(() => {
+    try {
+      localStorage.setItem(PROFILE_LS_KEY, JSON.stringify(pgProfile))
+    } catch {
+      /* 저장 실패는 무시 — 세션 상태만으로도 동작한다 */
+    }
+  }, [pgProfile])
+  const profileWire = () =>
+    pgProfile
+      .map((row) => ({ label: row.label.trim(), value: String(row.value || '').trim() }))
+      .filter((row) => row.label)
+  const patchProfileRow = (index, patch) =>
+    setPgProfile((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)))
   const [running, setRunning] = useState(null) // 실행 중 stageId
   const [pgStatus, setPgStatus] = useState(null)
   const [pgError, setPgError] = useState(null)
@@ -287,6 +325,7 @@ export default function PipelineStudio({ api }) {
       const body = {
         stageId,
         intent: pgIntent.trim(),
+        profile: profileWire(),
         ...(pgOverride.trim() ? { promptOverride: pgOverride } : {}),
         ...(stageId === 'survey' ? {} : { survey: svResult?.survey, answers: answersList }),
       }
@@ -420,7 +459,7 @@ export default function PipelineStudio({ api }) {
     flowSkeletonRef.current = false
     try {
       const result = await flowRunPipeline(
-        { phase: 'survey', intent: pgIntent.trim() },
+        { phase: 'survey', intent: pgIntent.trim(), profile: profileWire() },
         { onStatus: setPgStatus, onEvent: handleFlowEvent },
       )
       setFlowRunId(result.flowId)
@@ -458,6 +497,7 @@ export default function PipelineStudio({ api }) {
           phase: 'plan',
           flowId: flowRunId,
           intent: pgIntent.trim(),
+          profile: profileWire(),
           survey: svResult?.survey,
           answers: answersList,
         },
@@ -532,16 +572,24 @@ export default function PipelineStudio({ api }) {
     }))
   }
 
-  /* 계획 페이지 surveySummary 패널 재료 — 클라이언트 소유분 (LivePlayer summary와 같은 형태) */
+  /* 계획 페이지 surveySummary 패널 재료 — 클라이언트 소유분 (LivePlayer summary와 같은 형태).
+     프로필도 실험 조건 그대로 — 프로덕션에서 프로필 패널·요약에 실리는 것과 같은 문법 */
+  const previewProfileItems = useMemo(
+    () =>
+      pgProfile
+        .map((row) => ({ label: row.label.trim(), value: String(row.value || '').trim() }))
+        .filter((row) => row.label),
+    [pgProfile],
+  )
   const flowSummary = useMemo(
     () => ({
-      profile: [],
+      profile: previewProfileItems,
       questions: (svResult?.survey?.questions || []).map((q) => {
         const arr = pgAnswers[q.id] || []
         return { q: q.question, a: arr.length ? arr.join(', ') : '아무거나' }
       }),
     }),
-    [svResult, pgAnswers],
+    [svResult, pgAnswers, previewProfileItems],
   )
 
   /* 페이지 전체 말풍선 — 단계 산출 메타·원장·검증 게이트 요약 + 실행 액션(모드별).
@@ -966,6 +1014,74 @@ export default function PipelineStudio({ api }) {
                 </button>
               )}
             </div>
+            {/* 프로필 속성(고정 설문) — 실험 조건 편집. 실행 본문 profile로 실려 원장 facts가
+                되고 설문은 이 정보를 다시 묻지 않는다. 프로필 패널·설문 요약에도 그대로 렌더 */}
+            <details className="sb-pipe-profile">
+              <summary>
+                프로필 속성 (고정 설문 — 실험 조건)
+                <span className="sb-admin__muted">
+                  {' '}· {previewProfileItems.length ? `${previewProfileItems.length}항목` : '비어 있음'}
+                </span>
+              </summary>
+              <p className="sb-admin__muted">
+                사용자가 이미 알려준 속성으로 실행 시점에 실려요 — 원장 facts가 되고, 설문은 여기 있는 정보를
+                다시 묻지 않아요. 실렌더 미리보기의 프로필 패널·설문 요약에도 그대로 그려져요.
+              </p>
+              {pgProfile.map((row, index) => (
+                <div key={index} className="sb-pipe-profile__row">
+                  <input
+                    type="text"
+                    value={row.label}
+                    placeholder="속성 — 예: 피부 타입"
+                    aria-label={`프로필 속성 ${index + 1} 이름`}
+                    onChange={(event) => patchProfileRow(index, { label: event.target.value })}
+                  />
+                  <input
+                    type="text"
+                    value={row.value}
+                    placeholder="값 — 예: 지성"
+                    aria-label={`프로필 속성 ${index + 1} 값`}
+                    onChange={(event) => patchProfileRow(index, { value: event.target.value })}
+                  />
+                  <button
+                    type="button"
+                    className="sb-icon-btn"
+                    aria-label="속성 삭제"
+                    onClick={() => setPgProfile((prev) => prev.filter((_, i) => i !== index))}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              <div className="sb-pipe-profile__actions">
+                <button
+                  type="button"
+                  className="sb-btn sb-btn--ghost sb-btn--tiny"
+                  onClick={() => setPgProfile((prev) => [...prev, { label: '', value: '' }])}
+                >
+                  + 속성 추가
+                </button>
+                {pgProfile.length === 0 && (
+                  <button
+                    type="button"
+                    className="sb-btn sb-btn--ghost sb-btn--tiny"
+                    onClick={() => setPgProfile(PROFILE_PRESET.map((row) => ({ ...row })))}
+                  >
+                    예시로 채우기
+                  </button>
+                )}
+                {pgProfile.length > 0 && (
+                  <button
+                    type="button"
+                    className="sb-btn sb-btn--ghost sb-btn--tiny"
+                    onClick={() => setPgProfile([])}
+                  >
+                    비우기
+                  </button>
+                )}
+              </div>
+            </details>
+
             {pgTab === 'stage' && (
               <details className="sb-pipe-play__override">
                 <summary>임시 시스템 프롬프트 (what-if — 다음 실행 1회에 적용, 저장 안 됨)</summary>
@@ -1030,6 +1146,7 @@ export default function PipelineStudio({ api }) {
                   }
                   answers={pgAnswers}
                   onAnswer={flowBusy ? null : setFlowAnswer}
+                  profileItems={previewProfileItems}
                   surveySummary={flowSummary}
                   overall={previewOverall}
                 />

@@ -209,10 +209,11 @@ export const AdminDryRunBody = z.object({
 export type AdminDryRunBody = z.infer<typeof AdminDryRunBody>
 
 /* ── BFF admin — 전체 플로우 실행 (플레이그라운드 flow-run) ──────────────────
- * 실제 LangGraph 그래프를 쓰레드·core 기록 없이(스텁 core + 전용 MemorySaver) 통째로 돈다.
- * HTTP 요청 1회 = 그래프 실행 1구간(운영과 동일): survey 페이즈는 interrupt(답변 대기)에서
- * 멈추고, plan 페이즈가 재개한다. interrupt가 유실된 인스턴스에서는 body의 설문·답변으로
- * 시딩해 START부터 재실행한다(그래프 복구 경로 그대로 — survey 노드는 멱등 스킵). */
+ * 실제 LangGraph 그래프를 전용 MemorySaver로 통째로 돌고, admin 프로필(ops-playground)의
+ * core 쓰레드로 실기록한다 — flowId = 쓰레드 id (core 미연결이면 flow- 임시 id로 기록 없이
+ * 강등). HTTP 요청 1회 = 그래프 실행 1구간(운영과 동일): survey 페이즈는 interrupt(답변
+ * 대기)에서 멈추고, plan 페이즈가 재개한다. interrupt가 유실된 인스턴스에서는 body의
+ * 설문·답변으로 시딩해 START부터 재실행한다(그래프 복구 경로 그대로 — survey 노드는 멱등 스킵). */
 
 export const AdminFlowRunBody = z.object({
   phase: z.enum(['survey', 'plan']),

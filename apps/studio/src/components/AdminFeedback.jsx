@@ -12,6 +12,10 @@ import { timeAgo } from '../lib/timeAgo.js'
 const STAGE_LABEL = { survey: '설문', plan: '계획' }
 const LOW_SCORE = 2
 
+/** admin 프로필 — 플레이그라운드 플로우 실행이 만드는 쓰레드의 소유자. 집계·리더보드를
+ * 실사용자 지표와 섞지 않도록 소유 필터 축으로 가른다 (기본 = 실사용자만) */
+const ADMIN_USER = 'ops-playground'
+
 function fmtAvg(avg) {
   return avg == null ? '—' : `★ ${avg.toFixed(1)}`
 }
@@ -76,7 +80,15 @@ function buildThreadBoard(items) {
   for (const e of items.filter((entry) => entry.latest)) {
     let t = byThread.get(e.threadId)
     if (!t) {
-      t = { threadId: e.threadId, title: e.title, threadStatus: e.threadStatus, ratings: [], feedbackCount: 0, stages: [] }
+      t = {
+        threadId: e.threadId,
+        title: e.title,
+        threadStatus: e.threadStatus,
+        admin: e.userId === ADMIN_USER,
+        ratings: [],
+        feedbackCount: 0,
+        stages: [],
+      }
       byThread.set(e.threadId, t)
     }
     if (e.review.score != null) t.ratings.push(e.review.score)
@@ -132,23 +144,31 @@ function DistChart({ label, agg }) {
 
 export default function AdminFeedback({ wire, loading, error, onOpenThread }) {
   const [stageFilter, setStageFilter] = useState('all')
+  const [ownerFilter, setOwnerFilter] = useState('user') // 'user'(실사용자) | 'admin' | 'all' — 집계·목록 공통 축
   const [includeOld, setIncludeOld] = useState(false)
   const [commentedOnly, setCommentedOnly] = useState(false)
   const [expanded, setExpanded] = useState(null) // `${threadId}:${seq}`
 
   const items = wire ? wire.items : []
-  const stats = useMemo(() => buildStats(items), [items])
-  const board = useMemo(() => buildThreadBoard(items), [items])
+  const adminCount = useMemo(() => items.filter((e) => e.userId === ADMIN_USER).length, [items])
+  /* 소유 필터가 집계(타일·분포·리더보드)와 목록에 똑같이 걸린다 — admin(플레이그라운드)
+     제출이 실사용자 지표를 부풀리지 않게 기본은 실사용자만 */
+  const ownerItems = useMemo(
+    () => items.filter((e) => ownerFilter === 'all' || (e.userId === ADMIN_USER) === (ownerFilter === 'admin')),
+    [items, ownerFilter]
+  )
+  const stats = useMemo(() => buildStats(ownerItems), [ownerItems])
+  const board = useMemo(() => buildThreadBoard(ownerItems), [ownerItems])
 
   const visible = useMemo(
     () =>
-      items.filter(
+      ownerItems.filter(
         (e) =>
           (includeOld || e.latest) &&
           (stageFilter === 'all' || e.stage === stageFilter) &&
           (!commentedOnly || hasComment(e))
       ),
-    [items, includeOld, stageFilter, commentedOnly]
+    [ownerItems, includeOld, stageFilter, commentedOnly]
   )
 
   return (
@@ -166,6 +186,36 @@ export default function AdminFeedback({ wire, loading, error, onOpenThread }) {
 
       {wire && items.length > 0 && (
         <>
+          {/* 소유 필터 — admin(플레이그라운드) 제출과 실사용자 제출을 가른다. 아래 집계
+              (타일·분포·리더보드)와 목록이 전부 이 축을 따른다 */}
+          <div className="sb-admin-fb-filters">
+            <div className="sb-admin-fb-seg" role="group" aria-label="제출 소유 필터">
+              {[
+                ['user', `실사용자 (${items.length - adminCount})`],
+                ['admin', `admin (${adminCount})`],
+                ['all', '전체'],
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={'sb-admin-fb-seg__btn' + (ownerFilter === value ? ' is-on' : '')}
+                  onClick={() => setOwnerFilter(value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <span className="sb-admin__muted">admin = 플레이그라운드(ops-playground) 실행 쓰레드의 제출</span>
+          </div>
+          {ownerItems.length === 0 && (
+            <p className="sb-table__empty">
+              {ownerFilter === 'user'
+                ? `실사용자 제출이 아직 없어요.${adminCount > 0 ? ` admin 제출 ${adminCount}건은 소유 필터에서 볼 수 있어요.` : ''}`
+                : 'admin(플레이그라운드) 제출이 아직 없어요. 쓰레드 상세나 라이브 체험의 「💬 평가」로 남겨요.'}
+            </p>
+          )}
+          {ownerItems.length > 0 && (
+          <>
           {/* 요약 타일 — latest(유효본) 기준 */}
           <div className="sb-admin-fb-tiles">
             <div className="sb-admin-fb-tile">
@@ -233,6 +283,7 @@ export default function AdminFeedback({ wire, loading, error, onOpenThread }) {
                     >
                       {row.title || row.threadId}
                     </button>
+                    {row.admin && <span className="sb-admin-prompt-chip sb-admin-prompt-chip--custom">admin</span>}
                     {row.threadStatus === 'archived' && (
                       <span className="sb-admin-status sb-admin-status--archived">보관됨</span>
                     )}
@@ -333,6 +384,9 @@ export default function AdminFeedback({ wire, loading, error, onOpenThread }) {
                           <td title={entry.at}>{timeAgo(entry.at, { empty: '—' })}</td>
                           <td className="sb-admin-table__title" title={entry.threadId}>
                             {entry.title || entry.threadId}
+                            {entry.userId === ADMIN_USER && (
+                              <span className="sb-admin-prompt-chip sb-admin-prompt-chip--custom">admin</span>
+                            )}
                             {entry.threadStatus === 'archived' && (
                               <span className="sb-admin-status sb-admin-status--archived">보관됨</span>
                             )}
@@ -400,6 +454,8 @@ export default function AdminFeedback({ wire, loading, error, onOpenThread }) {
               )}
             </div>
           </div>
+          </>
+          )}
         </>
       )}
     </div>

@@ -20,6 +20,23 @@ const noop = () => {}
 
 const SECTION_KIND_LABEL = { guide: '단계 안내', steps: '체크리스트', products: '상품 추천', contents: '참고 콘텐츠' }
 
+/** 섹션 kind → livePage 투영 타입 — 말풍선의 "무엇으로 그려졌나" 표기 */
+const SECTION_PROJECTION = {
+  guide: 'planStep',
+  steps: 'checklist',
+  products: 'hscroll+productCard',
+  contents: 'hscroll+video/articleCard',
+}
+
+/** URL → 도메인 한 조각 — 말풍선의 출처 근거 표기 (URL 없으면 null) */
+const domainOf = (rawUrl) => {
+  try {
+    return new URL(String(rawUrl || '').trim()).hostname.replace(/^www\./, '')
+  } catch {
+    return null
+  }
+}
+
 /** 말풍선 좌우 배치 최소 컨테이너 폭 — 페이지(390) + 연결선(30) + 레일 최소폭 */
 const STACK_BREAK = 660
 
@@ -40,6 +57,7 @@ export default function FlowRunPreview({
   statusMessage = null, // 진행 문구 — 꼬리 스켈레톤·자리 로딩 카드에 표시
   answers = {}, // { [questionId]: string[] } — 설문 답변 (플로우 재개 입력)
   onAnswer = null, // (questionId, value: string|string[]) — null이면 읽기 전용
+  profileItems = [], // 실험 조건 프로필 [{label, value}] — 프로필 패널 렌더 재료
   surveySummary = { profile: [], questions: [] }, // 계획 페이지 surveySummary 패널 재료
   overall = null, // 페이지 전체 말풍선 { label, chip?, lines[], error?, dropLog?, foot? }
 }) {
@@ -96,17 +114,25 @@ export default function FlowRunPreview({
     }
   }, [stage, page, answers, interactive, onAnswer, surveySummary])
 
-  /* 말풍선 대상 — LLM 산출 컴포넌트의 와이어 상세 (livePage id 규칙과 같은 앵커) */
+  /* 말풍선 대상 — 컴포넌트를 만드는 데 쓰인 데이터를 보여준다 (livePage id 규칙과 같은 앵커).
+     렌더에 이미 보이는 콘텐츠 원문(인트로·안내 문구·상품명 가격 등)은 되풀이하지 않고,
+     와이어 필드·투영 타입·근거(카탈로그 id·출처 몰·URL 도메인·썸네일 유무)를 싣는다 */
   const bubbles = useMemo(() => {
     if (!page) return []
     const list = []
     if (stage === 'survey') {
       for (const it of items) {
         if (it.id === 'live-survey-intro') {
-          list.push({ id: it.id, kind: 'text', label: '인트로', chip: 'head', text: page.intro || '' })
+          list.push({
+            id: it.id,
+            kind: 'text',
+            label: '인트로',
+            chip: 'head',
+            meta: `head.intro → surveyIntro · ${(page.intro || '').length}자`,
+          })
         } else if (it.type === 'surveyQuestion') {
           const q = (page.questions || []).find((question) => question && question.id === it.id)
-          if (q) list.push({ id: it.id, kind: 'question', label: q.question || '질문', chip: q.multi ? '복수 선택' : '단일 선택', question: q })
+          if (q) list.push({ id: it.id, kind: 'question', label: q.question || '질문', chip: 'question', question: q })
         }
       }
       return list
@@ -114,7 +140,13 @@ export default function FlowRunPreview({
     const sections = page.sections || []
     for (const it of items) {
       if (it.id === 'live-plan-summary') {
-        list.push({ id: it.id, kind: 'text', label: '요약', chip: 'head', text: page.summary || '' })
+        list.push({
+          id: it.id,
+          kind: 'text',
+          label: '요약',
+          chip: 'head',
+          meta: `head.summary → noticeCard · ${(page.summary || '').length}자`,
+        })
         continue
       }
       const pendingMatch = /^live-plan-pending-(\d+)$/.exec(it.id)
@@ -124,7 +156,8 @@ export default function FlowRunPreview({
       }
       const sectionMatch = /^live-plan-s(\d+)$/.exec(it.id)
       if (!sectionMatch) continue
-      const section = sections[Number(sectionMatch[1])]
+      const index = Number(sectionMatch[1])
+      const section = sections[index]
       if (!section) continue
       list.push({
         id: it.id,
@@ -132,6 +165,7 @@ export default function FlowRunPreview({
         label: section.title || SECTION_KIND_LABEL[section.kind] || section.kind,
         chip: SECTION_KIND_LABEL[section.kind] || section.kind,
         section,
+        index,
       })
     }
     return list
@@ -146,13 +180,13 @@ export default function FlowRunPreview({
   }
 
   const bubbleBody = (b) => {
-    if (b.kind === 'text') return b.text ? <p className="sb-flow-bubble__text">{b.text}</p> : null
+    if (b.kind === 'text') return <p className="sb-flow-bubble__meta">{b.meta}</p>
     if (b.kind === 'question') {
       const q = b.question
       return (
         <>
           <p className="sb-flow-bubble__meta">
-            {q.id} · 선택지 {(q.options || []).length}개
+            {q.id} · {q.multi ? '복수 선택' : '단일 선택'} · question → surveyQuestion
             {interactive ? ' — 칩이나 페이지의 카드로 답을 골라요' : ''}
           </p>
           <div className="sb-pipe-play__opts">
@@ -180,20 +214,33 @@ export default function FlowRunPreview({
     if (b.kind === 'pending') {
       return <p className="sb-flow-bubble__meta">{statusMessage || '웹 검색으로 상품·콘텐츠를 채우는 중이에요…'}</p>
     }
+    /* 섹션 — 투영 경로 + 항목별 근거(렌더에 안 보이는 재료). 근거 문구(reason)·본문은
+       페이지에 이미 그려지므로 되풀이하지 않는다 */
     const s = b.section
     return (
       <>
-        {s.reason && <p className="sb-flow-bubble__meta">근거 — {s.reason}</p>}
-        {s.kind === 'guide' && s.body && <p className="sb-flow-bubble__text">{s.body}</p>}
-        {s.kind === 'steps' && <p className="sb-flow-bubble__text">{(s.steps || []).join(' → ')}</p>}
+        <p className="sb-flow-bubble__meta">
+          sections[{b.index}] · {s.kind} → {SECTION_PROJECTION[s.kind] || s.kind}
+          {s.kind === 'steps' ? ` · 항목 ${(s.steps || []).length}개` : ''}
+          {s.kind === 'products' ? ` · 상품 ${(s.products || []).length}개` : ''}
+          {s.kind === 'contents' ? ` · 콘텐츠 ${(s.items || []).length}개` : ''}
+          {s.kind === 'guide' ? ` · 본문 ${(s.body || '').length}자` : ''}
+        </p>
         {s.kind === 'products' && (
           <ul className="sb-pipe-products">
             {(s.products || []).map((product, i) => (
               <li key={product.id || i}>
-                <b>{product.brand}</b> {product.name}
+                <b>{product.name}</b>
                 <span className="sb-admin__muted">
                   {' '}
-                  {Number(product.price || 0).toLocaleString('ko-KR')}원 · {product.mall || '지마켓'}
+                  {[
+                    product.id ? `id ${product.id}` : null,
+                    product.mall ? `외부몰 ${product.mall}` : '카탈로그 · 지마켓',
+                    domainOf(product.url),
+                    product.imageUrl ? '썸네일 ✓' : '이모지 폴백',
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
                 </span>
               </li>
             ))}
@@ -203,8 +250,13 @@ export default function FlowRunPreview({
           <ul className="sb-pipe-products">
             {(s.items || []).map((item, i) => (
               <li key={i}>
-                <b>{item.source}</b> {item.title}
-                <span className="sb-admin__muted"> {item.type === 'video' ? '영상' : '게시글'}</span>
+                <b>{item.title}</b>
+                <span className="sb-admin__muted">
+                  {' '}
+                  {[item.type === 'video' ? '영상' : '게시글', domainOf(item.url), item.imageUrl ? '썸네일 ✓' : null]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
               </li>
             ))}
           </ul>
@@ -335,7 +387,7 @@ export default function FlowRunPreview({
                       {renderItem(it, {
                         mode: 'player',
                         player: playerApi,
-                        profile: { name: '사용자', items: [] },
+                        profile: { name: '사용자', items: profileItems },
                         allItems,
                         revealFade: streaming,
                       })}

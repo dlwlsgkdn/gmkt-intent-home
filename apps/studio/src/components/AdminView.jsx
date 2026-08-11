@@ -21,12 +21,16 @@ import { promoteEvalCase } from '../lib/adminApi.js'
  * "삭제"는 보관(archived) 처리 — 데이터는 남고 사용자 목록에서만 숨겨진다.
  */
 
+/** admin 프로필 — 플레이그라운드 플로우 실행이 만드는 쓰레드의 소유자 (실사용자와 구분 축) */
+const ADMIN_USER = 'ops-playground'
+
 export default function AdminView({ api, tab }) {
   const [threads, setThreads] = useState([])
   const [nextCursor, setNextCursor] = useState(null)
   const [listLoading, setListLoading] = useState(false)
   const [listError, setListError] = useState(null)
   const [statusFilter, setStatusFilter] = useState('all') // 상태 흐름 바의 필터 (칩 재클릭 = 해제)
+  const [ownerFilter, setOwnerFilter] = useState('all') // 'all' | 'user'(실사용자) | 'admin'(플레이그라운드)
 
   const [feedback, setFeedback] = useState(null) // AdminFeedbackWire { items, truncated }
   const [feedbackLoading, setFeedbackLoading] = useState(false)
@@ -113,16 +117,27 @@ export default function AdminView({ api, tab }) {
 
   const markdown = useMemo(() => (detail ? threadMarkdown(detail) : ''), [detail])
 
+  /* 소유 필터 — admin(플레이그라운드) 쓰레드와 실사용자 쓰레드를 가른다.
+     상태 흐름 바의 개수도 이 축을 따른다 (플레이그라운드 실행이 여정 지표를 섞지 않게) */
+  const adminThreadCount = useMemo(() => threads.filter((t) => t.userId === ADMIN_USER).length, [threads])
+  const ownerThreads = useMemo(
+    () =>
+      ownerFilter === 'all'
+        ? threads
+        : threads.filter((t) => (t.userId === ADMIN_USER) === (ownerFilter === 'admin')),
+    [threads, ownerFilter],
+  )
+
   /* 상태 흐름 바 — 로드된 행 기준 상태별 개수. 체험 여정(탐색→설문→계획→완료)과
      종착 상태(이탈·보관)를 파이프라인과 같은 흐름 문법으로 보여주고, 칩 클릭이 목록을 거른다 */
   const statusCounts = useMemo(() => {
     const counts = {}
-    for (const t of threads) counts[t.status] = (counts[t.status] || 0) + 1
+    for (const t of ownerThreads) counts[t.status] = (counts[t.status] || 0) + 1
     return counts
-  }, [threads])
+  }, [ownerThreads])
   const visibleThreads = useMemo(
-    () => (statusFilter === 'all' ? threads : threads.filter((t) => t.status === statusFilter)),
-    [threads, statusFilter],
+    () => (statusFilter === 'all' ? ownerThreads : ownerThreads.filter((t) => t.status === statusFilter)),
+    [ownerThreads, statusFilter],
   )
   const statusChip = (status) => (
     <button
@@ -206,6 +221,28 @@ export default function AdminView({ api, tab }) {
       <div className="sb-admin-card">
         <p className="sb-panel-label">쓰레드 목록 {threads.length > 0 ? `(${threads.length}개 로드됨)` : ''}</p>
         {listError && <p className="sb-admin-gate__error">{listError}</p>}
+        {/* 소유 필터 — admin(플레이그라운드) 쓰레드 구분. 상태 흐름 바·목록이 같이 걸린다 */}
+        {threads.length > 0 && (
+          <div className="sb-admin-fb-filters">
+            <div className="sb-admin-fb-seg" role="group" aria-label="쓰레드 소유 필터">
+              {[
+                ['all', `전체 (${threads.length})`],
+                ['user', `실사용자 (${threads.length - adminThreadCount})`],
+                ['admin', `admin (${adminThreadCount})`],
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={'sb-admin-fb-seg__btn' + (ownerFilter === value ? ' is-on' : '')}
+                  onClick={() => setOwnerFilter(value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <span className="sb-admin__muted">admin = 플레이그라운드(ops-playground) 실행 쓰레드</span>
+          </div>
+        )}
         {threads.length > 0 && (
           <div className="sb-thread-flow" role="group" aria-label="상태별 쓰레드 필터">
             {['exploring', 'surveying', 'planning', 'done'].map((status, index) => (
@@ -238,7 +275,13 @@ export default function AdminView({ api, tab }) {
                     <td>
                       <span className={`sb-admin-status sb-admin-status--${t.status}`}>{statusLabel(t.status)}</span>
                     </td>
-                    <td><code>{t.userId}</code></td>
+                    <td>
+                      {t.userId === ADMIN_USER ? (
+                        <span className="sb-admin-prompt-chip sb-admin-prompt-chip--custom" title={t.userId}>admin</span>
+                      ) : (
+                        <code>{t.userId}</code>
+                      )}
+                    </td>
                     <td title={t.updatedAt}>{timeAgo(t.updatedAt, { empty: '—' })}</td>
                     <td className="sb-admin-table__actions">
                       <button type="button" className="sb-btn sb-btn--ghost sb-btn--tiny" onClick={() => openDetail(t.id)}>

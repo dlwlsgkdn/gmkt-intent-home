@@ -1851,3 +1851,37 @@
 .sb-flow-observe .sb-pipe-state__key {
   flex-basis: 150px;
 }
+
+/* 플레이그라운드 프로필 속성(고정 설문) 편집 — 실험 조건 행 편집기.
+   실행 본문 profile로 실려 원장 facts가 된다 (localStorage ddak-ops-pg-profile) */
+.sb-pipe-profile summary {
+  font-size: var(--sb-t-caption);
+  color: var(--sb-muted);
+  cursor: pointer;
+  margin: 4px 0;
+}
+.sb-pipe-profile__row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 4px 0;
+}
+.sb-pipe-profile__row input {
+  border: 1px solid var(--sb-n-200);
+  border-radius: var(--sb-r-md);
+  padding: 6px 10px;
+  font-size: var(--sb-t-caption);
+  font-family: inherit;
+  min-width: 0;
+}
+.sb-pipe-profile__row input:first-child {
+  flex: 0 0 150px;
+}
+.sb-pipe-profile__row input:nth-child(2) {
+  flex: 1;
+}
+.sb-pipe-profile__actions {
+  display: flex;
+  gap: 6px;
+  margin: 6px 0 2px;
+}
