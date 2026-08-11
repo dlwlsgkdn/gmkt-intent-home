@@ -242,6 +242,58 @@ try {
   ok(drResult?.survey?.questions?.length === 3, `dry-run 설문 3문항 (${drResult?.survey?.questions?.length})`)
   ok(drResult?.ledger?.trendKeywords?.includes('스킨플러딩'), 'dry-run 원장에 트렌드 키워드 주입')
   ok(!last(dr, 'error'), 'dry-run 오류 없음')
+  ok(drResult?.prompt?.promptId === 'survey', 'dry-run 결과에 실제 프롬프트 노출 (promptId)')
+  ok(drResult?.prompt?.system?.includes('무너짐'), 'dry-run 프롬프트 — 치환 완료 시스템 전문 (지식 KV 포함)')
+  ok(drResult?.prompt?.user?.includes('가을 파운데이션 추천'), 'dry-run 프롬프트 — 요청 가변부 원문')
+
+  // ── 9.5 전체 플로우 실행 (flow-run) — 실제 그래프, 기록 없음 ──
+  console.log('9.5) 전체 플로우 실행 (flow-run)')
+  const callsBeforeFlow = await llmCalls()
+  const fr1 = await sse('/api/admin/pipeline/flow-run', { phase: 'survey', intent: '여름 쿠션 플로우 확인' }, plain)
+  const fr1Result = last(fr1, 'result')?.data
+  ok(!last(fr1, 'error'), '플로우 설문 구간 오류 없음')
+  ok(typeof fr1Result?.flowId === 'string' && fr1Result.flowId.startsWith('flow-'), `flowId 발급 (${fr1Result?.flowId})`)
+  ok(fr1Result?.survey?.questions?.length === 3, `플로우 설문 3문항 (${fr1Result?.survey?.questions?.length})`)
+  ok(fr1Result?.ledger?.trendKeywords?.includes('스킨플러딩'), '플로우 원장에 트렌드 키워드 주입')
+  const fr1Stages = fr1.filter((e) => e.event === 'stage').map((e) => e.data)
+  const stageOf = (list, id, phase) => list.find((s) => s.id === id && s.phase === phase)
+  ok(!!stageOf(fr1Stages, 'objective', 'done'), 'stage 이벤트 — 목적어 가드 done')
+  ok(stageOf(fr1Stages, 'intent', 'done')?.meta?.latencyMs != null, 'stage 이벤트 — 의도 정규화 meta')
+  ok(!!stageOf(fr1Stages, 'ledger', 'done')?.summary, 'stage 이벤트 — 원장 요약')
+  ok(stageOf(fr1Stages, 'survey', 'start')?.prompt?.system?.includes('무너짐'), 'stage 이벤트 — 설문 시작에 실제 시스템 전문')
+  ok(stageOf(fr1Stages, 'survey', 'start')?.prompt?.user?.includes('여름 쿠션 플로우 확인'), 'stage 이벤트 — 설문 시작에 가변부 원문')
+  ok(stageOf(fr1Stages, 'survey', 'done')?.meta?.latencyMs != null, 'stage 이벤트 — 설문 done meta')
+  ok(!!stageOf(fr1Stages, 'gate', 'start'), 'stage 이벤트 — 답변 대기 interrupt')
+  ok(count(fr1, 'content') >= 3, `content 조각 수신 ${count(fr1, 'content')}회`)
+
+  const fr2 = await sse(
+    '/api/admin/pipeline/flow-run',
+    {
+      phase: 'plan',
+      flowId: fr1Result.flowId,
+      intent: '여름 쿠션 플로우 확인',
+      survey: fr1Result.survey,
+      answers: [{ questionId: 'q1', choices: ['지성'] }],
+    },
+    plain,
+  )
+  const fr2Result = last(fr2, 'result')?.data
+  ok(!last(fr2, 'error'), '플로우 계획 구간 오류 없음')
+  ok(fr2Result?.page?.sections?.length === 3, `플로우 최종 병합 페이지 (${fr2Result?.page?.sections?.length}섹션)`)
+  ok((fr2Result?.dropLog ?? []).some((d) => d.code === 'blocklist'), '플로우 dropLog에 검증 게이트 기록')
+  const fr2Stages = fr2.filter((e) => e.event === 'stage').map((e) => e.data)
+  ok(stageOf(fr2Stages, 'plan-skeleton', 'start')?.prompt?.promptId === 'plan-skeleton', 'stage 이벤트 — 뼈대 시작 프롬프트')
+  ok(stageOf(fr2Stages, 'plan-products', 'start')?.prompt?.user?.includes('지성'), 'stage 이벤트 — 상품 가변부에 답변 반영')
+  ok(stageOf(fr2Stages, 'plan-skeleton', 'done') && stageOf(fr2Stages, 'plan-products', 'done'), 'stage 이벤트 — 병렬 5a·5b done')
+  const verifyStage = stageOf(fr2Stages, 'verify', 'done')
+  ok(verifyStage?.pass === 3 && verifyStage?.drops >= 1, `stage 이벤트 — 검증 게이트 통과 ${verifyStage?.pass}·드롭 ${verifyStage?.drops}`)
+  ok((stageOf(fr2Stages, 'record', 'done')?.summary ?? '').includes('기록 생략'), 'stage 이벤트 — 기록 생략 (core 스텁)')
+  {
+    const callsAfterFlow = await llmCalls()
+    const delta = (type) => callsAfterFlow.filter((c) => c.type === type).length - callsBeforeFlow.filter((c) => c.type === type).length
+    ok(delta('intent') === 1 && delta('survey') === 1, `플로우 LLM 호출 — intent ${delta('intent')}·survey ${delta('survey')}`)
+    ok(delta('skeleton') === 1 && delta('products') === 1, `플로우 LLM 호출 — skeleton ${delta('skeleton')}·products ${delta('products')}`)
+  }
 
   // ── 10. 평가·실험 API (페이즈 5) ──
   console.log('10) 평가·실험 API')

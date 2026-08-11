@@ -29,6 +29,7 @@ import {
 import {
   AdminDryRunBody,
   AdminEngineMetricsWire,
+  AdminFlowRunBody,
   AdminFeedbackEntry,
   AdminFeedbackWire,
   AdminKnowledgeEntry,
@@ -81,6 +82,7 @@ import { SEQ, combineMeta, intentOf } from '../threads/thread-io'
 import { KnowledgeService } from '../llm/knowledge.service'
 import { ENGINE_SETTING_KEY, EngineFlagService } from '../engine/engine-flag.service'
 import { PipelineDryRunService } from '../engine/dry-run.service'
+import { PipelineFlowRunService } from '../engine/flow-run.service'
 import { openSse, sseClose, sseSend, type SseRes } from '../threads/sse'
 
 const THREAD_ID_PARAM = {
@@ -109,6 +111,7 @@ export class AdminController {
     private readonly knowledge: KnowledgeService,
     private readonly engineFlag: EngineFlagService,
     private readonly dryRunService: PipelineDryRunService,
+    private readonly flowRunService: PipelineFlowRunService,
   ) {}
 
   @Get('threads')
@@ -389,6 +392,34 @@ export class AdminController {
       sseSend(res, 'result', result)
     } catch (e) {
       this.sendSseFailure(res, 'dry-run', e)
+    }
+    sseClose(res)
+  }
+
+  @Post('pipeline/flow-run')
+  @ApiOperation({
+    summary: '전체 플로우 실행 (플레이그라운드, SSE) — 실제 LangGraph 그래프, 쓰레드·core 기록 없음',
+    description:
+      '운영과 같은 그래프 토폴로지(병렬 5a∥5b·interrupt·검증 게이트)를 스텁 core+전용 MemorySaver로 돈다. ' +
+      'phase=survey는 답변 대기 interrupt까지, phase=plan은 flowId로 재개(유실 시 body의 survey·answers 시딩 재실행). ' +
+      'SSE: status → stage({ id, phase: start|done, meta?, prompt?(실제 시스템 전문·가변부), summary? }) ' +
+      '→ content(설문·계획 스트림 조각) → result(FlowRunResult) 또는 error.',
+  })
+  @ApiBody({ schema: toOpenApi(AdminFlowRunBody) })
+  @ApiProduces('text/event-stream')
+  @ApiOkResponse({ description: 'SSE 스트림 — result: FlowRunResult' })
+  async flowRun(@Body(new ZodValidationPipe(AdminFlowRunBody)) body: AdminFlowRunBody, @Res() res: SseRes) {
+    openSse(res)
+    sseSend(res, 'status', { message: body.phase === 'survey' ? '플로우를 시작하고 있어요…' : '계획 구간을 재개하고 있어요…' })
+    try {
+      const result = await this.flowRunService.run(body, {
+        onStatus: (message) => sseSend(res, 'status', { message }),
+        onStage: (event) => sseSend(res, 'stage', event),
+        onContent: (chunk) => sseSend(res, 'content', chunk),
+      })
+      sseSend(res, 'result', result)
+    } catch (e) {
+      this.sendSseFailure(res, 'flow-run', e)
     }
     sseClose(res)
   }

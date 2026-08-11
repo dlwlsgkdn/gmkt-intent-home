@@ -98,11 +98,11 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
   const intentNode = async (state: ThreadGraphStateType) => {
     if (state.intentProfile) return {}
     try {
-      const { content } = await deps.llm.generateIntent(state.intent)
-      return { intentProfile: content }
+      const { content, meta } = await deps.llm.generateIntent(state.intent)
+      return { intentProfile: content, intentMeta: meta }
     } catch (e) {
       logger.warn(`의도 정규화 실패 — 없이 진행: ${(e as Error).message}`)
-      return { intentProfile: null }
+      return { intentProfile: null, intentMeta: null }
     }
   }
 

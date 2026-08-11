@@ -16,6 +16,8 @@ export const ThreadGraphState = Annotation.Root({
   intent: Annotation<string>(),
   /** 1단계 의도 정규화 산출 — 원장 facts(source=intent)의 원천. 실패 시 null(fail-open) */
   intentProfile: Annotation<IntentGen | null>(),
+  /** 1단계 호출 메타 — 파이프라인 플로우 실행 관측용 (실패·스킵 시 null) */
+  intentMeta: Annotation<LlmMeta | null>(),
   profile: Annotation<Profile | null>(),
   /** 제약 원장 — 가변부 주입(프롬프트)과 6단계 역대조가 같은 값을 본다. plan 스텝에 스냅샷 기록 */
   ledger: Annotation<ConstraintLedger | null>(),

@@ -7,6 +7,7 @@ import { AdminController } from './admin/admin.controller'
 import { EngineFlagService } from './engine/engine-flag.service'
 import { GraphEngineService } from './engine/graph-engine.service'
 import { PipelineDryRunService } from './engine/dry-run.service'
+import { PipelineFlowRunService } from './engine/flow-run.service'
 import { ThreadsController } from './threads/threads.controller'
 import { ThreadsService } from './threads/threads.service'
 
@@ -41,6 +42,7 @@ export class AppController {
     EngineFlagService,
     GraphEngineService,
     PipelineDryRunService,
+    PipelineFlowRunService,
     ThreadsService,
   ],
 })

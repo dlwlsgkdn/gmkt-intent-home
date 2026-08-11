@@ -47,7 +47,8 @@ export function metaLine(meta) {
 export default function PipelineFlow({
   stages, // AdminPipelineWire.stages — 전략 문서 0~7 카탈로그
   running, // 실행 중 dry-run stageId | null
-  results, // { [stageId]: { meta?, custom?, pass?, drops? } } — 플레이그라운드 결과 요약
+  flowLive, // 전체 플로우 실행 중 { nodes: [단계 id], links: [연결선 id] } | null — 그래프 실시간 반영
+  results, // { [stageId]: { meta?, custom?, pass?, drops?, summary?, prompt? } } — 플레이그라운드 결과 요약
   selectedId,
   onSelect, // 노드 클릭 → 단계 레이어 모달 열기 (PipelineStudio)
 }) {
@@ -59,21 +60,25 @@ export default function PipelineFlow({
     if (!stage) return null
     const result = results?.[id]
     const done = Boolean(result)
-    const isLive = running === id
+    const isLive = running === id || Boolean(flowLive?.nodes?.includes(id))
     const onPath = Boolean(run?.path.includes(id))
     const sub = isLive
-      ? '생성 중…'
+      ? stage.kind === 'llm'
+        ? '생성 중…'
+        : '흐르는 중…'
       : onPath && stage.kind !== 'llm'
         ? '흐르는 중…'
         : result?.meta?.latencyMs != null
           ? `✓ ${(result.meta.latencyMs / 1000).toFixed(1)}s`
           : result?.pass != null
             ? `통과 ${result.pass} · 드롭 ${result.drops}`
-            : stage.status === 'planned'
-              ? '예정 · 5b 병행'
-              : stage.kind === 'llm'
-                ? `LLM${stage.effort ? ' · ' + stage.effort : ''}`
-                : KIND_LABEL[stage.kind] || stage.kind
+            : result?.summary
+              ? `✓ ${result.summary}`
+              : stage.status === 'planned'
+                ? '예정 · 5b 병행'
+                : stage.kind === 'llm'
+                  ? `LLM${stage.effort ? ' · ' + stage.effort : ''}`
+                  : KIND_LABEL[stage.kind] || stage.kind
     const cls = ['sb-flow__node']
     if (stage.kind === 'llm') cls.push('sb-flow__node--llm')
     if (stage.status === 'planned') cls.push('sb-flow__node--planned')
@@ -104,7 +109,11 @@ export default function PipelineFlow({
     <i
       key={id}
       aria-hidden="true"
-      className={'sb-flow__link' + (extra ? ` ${extra}` : '') + (run?.links.includes(id) ? ' is-live' : '')}
+      className={
+        'sb-flow__link' +
+        (extra ? ` ${extra}` : '') +
+        (run?.links.includes(id) || flowLive?.links?.includes(id) ? ' is-live' : '')
+      }
     />
   )
 
@@ -120,7 +129,12 @@ export default function PipelineFlow({
           {link('l23')}
           {node('survey')}
           <span
-            className={'sb-flow__gate' + (run?.links.includes('gate') ? ' is-live' : '')}
+            className={
+              'sb-flow__gate' +
+              (run?.links.includes('gate') || flowLive?.nodes?.includes('gate') || flowLive?.links?.includes('gate')
+                ? ' is-live'
+                : '')
+            }
             title="설문 완료 후 답변을 기다리는 interrupt 지점"
           >
             <span className="sb-flow__gate-label">⏸ 답변 대기</span>

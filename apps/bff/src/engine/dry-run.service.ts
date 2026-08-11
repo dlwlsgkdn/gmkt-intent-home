@@ -33,12 +33,24 @@ import { LlmService } from '../llm/llm.service'
 
 export type DryRunEvents = { onStatus?: (message: string) => void }
 
+/** 이 실행에 실제로 들어간 프롬프트 — 자리표시자 치환이 끝난 시스템 전문 + user 가변부 원문.
+ * 운영 콘솔 "이번 실행" 투명성 패널의 원천 (평가 실행 저장(createEvalRun)은 이 필드를 싣지 않는다) */
+export type DryRunPromptTrace = {
+  promptId: PromptDefId
+  system: string
+  /** 재정의/임시 프롬프트였는가 (meta.promptVersion `+custom`과 같은 판정) */
+  custom: boolean
+  user: string
+}
+
 export type DryRunResult = {
   stageId: AdminDryRunBody['stageId']
   /** 이 실행이 쓴 제약 원장 (프로필·답변·트렌드 키워드 반영) */
   ledger: ConstraintLedger
   /** 재정의/임시 프롬프트로 실행됐는가 */
   promptCustom: boolean
+  /** 실제 사용 프롬프트 (시스템 전문·가변부) */
+  prompt: DryRunPromptTrace
   meta: LlmMeta
   /** stageId=survey — 질문 id 부여 규칙은 실제 생성과 동일(q{i+1}) */
   survey?: SurveyPageWire
@@ -78,16 +90,25 @@ export class PipelineDryRunService {
     })
 
     if (body.stageId === 'survey') {
+      const system = await this.systemFor('survey', body.promptOverride)
+      const user = buildSurveyRequest(body.intent, body.profile, ledger)
       const { content, meta } = await this.llm.generate('설문 생성(dry-run)', SurveyGen, {
-        system: await this.systemFor('survey', body.promptOverride),
+        system,
         effort: this.effortOf('survey', 'low'),
-        user: buildSurveyRequest(body.intent, body.profile, ledger),
+        user,
       })
       const survey: SurveyPageWire = {
         intro: content.intro,
         questions: content.questions.map((q, i) => ({ id: `q${i + 1}`, ...q })),
       }
-      return { stageId: body.stageId, ledger, promptCustom: Boolean(body.promptOverride?.trim()), meta, survey }
+      return {
+        stageId: body.stageId,
+        ledger,
+        promptCustom: system.custom,
+        prompt: { promptId: 'survey', system: system.text, custom: system.custom, user },
+        meta,
+        survey,
+      }
     }
 
     // plan-* 단계는 설문·답변이 입력이다 — 보통 survey dry-run 결과를 그대로 싣는다
@@ -96,19 +117,30 @@ export class PipelineDryRunService {
     }
 
     if (body.stageId === 'plan-skeleton') {
+      const system = await this.systemFor('plan-skeleton', body.promptOverride)
+      const user = buildPlanSkeletonRequest(body.intent, body.survey, body.answers, body.profile, undefined, ledger)
       const { content, meta } = await this.llm.generate('계획 뼈대 생성(dry-run)', PlanSkeletonGen, {
-        system: await this.systemFor('plan-skeleton', body.promptOverride),
+        system,
         effort: this.effortOf('plan-skeleton', 'medium'),
-        user: buildPlanSkeletonRequest(body.intent, body.survey, body.answers, body.profile, undefined, ledger),
+        user,
       })
-      return { stageId: body.stageId, ledger, promptCustom: Boolean(body.promptOverride?.trim()), meta, skeleton: content }
+      return {
+        stageId: body.stageId,
+        ledger,
+        promptCustom: system.custom,
+        prompt: { promptId: 'plan-skeleton', system: system.text, custom: system.custom, user },
+        meta,
+        skeleton: content,
+      }
     }
 
     const guard: GuardContext = { blocklist: await this.knowledge.blocklist(), ledger }
+    const system = await this.systemFor('plan-products', body.promptOverride)
+    const user = buildPlanProductsRequest(body.intent, body.survey, body.answers, body.profile, undefined, ledger)
     const { content, meta } = await this.llm.generate('계획 상품 생성(dry-run)', PlanProductsGen, {
-      system: await this.systemFor('plan-products', body.promptOverride),
+      system,
       effort: this.effortOf('plan-products', 'high'),
-      user: buildPlanProductsRequest(body.intent, body.survey, body.answers, body.profile, undefined, ledger),
+      user,
       webSearch: true,
       stream: events.onStatus
         ? { arrayKey: 'sections', onSearch: (query) => events.onStatus?.(`웹에서 "${query}" 검색 중…`) }
@@ -126,7 +158,8 @@ export class PipelineDryRunService {
     return {
       stageId: body.stageId,
       ledger,
-      promptCustom: Boolean(body.promptOverride?.trim()),
+      promptCustom: system.custom,
+      prompt: { promptId: 'plan-products', system: system.text, custom: system.custom, user },
       meta,
       sections,
       dropLog,

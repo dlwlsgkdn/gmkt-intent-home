@@ -100,7 +100,7 @@
   justify-content: space-between;
   gap: 12px;
   padding: 16px 24px;
-  border-bottom: 1px solid var(--sb-n-150, var(--sb-n-200));
+  border-bottom: 1px solid var(--sb-n-200);
 }
 .sb-admin-dialog__head h2 {
   font-size: var(--sb-t-title);
@@ -207,7 +207,7 @@
   flex: 1 1 160px;
   min-width: 150px;
   background: var(--sb-n-50);
-  border: 1px solid var(--sb-n-150, var(--sb-n-200));
+  border: 1px solid var(--sb-n-200);
   border-radius: var(--sb-r-lg);
   padding: 12px 14px;
   display: flex;
@@ -1289,7 +1289,7 @@
 .sb-exp-engine {
   flex: 1 1 280px;
   min-width: 260px;
-  border: 1px solid var(--sb-n-150, var(--sb-n-200));
+  border: 1px solid var(--sb-n-200);
   border-radius: var(--sb-r-lg);
   background: var(--sb-n-50);
   padding: 12px 14px;
@@ -1326,7 +1326,7 @@
 .sb-exp-bar__track {
   flex: 1;
   height: 8px;
-  background: var(--sb-n-150, var(--sb-n-200));
+  background: var(--sb-n-200);
   border-radius: var(--sb-r-pill);
   overflow: hidden;
 }
@@ -1478,7 +1478,7 @@
 .sb-exp-summary {
   margin: 10px 0 4px;
   padding: 8px 10px;
-  border: 1px solid var(--sb-n-150, var(--sb-n-200));
+  border: 1px solid var(--sb-n-200);
   border-radius: var(--sb-r-md);
   background: var(--sb-n-50, transparent);
 }
@@ -1512,4 +1512,111 @@
 }
 .sb-exp-summary__stat--judge {
   color: var(--sb-ai);
+}
+
+/* 플레이그라운드 — 모드(단계 단독 ∥ 전체 플로우) 머리 */
+.sb-pipe-play__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.sb-pipe-play__head .sb-panel-label {
+  margin: 0;
+}
+
+/* 전체 플로우 실행 로그 — 단계 수명 타임라인 (행 클릭 = 단계 레이어 모달 "이번 실행") */
+.sb-pipe-flowlog {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.sb-pipe-flowlog__row button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  background: none;
+  padding: 4px 6px;
+  border-radius: var(--sb-r-sm);
+  font: inherit;
+  font-size: var(--sb-t-caption);
+  color: var(--sb-ink-2);
+  text-align: left;
+  cursor: pointer;
+}
+.sb-pipe-flowlog__row button:disabled {
+  cursor: default;
+}
+.sb-pipe-flowlog__row button:not(:disabled):hover {
+  background: var(--sb-n-50);
+}
+.sb-pipe-flowlog__row b {
+  font-weight: 400;
+  white-space: nowrap;
+}
+.sb-pipe-flowlog__dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--sb-n-300);
+}
+.sb-pipe-flowlog__row.is-live .sb-pipe-flowlog__dot {
+  background: var(--sb-ai);
+  animation: sb-flow-blink 1.1s ease-in-out infinite;
+}
+.sb-pipe-flowlog__row.is-done .sb-pipe-flowlog__dot {
+  background: var(--sb-success);
+}
+.sb-pipe-flowlog__sub {
+  flex: 1;
+  min-width: 0;
+  color: var(--sb-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 단계 레이어 모달 — "이번 실행 프롬프트" (실제 시스템 전문·가변부 열람) */
+.sb-pipe-trace {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--sb-n-200);
+}
+.sb-pipe-trace__box {
+  margin-top: 6px;
+  border: 1px solid var(--sb-n-200);
+  border-radius: var(--sb-r-md);
+  background: var(--sb-n-50);
+}
+.sb-pipe-trace__box summary {
+  padding: 7px 10px;
+  font-size: var(--sb-t-caption);
+  color: var(--sb-ink-2);
+  cursor: pointer;
+}
+.sb-pipe-trace__box pre {
+  margin: 0;
+  padding: 10px 12px;
+  border-top: 1px solid var(--sb-n-200);
+  max-height: 300px;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 플로우 요약이 노드 폭(170px)을 넘지 않게 — 기존 nowrap 유지 + 말줄임 */
+.sb-flow__sub {
+  max-width: 116px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

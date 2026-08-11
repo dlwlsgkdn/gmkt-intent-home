@@ -97,8 +97,9 @@ export function putAdminEngine(engine) {
 }
 
 
-/** SSE POST 공용 소비자 — status(진행 문구) 콜백 + 마지막 result 반환, error 이벤트는 예외로 */
-async function ssePost(path, body, { onStatus } = {}) {
+/** SSE POST 공용 소비자 — status(진행 문구) 콜백 + 마지막 result 반환, error 이벤트는 예외로.
+ * onEvent(name, data)는 그 밖의 이벤트(flow-run의 stage·content 등)를 받는다 */
+async function ssePost(path, body, { onStatus, onEvent } = {}) {
   let res
   try {
     res = await fetch(`${BASE}${path}`, {
@@ -128,6 +129,7 @@ async function ssePost(path, body, { onStatus } = {}) {
     if (ev === 'status') onStatus?.(data.message)
     else if (ev === 'result') result = data
     else if (ev === 'error') error = data
+    else onEvent?.(ev, data)
   }
   for (;;) {
     const { done, value } = await reader.read()
@@ -152,6 +154,13 @@ async function ssePost(path, body, { onStatus } = {}) {
  * body: { stageId, intent, profile?, survey?, answers?, promptOverride? } → DryRunResult */
 export function dryRunStage(body, opts) {
   return ssePost('/pipeline/dry-run', body, opts)
+}
+
+/** 전체 플로우 실행 (플레이그라운드, SSE) — 실제 LangGraph 그래프, 쓰레드·core 기록 없음.
+ * body: { phase: 'survey'|'plan', flowId?, intent, profile?, survey?, answers? } → FlowRunResult.
+ * opts.onEvent가 stage({ id, phase, meta?, prompt?, summary? })·content(스트림 조각)를 받는다 */
+export function flowRunPipeline(body, opts) {
+  return ssePost('/pipeline/flow-run', body, opts)
 }
 
 /* ── 평가·실험 (페이즈 5) ── */

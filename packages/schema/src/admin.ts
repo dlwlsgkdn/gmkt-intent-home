@@ -207,3 +207,21 @@ export const AdminDryRunBody = z.object({
   promptOverride: z.string().max(20000).optional(),
 })
 export type AdminDryRunBody = z.infer<typeof AdminDryRunBody>
+
+/* ── BFF admin — 전체 플로우 실행 (플레이그라운드 flow-run) ──────────────────
+ * 실제 LangGraph 그래프를 쓰레드·core 기록 없이(스텁 core + 전용 MemorySaver) 통째로 돈다.
+ * HTTP 요청 1회 = 그래프 실행 1구간(운영과 동일): survey 페이즈는 interrupt(답변 대기)에서
+ * 멈추고, plan 페이즈가 재개한다. interrupt가 유실된 인스턴스에서는 body의 설문·답변으로
+ * 시딩해 START부터 재실행한다(그래프 복구 경로 그대로 — survey 노드는 멱등 스킵). */
+
+export const AdminFlowRunBody = z.object({
+  phase: z.enum(['survey', 'plan']),
+  /** survey 페이즈 응답이 발급한 플로우 id — plan 페이즈 재개 키 */
+  flowId: z.string().max(64).optional(),
+  intent: z.string().min(1).max(500),
+  profile: Profile.optional(),
+  /** plan 페이즈 필수 — interrupt 유실 시 시딩 재실행 폴백 재료 */
+  survey: SurveyPageWire.optional(),
+  answers: z.array(Answer).optional(),
+})
+export type AdminFlowRunBody = z.infer<typeof AdminFlowRunBody>
