@@ -141,11 +141,27 @@ export const JUDGE_SYSTEM = `너는 지마켓 뷰티 AI 쇼핑 플래너의 **�
 - structure (단계 구성): 안내가 2~3개 단계 흐름으로 나뉘고 상품 섹션이 해당 단계 안내 뒤에 붙었는가, 사용 순서로 닫히는가.
 - actionability (실행 가능성): 안내가 구체적이어서 그대로 따라 할 수 있는가. 추상적 조언만 있으면 감점.`
 
+/* 설문 단계 judge — 실행 단계 축(config.stage='survey')의 판정자. 계획 judge와 눈금은
+   같지만 루브릭이 다르다 (schemas.ts JUDGE_SURVEY_DIMENSIONS).
+   주의: 모의 Anthropic(e2e)이 시스템 문구로 호출을 판별한다 — "설문 심사관" 마커 유지. */
+export const JUDGE_SURVEY_SYSTEM = `너는 지마켓 뷰티 AI 쇼핑 플래너의 **설문 심사관**이다. 생성된 설문 페이지를 사용자 입력(의도·프로필)과 대조해 루브릭 4개 차원으로 채점한다.
+
+채점 원칙:
+- 점수는 0~5 정수 — 5=흠잡을 데 없음, 4=좋음(사소한 아쉬움), 3=쓸 만하지만 아쉬움, 2=문제가 눈에 띔, 1=크게 부족, 0=쓸 수 없음.
+- 관대하게 주지 않는다: 근거 없이 4 이상을 주지 말고, 각 차원의 note에는 점수 근거를 한두 문장으로, 구체 질문 문구를 들어 쓴다.
+- verdict는 종합 심사평 2~3문장 — 가장 큰 감점 요인과 개선 방향을 짚는다. overall은 차원 평균이 아니라 종합 판단이다.
+
+루브릭:
+- necessity (질문 절제): 답이 계획을 실제로 바꾸는 질문만 있는가. 프로필·의도에서 이미 아는 것을 다시 물으면 크게 감점. 질문 수가 1~3개를 넘으면 감점.
+- relevance (의도 적합): 첫 질문이 의도의 핵심 축(용도·고민·대상)을 짚고, 예산·선호로 마무리하는가. 의도와 무관한 일반 질문이면 감점.
+- answerability (답하기 쉬움): 선택지가 2~6개의 짧은 명사구로 고르기 쉬운가. "기타"·"잘 모르겠어요" 남발이면 감점.
+- tone (말투): 친근한 존댓말, 이모지 없이 담백한가.`
+
 /* ── 시스템 프롬프트 카탈로그 — 운영 콘솔(#ops) 조회·재정의의 원천.
  * template은 자리표시자({{CATALOG}}) 포함 원문이고, 실제 호출값은 renderSystemTemplate을
  * 거친다. 재정의는 core 설정 KV(`llm-prompt-<id>`)에 원문으로 저장된다 (llm.service). */
 
-export type PromptDefId = 'intent' | 'survey' | 'plan-skeleton' | 'plan-products' | 'judge'
+export type PromptDefId = 'intent' | 'survey' | 'plan-skeleton' | 'plan-products' | 'judge' | 'judge-survey'
 
 export const PROMPT_DEFS: { id: PromptDefId; label: string; note: string; template: string }[] = [
   {
@@ -174,9 +190,15 @@ export const PROMPT_DEFS: { id: PromptDefId; label: string; note: string; templa
   },
   {
     id: 'judge',
-    label: '자동 채점 (judge)',
-    note: '실험 탭 실행 결과를 루브릭 4차원(근거 충실·맞춤성·단계 구성·실행 가능성)으로 심사하는 판정자 프롬프트. 사람 채점과 별도 저장되며(source 축), 생성 파이프라인 단계가 아니다.',
+    label: '자동 채점 (judge · 계획)',
+    note: '실험 탭 계획 실행 결과를 루브릭 4차원(근거 충실·맞춤성·단계 구성·실행 가능성)으로 심사하는 판정자 프롬프트. 사람 채점과 별도 저장되며(source 축), 생성 파이프라인 단계가 아니다.',
     template: JUDGE_SYSTEM,
+  },
+  {
+    id: 'judge-survey',
+    label: '자동 채점 (judge · 설문)',
+    note: '실험 탭 설문 단계 실행(config.stage=survey) 결과를 루브릭 4차원(질문 절제·의도 적합·답하기 쉬움·말투)으로 심사하는 판정자 프롬프트. 계획 judge와 눈금은 같고 루브릭만 다르다.',
+    template: JUDGE_SURVEY_SYSTEM,
   },
 ]
 
@@ -311,6 +333,32 @@ function judgePageBlock(page: PlanPageWire): string {
 - 제목: ${page.headline}
 - 요약: ${page.summary}
 ${lines.join('\n')}`
+}
+
+/** 설문 단계 judge 요청 — 케이스 입력(비교 기준) + 실행이 생성한 설문 전문 */
+export type JudgeSurveyInput = {
+  intent: string
+  profile?: Profile
+  survey: SurveyPageWire
+}
+
+export function buildJudgeSurveyRequest(input: JudgeSurveyInput): string {
+  const questions = input.survey.questions
+    .map(
+      (q, i) =>
+        `${i + 1}. ${q.question}${q.multi ? ' (복수 선택)' : ''}\n   선택지: ${q.options.join(' | ')}`,
+    )
+    .join('\n')
+  return `사용자 의도: ${input.intent}
+
+사용자 프로필:
+${profileBlock(input.profile)}
+
+생성된 설문 페이지 (심사 대상):
+- 머리 문구: ${input.survey.intro}
+${questions}
+
+이 설문 페이지를 루브릭 4개 차원으로 채점해 주세요.`
 }
 
 export function buildJudgeRequest(input: JudgeInput): string {

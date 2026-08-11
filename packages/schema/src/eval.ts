@@ -39,6 +39,11 @@ export const CreateEvalCaseBody = z.object({
 })
 export type CreateEvalCaseBody = z.infer<typeof CreateEvalCaseBody>
 
+/** 평가 실행의 대상 단계 축 — 어떤 파이프라인 산출물을 실행·채점하나.
+ * 'plan'(뼈대+상품 병합 페이지)·'survey'(설문 페이지). 구 실행엔 필드가 없다 = plan */
+export const EvalRunStage = z.enum(['plan', 'survey'])
+export type EvalRunStage = z.infer<typeof EvalRunStage>
+
 /** 실행 설정 스냅샷 — 비교 축 (느슨한 객체: 축은 실험이 진화하며 늘어난다) */
 export const EvalRunConfig = z.looseObject({
   /** 실행 경로 — 'dry-run'(플레이그라운드 경로) 또는 향후 'legacy'/'langgraph' 실주행 */
@@ -48,6 +53,8 @@ export const EvalRunConfig = z.looseObject({
   /** 임시 프롬프트(what-if)로 실행했는가 */
   promptOverride: z.boolean().optional(),
   label: z.string().optional(),
+  /** 대상 단계 (없으면 plan — 구 실행 호환) */
+  stage: EvalRunStage.optional(),
 })
 export type EvalRunConfig = z.infer<typeof EvalRunConfig>
 
@@ -79,8 +86,8 @@ export const EvalRun = z.object({
   id: EvalId,
   caseId: EvalId,
   config: EvalRunConfig,
-  /** 계획 결과 (뼈대+검증 통과 상품·콘텐츠 병합본) */
-  page: PlanPageWire.nullable(),
+  /** 실행 결과 — 단계 축(config.stage)에 따라 계획 페이지(뼈대+검증 통과 병합본) 또는 설문 페이지 */
+  page: z.union([PlanPageWire, SurveyPageWire]).nullable(),
   /** 검증 게이트 드롭 로그 — 품질 신호 */
   dropLog: z.array(z.looseObject({ code: z.string(), message: z.string() })),
   meta: LlmMeta.nullable(),
@@ -97,7 +104,7 @@ export type EvalRun = z.infer<typeof EvalRun>
 
 export const CreateEvalRunBody = z.object({
   config: EvalRunConfig,
-  page: PlanPageWire.nullable().optional(),
+  page: z.union([PlanPageWire, SurveyPageWire]).nullable().optional(),
   dropLog: z.array(z.looseObject({ code: z.string(), message: z.string() })).optional(),
   meta: LlmMeta.nullable().optional(),
 })
@@ -162,9 +169,11 @@ export const PromoteEvalCaseBody = z.object({
 export type PromoteEvalCaseBody = z.infer<typeof PromoteEvalCaseBody>
 
 export const RunEvalCaseBody = z.object({
-  /** 임시 시스템 프롬프트 (what-if) — 뼈대·상품 두 단계 모두에 적용, 저장 안 됨 */
+  /** 임시 시스템 프롬프트 (what-if) — 해당 단계의 LLM 호출 전부에 적용, 저장 안 됨 */
   promptOverride: z.string().max(20000).optional(),
   /** 실행 라벨 — 리스트에서 사람이 알아볼 이름 (예: "프롬프트 A안") */
   label: z.string().max(100).optional(),
+  /** 대상 단계 — 생략 시 plan. survey는 케이스 의도·프로필만으로 설문 페이지를 재생성한다 */
+  stage: EvalRunStage.optional(),
 })
 export type RunEvalCaseBody = z.infer<typeof RunEvalCaseBody>

@@ -38,6 +38,15 @@ const INTENT_JSON = JSON.stringify({
   audience: '본인',
 })
 
+const JUDGE_SURVEY_JSON = JSON.stringify({
+  necessity: { score: 5, note: '세 질문 모두 계획을 바꾸는 질문입니다.' },
+  relevance: { score: 4, note: '첫 질문이 피부 타입 축을 짚습니다.' },
+  answerability: { score: 4, note: '선택지가 짧은 명사구입니다.' },
+  tone: { score: 5, note: '담백한 존댓말입니다.' },
+  overall: 4,
+  verdict: '모의 설문 심사평: 질문 절제가 좋습니다.',
+})
+
 const JUDGE_JSON = JSON.stringify({
   grounding: { score: 4, note: '추천 쿠션 섹션의 상품이 카탈로그로 확인되나 드롭이 있었습니다.' },
   personalization: { score: 5, note: '지성 답변이 안내와 선정 근거에 반영됐습니다.' },
@@ -122,6 +131,10 @@ const server = http.createServer(async (req, res) => {
       .join('\n')
     // 판별 순서 주의: 상품 시스템에도 '뼈대', 뼈대 시스템에도 '설문' 문구가 있다 —
     // 상품 고유 마커(productIds) → 뼈대 → 설문 순으로 좁힌다
+    if (system.includes('설문 심사관')) {
+      llmCalls.push({ type: 'judge-survey', system, user })
+      return streamAnthropic(res, JUDGE_SURVEY_JSON, { delayMs: 2, chunkSize: 40 })
+    }
     if (system.includes('품질 심사관')) {
       llmCalls.push({ type: 'judge', system, user })
       return streamAnthropic(res, JUDGE_JSON, { delayMs: 2, chunkSize: 40 })

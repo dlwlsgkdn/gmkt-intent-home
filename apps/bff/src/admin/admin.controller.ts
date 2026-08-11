@@ -39,6 +39,7 @@ import {
   EvalCasesWire,
   EvalRunsWire,
   PromoteEvalCaseBody,
+  type EvalJudgeRubricEntry,
   PutAdminEngineBody,
   PutAdminKnowledgeBody,
   PutAdminModelBody,
@@ -63,13 +64,16 @@ import { DEFAULT_MODEL, LLM_MODEL_SETTING_KEY, LlmService, MODEL_OPTIONS, prompt
 import {
   GUARD_BLOCKLIST_SETTING_KEY,
   JudgeGen,
+  JudgeSurveyGen,
   KNOWLEDGE_SOURCES,
   LlmGenerationError,
   PIPELINE_STAGES,
   PROMPT_DEFS,
   PROMPT_VERSION,
   buildJudgeRequest,
+  buildJudgeSurveyRequest,
   judgeRubricEntries,
+  judgeSurveyRubricEntries,
   knowledgeSettingKey,
   mergePlanSections,
 } from '@ddak/pipeline'
@@ -438,10 +442,11 @@ export class AdminController {
 
   @Post('eval/cases/:id/run')
   @ApiOperation({
-    summary: '케이스 실행 (SSE) — 뼈대+상품 dry-run을 순차 실행해 병합 결과·메트릭을 기록',
+    summary: '케이스 실행 (SSE) — 단계 축(stage)에 따라 계획(뼈대+상품) 또는 설문 페이지를 실행·기록',
     description:
       '그래프 노드와 같은 빌더·스키마·가드로 실행하고(쓰레드·core 스텝 기록 없음), 결과는 eval_runs에 저장된다. ' +
-      'promptOverride는 저장 없는 what-if (두 단계 모두 적용). SSE: status → result({ run }) | error.',
+      'stage 생략 = plan(뼈대+상품 순차, 두 단계 모두 promptOverride 적용) · stage=survey는 의도·프로필만으로 ' +
+      '설문 페이지를 재생성한다. SSE: status → result({ run }) | error.',
   })
   @ApiParam({ name: 'id', description: '평가 케이스 id' })
   @ApiBody({ schema: toOpenApi(RunEvalCaseBody) })
@@ -457,6 +462,34 @@ export class AdminController {
       const cases = await this.core.listEvalCases()
       const evalCase = cases.items.find((c) => c.id === id)
       if (!evalCase) throw new BadRequestException('평가 케이스가 없습니다')
+      if ((body.stage ?? 'plan') === 'survey') {
+        sseSend(res, 'status', { message: '설문 페이지를 실행하고 있어요…' })
+        const result = await this.dryRunService.run(
+          {
+            stageId: 'survey',
+            intent: evalCase.intent,
+            profile: evalCase.profile ?? undefined,
+            promptOverride: body.promptOverride,
+          },
+          { onStatus: (message) => sseSend(res, 'status', { message }) },
+        )
+        const run = await this.core.createEvalRun(id, {
+          config: {
+            engine: 'dry-run',
+            model: result.meta?.model,
+            promptVersion: result.meta?.promptVersion,
+            promptOverride: Boolean(body.promptOverride?.trim()),
+            stage: 'survey',
+            ...(body.label?.trim() ? { label: body.label.trim() } : {}),
+          },
+          page: result.survey!,
+          dropLog: [],
+          meta: result.meta ?? null,
+        })
+        sseSend(res, 'result', { run })
+        sseClose(res)
+        return
+      }
       if (!evalCase.survey || !evalCase.answers?.length) {
         throw new BadRequestException('이 케이스에는 설문·답변 스냅샷이 없어 계획 실행을 할 수 없습니다')
       }
@@ -494,6 +527,7 @@ export class AdminController {
           model: meta.model,
           promptVersion: meta.promptVersion,
           promptOverride: Boolean(body.promptOverride?.trim()),
+          stage: 'plan',
           ...(body.label?.trim() ? { label: body.label.trim() } : {}),
         },
         page,
@@ -551,27 +585,48 @@ export class AdminController {
     try {
       const { run, case: evalCase } = await this.core.getEvalRun(id)
       if (!run.page) throw new BadRequestException('결과 페이지가 없는 실행은 채점할 수 없습니다')
-      if (!evalCase.survey || !evalCase.answers?.length) {
-        throw new BadRequestException('케이스에 설문·답변 스냅샷이 없어 대조 채점을 할 수 없습니다')
-      }
       sseSend(res, 'status', { message: '자동 채점을 실행하고 있어요…' })
-      const { content, meta } = await this.llm.generate('자동 채점', JudgeGen, {
-        system: await this.llm.resolveSystem('judge'),
-        effort: 'medium' as const,
-        user: buildJudgeRequest({
-          intent: evalCase.intent,
-          profile: evalCase.profile ?? undefined,
-          survey: evalCase.survey,
-          answers: evalCase.answers,
-          page: run.page,
-          dropLog: (run.dropLog ?? []) as { code: string; message: string }[],
-        }),
-      })
+      // 단계 축 분기 — 실행이 만든 산출물 종류에 맞는 심사관·루브릭을 쓴다 (config.stage 없음 = plan)
+      let verdict: { overall: number; rubric: EvalJudgeRubricEntry[]; text: string }
+      let meta
+      if (run.config?.stage === 'survey') {
+        if (!('questions' in run.page)) throw new BadRequestException('설문 실행의 결과 페이지 형태가 아닙니다')
+        const result = await this.llm.generate('자동 채점(설문)', JudgeSurveyGen, {
+          system: await this.llm.resolveSystem('judge-survey'),
+          effort: 'medium' as const,
+          user: buildJudgeSurveyRequest({
+            intent: evalCase.intent,
+            profile: evalCase.profile ?? undefined,
+            survey: run.page,
+          }),
+        })
+        verdict = { overall: result.content.overall, rubric: judgeSurveyRubricEntries(result.content), text: result.content.verdict }
+        meta = result.meta
+      } else {
+        if (!('sections' in run.page)) throw new BadRequestException('계획 실행의 결과 페이지 형태가 아닙니다')
+        if (!evalCase.survey || !evalCase.answers?.length) {
+          throw new BadRequestException('케이스에 설문·답변 스냅샷이 없어 대조 채점을 할 수 없습니다')
+        }
+        const result = await this.llm.generate('자동 채점', JudgeGen, {
+          system: await this.llm.resolveSystem('judge'),
+          effort: 'medium' as const,
+          user: buildJudgeRequest({
+            intent: evalCase.intent,
+            profile: evalCase.profile ?? undefined,
+            survey: evalCase.survey,
+            answers: evalCase.answers,
+            page: run.page,
+            dropLog: (run.dropLog ?? []) as { code: string; message: string }[],
+          }),
+        })
+        verdict = { overall: result.content.overall, rubric: judgeRubricEntries(result.content), text: result.content.verdict }
+        meta = result.meta
+      }
       const updated = await this.core.setEvalRunJudge(id, {
         judge: {
-          score: content.overall,
-          rubric: judgeRubricEntries(content),
-          verdict: content.verdict,
+          score: verdict.overall,
+          rubric: verdict.rubric,
+          verdict: verdict.text,
           meta,
           at: new Date().toISOString(),
         },

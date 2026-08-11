@@ -1459,3 +1459,57 @@
   font-size: var(--sb-t-caption);
   min-width: 0;
 }
+
+/* 실행 단계 선택(실행 설정 details 안 세그먼트) · 전수 판정 · 설정별 채점 요약 */
+.sb-exp-stagepick {
+  margin: 6px 0 8px;
+}
+.sb-admin-prompt-chip--stage {
+  color: var(--sb-accent);
+  border-color: color-mix(in srgb, var(--sb-accent) 35%, transparent);
+  background: color-mix(in srgb, var(--sb-accent) 8%, transparent);
+}
+.sb-exp-batch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 2px;
+}
+.sb-exp-summary {
+  margin: 10px 0 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--sb-n-150, var(--sb-n-200));
+  border-radius: var(--sb-r-md);
+  background: var(--sb-n-50, transparent);
+}
+.sb-exp-summary ul {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.sb-exp-summary__row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  font-size: var(--sb-t-caption);
+}
+.sb-exp-summary__key {
+  flex: 0 0 220px;
+  color: var(--sb-ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sb-exp-summary__stat {
+  color: var(--sb-ink-2);
+}
+.sb-exp-summary__stat i {
+  font-style: normal;
+  color: var(--sb-subtle);
+  margin-left: 2px;
+}
+.sb-exp-summary__stat--judge {
+  color: var(--sb-ai);
+}

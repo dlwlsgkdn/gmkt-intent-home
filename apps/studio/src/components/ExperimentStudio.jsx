@@ -33,13 +33,17 @@ function metaLine(meta) {
 
 const SECTION_KIND_LABEL = { guide: '안내', products: '상품', contents: '콘텐츠', steps: '순서' }
 
-/** 실행 페이지 → 섹션 앵커 목록 — 채점 components의 id(sec-<index>)·label 원천.
- * 실행 결과 페이지는 불변 스냅샷이라 앵커도 안정적이다 (label은 재해석용으로 함께 저장) */
-const runAnchors = (run) =>
-  (run.page?.sections || []).map((s, i) => ({
+/** 실행 페이지 → 채점 앵커 목록 — components의 id·label 원천 (실행 결과는 불변 스냅샷이라 안정적).
+ * 단계 축에 따라 계획 = 섹션(sec-<index>), 설문 = 질문(와이어 질문 id — 라이브 피드백과 같은 규칙) */
+const runAnchors = (run) => {
+  const page = run.page
+  if (!page) return []
+  if (page.questions) return page.questions.map((q) => ({ id: q.id, label: `질문 · ${q.question}` }))
+  return (page.sections || []).map((s, i) => ({
     id: `sec-${i}`,
     label: `${SECTION_KIND_LABEL[s.kind] || s.kind} · ${s.title}`,
   }))
+}
 
 /** 별점 표시 한 조각 — 미채점/0점 배지 구분은 평가 스튜디오 문법 그대로 */
 function ScoreBadge({ score }) {
@@ -63,12 +67,15 @@ export default function ExperimentStudio() {
   const [status, setStatus] = useState(null)
   const [override, setOverride] = useState('')
   const [label, setLabel] = useState('')
+  const [runStage, setRunStage] = useState('plan') // 실행 단계 축 — 'plan' | 'survey'
+  const [batch, setBatch] = useState(false) // 전수 판정 진행 중
+  const [batchResult, setBatchResult] = useState(null)
   const [scoreDraft, setScoreDraft] = useState({}) // runId -> { score, comment, components: {id: {score, feedback}}, saving }
   const [detailOpen, setDetailOpen] = useState({}) // runId -> bool (섹션별 채점 펼침)
   const [judging, setJudging] = useState(null) // 자동 채점 중 runId
-  const [judgePrompt, setJudgePrompt] = useState(null) // AdminPromptEntry (id='judge')
-  const [judgeDraft, setJudgeDraft] = useState('')
-  const [judgeSaving, setJudgeSaving] = useState(false)
+  const [judgePrompts, setJudgePrompts] = useState([]) // AdminPromptEntry[] (id가 judge*) — 계획·설문 심사관
+  const [judgeDrafts, setJudgeDrafts] = useState({}) // promptId -> 편집 원문
+  const [judgeSaving, setJudgeSaving] = useState(null) // 저장 중 promptId
 
   const load = async () => {
     setError(null)
@@ -82,11 +89,11 @@ export default function ExperimentStudio() {
     // judge 프롬프트는 부가 기능 — 조회 실패해도 탭은 동작한다
     try {
       const wire = await fetchAdminPrompts()
-      const entry = wire.prompts.find((p) => p.id === 'judge') || null
-      setJudgePrompt(entry)
-      setJudgeDraft(entry ? entry.configured ?? entry.defaultText : '')
+      const entries = wire.prompts.filter((p) => p.id.startsWith('judge'))
+      setJudgePrompts(entries)
+      setJudgeDrafts(Object.fromEntries(entries.map((e) => [e.id, e.configured ?? e.defaultText])))
     } catch {
-      setJudgePrompt(null)
+      setJudgePrompts([])
     }
   }
   useEffect(() => {
@@ -118,6 +125,7 @@ export default function ExperimentStudio() {
         {
           ...(override.trim() ? { promptOverride: override } : {}),
           ...(label.trim() ? { label: label.trim() } : {}),
+          ...(runStage === 'survey' ? { stage: 'survey' } : {}),
         },
         { onStatus: setStatus },
       )
@@ -199,20 +207,85 @@ export default function ExperimentStudio() {
     }
   }
 
-  const judgePromptDirty = judgePrompt ? judgeDraft !== (judgePrompt.configured ?? judgePrompt.defaultText) : false
+  /** 전수 판정 — 케이스별 최신 실행 중 미판정분을 순차 judge (회귀 라운드 1회 = 버튼 1번).
+   * 순차인 이유: LLM 동시 호출 비용·레이트 제어. 이미 판정된 실행은 건너뛴다(재판정은 행 버튼) */
+  const batchJudge = async () => {
+    if (running || judging || batch) return
+    setBatch(true)
+    setError(null)
+    setBatchResult(null)
+    let judged = 0
+    let skipped = 0
+    let failed = 0
+    const list = cases || []
+    for (let i = 0; i < list.length; i++) {
+      const c = list[i]
+      setStatus(`전수 판정 ${i + 1}/${list.length} — ${c.title || c.intent}`)
+      try {
+        const wire = await fetchEvalRuns(c.id)
+        setRunsByCase((prev) => ({ ...prev, [c.id]: wire.items }))
+        const latest = wire.items[0]
+        if (!latest || !latest.page || latest.judge) {
+          skipped++
+          continue
+        }
+        await judgeEvalRun(latest.id, {})
+        const refreshed = await fetchEvalRuns(c.id)
+        setRunsByCase((prev) => ({ ...prev, [c.id]: refreshed.items }))
+        judged++
+      } catch {
+        failed++
+      }
+    }
+    setBatch(false)
+    setStatus(null)
+    setBatchResult(`전수 판정 완료 — 판정 ${judged} · 건너뜀 ${skipped}${failed ? ` · 실패 ${failed}` : ''}`)
+  }
 
-  const saveJudgePrompt = async (text) => {
-    setJudgeSaving(true)
+  /** 설정별 채점 요약 — 불러온 실행 전체를 config 축(단계·promptVersion·what-if)으로 묶어
+   * 사람 평균과 judge 평균을 나란히 (합산하지 않는다 — source 축 분리) */
+  const summaryRows = (() => {
+    const all = Object.values(runsByCase).flat()
+    if (!all.length) return []
+    const groups = new Map()
+    for (const r of all) {
+      const key = `${r.config?.stage === 'survey' ? '설문' : '계획'} · ${r.config?.promptVersion || '—'}${
+        r.config?.promptOverride ? ' (what-if)' : ''
+      }`
+      let g = groups.get(key)
+      if (!g) {
+        g = { key, count: 0, human: [], judge: [] }
+        groups.set(key, g)
+      }
+      g.count++
+      if (r.score != null) g.human.push(r.score)
+      if (r.judge?.score != null) g.judge.push(r.judge.score)
+    }
+    const avg = (arr) => (arr.length ? (arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1) : null)
+    return [...groups.values()].map((g) => ({
+      key: g.key,
+      count: g.count,
+      human: avg(g.human),
+      humanN: g.human.length,
+      judge: avg(g.judge),
+      judgeN: g.judge.length,
+    }))
+  })()
+
+  const judgePromptDirty = (entry) => judgeDrafts[entry.id] !== (entry.configured ?? entry.defaultText)
+
+  const saveJudgePrompt = async (id, text) => {
+    setJudgeSaving(id)
     setError(null)
     try {
-      const wire = await putAdminPrompt('judge', text)
-      const entry = wire.prompts.find((p) => p.id === 'judge') || null
-      setJudgePrompt(entry)
-      setJudgeDraft(entry ? entry.configured ?? entry.defaultText : '')
+      const wire = await putAdminPrompt(id, text)
+      const entries = wire.prompts.filter((p) => p.id.startsWith('judge'))
+      setJudgePrompts(entries)
+      setJudgeDrafts(Object.fromEntries(entries.map((e) => [e.id, e.configured ?? e.defaultText])))
     } catch (e) {
       setError(e.message)
     } finally {
-      setJudgeSaving(false)
+      setJudgeSaving(null)
     }
   }
 
@@ -308,7 +381,24 @@ export default function ExperimentStudio() {
           더할 수 있고, 자동 채점(판정)은 별도 축으로 나란히 쌓여요.
         </p>
         <details className="sb-pipe-play__override">
-          <summary>실행 설정 — 임시 프롬프트(what-if)·라벨 (다음 실행에 적용)</summary>
+          <summary>실행 설정 — 단계·임시 프롬프트(what-if)·라벨 (다음 실행에 적용)</summary>
+          <div className="sb-admin-fb-seg sb-exp-stagepick" role="radiogroup" aria-label="실행 단계">
+            <button
+              type="button"
+              className={'sb-admin-fb-seg__btn' + (runStage === 'plan' ? ' is-on' : '')}
+              onClick={() => setRunStage('plan')}
+            >
+              계획 (뼈대+상품)
+            </button>
+            <button
+              type="button"
+              className={'sb-admin-fb-seg__btn' + (runStage === 'survey' ? ' is-on' : '')}
+              title="케이스의 의도·프로필만으로 설문 페이지를 재생성해요 — 설문·답변 스냅샷이 없는 케이스도 실행돼요"
+              onClick={() => setRunStage('survey')}
+            >
+              설문
+            </button>
+          </div>
           <input
             type="text"
             className="sb-exp-label"
@@ -319,39 +409,78 @@ export default function ExperimentStudio() {
           <textarea
             value={override}
             spellCheck={false}
-            placeholder="임시 시스템 프롬프트 — 비우면 저장값(재정의 포함)으로 실행. 뼈대·상품 두 단계에 적용돼요."
+            placeholder="임시 시스템 프롬프트 — 비우면 저장값(재정의 포함)으로 실행. 해당 단계의 LLM 호출 전부에 적용돼요."
             onChange={(event) => setOverride(event.target.value)}
           />
         </details>
-        {judgePrompt && (
-          <details className="sb-pipe-play__override">
+        {judgePrompts.map((entry) => (
+          <details key={entry.id} className="sb-pipe-play__override">
             <summary>
-              자동 채점 기준 (judge 프롬프트)
-              {judgePrompt.configured != null && (
+              채점 기준 — {entry.label}
+              {entry.configured != null && (
                 <span className="sb-admin-prompt-chip sb-admin-prompt-chip--custom">재정의</span>
               )}
             </summary>
-            <p className="sb-admin__muted">{judgePrompt.note}</p>
-            <textarea value={judgeDraft} spellCheck={false} onChange={(event) => setJudgeDraft(event.target.value)} />
+            <p className="sb-admin__muted">{entry.note}</p>
+            <textarea
+              value={judgeDrafts[entry.id] ?? ''}
+              spellCheck={false}
+              onChange={(event) => setJudgeDrafts((prev) => ({ ...prev, [entry.id]: event.target.value }))}
+            />
             <div className="sb-exp-judge-prompt__actions">
               <button
                 type="button"
                 className="sb-btn sb-btn--primary sb-btn--tiny"
-                disabled={!judgePromptDirty || judgeSaving}
-                onClick={() => saveJudgePrompt(judgeDraft)}
+                disabled={!judgePromptDirty(entry) || judgeSaving !== null}
+                onClick={() => saveJudgePrompt(entry.id, judgeDrafts[entry.id])}
               >
-                {judgeSaving ? '저장 중…' : '저장'}
+                {judgeSaving === entry.id ? '저장 중…' : '저장'}
               </button>
               <button
                 type="button"
                 className="sb-btn sb-btn--ghost sb-btn--tiny"
-                disabled={judgeSaving || judgePrompt.configured == null}
-                onClick={() => saveJudgePrompt(null)}
+                disabled={judgeSaving !== null || entry.configured == null}
+                onClick={() => saveJudgePrompt(entry.id, null)}
               >
                 기본값 복귀
               </button>
             </div>
           </details>
+        ))}
+        {(cases || []).length > 0 && (
+          <div className="sb-exp-batch">
+            <button
+              type="button"
+              className="sb-btn sb-btn--ai sb-btn--tiny"
+              disabled={batch || running !== null || judging !== null}
+              title="케이스별 최신 실행 중 아직 판정이 없는 것을 순서대로 자동 채점해요 — 프롬프트·설정을 바꾼 뒤의 회귀 라운드"
+              onClick={batchJudge}
+            >
+              {batch ? '전수 판정 중…' : '✦ 전수 판정'}
+            </button>
+            {batchResult && <span className="sb-admin__muted">{batchResult}</span>}
+          </div>
+        )}
+        {summaryRows.length > 0 && (
+          <div className="sb-exp-summary">
+            <p className="sb-panel-label">설정별 채점 요약 (불러온 실행 기준 — 전수 판정이 전 케이스를 불러와요)</p>
+            <ul>
+              {summaryRows.map((row) => (
+                <li key={row.key} className="sb-exp-summary__row">
+                  <span className="sb-exp-summary__key">{row.key}</span>
+                  <span className="sb-admin__muted">실행 {row.count}</span>
+                  <span className="sb-exp-summary__stat">
+                    사람 {row.human != null ? `★${row.human}` : '—'}
+                    <i>({row.humanN})</i>
+                  </span>
+                  <span className="sb-exp-summary__stat sb-exp-summary__stat--judge">
+                    판정 {row.judge != null ? `★${row.judge}` : '—'}
+                    <i>({row.judgeN})</i>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
         {status && (
           <p className="sb-flow-status">
@@ -397,11 +526,15 @@ export default function ExperimentStudio() {
                 <button
                   type="button"
                   className="sb-btn sb-btn--ai sb-btn--tiny"
-                  disabled={running !== null || !c.survey || !(c.answers || []).length}
-                  title={c.survey ? undefined : '설문·답변 스냅샷이 없어 실행할 수 없어요'}
+                  disabled={running !== null || batch || (runStage === 'plan' && (!c.survey || !(c.answers || []).length))}
+                  title={
+                    runStage === 'plan' && !c.survey
+                      ? '설문·답변 스냅샷이 없어 계획 실행을 할 수 없어요 — 실행 설정에서 설문 단계로 바꾸면 실행돼요'
+                      : undefined
+                  }
                   onClick={() => run(c.id)}
                 >
-                  {running === c.id ? '실행 중…' : '✦ 실행'}
+                  {running === c.id ? '실행 중…' : runStage === 'survey' ? '✦ 설문 실행' : '✦ 실행'}
                 </button>
                 <button type="button" className="sb-btn sb-btn--ghost sb-btn--tiny" onClick={() => toggleExpand(c.id)}>
                   기록{runsByCase[c.id] ? ` ${runsByCase[c.id].length}` : ''}
@@ -430,6 +563,9 @@ export default function ExperimentStudio() {
                             </span>
                           )}
                           {r.config?.label && <b>{r.config.label}</b>}
+                          {r.config?.stage === 'survey' && (
+                            <span className="sb-admin-prompt-chip sb-admin-prompt-chip--stage">설문 단계</span>
+                          )}
                           <span className="sb-admin-prompt-chip">{r.config?.engine || '—'}</span>
                           {r.config?.promptVersion && <span className="sb-admin-prompt-chip">{r.config.promptVersion}</span>}
                           {r.config?.promptOverride && (
@@ -441,7 +577,9 @@ export default function ExperimentStudio() {
                         </div>
                         {r.page && (
                           <p className="sb-pipe-stage__note">
-                            {r.page.headline} — 섹션 {r.page.sections.length}개
+                            {r.page.questions
+                              ? `${r.page.intro} — 질문 ${r.page.questions.length}개`
+                              : `${r.page.headline} — 섹션 ${r.page.sections.length}개`}
                           </p>
                         )}
                         {r.judge && (
@@ -499,7 +637,7 @@ export default function ExperimentStudio() {
                           <button
                             type="button"
                             className="sb-btn sb-btn--ai sb-btn--tiny"
-                            disabled={judging !== null || !r.page}
+                            disabled={judging !== null || batch || !r.page}
                             title="LLM 심사관이 루브릭 4차원(근거 충실·맞춤성·단계 구성·실행 가능성)으로 채점해요 — 사람 채점과 별도로 저장돼요"
                             onClick={() => judge(r, c.id)}
                           >

@@ -140,11 +140,11 @@ Base: `/api/admin/*` (스튜디오 프록시 `/api/bff/admin/*` 경유) · 인�
 |---|---|---|
 | GET | `/api/admin/eval/cases` | 골든 케이스 목록 (`EvalCasesWire`) |
 | POST | `/api/admin/eval/cases` | 쓰레드 → 케이스 승격 — `{ threadId }`, 스텝에서 의도·프로필·설문·답변 스냅샷 추출 |
-| POST | `/api/admin/eval/cases/:id/run` | **케이스 실행** (SSE) — 뼈대+상품 dry-run 순차 실행 → 병합 페이지·dropLog·결합 메타를 eval_runs에 기록. `{ promptOverride?, label? }` |
+| POST | `/api/admin/eval/cases/:id/run` | **케이스 실행** (SSE) — 단계 축 `{ stage?: plan\|survey, promptOverride?, label? }`. plan(기본) = 뼈대+상품 dry-run 순차 → 병합 페이지·dropLog·결합 메타 기록, survey = 의도·프로필만으로 설문 페이지 재생성(설문·답변 스냅샷 없는 케이스도 실행 가능). config에 stage 각인 |
 | GET | `/api/admin/eval/cases/:id/runs` | 실행 기록 (채점 포함, 최신순) |
 | DELETE | `/api/admin/eval/cases/:id` | 케이스 삭제 (실행 기록 cascade) |
 | PATCH | `/api/admin/eval/runs/:id` | **사람 채점** — `{ score: 0~5\|null, comment, components? }`. components는 섹션별 채점(`[{ id: sec-<index>, label, score, feedback }]` — 라이브 피드백과 같은 평가 레코드 문법, 생략=유지·빈 배열=비움). judge는 이 경로로 못 건드린다 |
-| POST | `/api/admin/eval/runs/:id/judge` | **자동 채점** (SSE) — LLM 심사관이 케이스 입력과 실행 결과(page·dropLog)를 대조해 루브릭 4차원(근거 충실·맞춤성·단계 구성·실행 가능성)으로 채점, `run.judge`에 저장. 사람 채점과 절대 안 섞인다(source 축). 프롬프트는 PROMPT_DEFS `judge`(재정의 `llm-prompt-judge`). SSE: `status` → `result({ run })` \| `error` |
+| POST | `/api/admin/eval/runs/:id/judge` | **자동 채점** (SSE) — LLM 심사관이 케이스 입력과 실행 결과를 대조해 루브릭 4차원으로 채점, `run.judge`에 저장. 사람 채점과 절대 안 섞인다(source 축). 단계 축 분기: config.stage=plan(기본)은 `judge`(근거 충실·맞춤성·단계 구성·실행 가능성, dropLog 포함 심사), survey는 `judge-survey`(질문 절제·의도 적합·답하기 쉬움·말투) — 재정의는 각각 `llm-prompt-judge`/`llm-prompt-judge-survey`. SSE: `status` → `result({ run })` \| `error` |
 | GET | `/api/admin/metrics/engines` | **전환 판정 계기판** — 실주행 plan 스텝 llmMeta(engine 각인) 엔진별 집계: 표본·평균 지연·뼈대/상품·캐시 적중률·promptVersion |
 
 ## 2. Core — internal API (BFF 전용, 비공개)

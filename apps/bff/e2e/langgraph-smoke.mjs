@@ -288,6 +288,23 @@ try {
     ok(judgeCalls[0]?.user?.includes('심사 대상'), '심사 요청에 결과 페이지 전문 포함')
     ok(judgeCalls[0]?.user?.includes('드롭 로그'), '심사 요청에 검증 게이트 드롭 로그 포함')
   }
+
+  // ── 10.7 단계 축 — 설문 단계 실행 + 설문 judge (다른 루브릭) ──
+  console.log('10.7) 설문 단계 실행·판정 (stage=survey)')
+  const svRunEvents = await sse(`/api/admin/eval/cases/${promo.id}/run`, { stage: 'survey', label: '설문 회귀' }, plain)
+  const svRun = last(svRunEvents, 'result')?.data?.run
+  ok(svRun?.config?.stage === 'survey', 'config.stage=survey 각인')
+  ok(svRun?.page?.questions?.length === 3, `설문 페이지 저장 (질문 ${svRun?.page?.questions?.length})`)
+  ok(svRun?.page?.questions?.[0]?.id === 'q1', '질문 id 부여(q1) — 채점 앵커')
+  const svJudgeEvents = await sse(`/api/admin/eval/runs/${svRun.id}/judge`, {}, plain)
+  const svJudged = last(svJudgeEvents, 'result')?.data?.run
+  ok(svJudged?.judge?.score === 4, `설문 judge 종합 별점 (${svJudged?.judge?.score})`)
+  ok(svJudged?.judge?.rubric?.[0]?.key === 'necessity' && svJudged.judge.rubric[0].label === '질문 절제', '설문 루브릭(질문 절제) 매핑')
+  {
+    const sjCalls = (await llmCalls()).filter((c) => c.type === 'judge-survey')
+    ok(sjCalls.length === 1, 'judge-survey LLM 1회 호출')
+    ok(sjCalls[0]?.user?.includes('심사 대상'), '설문 심사 요청에 설문 전문 포함')
+  }
   const engineMetrics = await fetch(BFF + '/api/admin/metrics/engines').then((r) => r.json())
   const lg = engineMetrics?.engines?.find((e) => e.engine === 'langgraph')
   const legacyM = engineMetrics?.engines?.find((e) => e.engine === 'legacy')

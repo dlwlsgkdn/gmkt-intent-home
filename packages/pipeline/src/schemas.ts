@@ -181,6 +181,30 @@ export function judgeRubricEntries(gen: JudgeGen) {
   return JUDGE_DIMENSIONS.map(({ key, label }) => ({ key, label, score: gen[key].score, note: gen[key].note }))
 }
 
+/* 설문 단계 judge — 계획과 실패 양상이 달라 루브릭도 따로 둔다 (단계 축의 차원 분리).
+ * 눈금·구조(고정 키 4차원 + overall + verdict)는 계획 judge와 동일 문법. */
+
+export const JUDGE_SURVEY_DIMENSIONS = [
+  { key: 'necessity', label: '질문 절제' },
+  { key: 'relevance', label: '의도 적합' },
+  { key: 'answerability', label: '답하기 쉬움' },
+  { key: 'tone', label: '말투' },
+] as const
+
+export const JudgeSurveyGen = z.object({
+  necessity: JudgeAxisGen.describe('질문 절제 — 답이 계획을 바꾸는 질문만인가, 이미 아는 것(프로필·의도)을 다시 묻지 않는가'),
+  relevance: JudgeAxisGen.describe('의도 적합 — 질문이 의도의 핵심 축(용도·고민·대상·예산)을 짚는가'),
+  answerability: JudgeAxisGen.describe('답하기 쉬움 — 선택지가 짧고 고르기 쉬운가(2~6개), 기타·모르겠어요 남발이 없는가'),
+  tone: JudgeAxisGen.describe('말투 — 친근한 존댓말, 이모지 없이 담백한가'),
+  overall: z.number().int().min(0).max(5).describe('종합 별점 0~5 — 차원 평균이 아니라 심사관의 종합 판단'),
+  verdict: z.string().describe('종합 심사평 2~3문장 — 가장 큰 감점 요인과 개선 방향'),
+})
+export type JudgeSurveyGen = z.infer<typeof JudgeSurveyGen>
+
+export function judgeSurveyRubricEntries(gen: JudgeSurveyGen) {
+  return JUDGE_SURVEY_DIMENSIONS.map(({ key, label }) => ({ key, label, score: gen[key].score, note: gen[key].note }))
+}
+
 /*
  * 부분 스트리밍(토큰 단위 미리보기)용 느슨한 스키마 — 자라는 중(미완성)인 원소라
  * 필수·개수 제약을 걷어낸다. 확정 검증은 언제나 위의 본 스키마가 맡는다 (threads.service).
