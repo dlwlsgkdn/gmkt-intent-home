@@ -167,7 +167,8 @@ export default function AdminView({ api, tab }) {
         </div>
       </div>
 
-    <section className="sb-admin">
+    {/* 파이프라인 탭은 3컬럼(지식·다이어그램·플레이그라운드)이라 넓은 컨테이너 변형을 쓴다 */}
+    <section className={'sb-admin' + (tab === 'pipeline' ? ' sb-admin--wide' : '')}>
 
       {/* 탭 — 운영(쓰레드·평가) / 파이프라인(단계·프롬프트·지식·플레이그라운드) */}
       <div className="sb-admin-tabs" role="tablist" aria-label="관리 영역">

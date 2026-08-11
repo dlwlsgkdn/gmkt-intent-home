@@ -15,6 +15,10 @@
   flex-direction: column;
   gap: 20px;
 }
+/* 파이프라인 탭 전용 넓은 변형 — 3컬럼(지식·다이어그램·플레이그라운드)이 서도록 */
+.sb-admin--wide {
+  max-width: 1600px;
+}
 .sb-admin__muted {
   font-size: var(--sb-t-caption);
   color: var(--sb-subtle);
@@ -566,24 +570,47 @@
 }
 
 /* ── 파이프라인 스튜디오 (관리 페이지 "파이프라인" 탭 — 페이즈 4) ───────────────
-   왼쪽 = 세로 흐름 다이어그램 카드(레일), 오른쪽 = 플레이그라운드·지식 카드 스택.
-   실행이 왼쪽 흐름에 비치도록 나란히 둔다 — 좁은 화면에선 위(다이어그램)→아래로 쌓인다 */
+   3컬럼: 왼쪽 = 지식 소스 KV, 가운데 = 세로 흐름 다이어그램 카드(히어로),
+   오른쪽 = 플레이그라운드. 실행이 가운데 흐름에 비치도록 나란히 둔다.
+   배치는 grid-template-areas — 좁아지면 지식이 다이어그램 아래로(2컬럼),
+   더 좁으면 위(다이어그램)→아래 한 컬럼으로 쌓인다 */
 
 .sb-pipe-layout {
   display: grid;
-  grid-template-columns: 420px minmax(0, 1fr);
+  grid-template-columns: minmax(230px, 260px) 420px minmax(0, 1fr);
+  grid-template-areas: 'knowledge flow side';
   gap: 20px;
   align-items: start;
 }
+.sb-pipe-knowledge-card {
+  grid-area: knowledge;
+  min-width: 0;
+}
+.sb-pipe-layout > .sb-flow-card {
+  grid-area: flow;
+}
 .sb-pipe-side {
+  grid-area: side;
   display: flex;
   flex-direction: column;
   gap: 20px;
   min-width: 0;
 }
+@media (max-width: 1360px) {
+  .sb-pipe-layout {
+    grid-template-columns: 420px minmax(0, 1fr);
+    grid-template-areas:
+      'flow side'
+      'knowledge side';
+  }
+}
 @media (max-width: 1000px) {
   .sb-pipe-layout {
     grid-template-columns: 1fr;
+    grid-template-areas:
+      'flow'
+      'side'
+      'knowledge';
   }
 }
 
@@ -1722,4 +1749,87 @@
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* ── 플레이그라운드 전체 플로우 실렌더 미리보기 (FlowRunPreview.jsx) ───────────────
+   프로덕션(LivePlayer) 스트리밍 문법 재사용 — 스켈레톤·진행 꼬리·자리 로딩 카드는
+   viewer.css의 sb-live-* 클래스를 그대로 쓴다. 오른쪽 레일 말풍선은 평가 스튜디오
+   .sb-bubble(evaluation.css) 재사용: 여긴 평가 입력이 아니라 컴포넌트별 와이어 상세
+   관측이고, 설문 질문 말풍선의 답변 칩만 입력(플로우 재개)이다. 좁은 컨테이너
+   (660px 미만)·뷰포트 1100px 이하는 JS(layoutBubbles)가 is-stacked를 달아 페이지
+   아래 일반 흐름으로 쌓는다 (evaluation.css 전역 1100px static 전환과 합 맞춤) */
+
+.sb-flow-preview {
+  display: flex;
+  align-items: flex-start;
+  gap: 30px; /* .sb-bubble::before 점선 연결선 길이(30px)와 맞춘다 */
+  margin-top: 10px;
+}
+.sb-flow-preview__page {
+  flex: 0 0 390px;
+  min-width: 0;
+}
+.sb-flow-preview__page .sb-phone {
+  margin: 0;
+  width: 390px;
+  max-width: 100%;
+}
+.sb-flow-preview__rail {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 220px;
+}
+.sb-flow-bubble {
+  cursor: pointer;
+}
+.sb-flow-bubble__meta {
+  margin: 0 0 4px;
+  font-size: var(--sb-t-micro);
+  color: var(--sb-subtle);
+}
+.sb-flow-bubble__text {
+  margin: 0;
+  font-size: var(--sb-t-caption);
+  color: var(--sb-ink-2);
+}
+.sb-flow-bubble .sb-pipe-play__opts {
+  margin-top: 4px;
+}
+.sb-flow-bubble .sb-pipe-play__opt:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+.sb-flow-bubble__foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+/* 좁은 컨테이너 — 페이지 아래에 말풍선을 일반 흐름으로 쌓는다 (JS가 인라인 top을 걷어냄) */
+.sb-flow-preview.is-stacked {
+  flex-direction: column;
+}
+.sb-flow-preview.is-stacked .sb-flow-preview__page {
+  flex: none;
+  width: 100%;
+}
+.sb-flow-preview.is-stacked .sb-flow-preview__page .sb-phone {
+  margin: 0 auto;
+}
+.sb-flow-preview.is-stacked .sb-flow-preview__rail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  flex: none;
+}
+.sb-flow-preview.is-stacked .sb-bubble {
+  position: static;
+}
+.sb-flow-preview.is-stacked .sb-bubble::before {
+  display: none;
+}
+/* 지식 소스가 좁은 왼쪽 컬럼에 설 때 — 행이 좁으면 편집 버튼이 아래로 흐른다 */
+.sb-pipe-knowledge-card .sb-pipe-knowledge__row {
+  flex-wrap: wrap;
 }

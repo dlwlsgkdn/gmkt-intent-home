@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   dryRunStage,
   fetchAdminModel,
@@ -11,18 +11,20 @@ import {
   putAdminPrompt,
 } from '../lib/adminApi.js'
 import AdminThreadPreview from './AdminThreadPreview.jsx'
+import FlowRunPreview from './FlowRunPreview.jsx'
 import PipelineFlow, { KIND_LABEL, metaLine } from './PipelineFlow.jsx'
 
 /*
  * 파이프라인 스튜디오 (운영 콘솔 "파이프라인" 탭 — DESIGN-PIPELINE-LANGGRAPH.md 페이즈 4).
- * 왼쪽 = 세로 흐름 다이어그램 카드(PipelineFlow — 히어로) + 런타임 설정(엔진·모델),
- * 오른쪽 = 플레이그라운드·지식 KV. 시스템 프롬프트 패널은 별도 카드가 아니라 다이어그램에
- * 녹아 있다: LLM 노드 클릭 = 단계 레이어 모달(설명·최근 실행·프롬프트 열람·수정).
- * 플레이그라운드는 두 모드다: "단계 단독"은 LLM 단계 하나를 그래프·쓰레드 기록 없이
- * dry-run하고, "전체 플로우"는 실제 LangGraph 그래프(병렬·interrupt·검증 게이트)를 스텁
- * core+MemorySaver로 통째로 돌며 stage 이벤트(단계 수명·실제 프롬프트·데이터)를 실시간으로
- * 받는다 — 실행 중에는 다이어그램 위로 경로가 흐르고, 단계별 프롬프트·메타는 노드 레이어
- * 모달의 "이번 실행" 섹션과 실행 로그 타임라인에 남는다.
+ * 3컬럼: 왼쪽 = 지식 소스 KV, 가운데 = 세로 흐름 다이어그램 카드(PipelineFlow — 히어로) +
+ * 런타임 설정(엔진·모델), 오른쪽 = 플레이그라운드. 시스템 프롬프트 패널은 별도 카드가
+ * 아니라 다이어그램에 녹아 있다: LLM 노드 클릭 = 단계 레이어 모달(설명·최근 실행·프롬프트
+ * 열람·수정). 플레이그라운드는 두 모드다: "단계 단독"은 LLM 단계 하나를 그래프·쓰레드 기록
+ * 없이 dry-run하고, "전체 플로우"는 실제 LangGraph 그래프(병렬·interrupt·검증 게이트)를
+ * 스텁 core+MemorySaver로 통째로 돌며 stage 이벤트(단계 수명·실제 프롬프트·데이터)를
+ * 실시간으로 받는다 — 실행 중에는 다이어그램 위로 경로가 흐르고, content 이벤트(부분
+ * 페이지)는 실렌더 미리보기(FlowRunPreview)가 프로덕션(LivePlayer)과 같은 스트리밍으로
+ * 그리며 컴포넌트별 와이어 상세를 말풍선 레일로 보여준다.
  * 실행 버튼은 진짜 생성이므로 ✦ (스튜디오 왕복 ⇄ 아님 — CLAUDE.md 표기 규칙).
  */
 
@@ -139,6 +141,15 @@ export default function PipelineStudio({ api }) {
   const [flowNote, setFlowNote] = useState(null) // content 스트림 조각 한 줄 표시
   const [flowStateHistory, setFlowStateHistory] = useState([]) // [{ node, id, changedKeys, snapshot }] — state 이벤트 누적
   const [flowStateIdx, setFlowStateIdx] = useState(null) // 고정 선택 인덱스 — null이면 최신 추종
+
+  /* 실렌더 미리보기 (FlowRunPreview) — content 이벤트의 부분 페이지를 LivePlayer와 같은
+     문법으로 누적한다: 설문 { intro?, questions[] } | 계획 { headline?, summary?, sections[] },
+     계획은 skeleton 이벤트에서 조기 확정(자리 로딩 카드)하고 section 이벤트가 자리를 채운다 */
+  const [flowPartial, setFlowPartial] = useState(null) // 생성 중 부분 페이지 (확정 전 미리보기)
+  const [flowPlanPage, setFlowPlanPage] = useState(null) // 뼈대 조기 확정 페이지 — result가 최종으로 덮는다
+  const [flowPendingSlots, setFlowPendingSlots] = useState([]) // 아직 검색 결과가 안 채운 자리 인덱스
+  const [flowView, setFlowView] = useState('survey') // 실렌더 미리보기 단계 seg — 'survey' | 'plan'
+  const flowSkeletonRef = useRef(false) // 이번 계획 실행에서 skeleton(조기 확정)을 받았는지
 
   const load = async () => {
     setError(null)
@@ -293,6 +304,10 @@ export default function PipelineStudio({ api }) {
         setSkResult(null)
         setProdResult(null)
         setFlowRunPlan(null)
+        setFlowPlanPage(null)
+        setFlowPendingSlots([])
+        setFlowPartial(null)
+        flowSkeletonRef.current = false
       } else if (stageId === 'plan-skeleton') setSkResult(result)
       else setProdResult(result)
     } catch (e) {
@@ -337,12 +352,47 @@ export default function PipelineStudio({ api }) {
         ]
       })
     } else if (name === 'content') {
+      // 부분 페이지 누적 — 실렌더 미리보기(FlowRunPreview)가 프로덕션(LivePlayer)과 같은
+      // 스트리밍으로 그린다. 같은 index 반복 도착 = 자라는 컴포넌트 (도착 즉시 렌더)
       const c = data
-      if (c.event === 'head') setFlowNote('인트로 생성 중…')
-      else if (c.event === 'question') setFlowNote(`질문 ${c.data.index + 1} 생성 중 — ${c.data.question?.question ?? ''}`)
-      else if (c.event === 'skeleton') setFlowNote(`뼈대 조기 확정 — 상품·콘텐츠 자리 ${c.data.pending?.length ?? 0}개`)
-      else if (c.event === 'section')
+      if (c.event === 'head') {
+        setFlowNote('인트로 생성 중…')
+        if (!flowSkeletonRef.current) setFlowPartial((prev) => ({ ...(prev || {}), ...c.data }))
+      } else if (c.event === 'question') {
+        setFlowNote(`질문 ${c.data.index + 1} 생성 중 — ${c.data.question?.question ?? ''}`)
+        setFlowPartial((prev) => {
+          const next = { ...(prev || {}), questions: [...((prev && prev.questions) || [])] }
+          next.questions[c.data.index] = c.data.question
+          return next
+        })
+      } else if (c.event === 'skeleton') {
+        // 뼈대 조기 확정 — 페이지를 확정 렌더로 전환하고 상품·콘텐츠 자리는 로딩 카드로 남긴다
+        setFlowNote(`뼈대 조기 확정 — 상품·콘텐츠 자리 ${c.data.pending?.length ?? 0}개`)
+        flowSkeletonRef.current = true
+        setFlowPlanPage(c.data.page)
+        setFlowPendingSlots(c.data.pending || [])
+        setFlowPartial(null)
+      } else if (c.event === 'section') {
         setFlowNote(`섹션 ${c.data.index + 1} ${c.data.final ? '도착' : '생성 중'} — ${c.data.section?.title ?? ''}`)
+        if (flowSkeletonRef.current) {
+          // 조기 확정 뒤 도착한 상품·콘텐츠 — 확정 페이지의 자리를 직접 채운다 (증분은 같은 index 덮어쓰기)
+          setFlowPlanPage((prev) => {
+            if (!prev) return prev
+            const sections = [...(prev.sections || [])]
+            sections[c.data.index] = c.data.section
+            return { ...prev, sections }
+          })
+          if (c.data.final) setFlowPendingSlots((prev) => prev.filter((i) => i !== c.data.index))
+        } else {
+          setFlowPartial((prev) => {
+            const next = { ...(prev || {}), sections: [...((prev && prev.sections) || [])] }
+            next.sections[c.data.index] = c.data.section
+            return next
+          })
+        }
+      } else if (c.event === 'search') {
+        setFlowNote(`웹에서 "${c.data.query}" 검색 중…`)
+      }
     }
   }
 
@@ -363,6 +413,11 @@ export default function PipelineStudio({ api }) {
     setPgAnswers({})
     setSkResult(null)
     setProdResult(null)
+    setFlowPartial(null)
+    setFlowPlanPage(null)
+    setFlowPendingSlots([])
+    setFlowView('survey')
+    flowSkeletonRef.current = false
     try {
       const result = await flowRunPipeline(
         { phase: 'survey', intent: pgIntent.trim() },
@@ -370,6 +425,7 @@ export default function PipelineStudio({ api }) {
       )
       setFlowRunId(result.flowId)
       setSvResult({ survey: result.survey, ledger: result.ledger, meta: result.meta })
+      setFlowPartial(null)
     } catch (e) {
       setPgError(e.message)
       setFlowRunLive([])
@@ -390,6 +446,11 @@ export default function PipelineStudio({ api }) {
     setPgError(null)
     setFlowNote(null)
     setFlowRunPlan(null)
+    setFlowPartial(null)
+    setFlowPlanPage(null)
+    setFlowPendingSlots([])
+    setFlowView('plan')
+    flowSkeletonRef.current = false
     try {
       const result = await flowRunPipeline(
         {
@@ -402,8 +463,14 @@ export default function PipelineStudio({ api }) {
         { onStatus: setPgStatus, onEvent: handleFlowEvent },
       )
       setFlowRunPlan(result)
+      // 최종본(권위)으로 갈아끼운다 — 검색이 못 채운 자리는 최종본에서 빠진다 (서버 규칙)
+      setFlowPlanPage(result.page)
+      setFlowPendingSlots([])
+      setFlowPartial(null)
     } catch (e) {
       setPgError(e.message)
+      setFlowPendingSlots([])
+      setFlowPartial(null)
     } finally {
       setFlowRunning(null)
       setPgStatus(null)
@@ -423,19 +490,91 @@ export default function PipelineStudio({ api }) {
     }
   }, [svResult, answersList])
 
-  /* 플로우 최종 계획 미리보기 — 설문·답변·병합 페이지를 합성 쓰레드로 만들어 실렌더 재사용 */
-  const flowPlanPreviewThread = useMemo(() => {
-    if (!flowRunPlan?.page || !svResult?.survey) return null
-    return {
-      steps: [
-        { stage: 'survey', payload: { page: svResult.survey } },
-        ...(answersList.length ? [{ stage: 'answers', payload: { answers: answersList } }] : []),
-        { stage: 'plan', payload: { page: flowRunPlan.page } },
-      ],
-    }
-  }, [flowRunPlan, svResult, answersList])
-
   const planReady = Boolean(svResult?.survey) && answersList.length > 0
+  const flowBusy = running !== null || flowRunning !== null
+
+  /* ── 실렌더 미리보기(FlowRunPreview) 재료 — 스트리밍 중엔 부분 페이지, 끝나면 확정본 ── */
+  const flowSurveyPreviewPage =
+    flowRunning === 'survey'
+      ? flowPartial
+        ? { intro: flowPartial.intro || '', questions: (flowPartial.questions || []).filter(Boolean) }
+        : null
+      : svResult?.survey || null
+  const flowPlanPreview = flowPlanPage
+    ? { page: flowPlanPage, pending: flowPendingSlots }
+    : flowRunning === 'plan' && flowPartial
+      ? {
+          page: { headline: flowPartial.headline || '', summary: flowPartial.summary || '', sections: flowPartial.sections || [] },
+          pending: [],
+        }
+      : null
+  const flowShownStage = flowView === 'plan' && (flowPlanPreview || flowRunning === 'plan') ? 'plan' : 'survey'
+
+  /* 설문 답변 쓰기 — 페이지의 질문 카드(레지스트리 setAnswer: multi 배열·단일 문자열)와
+     말풍선 칩이 같은 pgAnswers(배열 맵)에 쓴다 */
+  const setFlowAnswer = (questionId, value) => {
+    setPgAnswers((prev) => ({
+      ...prev,
+      [questionId]: Array.isArray(value) ? value.filter(Boolean) : value != null && String(value).length > 0 ? [value] : [],
+    }))
+  }
+
+  /* 계획 페이지 surveySummary 패널 재료 — 클라이언트 소유분 (LivePlayer summary와 같은 형태) */
+  const flowSummary = useMemo(
+    () => ({
+      profile: [],
+      questions: (svResult?.survey?.questions || []).map((q) => {
+        const arr = pgAnswers[q.id] || []
+        return { q: q.question, a: arr.length ? arr.join(', ') : '아무거나' }
+      }),
+    }),
+    [svResult, pgAnswers],
+  )
+
+  /* 페이지 전체 말풍선 — 단계 산출 메타·원장·검증 게이트 요약 + 플로우 재개 액션 */
+  const flowVerify = flowRunStages.verify
+  const flowOverall =
+    flowShownStage === 'survey'
+      ? {
+          label: '설문 페이지',
+          chip: flowRunning === 'survey' ? '생성 중' : 'LLM 산출 (3)',
+          lines: [
+            svResult?.meta ? metaLine(svResult.meta) : null,
+            svResult?.survey ? `질문 ${svResult.survey.questions.length}개 · 답변 ${answersList.length}개 선택` : null,
+            svResult?.ledger?.trendKeywords?.length ? `원장 키워드: ${svResult.ledger.trendKeywords.join(', ')}` : null,
+          ].filter(Boolean),
+          foot: svResult?.survey ? (
+            <button
+              type="button"
+              className="sb-btn sb-btn--ai sb-btn--tiny"
+              disabled={!planReady || flowBusy || !flowRunId}
+              title={
+                !flowRunId
+                  ? '플로우 시작(설문 구간)부터 실행하세요'
+                  : planReady
+                    ? undefined
+                    : '답변을 하나 이상 선택하세요'
+              }
+              onClick={runFlowPlan}
+            >
+              {flowRunning === 'plan' ? '실행 중…' : '✦ 계획 이어서 실행 (5a∥4·5b→6·7)'}
+            </button>
+          ) : null,
+        }
+      : {
+          label: '계획 페이지',
+          chip: flowRunning === 'plan' ? '생성 중' : '검증 게이트 병합본',
+          lines: [
+            flowRunPlan
+              ? [metaLine(flowRunPlan.skeletonMeta), metaLine(flowRunPlan.productsMeta)].filter(Boolean).join(' ∥ ') || null
+              : null,
+            flowVerify?.pass != null ? `검증 게이트 — 섹션 ${flowVerify.pass}개 통과 · ${flowVerify.drops}건 드롭` : null,
+          ].filter(Boolean),
+          error: flowRunPlan?.productsFailed
+            ? `검색 단계 실패 — 상품 없이 병합됐어요: ${flowRunPlan.productsFailed}`
+            : null,
+          dropLog: flowRunPlan?.dropLog || [],
+        }
 
   /* 흐름 다이어그램에 얹는 실행 결과 요약 — 노드의 ✓ 배지·레이어 모달 "이번 실행"의 원천.
    * 단계 단독 dry-run 결과와 전체 플로우 stage 이벤트를 한 맵으로 겹친다 (나중 실행이 이긴다) */
@@ -482,8 +621,45 @@ export default function PipelineStudio({ api }) {
     <>
       {error && <p className="sb-admin-gate__error">{error}</p>}
 
-      {/* 세로 흐름 카드(왼쪽 레일) ∥ 플레이그라운드·지식(오른쪽) — 실행이 왼쪽 흐름에 비친다 */}
+      {/* 지식 소스(왼쪽) ∥ 세로 흐름 카드(가운데 히어로) ∥ 플레이그라운드(오른쪽) —
+          실행이 가운데 흐름에 비친다. 배치는 grid-template-areas (admin.css .sb-pipe-layout) */}
       <div className="sb-pipe-layout">
+        {/* 지식 소스 — KV 편집 (왼쪽 컬럼) */}
+        <div className="sb-admin-card sb-pipe-knowledge-card">
+          <p className="sb-panel-label">지식 소스 (팀 데이터 v0 — 설정 KV)</p>
+          <p className="sb-admin__muted">
+            DB화 전의 수동 입력 자리예요. 시스템 자리표시자 지식은 프롬프트 캐시에 흡수되고, 가변부·게이트 값은 요청마다
+            실려요. 편집은 새 생성부터 반영돼요 (서버 캐시 최대 30초).
+          </p>
+          {wire && (
+            <ul className="sb-pipe-knowledge">
+              {wire.knowledge.map((entry) => (
+                <li key={entry.id} className="sb-pipe-knowledge__row">
+                  <div className="sb-pipe-knowledge__main">
+                    <div className="sb-pipe-stage__title">
+                      <b>{entry.label}</b>
+                      <span className="sb-admin-prompt-chip">{INJECTION_LABEL[entry.injection] || entry.injection}</span>
+                      {entry.placeholder && <code>{entry.placeholder}</code>}
+                      {!entry.editable && <span className="sb-admin-prompt-chip">실데이터 파생</span>}
+                      {entry.editable && entry.value && (
+                        <span className="sb-admin-prompt-chip sb-admin-prompt-chip--custom">값 있음</span>
+                      )}
+                    </div>
+                    <p className="sb-pipe-stage__note">
+                      {entry.editable ? (entry.value ? entry.value.split('\n')[0] : '비어 있음 — 지식 없이 생성돼요') : entry.note}
+                    </p>
+                  </div>
+                  {entry.editable && (
+                    <button type="button" className="sb-btn sb-btn--ghost sb-btn--tiny" onClick={() => openKnowledge(entry)}>
+                      편집
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
         <div className="sb-admin-card sb-flow-card">
           <p className="sb-panel-label">생성 파이프라인 (전략 문서 0~7)</p>
 
@@ -737,7 +913,50 @@ export default function PipelineStudio({ api }) {
               )
             })()}
 
-            {svResult?.survey && (
+            {/* 전체 플로우 실렌더 미리보기 — 프로덕션(LivePlayer) 스트리밍 그대로 + 컴포넌트별
+                와이어 상세 말풍선 레일. 설문 답변 선택(재개 입력)도 이 페이지·말풍선에서 한다 */}
+            {pgTab === 'flow' && (flowSurveyPreviewPage || flowPlanPreview || flowRunning) && (
+              <div className="sb-pipe-play__stage">
+                <div className="sb-pipe-play__stagehead">
+                  <b>실제 렌더링 — 프로덕션 스트리밍 그대로</b>
+                  <div className="sb-admin-fb-seg" role="group" aria-label="실렌더 미리보기 단계">
+                    <button
+                      type="button"
+                      className={'sb-admin-fb-seg__btn' + (flowShownStage === 'survey' ? ' is-on' : '')}
+                      onClick={() => setFlowView('survey')}
+                    >
+                      설문
+                    </button>
+                    <button
+                      type="button"
+                      className={'sb-admin-fb-seg__btn' + (flowShownStage === 'plan' ? ' is-on' : '')}
+                      disabled={!flowPlanPreview}
+                      title={flowPlanPreview ? undefined : '계획 구간을 실행하면 열려요'}
+                      onClick={() => setFlowView('plan')}
+                    >
+                      계획
+                    </button>
+                  </div>
+                </div>
+                <FlowRunPreview
+                  stage={flowShownStage}
+                  page={flowShownStage === 'survey' ? flowSurveyPreviewPage : flowPlanPreview?.page || null}
+                  streaming={
+                    flowShownStage === 'survey'
+                      ? flowRunning === 'survey'
+                      : flowRunning === 'plan' && !flowSkeletonRef.current
+                  }
+                  pendingSlots={flowShownStage === 'plan' ? flowPlanPreview?.pending || [] : []}
+                  statusMessage={pgStatus || flowNote}
+                  answers={pgAnswers}
+                  onAnswer={flowBusy ? null : setFlowAnswer}
+                  surveySummary={flowSummary}
+                  overall={flowOverall}
+                />
+              </div>
+            )}
+
+            {pgTab === 'stage' && svResult?.survey && (
               <div className="sb-pipe-play__stage">
                 <div className="sb-pipe-play__stagehead">
                   <b>설문 결과</b>
@@ -771,44 +990,24 @@ export default function PipelineStudio({ api }) {
                       </div>
                     ))}
                     <div className="sb-pipe-play__actions">
-                      {pgTab === 'stage' ? (
-                        <>
-                          <button
-                            type="button"
-                            className="sb-btn sb-btn--ai sb-btn--small"
-                            disabled={!planReady || running !== null || flowRunning !== null}
-                            title={planReady ? undefined : '답변을 하나 이상 선택하세요'}
-                            onClick={() => runStage('plan-skeleton')}
-                          >
-                            {running === 'plan-skeleton' ? '실행 중…' : '✦ 계획 뼈대 실행 (5a)'}
-                          </button>
-                          <button
-                            type="button"
-                            className="sb-btn sb-btn--ai sb-btn--small"
-                            disabled={!planReady || running !== null || flowRunning !== null}
-                            title={planReady ? undefined : '답변을 하나 이상 선택하세요'}
-                            onClick={() => runStage('plan-products')}
-                          >
-                            {running === 'plan-products' ? '실행 중…' : '✦ 상품·콘텐츠 실행 (4+5b→6)'}
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          type="button"
-                          className="sb-btn sb-btn--ai sb-btn--small"
-                          disabled={!planReady || running !== null || flowRunning !== null || !flowRunId}
-                          title={
-                            !flowRunId
-                              ? '플로우 시작(설문 구간)부터 실행하세요'
-                              : planReady
-                                ? undefined
-                                : '답변을 하나 이상 선택하세요'
-                          }
-                          onClick={runFlowPlan}
-                        >
-                          {flowRunning === 'plan' ? '실행 중…' : '✦ 계획 이어서 실행 (5a∥4·5b→6·7)'}
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        className="sb-btn sb-btn--ai sb-btn--small"
+                        disabled={!planReady || running !== null || flowRunning !== null}
+                        title={planReady ? undefined : '답변을 하나 이상 선택하세요'}
+                        onClick={() => runStage('plan-skeleton')}
+                      >
+                        {running === 'plan-skeleton' ? '실행 중…' : '✦ 계획 뼈대 실행 (5a)'}
+                      </button>
+                      <button
+                        type="button"
+                        className="sb-btn sb-btn--ai sb-btn--small"
+                        disabled={!planReady || running !== null || flowRunning !== null}
+                        title={planReady ? undefined : '답변을 하나 이상 선택하세요'}
+                        onClick={() => runStage('plan-products')}
+                      >
+                        {running === 'plan-products' ? '실행 중…' : '✦ 상품·콘텐츠 실행 (4+5b→6)'}
+                      </button>
                     </div>
                     {svResult.ledger?.trendKeywords?.length > 0 && (
                       <p className="sb-admin__muted">원장 키워드: {svResult.ledger.trendKeywords.join(', ')}</p>
@@ -823,7 +1022,7 @@ export default function PipelineStudio({ api }) {
               </div>
             )}
 
-            {skResult?.skeleton && (
+            {pgTab === 'stage' && skResult?.skeleton && (
               <div className="sb-pipe-play__stage">
                 <div className="sb-pipe-play__stagehead">
                   <b>계획 뼈대 결과</b>
@@ -850,7 +1049,7 @@ export default function PipelineStudio({ api }) {
               </div>
             )}
 
-            {prodResult && (
+            {pgTab === 'stage' && prodResult && (
               <div className="sb-pipe-play__stage">
                 <div className="sb-pipe-play__stagehead">
                   <b>상품·콘텐츠 결과 (검증 게이트 통과분)</b>
@@ -903,102 +1102,6 @@ export default function PipelineStudio({ api }) {
               </div>
             )}
 
-            {/* 전체 플로우 최종 계획 — 검증 게이트까지 지난 병합본 + 실렌더 미리보기 */}
-            {flowRunPlan?.page && (
-              <div className="sb-pipe-play__stage">
-                <div className="sb-pipe-play__stagehead">
-                  <b>플로우 최종 계획 (검증 게이트 병합본)</b>
-                  <span className="sb-admin__muted">
-                    {[metaLine(flowRunPlan.skeletonMeta), metaLine(flowRunPlan.productsMeta)].filter(Boolean).join(' ∥ ')}
-                  </span>
-                </div>
-                {flowRunPlan.productsFailed && (
-                  <p className="sb-admin-gate__error">검색 단계 실패 — 상품 없이 병합됐어요: {flowRunPlan.productsFailed}</p>
-                )}
-                <p className="sb-pipe-play__intro">
-                  <b>{flowRunPlan.page.headline}</b> — {flowRunPlan.page.summary}
-                </p>
-                <div className="sb-pipe-play__grid">
-                  <div>
-                    <ul className="sb-pipe-sections">
-                      {flowRunPlan.page.sections.map((section, index) => (
-                        <li key={index} className="sb-pipe-sections__row">
-                          <span className="sb-admin-prompt-chip">{section.kind}</span>
-                          <div>
-                            <b>{section.title}</b>
-                            {section.kind === 'guide' && <p>{section.body}</p>}
-                            {section.kind === 'steps' && <p>{(section.steps || []).join(' → ')}</p>}
-                            {section.kind === 'products' && (
-                              <p className="sb-admin__muted">
-                                상품 {(section.products || []).length}개{section.reason ? ` — ${section.reason}` : ''}
-                              </p>
-                            )}
-                            {section.kind === 'contents' && (
-                              <p className="sb-admin__muted">
-                                콘텐츠 {(section.items || []).length}개{section.reason ? ` — ${section.reason}` : ''}
-                              </p>
-                            )}
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                    <div className="sb-pipe-play__droplog">
-                      <p className="sb-panel-label">드롭 로그 ({(flowRunPlan.dropLog || []).length})</p>
-                      {(flowRunPlan.dropLog || []).length === 0 && <p className="sb-admin__muted">드롭 없음</p>}
-                      <ul>
-                        {(flowRunPlan.dropLog || []).map((drop, dropIndex) => (
-                          <li key={dropIndex}>
-                            <span className="sb-admin-prompt-chip sb-admin-prompt-chip--warn">{drop.code}</span>{' '}
-                            {drop.message}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                  {flowPlanPreviewThread && (
-                    <div className="sb-pipe-play__preview">
-                      <AdminThreadPreview thread={flowPlanPreviewThread} stage="plan" />
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* 지식 소스 — KV 편집 */}
-          <div className="sb-admin-card">
-            <p className="sb-panel-label">지식 소스 (팀 데이터 v0 — 설정 KV)</p>
-            <p className="sb-admin__muted">
-              DB화 전의 수동 입력 자리예요. 시스템 자리표시자 지식은 프롬프트 캐시에 흡수되고, 가변부·게이트 값은 요청마다
-              실려요. 편집은 새 생성부터 반영돼요 (서버 캐시 최대 30초).
-            </p>
-            {wire && (
-              <ul className="sb-pipe-knowledge">
-                {wire.knowledge.map((entry) => (
-                  <li key={entry.id} className="sb-pipe-knowledge__row">
-                    <div className="sb-pipe-knowledge__main">
-                      <div className="sb-pipe-stage__title">
-                        <b>{entry.label}</b>
-                        <span className="sb-admin-prompt-chip">{INJECTION_LABEL[entry.injection] || entry.injection}</span>
-                        {entry.placeholder && <code>{entry.placeholder}</code>}
-                        {!entry.editable && <span className="sb-admin-prompt-chip">실데이터 파생</span>}
-                        {entry.editable && entry.value && (
-                          <span className="sb-admin-prompt-chip sb-admin-prompt-chip--custom">값 있음</span>
-                        )}
-                      </div>
-                      <p className="sb-pipe-stage__note">
-                        {entry.editable ? (entry.value ? entry.value.split('\n')[0] : '비어 있음 — 지식 없이 생성돼요') : entry.note}
-                      </p>
-                    </div>
-                    {entry.editable && (
-                      <button type="button" className="sb-btn sb-btn--ghost sb-btn--tiny" onClick={() => openKnowledge(entry)}>
-                        편집
-                      </button>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
           </div>
         </div>
       </div>
