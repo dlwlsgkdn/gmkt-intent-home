@@ -1620,3 +1620,106 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* 그래프 상태(ThreadGraphState) 패널 — 플로우 실행이 덮는 채널을 시점별로 열람 */
+.sb-pipe-state {
+  margin-top: 10px;
+  border: 1px solid var(--sb-n-200);
+  border-radius: var(--sb-r-md);
+  background: var(--sb-n-50);
+  padding: 0 10px 10px;
+}
+.sb-pipe-state > summary {
+  padding: 8px 2px;
+  font-size: var(--sb-t-caption);
+  color: var(--sb-ink-2);
+  cursor: pointer;
+}
+.sb-pipe-state__steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 2px 0 6px;
+}
+.sb-pipe-state__step {
+  border: 1px solid var(--sb-n-200);
+  border-radius: var(--sb-r-pill);
+  background: var(--sb-n-0);
+  padding: 2px 9px;
+  font-size: var(--sb-t-micro);
+  color: var(--sb-muted);
+  cursor: pointer;
+}
+.sb-pipe-state__step.is-on {
+  border-color: var(--sb-ai);
+  color: var(--sb-ai);
+  background: var(--sb-ai-soft, var(--sb-n-0));
+}
+.sb-pipe-state__list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sb-pipe-state__row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 3px 6px;
+  border-radius: var(--sb-r-sm);
+  font-size: var(--sb-t-caption);
+}
+.sb-pipe-state__row.is-changed {
+  background: var(--sb-ai-soft, var(--sb-n-100));
+}
+.sb-pipe-state__key {
+  flex: 0 0 190px;
+  color: var(--sb-ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sb-pipe-state__mark {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--sb-ai);
+  margin-left: 6px;
+  vertical-align: 1px;
+}
+.sb-pipe-state__plain {
+  flex: 1;
+  min-width: 0;
+  color: var(--sb-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sb-pipe-state__val {
+  flex: 1;
+  min-width: 0;
+}
+.sb-pipe-state__val > summary {
+  color: var(--sb-muted);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sb-pipe-state__val pre {
+  margin: 4px 0 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--sb-n-200);
+  border-radius: var(--sb-r-sm);
+  background: var(--sb-n-0);
+  max-height: 240px;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

@@ -31,6 +31,59 @@ const INJECTION_LABEL = { system: '시스템(캐시)', user: '가변부', guard:
 /** 플로우 실행 로그 타임라인 표시 순서 — 'gate'는 다이어그램 밖 interrupt 표식 */
 const FLOW_LOG_ORDER = ['objective', 'intent', 'ledger', 'survey', 'gate', 'plan-skeleton', 'plan-products', 'verify', 'record']
 
+/** 그래프 상태(ThreadGraphState) 패널의 채널 카탈로그 — bff engine/state.ts 선언 순서.
+ * sum = 한 줄 요약(없으면 기본 표시), 값 원문은 JSON 펼침으로 본다 */
+const STATE_CHANNELS = [
+  { key: 'threadId', label: '플로우 id' },
+  { key: 'userId', label: '사용자' },
+  { key: 'intent', label: '의도 (한 줄 발화)' },
+  {
+    key: 'intentProfile',
+    label: '의도 해석 (1)',
+    sum: (v) => (v ? [v.template, v.goal, v.timing, v.audience].filter(Boolean).join(' · ') : null),
+  },
+  { key: 'intentMeta', label: '의도 해석 메타', sum: (v) => metaLine(v) },
+  { key: 'profile', label: '프로필', sum: (v) => (Array.isArray(v) ? `${v.length}항목` : null) },
+  {
+    key: 'ledger',
+    label: '제약 원장 (2)',
+    sum: (v) =>
+      v ? `사실 ${v.facts?.length ?? 0} · 키워드 ${v.trendKeywords?.length ?? 0} · 기피 ${v.avoid?.length ?? 0}` : null,
+  },
+  { key: 'blocklist', label: '블록리스트 (guard)', sum: (v) => (Array.isArray(v) ? `${v.length}개` : null) },
+  { key: 'survey', label: '설문 페이지 (3)', sum: (v) => (v ? `질문 ${v.questions?.length ?? 0}개` : null) },
+  { key: 'surveyMeta', label: '설문 메타', sum: (v) => metaLine(v) },
+  { key: 'answers', label: '답변 (interrupt 재개)', sum: (v) => (Array.isArray(v) ? `${v.length}개` : null) },
+  { key: 'feedback', label: '재생성 피드백', sum: (v) => (v ? `${v.stage} 피드백` : null) },
+  { key: 'prevPlan', label: '직전 계획', sum: (v) => (v ? `${v.headline ?? ''}` : null) },
+  { key: 'skeleton', label: '계획 뼈대 (5a)', sum: (v) => (v ? `섹션 ${v.sections?.length ?? 0}` : null) },
+  { key: 'skeletonMeta', label: '뼈대 메타', sum: (v) => metaLine(v) },
+  {
+    key: 'searchSections',
+    label: '검색 섹션 원본 (5b)',
+    sum: (v) => (Array.isArray(v) ? `${v.length}개 (그라운딩 전)` : null),
+  },
+  { key: 'productsMeta', label: '검색 메타', sum: (v) => metaLine(v) },
+  { key: 'productsFailed', label: '검색 실패', sum: (v) => v || null },
+  {
+    key: 'page',
+    label: '최종 페이지 (6)',
+    sum: (v) => (v ? `${v.headline ?? ''} · 섹션 ${v.sections?.length ?? 0}` : null),
+  },
+  { key: 'dropLog', label: '드롭 로그 (6)', sum: (v) => (Array.isArray(v) ? `${v.length}건` : null) },
+]
+
+/** 상태 값 한 줄 표시 — 요약자 우선, 문자열은 그대로(말줄임은 CSS), 그 밖은 타입 표시 */
+const stateSummary = (channel, value) => {
+  if (value === undefined) return undefined
+  if (value === null) return '—'
+  const summed = channel.sum?.(value)
+  if (summed != null && summed !== '') return summed
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  return Array.isArray(value) ? `${value.length}개` : '객체'
+}
+
 /** 플로우 실행 중 노드 → 켜지는 연결선 (PipelineFlow의 link id — 노드의 유입선 기준) */
 const FLOW_INCOMING = {
   objective: [],
@@ -84,6 +137,8 @@ export default function PipelineStudio({ api }) {
   const [flowRunLive, setFlowRunLive] = useState([]) // 실행 중(start~done 사이) 단계 id 목록
   const [flowRunPlan, setFlowRunPlan] = useState(null) // FlowRunResult(phase=plan) — 최종 병합 페이지
   const [flowNote, setFlowNote] = useState(null) // content 스트림 조각 한 줄 표시
+  const [flowStateHistory, setFlowStateHistory] = useState([]) // [{ node, id, changedKeys, snapshot }] — state 이벤트 누적
+  const [flowStateIdx, setFlowStateIdx] = useState(null) // 고정 선택 인덱스 — null이면 최신 추종
 
   const load = async () => {
     setError(null)
@@ -267,6 +322,20 @@ export default function PipelineStudio({ api }) {
       })
       if (data.phase === 'start') setFlowRunLive((prev) => (prev.includes(data.id) ? prev : [...prev, data.id]))
       else setFlowRunLive((prev) => prev.filter((id) => id !== data.id))
+    } else if (name === 'state') {
+      // LastValue 채널 — 패치를 누적하면 그 시점의 ThreadGraphState 스냅샷이 된다
+      setFlowStateHistory((prev) => {
+        const base = prev.length ? prev[prev.length - 1].snapshot : {}
+        return [
+          ...prev,
+          {
+            node: data.node,
+            id: data.id,
+            changedKeys: Object.keys(data.patch || {}),
+            snapshot: { ...base, ...(data.patch || {}) },
+          },
+        ]
+      })
     } else if (name === 'content') {
       const c = data
       if (c.event === 'head') setFlowNote('인트로 생성 중…')
@@ -288,6 +357,8 @@ export default function PipelineStudio({ api }) {
     setFlowRunLive([])
     setFlowRunId(null)
     setFlowRunPlan(null)
+    setFlowStateHistory([])
+    setFlowStateIdx(null)
     setSvResult(null)
     setPgAnswers({})
     setSkResult(null)
@@ -609,6 +680,62 @@ export default function PipelineStudio({ api }) {
                 })}
               </ol>
             )}
+
+            {/* 그래프 상태 패널 — 파이프라인이 흐르며 덮이는 ThreadGraphState 채널 (state 이벤트 누적) */}
+            {pgTab === 'flow' && flowStateHistory.length > 0 && (() => {
+              const idx = flowStateIdx == null ? flowStateHistory.length - 1 : Math.min(flowStateIdx, flowStateHistory.length - 1)
+              const entry = flowStateHistory[idx]
+              const stepLabel = (h) =>
+                h.id === 'gate' ? '답변 대기 (interrupt)' : wire?.stages.find((st) => st.id === h.id)?.label || h.node
+              return (
+                <details className="sb-pipe-state" open>
+                  <summary>
+                    그래프 상태 (ThreadGraphState) — 단계가 지날 때마다 덮인 채널{' '}
+                    <span className="sb-admin__muted">{idx + 1}/{flowStateHistory.length} 시점</span>
+                  </summary>
+                  <div className="sb-pipe-state__steps" role="group" aria-label="상태 시점 선택">
+                    {flowStateHistory.map((h, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        className={'sb-pipe-state__step' + (i === idx ? ' is-on' : '')}
+                        title={h.node}
+                        onClick={() => setFlowStateIdx(i === flowStateHistory.length - 1 ? null : i)}
+                      >
+                        {stepLabel(h)}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="sb-admin__muted">
+                    {entry.node} 시점 — 이번에 덮인 채널: {entry.changedKeys.join(', ') || '없음'}
+                    {flowStateIdx != null && ' · 최신 시점을 누르면 실행을 다시 따라가요'}
+                  </p>
+                  <ul className="sb-pipe-state__list">
+                    {STATE_CHANNELS.filter((channel) => entry.snapshot[channel.key] !== undefined).map((channel) => {
+                      const value = entry.snapshot[channel.key]
+                      const changed = entry.changedKeys.includes(channel.key)
+                      const expandable = value != null && typeof value === 'object'
+                      return (
+                        <li key={channel.key} className={'sb-pipe-state__row' + (changed ? ' is-changed' : '')}>
+                          <span className="sb-pipe-state__key">
+                            {channel.label}
+                            {changed && <i className="sb-pipe-state__mark" title="이 단계에서 덮임" />}
+                          </span>
+                          {expandable ? (
+                            <details className="sb-pipe-state__val">
+                              <summary>{stateSummary(channel, value)}</summary>
+                              <pre>{JSON.stringify(value, null, 2)}</pre>
+                            </details>
+                          ) : (
+                            <span className="sb-pipe-state__plain">{stateSummary(channel, value)}</span>
+                          )}
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </details>
+              )
+            })()}
 
             {svResult?.survey && (
               <div className="sb-pipe-play__stage">

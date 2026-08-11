@@ -403,7 +403,8 @@ export class AdminController {
       '운영과 같은 그래프 토폴로지(병렬 5a∥5b·interrupt·검증 게이트)를 스텁 core+전용 MemorySaver로 돈다. ' +
       'phase=survey는 답변 대기 interrupt까지, phase=plan은 flowId로 재개(유실 시 body의 survey·answers 시딩 재실행). ' +
       'SSE: status → stage({ id, phase: start|done, meta?, prompt?(실제 시스템 전문·가변부), summary? }) ' +
-      '→ content(설문·계획 스트림 조각) → result(FlowRunResult) 또는 error.',
+      '→ content(설문·계획 스트림 조각) → state({ node, id, patch } — 노드가 덮은 그래프 상태 채널, ' +
+      'LastValue라 누적하면 스냅샷) → result(FlowRunResult) 또는 error.',
   })
   @ApiBody({ schema: toOpenApi(AdminFlowRunBody) })
   @ApiProduces('text/event-stream')
@@ -416,6 +417,7 @@ export class AdminController {
         onStatus: (message) => sseSend(res, 'status', { message }),
         onStage: (event) => sseSend(res, 'stage', event),
         onContent: (chunk) => sseSend(res, 'content', chunk),
+        onState: (event) => sseSend(res, 'state', event),
       })
       sseSend(res, 'result', result)
     } catch (e) {

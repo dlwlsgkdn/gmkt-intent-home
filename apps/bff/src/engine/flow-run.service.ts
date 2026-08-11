@@ -77,10 +77,21 @@ export type FlowStageWireEvent = {
   drops?: number
 }
 
+/** 그래프 상태(ThreadGraphState) 관측 이벤트 — 노드가 덮은 채널 패치. 모든 채널이 LastValue라
+ * FE가 패치를 누적하면 그 시점의 상태 스냅샷이 된다 (빈 패치는 보내지 않는다) */
+export type FlowStateWireEvent = {
+  /** 그래프 노드 이름 — 합성 시점은 '(시작 입력)'·'(체크포인트 재개)'·'(시딩 재실행 입력)' */
+  node: string
+  /** 다이어그램 단계 id (합성 시점은 null) */
+  id: string | null
+  patch: Record<string, unknown>
+}
+
 export type FlowRunEvents = {
   onStatus?: (message: string) => void
   onStage?: (event: FlowStageWireEvent) => void
   onContent?: (chunk: GraphStreamChunk) => void
+  onState?: (event: FlowStateWireEvent) => void
 }
 
 export type FlowRunResult = {
@@ -171,6 +182,16 @@ class FlowStageEmitter {
     this.events.onStage?.({ id: NODE_STAGE[node] ?? node, phase: 'start', prompt: await this.promptFor(node) })
   }
 
+  /** 합성 시점 상태 주입 — 시작 입력·체크포인트 재개 스냅샷. acc(프롬프트 재구성 재료)도 함께 갱신 */
+  seedState(node: string, patch: Record<string, unknown>) {
+    const p = patch as StatePatch
+    if (p.ledger) this.acc.ledger = p.ledger
+    if (p.survey) this.acc.survey = p.survey
+    if (p.answers) this.acc.answers = p.answers
+    if (p.profile) this.acc.profile = p.profile
+    this.events.onState?.({ node, id: null, patch })
+  }
+
   /** custom 스트림의 뼈대 조기 확정 — 5a 완료를 updates보다 먼저 알린다 (meta는 updates가 보강) */
   onCustom(chunk: GraphStreamChunk) {
     if (chunk.event === 'skeleton') {
@@ -197,6 +218,9 @@ class FlowStageEmitter {
       if (patch.survey) this.acc.survey = patch.survey
       if (patch.answers) this.acc.answers = patch.answers
       if (patch.profile) this.acc.profile = patch.profile
+      if (Object.keys(patch).length) {
+        this.events.onState?.({ node, id: NODE_STAGE[node] ?? node, patch: patch as Record<string, unknown> })
+      }
       await this.markDone(node, patch)
     }
   }
@@ -309,13 +333,15 @@ export class PipelineFlowRunService {
 
     let runInput: Parameters<ThreadGraph['stream']>[0]
     if (body.phase === 'survey') {
-      runInput = {
+      const seed = {
         threadId: flowId,
         userId: FLOW_USER,
         intent: body.intent,
         profile: body.profile ?? null,
         survey: null,
       }
+      runInput = seed
+      emitter.seedState('(시작 입력)', seed)
       await emitter.start('s0-objective')
     } else {
       if (!body.answers?.length) throw new BadRequestException('plan 페이즈에는 answers가 필요합니다')
@@ -323,9 +349,9 @@ export class PipelineFlowRunService {
       const tasks = (snapshot?.tasks ?? []) as { interrupts?: unknown[] }[]
       const pending = tasks.some((t) => (t.interrupts?.length ?? 0) > 0)
       if (pending) {
-        // 정식 재개 — 체크포인트의 설문을 프롬프트 재구성 재료로 가져온다
-        const values = (snapshot?.values ?? {}) as StatePatch
-        if (values.survey) await emitter.onUpdates({ 's3-survey': { survey: values.survey } })
+        // 정식 재개 — 체크포인트 스냅샷을 상태 관측·프롬프트 재구성 재료로 주입한다
+        const values = (snapshot?.values ?? {}) as Record<string, unknown>
+        if (Object.keys(values).length) emitter.seedState('(체크포인트 재개)', values)
         runInput = new Command({
           resume: { answers: body.answers, profile: body.profile },
         }) as Parameters<ThreadGraph['stream']>[0]
@@ -335,7 +361,7 @@ export class PipelineFlowRunService {
           throw new BadRequestException('플로우가 만료됐습니다 — 설문 페이즈부터 다시 실행해 주세요')
         }
         events.onStatus?.('플로우 상태가 만료돼 시딩 재실행해요 (설문은 재사용, 그래프 복구 경로)')
-        runInput = {
+        const seed = {
           threadId: flowId,
           userId: FLOW_USER,
           intent: body.intent,
@@ -345,6 +371,8 @@ export class PipelineFlowRunService {
           feedback: null,
           prevPlan: null,
         }
+        runInput = seed
+        emitter.seedState('(시딩 재실행 입력)', seed)
         await emitter.start('s0-objective')
       }
     }

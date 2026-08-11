@@ -265,6 +265,10 @@ try {
   ok(stageOf(fr1Stages, 'survey', 'done')?.meta?.latencyMs != null, 'stage 이벤트 — 설문 done meta')
   ok(!!stageOf(fr1Stages, 'gate', 'start'), 'stage 이벤트 — 답변 대기 interrupt')
   ok(count(fr1, 'content') >= 3, `content 조각 수신 ${count(fr1, 'content')}회`)
+  const fr1States = fr1.filter((e) => e.event === 'state').map((e) => e.data)
+  ok(fr1States[0]?.node === '(시작 입력)' && fr1States[0]?.patch?.intent === '여름 쿠션 플로우 확인', 'state 이벤트 — 시작 입력 스냅샷')
+  ok(fr1States.some((s) => s.id === 'ledger' && s.patch?.ledger), 'state 이벤트 — 원장 채널 패치')
+  ok(fr1States.some((s) => s.id === 'survey' && s.patch?.survey?.questions?.length === 3), 'state 이벤트 — 설문 채널 패치')
 
   const fr2 = await sse(
     '/api/admin/pipeline/flow-run',
@@ -288,6 +292,11 @@ try {
   const verifyStage = stageOf(fr2Stages, 'verify', 'done')
   ok(verifyStage?.pass === 3 && verifyStage?.drops >= 1, `stage 이벤트 — 검증 게이트 통과 ${verifyStage?.pass}·드롭 ${verifyStage?.drops}`)
   ok((stageOf(fr2Stages, 'record', 'done')?.summary ?? '').includes('기록 생략'), 'stage 이벤트 — 기록 생략 (core 스텁)')
+  const fr2States = fr2.filter((e) => e.event === 'state').map((e) => e.data)
+  ok(fr2States[0]?.node === '(체크포인트 재개)' && fr2States[0]?.patch?.survey, 'state 이벤트 — 재개 스냅샷 (설문 포함)')
+  ok(fr2States.some((s) => s.node === 'await-answers' && s.patch?.answers?.length === 1), 'state 이벤트 — 답변 주입 패치')
+  ok(fr2States.some((s) => s.id === 'plan-skeleton' && s.patch?.skeleton), 'state 이벤트 — 뼈대 채널 패치')
+  ok(fr2States.some((s) => s.id === 'verify' && s.patch?.page && s.patch?.dropLog), 'state 이벤트 — 최종 페이지·드롭 로그 패치')
   {
     const callsAfterFlow = await llmCalls()
     const delta = (type) => callsAfterFlow.filter((c) => c.type === type).length - callsBeforeFlow.filter((c) => c.type === type).length
