@@ -563,6 +563,38 @@ export default function PipelineStudio({ api }) {
   const planPreview = pgTab === 'flow' ? flowPlanPreview : stagePlanView
   const shownStage = previewStage === 'plan' && (planPreview || flowRunning === 'plan') ? 'plan' : 'survey'
 
+  /* ── 말풍선 근거 재료 — "왜 선택·구성됐나"를 답하는 비(非)렌더 데이터 ──
+     뼈대(5a)의 자리 선정 기준: 최종 페이지에선 검색(5b) reason이 자리를 차지해 사라지는
+     원문 — 그래프 상태(skeleton 채널)·뼈대 dry-run 결과에서 건져 자리 인덱스로 매단다 */
+  const planSkeleton = useMemo(() => {
+    if (pgTab === 'stage') return skResult?.skeleton || null
+    for (let i = flowStateHistory.length - 1; i >= 0; i--) {
+      if (flowStateHistory[i].snapshot.skeleton) return flowStateHistory[i].snapshot.skeleton
+    }
+    return null
+  }, [pgTab, skResult, flowStateHistory])
+  const slotReasons = useMemo(() => {
+    const map = {}
+    ;(planSkeleton?.sections || []).forEach((section, i) => {
+      if ((section.kind === 'products' || section.kind === 'contents') && section.reason) map[i] = section.reason
+    })
+    return map
+  }, [planSkeleton])
+  /* 의도 해석(1단계) — 발화를 어떻게 읽었는지. 전체 플로우의 그래프 상태에만 실린다 */
+  const flowIntentLine = useMemo(() => {
+    if (pgTab !== 'flow') return null
+    for (let i = flowStateHistory.length - 1; i >= 0; i--) {
+      const ip = flowStateHistory[i].snapshot.intentProfile
+      if (ip) return [ip.template, ip.goal, ip.timing, ip.audience].filter(Boolean).join(' · ')
+    }
+    return null
+  }, [pgTab, flowStateHistory])
+  /* 원장 스냅샷 — 이 페이지 생성이 따른 제약 (페이지 전체 말풍선의 근거 접기) */
+  const previewLedger =
+    shownStage === 'plan'
+      ? (pgTab === 'flow' ? flowRunPlan?.ledger : prodResult?.ledger || skResult?.ledger) || svResult?.ledger || null
+      : svResult?.ledger || null
+
   /* 설문 답변 쓰기 — 페이지의 질문 카드(레지스트리 setAnswer: multi 배열·단일 문자열)와
      말풍선 칩이 같은 pgAnswers(배열 맵)에 쓴다 */
   const setFlowAnswer = (questionId, value) => {
@@ -636,9 +668,10 @@ export default function PipelineStudio({ api }) {
           lines: [
             svResult?.meta ? metaLine(svResult.meta) : null,
             svResult?.survey ? `질문 ${svResult.survey.questions.length}개 · 답변 ${answersList.length}개 선택` : null,
-            svResult?.ledger?.trendKeywords?.length ? `원장 키워드: ${svResult.ledger.trendKeywords.join(', ')}` : null,
+            flowIntentLine ? `의도 해석 (1) — ${flowIntentLine}` : null,
             flowSavedLine,
           ].filter(Boolean),
+          ledger: previewLedger,
           foot: !svResult?.survey ? null : pgTab === 'stage' ? (
             stageRunButtons
           ) : (
@@ -669,6 +702,7 @@ export default function PipelineStudio({ api }) {
                 ? `검증 게이트 — 섹션 ${(prodResult.sections || []).length}개 통과 · ${(prodResult.dropLog || []).length}건 드롭`
                 : '상품·콘텐츠 미실행 — 자리가 비어 있어요',
             ].filter(Boolean),
+            ledger: previewLedger,
             dropLog: prodResult?.dropLog || [],
             foot: stageRunButtons,
           }
@@ -680,8 +714,10 @@ export default function PipelineStudio({ api }) {
                 ? [metaLine(flowRunPlan.skeletonMeta), metaLine(flowRunPlan.productsMeta)].filter(Boolean).join(' ∥ ') || null
                 : null,
               flowVerify?.pass != null ? `검증 게이트 — 섹션 ${flowVerify.pass}개 통과 · ${flowVerify.drops}건 드롭` : null,
+              flowIntentLine ? `의도 해석 (1) — ${flowIntentLine}` : null,
               flowSavedLine,
             ].filter(Boolean),
+            ledger: previewLedger,
             error: flowRunPlan?.productsFailed
               ? `검색 단계 실패 — 상품 없이 병합됐어요: ${flowRunPlan.productsFailed}`
               : null,
@@ -1147,6 +1183,8 @@ export default function PipelineStudio({ api }) {
                   answers={pgAnswers}
                   onAnswer={flowBusy ? null : setFlowAnswer}
                   profileItems={previewProfileItems}
+                  slotReasons={slotReasons}
+                  onOpenStage={setSelectedStage}
                   surveySummary={flowSummary}
                   overall={previewOverall}
                 />

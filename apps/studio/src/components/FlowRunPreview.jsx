@@ -37,6 +37,12 @@ const domainOf = (rawUrl) => {
   }
 }
 
+/** 말풍선 → 생성 단계 링크 라벨 — 클릭하면 단계 레이어 모달(이번 실행 프롬프트 = 실제 LLM 쿼리) */
+const SOURCE_STAGE_LABEL = { survey: '설문 (3)', 'plan-skeleton': '뼈대 (5a)', 'plan-products': '검색 (5b)' }
+
+/** 원장 사실 출처 — LedgerFact.source 한글 라벨 */
+const FACT_SOURCE_LABEL = { profile: '프로필', answer: '답변', intent: '의도 해석', feedback: '피드백', signal: '행동 신호' }
+
 /** 말풍선 좌우 배치 최소 컨테이너 폭 — 페이지(390) + 연결선(30) + 레일 최소폭 */
 const STACK_BREAK = 660
 
@@ -58,6 +64,8 @@ export default function FlowRunPreview({
   answers = {}, // { [questionId]: string[] } — 설문 답변 (플로우 재개 입력)
   onAnswer = null, // (questionId, value: string|string[]) — null이면 읽기 전용
   profileItems = [], // 실험 조건 프로필 [{label, value}] — 프로필 패널 렌더 재료
+  slotReasons = {}, // { [sectionIndex]: reason } — 뼈대(5a)가 남긴 자리 선정 기준 (최종 렌더엔 안 남는 근거)
+  onOpenStage = null, // (stageId) — 말풍선 "생성 쿼리" 링크 → 단계 레이어 모달 (실제 프롬프트 열람)
   surveySummary = { profile: [], questions: [] }, // 계획 페이지 surveySummary 패널 재료
   overall = null, // 페이지 전체 말풍선 { label, chip?, lines[], error?, dropLog?, foot? }
 }) {
@@ -129,10 +137,19 @@ export default function FlowRunPreview({
             label: '인트로',
             chip: 'head',
             meta: `head.intro → surveyIntro · ${(page.intro || '').length}자`,
+            sourceStages: ['survey'],
           })
         } else if (it.type === 'surveyQuestion') {
           const q = (page.questions || []).find((question) => question && question.id === it.id)
-          if (q) list.push({ id: it.id, kind: 'question', label: q.question || '질문', chip: 'question', question: q })
+          if (q)
+            list.push({
+              id: it.id,
+              kind: 'question',
+              label: q.question || '질문',
+              chip: 'question',
+              question: q,
+              sourceStages: ['survey'],
+            })
         }
       }
       return list
@@ -146,12 +163,21 @@ export default function FlowRunPreview({
           label: '요약',
           chip: 'head',
           meta: `head.summary → noticeCard · ${(page.summary || '').length}자`,
+          sourceStages: ['plan-skeleton'],
         })
         continue
       }
       const pendingMatch = /^live-plan-pending-(\d+)$/.exec(it.id)
       if (pendingMatch) {
-        list.push({ id: it.id, kind: 'pending', label: `상품·콘텐츠 자리 (섹션 ${Number(pendingMatch[1]) + 1})`, chip: '검색 중' })
+        const slotIndex = Number(pendingMatch[1])
+        list.push({
+          id: it.id,
+          kind: 'pending',
+          label: `상품·콘텐츠 자리 (섹션 ${slotIndex + 1})`,
+          chip: '검색 중',
+          slotReason: slotReasons[slotIndex] || null,
+          sourceStages: ['plan-skeleton', 'plan-products'],
+        })
         continue
       }
       const sectionMatch = /^live-plan-s(\d+)$/.exec(it.id)
@@ -159,6 +185,7 @@ export default function FlowRunPreview({
       const index = Number(sectionMatch[1])
       const section = sections[index]
       if (!section) continue
+      const isSearchKind = section.kind === 'products' || section.kind === 'contents'
       list.push({
         id: it.id,
         kind: 'section',
@@ -166,10 +193,13 @@ export default function FlowRunPreview({
         chip: SECTION_KIND_LABEL[section.kind] || section.kind,
         section,
         index,
+        // 뼈대(5a)가 이 자리를 만들며 남긴 선정 기준 — 최종 렌더에는 검색(5b) reason만 남는다
+        slotReason: isSearchKind ? slotReasons[index] || null : null,
+        sourceStages: isSearchKind ? ['plan-skeleton', 'plan-products'] : ['plan-skeleton'],
       })
     }
     return list
-  }, [page, stage, items])
+  }, [page, stage, items, slotReasons])
 
   const toggleOption = (question, option) => {
     if (!interactive) return
@@ -178,6 +208,27 @@ export default function FlowRunPreview({
     if (question.multi) onAnswer(question.id, on ? arr.filter((o) => o !== option) : [...arr, option])
     else onAnswer(question.id, on ? [] : [option])
   }
+
+  /* "생성 쿼리" 링크 — 이 컴포넌트를 만든 LLM 단계의 실제 프롬프트(시스템 전문·가변부)를
+     단계 레이어 모달로 연다. 왜/어떻게 구성됐는지의 원천 근거다 */
+  const sourceLinks = (b) =>
+    onOpenStage && b.sourceStages?.length ? (
+      <div className="sb-flow-bubble__src">
+        <span>생성 쿼리</span>
+        {b.sourceStages.map((stageId) => (
+          <button
+            key={stageId}
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation()
+              onOpenStage(stageId)
+            }}
+          >
+            {SOURCE_STAGE_LABEL[stageId] || stageId}
+          </button>
+        ))}
+      </div>
+    ) : null
 
   const bubbleBody = (b) => {
     if (b.kind === 'text') return <p className="sb-flow-bubble__meta">{b.meta}</p>
@@ -212,10 +263,16 @@ export default function FlowRunPreview({
       )
     }
     if (b.kind === 'pending') {
-      return <p className="sb-flow-bubble__meta">{statusMessage || '웹 검색으로 상품·콘텐츠를 채우는 중이에요…'}</p>
+      return (
+        <>
+          {b.slotReason && <p className="sb-flow-bubble__text">자리 선정 기준 (뼈대 5a) — {b.slotReason}</p>}
+          <p className="sb-flow-bubble__meta">{statusMessage || '웹 검색으로 상품·콘텐츠를 채우는 중이에요…'}</p>
+        </>
+      )
     }
-    /* 섹션 — 투영 경로 + 항목별 근거(렌더에 안 보이는 재료). 근거 문구(reason)·본문은
-       페이지에 이미 그려지므로 되풀이하지 않는다 */
+    /* 섹션 — 투영 경로 + 항목별 근거(렌더에 안 보이는 재료). 검색(5b)의 추천 이유(reason)·
+       본문은 페이지에 이미 그려지므로 되풀이하지 않고, 렌더에 안 남는 뼈대(5a)의
+       자리 선정 기준만 싣는다 — "왜 이 자리에 이 컴포넌트인가"의 근거 */
     const s = b.section
     return (
       <>
@@ -226,6 +283,7 @@ export default function FlowRunPreview({
           {s.kind === 'contents' ? ` · 콘텐츠 ${(s.items || []).length}개` : ''}
           {s.kind === 'guide' ? ` · 본문 ${(s.body || '').length}자` : ''}
         </p>
+        {b.slotReason && <p className="sb-flow-bubble__text">자리 선정 기준 (뼈대 5a) — {b.slotReason}</p>}
         {s.kind === 'products' && (
           <ul className="sb-pipe-products">
             {(s.products || []).map((product, i) => (
@@ -425,6 +483,39 @@ export default function FlowRunPreview({
             {(overall.lines || []).map((line, i) => (
               <p key={i} className="sb-flow-bubble__meta">{line}</p>
             ))}
+            {/* 생성 제약 근거(원장) — 이 페이지가 따른 사실(출처 칩)·예산·기피·키워드.
+                펼침/접힘이 말풍선 높이를 바꾸므로 배치를 다시 잡는다 */}
+            {overall.ledger && (
+              <details
+                className="sb-flow-bubble__ledger"
+                onToggle={() => requestAnimationFrame(() => layoutRef.current())}
+              >
+                <summary>
+                  생성 제약 근거 (원장) — 사실 {(overall.ledger.facts || []).length}
+                  {overall.ledger.budgetKrw != null
+                    ? ` · 예산 ${overall.ledger.budgetKrw.toLocaleString('ko-KR')}원 이하`
+                    : ''}
+                  {(overall.ledger.avoid || []).length ? ` · 기피 ${overall.ledger.avoid.length}` : ''}
+                </summary>
+                <ul className="sb-flow-bubble__facts">
+                  {(overall.ledger.facts || []).map((fact, i) => (
+                    <li key={i}>
+                      <b>{fact.label}</b> {fact.value}
+                      <span className="sb-admin-prompt-chip">{FACT_SOURCE_LABEL[fact.source] || fact.source}</span>
+                    </li>
+                  ))}
+                </ul>
+                {(overall.ledger.avoid || []).length > 0 && (
+                  <p className="sb-flow-bubble__meta">기피 — {overall.ledger.avoid.join(', ')}</p>
+                )}
+                {(overall.ledger.trendKeywords || []).length > 0 && (
+                  <p className="sb-flow-bubble__meta">트렌드 키워드 — {overall.ledger.trendKeywords.join(', ')}</p>
+                )}
+                {(overall.ledger.recentFeedback || []).length > 0 && (
+                  <p className="sb-flow-bubble__meta">직전 피드백 — {overall.ledger.recentFeedback.join(' / ')}</p>
+                )}
+              </details>
+            )}
             {overall.error && <p className="sb-admin-gate__error">{overall.error}</p>}
             {overall.dropLog && overall.dropLog.length > 0 && (
               <ul className="sb-pipe-products">
@@ -450,6 +541,7 @@ export default function FlowRunPreview({
               {b.chip && <span className="sb-admin-prompt-chip">{b.chip}</span>}
             </div>
             {bubbleBody(b)}
+            {sourceLinks(b)}
           </div>
         ))}
       </div>

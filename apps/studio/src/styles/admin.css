@@ -1885,3 +1885,56 @@
   gap: 6px;
   margin: 6px 0 2px;
 }
+
+/* 말풍선 근거 — "생성 쿼리" 링크(단계 레이어 모달로 실제 프롬프트 열람)와
+   생성 제약 근거(원장) 접기. 렌더에 안 남는 재료(자리 선정 기준·원장 사실)가 여기 실린다 */
+.sb-flow-bubble__src {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 7px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--sb-n-100);
+}
+.sb-flow-bubble__src > span {
+  font-size: var(--sb-t-micro);
+  color: var(--sb-subtle);
+}
+.sb-flow-bubble__src button {
+  border: 1px solid var(--sb-n-200);
+  background: var(--sb-n-0);
+  border-radius: var(--sb-r-pill);
+  padding: 1px 8px;
+  font-size: var(--sb-t-micro);
+  color: var(--sb-ink-2);
+  cursor: pointer;
+}
+.sb-flow-bubble__src button:hover {
+  border-color: var(--sb-info);
+  color: var(--sb-info);
+}
+.sb-flow-bubble__ledger {
+  margin-top: 6px;
+}
+.sb-flow-bubble__ledger summary {
+  font-size: var(--sb-t-micro);
+  color: var(--sb-muted);
+  cursor: pointer;
+}
+.sb-flow-bubble__facts {
+  list-style: none;
+  margin: 6px 0 2px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: var(--sb-t-micro);
+  color: var(--sb-ink-2);
+}
+.sb-flow-bubble__facts b {
+  font-weight: 500;
+}
+.sb-flow-bubble__facts .sb-admin-prompt-chip {
+  margin-left: 4px;
+  padding: 0 6px;
+}
