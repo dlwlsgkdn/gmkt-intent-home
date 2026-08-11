@@ -10,7 +10,6 @@ import {
   putAdminModel,
   putAdminPrompt,
 } from '../lib/adminApi.js'
-import AdminThreadPreview from './AdminThreadPreview.jsx'
 import FlowRunPreview from './FlowRunPreview.jsx'
 import PipelineFlow, { KIND_LABEL, metaLine } from './PipelineFlow.jsx'
 
@@ -21,10 +20,13 @@ import PipelineFlow, { KIND_LABEL, metaLine } from './PipelineFlow.jsx'
  * 아니라 다이어그램에 녹아 있다: LLM 노드 클릭 = 단계 레이어 모달(설명·최근 실행·프롬프트
  * 열람·수정). 플레이그라운드는 두 모드다: "단계 단독"은 LLM 단계 하나를 그래프·쓰레드 기록
  * 없이 dry-run하고, "전체 플로우"는 실제 LangGraph 그래프(병렬·interrupt·검증 게이트)를
- * 스텁 core+MemorySaver로 통째로 돌며 stage 이벤트(단계 수명·실제 프롬프트·데이터)를
- * 실시간으로 받는다 — 실행 중에는 다이어그램 위로 경로가 흐르고, content 이벤트(부분
- * 페이지)는 실렌더 미리보기(FlowRunPreview)가 프로덕션(LivePlayer)과 같은 스트리밍으로
- * 그리며 컴포넌트별 와이어 상세를 말풍선 레일로 보여준다.
+ * 전용 MemorySaver로 통째로 돌며 **admin 프로필(ops-playground)의 core 쓰레드로 기록**한다
+ * — 쓰레드·평가 탭에서 열람·평가·케이스 승격이 가능한 평가 대상이 된다 (core 미연결이면
+ * 기록 없는 임시 플로우로 강등). stage 이벤트(단계 수명·실제 프롬프트)·state 이벤트(그래프
+ * 상태 채널 패치)는 **가운데 흐름 카드의 "이번 실행 관측"**(타임라인 + 그래프 상태 접기)에
+ * 쌓이고, content 이벤트(부분 페이지)는 실렌더 미리보기(FlowRunPreview)가 프로덕션
+ * (LivePlayer)과 같은 스트리밍으로 그리며 컴포넌트별 와이어 상세를 말풍선 레일로 보여준다
+ * — 단계 단독 모드도 같은 미리보기 한 벌을 쓴다(계획은 뼈대+검색 병합의 FE 합성).
  * 실행 버튼은 진짜 생성이므로 ✦ (스튜디오 왕복 ⇄ 아님 — CLAUDE.md 표기 규칙).
  */
 
@@ -148,7 +150,8 @@ export default function PipelineStudio({ api }) {
   const [flowPartial, setFlowPartial] = useState(null) // 생성 중 부분 페이지 (확정 전 미리보기)
   const [flowPlanPage, setFlowPlanPage] = useState(null) // 뼈대 조기 확정 페이지 — result가 최종으로 덮는다
   const [flowPendingSlots, setFlowPendingSlots] = useState([]) // 아직 검색 결과가 안 채운 자리 인덱스
-  const [flowView, setFlowView] = useState('survey') // 실렌더 미리보기 단계 seg — 'survey' | 'plan'
+  const [previewStage, setPreviewStage] = useState('survey') // 실렌더 미리보기 단계 seg — 'survey' | 'plan' (두 모드 공용)
+  const [flowRecorded, setFlowRecorded] = useState(false) // 플로우가 admin 프로필의 core 쓰레드로 저장됐는지
   const flowSkeletonRef = useRef(false) // 이번 계획 실행에서 skeleton(조기 확정)을 받았는지
 
   const load = async () => {
@@ -275,16 +278,6 @@ export default function PipelineStudio({ api }) {
     [pgAnswers],
   )
 
-  const toggleAnswer = (question, option) => {
-    setPgAnswers((prev) => {
-      const current = prev[question.id] || []
-      let next
-      if (question.multi) next = current.includes(option) ? current.filter((o) => o !== option) : [...current, option]
-      else next = current[0] === option ? [] : [option]
-      return { ...prev, [question.id]: next }
-    })
-  }
-
   const runStage = async (stageId) => {
     if (running || flowRunning) return
     setRunning(stageId)
@@ -307,9 +300,15 @@ export default function PipelineStudio({ api }) {
         setFlowPlanPage(null)
         setFlowPendingSlots([])
         setFlowPartial(null)
+        setPreviewStage('survey')
         flowSkeletonRef.current = false
-      } else if (stageId === 'plan-skeleton') setSkResult(result)
-      else setProdResult(result)
+      } else if (stageId === 'plan-skeleton') {
+        setSkResult(result)
+        setPreviewStage('plan')
+      } else {
+        setProdResult(result)
+        setPreviewStage('plan')
+      }
     } catch (e) {
       setPgError(e.message)
     } finally {
@@ -416,7 +415,8 @@ export default function PipelineStudio({ api }) {
     setFlowPartial(null)
     setFlowPlanPage(null)
     setFlowPendingSlots([])
-    setFlowView('survey')
+    setPreviewStage('survey')
+    setFlowRecorded(false)
     flowSkeletonRef.current = false
     try {
       const result = await flowRunPipeline(
@@ -424,6 +424,7 @@ export default function PipelineStudio({ api }) {
         { onStatus: setPgStatus, onEvent: handleFlowEvent },
       )
       setFlowRunId(result.flowId)
+      setFlowRecorded(!!result.recorded)
       setSvResult({ survey: result.survey, ledger: result.ledger, meta: result.meta })
       setFlowPartial(null)
     } catch (e) {
@@ -449,7 +450,7 @@ export default function PipelineStudio({ api }) {
     setFlowPartial(null)
     setFlowPlanPage(null)
     setFlowPendingSlots([])
-    setFlowView('plan')
+    setPreviewStage('plan')
     flowSkeletonRef.current = false
     try {
       const result = await flowRunPipeline(
@@ -479,22 +480,13 @@ export default function PipelineStudio({ api }) {
     }
   }
 
-  /* 설문 미리보기용 합성 쓰레드 — AdminThreadPreview(실렌더)를 그대로 재사용한다 */
-  const previewThread = useMemo(() => {
-    if (!svResult?.survey) return null
-    return {
-      steps: [
-        { stage: 'survey', payload: { page: svResult.survey } },
-        ...(answersList.length ? [{ stage: 'answers', payload: { answers: answersList } }] : []),
-      ],
-    }
-  }, [svResult, answersList])
-
   const planReady = Boolean(svResult?.survey) && answersList.length > 0
   const flowBusy = running !== null || flowRunning !== null
 
-  /* ── 실렌더 미리보기(FlowRunPreview) 재료 — 스트리밍 중엔 부분 페이지, 끝나면 확정본 ── */
-  const flowSurveyPreviewPage =
+  /* ── 실렌더 미리보기(FlowRunPreview) 재료 — 두 모드 공용: 스트리밍 중엔 부분 페이지,
+     끝나면 확정본. 단계 단독 모드의 계획은 뼈대+검색 결과를 스튜디오가 자리 규칙대로
+     합성한 병합 미리보기다 (검증 게이트 병합의 FE 근사 — 남는 검색 섹션은 끝에 붙는다) ── */
+  const surveyPreviewPage =
     flowRunning === 'survey'
       ? flowPartial
         ? { intro: flowPartial.intro || '', questions: (flowPartial.questions || []).filter(Boolean) }
@@ -508,7 +500,28 @@ export default function PipelineStudio({ api }) {
           pending: [],
         }
       : null
-  const flowShownStage = flowView === 'plan' && (flowPlanPreview || flowRunning === 'plan') ? 'plan' : 'survey'
+  const stagePlanView = useMemo(() => {
+    if (!skResult?.skeleton && !prodResult) return null
+    const search = [...(prodResult?.sections || [])]
+    const takeKind = (kind) => {
+      const i = search.findIndex((s) => s.kind === kind)
+      return i >= 0 ? search.splice(i, 1)[0] : null
+    }
+    if (!skResult?.skeleton) return { page: { headline: '', summary: '', sections: search }, pending: [] }
+    const sk = skResult.skeleton
+    const pending = []
+    const sections = sk.sections.map((section, i) => {
+      if (section.kind !== 'products' && section.kind !== 'contents') return section
+      const filled = takeKind(section.kind)
+      if (filled) return filled
+      pending.push(i) // 아직 안 채운 자리 — "상품·콘텐츠 실행"이 채운다
+      return null
+    })
+    sections.push(...search)
+    return { page: { headline: sk.headline, summary: sk.summary, sections }, pending }
+  }, [skResult, prodResult])
+  const planPreview = pgTab === 'flow' ? flowPlanPreview : stagePlanView
+  const shownStage = previewStage === 'plan' && (planPreview || flowRunning === 'plan') ? 'plan' : 'survey'
 
   /* 설문 답변 쓰기 — 페이지의 질문 카드(레지스트리 setAnswer: multi 배열·단일 문자열)와
      말풍선 칩이 같은 pgAnswers(배열 맵)에 쓴다 */
@@ -531,19 +544,56 @@ export default function PipelineStudio({ api }) {
     [svResult, pgAnswers],
   )
 
-  /* 페이지 전체 말풍선 — 단계 산출 메타·원장·검증 게이트 요약 + 플로우 재개 액션 */
+  /* 페이지 전체 말풍선 — 단계 산출 메타·원장·검증 게이트 요약 + 실행 액션(모드별).
+     플로우 모드는 저장된 쓰레드(admin 프로필) 안내를 함께 싣는다 — 평가의 진입점 */
   const flowVerify = flowRunStages.verify
-  const flowOverall =
-    flowShownStage === 'survey'
+  const flowSavedLine =
+    pgTab === 'flow' && flowRunId
+      ? flowRecorded
+        ? `쓰레드 ${flowRunId} 저장 — admin 프로필(ops-playground) · 쓰레드·평가 탭에서 평가·케이스 승격`
+        : '기록 없음 — core 미연결 임시 플로우'
+      : null
+  const stageRunButtons = (
+    <>
+      <button
+        type="button"
+        className="sb-btn sb-btn--ai sb-btn--tiny"
+        disabled={!planReady || flowBusy}
+        title={planReady ? undefined : '답변을 하나 이상 선택하세요'}
+        onClick={() => runStage('plan-skeleton')}
+      >
+        {running === 'plan-skeleton' ? '실행 중…' : '✦ 계획 뼈대 실행 (5a)'}
+      </button>
+      <button
+        type="button"
+        className="sb-btn sb-btn--ai sb-btn--tiny"
+        disabled={!planReady || flowBusy}
+        title={planReady ? undefined : '답변을 하나 이상 선택하세요'}
+        onClick={() => runStage('plan-products')}
+      >
+        {running === 'plan-products' ? '실행 중…' : '✦ 상품·콘텐츠 실행 (4+5b→6)'}
+      </button>
+    </>
+  )
+  const previewOverall =
+    shownStage === 'survey'
       ? {
           label: '설문 페이지',
-          chip: flowRunning === 'survey' ? '생성 중' : 'LLM 산출 (3)',
+          chip:
+            flowRunning === 'survey'
+              ? '생성 중'
+              : pgTab === 'stage' && svResult?.promptCustom
+                ? '임시/재정의 프롬프트'
+                : 'LLM 산출 (3)',
           lines: [
             svResult?.meta ? metaLine(svResult.meta) : null,
             svResult?.survey ? `질문 ${svResult.survey.questions.length}개 · 답변 ${answersList.length}개 선택` : null,
             svResult?.ledger?.trendKeywords?.length ? `원장 키워드: ${svResult.ledger.trendKeywords.join(', ')}` : null,
+            flowSavedLine,
           ].filter(Boolean),
-          foot: svResult?.survey ? (
+          foot: !svResult?.survey ? null : pgTab === 'stage' ? (
+            stageRunButtons
+          ) : (
             <button
               type="button"
               className="sb-btn sb-btn--ai sb-btn--tiny"
@@ -559,22 +609,36 @@ export default function PipelineStudio({ api }) {
             >
               {flowRunning === 'plan' ? '실행 중…' : '✦ 계획 이어서 실행 (5a∥4·5b→6·7)'}
             </button>
-          ) : null,
+          ),
         }
-      : {
-          label: '계획 페이지',
-          chip: flowRunning === 'plan' ? '생성 중' : '검증 게이트 병합본',
-          lines: [
-            flowRunPlan
-              ? [metaLine(flowRunPlan.skeletonMeta), metaLine(flowRunPlan.productsMeta)].filter(Boolean).join(' ∥ ') || null
+      : pgTab === 'stage'
+        ? {
+            label: '계획 페이지',
+            chip: '뼈대+검색 병합 (스튜디오 합성)',
+            lines: [
+              [metaLine(skResult?.meta), metaLine(prodResult?.meta)].filter(Boolean).join(' ∥ ') || null,
+              prodResult
+                ? `검증 게이트 — 섹션 ${(prodResult.sections || []).length}개 통과 · ${(prodResult.dropLog || []).length}건 드롭`
+                : '상품·콘텐츠 미실행 — 자리가 비어 있어요',
+            ].filter(Boolean),
+            dropLog: prodResult?.dropLog || [],
+            foot: stageRunButtons,
+          }
+        : {
+            label: '계획 페이지',
+            chip: flowRunning === 'plan' ? '생성 중' : '검증 게이트 병합본',
+            lines: [
+              flowRunPlan
+                ? [metaLine(flowRunPlan.skeletonMeta), metaLine(flowRunPlan.productsMeta)].filter(Boolean).join(' ∥ ') || null
+                : null,
+              flowVerify?.pass != null ? `검증 게이트 — 섹션 ${flowVerify.pass}개 통과 · ${flowVerify.drops}건 드롭` : null,
+              flowSavedLine,
+            ].filter(Boolean),
+            error: flowRunPlan?.productsFailed
+              ? `검색 단계 실패 — 상품 없이 병합됐어요: ${flowRunPlan.productsFailed}`
               : null,
-            flowVerify?.pass != null ? `검증 게이트 — 섹션 ${flowVerify.pass}개 통과 · ${flowVerify.drops}건 드롭` : null,
-          ].filter(Boolean),
-          error: flowRunPlan?.productsFailed
-            ? `검색 단계 실패 — 상품 없이 병합됐어요: ${flowRunPlan.productsFailed}`
-            : null,
-          dropLog: flowRunPlan?.dropLog || [],
-        }
+            dropLog: flowRunPlan?.dropLog || [],
+          }
 
   /* 흐름 다이어그램에 얹는 실행 결과 요약 — 노드의 ✓ 배지·레이어 모달 "이번 실행"의 원천.
    * 단계 단독 dry-run 결과와 전체 플로우 stage 이벤트를 한 맵으로 겹친다 (나중 실행이 이긴다) */
@@ -760,6 +824,90 @@ export default function PipelineStudio({ api }) {
                   {pgStatus || flowNote || (flowRunning ? '플로우를 실행하고 있어요…' : '단계를 실행하고 있어요…')}
                 </p>
               )}
+
+              {/* 이번 실행 관측 — 플로우 단계 수명 타임라인 + 그래프 상태. 다이어그램 바로 아래에
+                  녹여 실행이 흐름 위에서 그대로 읽히게 한다 (행 클릭 = 단계 레이어 모달) */}
+              {FLOW_LOG_ORDER.some((id) => flowRunStages[id]) && (
+                <div className="sb-flow-observe">
+                  <p className="sb-panel-label">이번 플로우 실행</p>
+                  <ol className="sb-pipe-flowlog">
+                    {FLOW_LOG_ORDER.filter((id) => flowRunStages[id]).map((id) => {
+                      const s = flowRunStages[id]
+                      const stageDef = wire?.stages.find((st) => st.id === id)
+                      const label = id === 'gate' ? '답변 대기 (interrupt)' : stageDef?.label || id
+                      return (
+                        <li key={id} className={'sb-pipe-flowlog__row' + (s.status === 'start' ? ' is-live' : ' is-done')}>
+                          <button type="button" disabled={!stageDef} onClick={() => stageDef && setSelectedStage(id)}>
+                            <i className="sb-pipe-flowlog__dot" aria-hidden="true" />
+                            <b>{label}</b>
+                            <span className="sb-pipe-flowlog__sub">
+                              {s.status === 'start' ? '실행 중…' : s.summary || '완료'}
+                              {s.meta ? ` · ${metaLine(s.meta)}` : ''}
+                            </span>
+                            {s.prompt && <span className="sb-admin-prompt-chip">프롬프트</span>}
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ol>
+
+                  {/* 그래프 상태 (ThreadGraphState) — 채널 스냅샷. 간결하게 접힌 채로 둔다 */}
+                  {flowStateHistory.length > 0 && (() => {
+                    const idx = flowStateIdx == null ? flowStateHistory.length - 1 : Math.min(flowStateIdx, flowStateHistory.length - 1)
+                    const entry = flowStateHistory[idx]
+                    const stepLabel = (h) =>
+                      h.id === 'gate' ? '답변 대기 (interrupt)' : wire?.stages.find((st) => st.id === h.id)?.label || h.node
+                    return (
+                      <details className="sb-pipe-state">
+                        <summary>
+                          그래프 상태 (ThreadGraphState){' '}
+                          <span className="sb-admin__muted">{idx + 1}/{flowStateHistory.length} 시점 · 채널 스냅샷</span>
+                        </summary>
+                        <div className="sb-pipe-state__steps" role="group" aria-label="상태 시점 선택">
+                          {flowStateHistory.map((h, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              className={'sb-pipe-state__step' + (i === idx ? ' is-on' : '')}
+                              title={h.node}
+                              onClick={() => setFlowStateIdx(i === flowStateHistory.length - 1 ? null : i)}
+                            >
+                              {stepLabel(h)}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="sb-admin__muted">
+                          {entry.node} 시점 — 이번에 덮인 채널: {entry.changedKeys.join(', ') || '없음'}
+                          {flowStateIdx != null && ' · 최신 시점을 누르면 실행을 다시 따라가요'}
+                        </p>
+                        <ul className="sb-pipe-state__list">
+                          {STATE_CHANNELS.filter((channel) => entry.snapshot[channel.key] !== undefined).map((channel) => {
+                            const value = entry.snapshot[channel.key]
+                            const changed = entry.changedKeys.includes(channel.key)
+                            const expandable = value != null && typeof value === 'object'
+                            return (
+                              <li key={channel.key} className={'sb-pipe-state__row' + (changed ? ' is-changed' : '')}>
+                                <span className="sb-pipe-state__key">
+                                  {channel.label}
+                                  {changed && <i className="sb-pipe-state__mark" title="이 단계에서 덮임" />}
+                                </span>
+                                {expandable ? (
+                                  <details className="sb-pipe-state__val">
+                                    <summary>{stateSummary(channel, value)}</summary>
+                                    <pre>{JSON.stringify(value, null, 2)}</pre>
+                                  </details>
+                                ) : (
+                                  <span className="sb-pipe-state__plain">{stateSummary(channel, value)}</span>
+                                )}
+                              </li>
+                            )
+                          })}
+                        </ul>
+                      </details>
+                    )
+                  })()}
+                </div>
+              )}
             </>
           )}
         </div>
@@ -768,7 +916,7 @@ export default function PipelineStudio({ api }) {
           {/* 플레이그라운드 — 단계 단독 dry-run ∥ 전체 플로우 (실행이 왼쪽 다이어그램에 그대로 비친다) */}
           <div className="sb-admin-card">
             <div className="sb-pipe-play__head">
-              <p className="sb-panel-label">플레이그라운드 (쓰레드 기록 없음)</p>
+              <p className="sb-panel-label">플레이그라운드</p>
               <div className="sb-admin-fb-seg" role="group" aria-label="플레이그라운드 모드">
                 <button
                   type="button"
@@ -788,8 +936,8 @@ export default function PipelineStudio({ api }) {
             </div>
             <p className="sb-admin__muted">
               {pgTab === 'stage'
-                ? 'LLM 단계 하나를 그래프 없이 단독 실행해요 — 임시 프롬프트 what-if는 이 모드 전용이에요.'
-                : '실제 그래프(병렬 5a∥5b · 답변 대기 · 검증 게이트)를 통째로 돌아요 — 단계별 실제 프롬프트·데이터가 실시간으로 남고, 노드를 누르면 "이번 실행"으로 볼 수 있어요.'}
+                ? 'LLM 단계 하나를 그래프·쓰레드 기록 없이 단독 실행해요 — 임시 프롬프트 what-if는 이 모드 전용이에요.'
+                : '실제 그래프(병렬 5a∥5b · 답변 대기 · 검증 게이트)를 통째로 돌고, 실행은 admin 프로필(ops-playground)의 쓰레드로 저장돼 쓰레드·평가 탭에서 평가·케이스 승격에 쓸 수 있어요. 단계별 관측은 가운데 흐름 카드에 실시간으로 쌓여요.'}
             </p>
             <div className="sb-pipe-play__intent">
               <input
@@ -833,275 +981,60 @@ export default function PipelineStudio({ api }) {
             {pgTab === 'flow' && flowNote && <p className="sb-admin__muted">{flowNote}</p>}
             {pgError && <p className="sb-admin-gate__error">{pgError}</p>}
 
-            {/* 플로우 실행 로그 — 단계 수명 타임라인 (행 클릭 = 단계 레이어 모달의 "이번 실행") */}
-            {pgTab === 'flow' && FLOW_LOG_ORDER.some((id) => flowRunStages[id]) && (
-              <ol className="sb-pipe-flowlog">
-                {FLOW_LOG_ORDER.filter((id) => flowRunStages[id]).map((id) => {
-                  const s = flowRunStages[id]
-                  const stageDef = wire?.stages.find((st) => st.id === id)
-                  const label = id === 'gate' ? '답변 대기 (interrupt)' : stageDef?.label || id
-                  return (
-                    <li key={id} className={'sb-pipe-flowlog__row' + (s.status === 'start' ? ' is-live' : ' is-done')}>
-                      <button type="button" disabled={!stageDef} onClick={() => stageDef && setSelectedStage(id)}>
-                        <i className="sb-pipe-flowlog__dot" aria-hidden="true" />
-                        <b>{label}</b>
-                        <span className="sb-pipe-flowlog__sub">
-                          {s.status === 'start' ? '실행 중…' : s.summary || '완료'}
-                          {s.meta ? ` · ${metaLine(s.meta)}` : ''}
-                        </span>
-                        {s.prompt && <span className="sb-admin-prompt-chip">프롬프트</span>}
-                      </button>
-                    </li>
-                  )
-                })}
-              </ol>
-            )}
-
-            {/* 그래프 상태 패널 — 파이프라인이 흐르며 덮이는 ThreadGraphState 채널 (state 이벤트 누적) */}
-            {pgTab === 'flow' && flowStateHistory.length > 0 && (() => {
-              const idx = flowStateIdx == null ? flowStateHistory.length - 1 : Math.min(flowStateIdx, flowStateHistory.length - 1)
-              const entry = flowStateHistory[idx]
-              const stepLabel = (h) =>
-                h.id === 'gate' ? '답변 대기 (interrupt)' : wire?.stages.find((st) => st.id === h.id)?.label || h.node
-              return (
-                <details className="sb-pipe-state" open>
-                  <summary>
-                    그래프 상태 (ThreadGraphState) — 단계가 지날 때마다 덮인 채널{' '}
-                    <span className="sb-admin__muted">{idx + 1}/{flowStateHistory.length} 시점</span>
-                  </summary>
-                  <div className="sb-pipe-state__steps" role="group" aria-label="상태 시점 선택">
-                    {flowStateHistory.map((h, i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        className={'sb-pipe-state__step' + (i === idx ? ' is-on' : '')}
-                        title={h.node}
-                        onClick={() => setFlowStateIdx(i === flowStateHistory.length - 1 ? null : i)}
-                      >
-                        {stepLabel(h)}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="sb-admin__muted">
-                    {entry.node} 시점 — 이번에 덮인 채널: {entry.changedKeys.join(', ') || '없음'}
-                    {flowStateIdx != null && ' · 최신 시점을 누르면 실행을 다시 따라가요'}
-                  </p>
-                  <ul className="sb-pipe-state__list">
-                    {STATE_CHANNELS.filter((channel) => entry.snapshot[channel.key] !== undefined).map((channel) => {
-                      const value = entry.snapshot[channel.key]
-                      const changed = entry.changedKeys.includes(channel.key)
-                      const expandable = value != null && typeof value === 'object'
-                      return (
-                        <li key={channel.key} className={'sb-pipe-state__row' + (changed ? ' is-changed' : '')}>
-                          <span className="sb-pipe-state__key">
-                            {channel.label}
-                            {changed && <i className="sb-pipe-state__mark" title="이 단계에서 덮임" />}
-                          </span>
-                          {expandable ? (
-                            <details className="sb-pipe-state__val">
-                              <summary>{stateSummary(channel, value)}</summary>
-                              <pre>{JSON.stringify(value, null, 2)}</pre>
-                            </details>
-                          ) : (
-                            <span className="sb-pipe-state__plain">{stateSummary(channel, value)}</span>
-                          )}
-                        </li>
-                      )
-                    })}
-                  </ul>
-                </details>
-              )
-            })()}
-
-            {/* 전체 플로우 실렌더 미리보기 — 프로덕션(LivePlayer) 스트리밍 그대로 + 컴포넌트별
-                와이어 상세 말풍선 레일. 설문 답변 선택(재개 입력)도 이 페이지·말풍선에서 한다 */}
-            {pgTab === 'flow' && (flowSurveyPreviewPage || flowPlanPreview || flowRunning) && (
+            {/* 실렌더 미리보기 — 두 모드 공용: 생성 결과(설문/계획)를 프로덕션(LivePlayer)
+                스트리밍 그대로 그리고, 생성 데이터는 오른쪽 컴포넌트별 말풍선으로 연결한다.
+                설문 답변 선택(재개·단계 실행 입력)도 이 페이지·말풍선에서 한다 */}
+            {(surveyPreviewPage || planPreview || flowRunning) && (
               <div className="sb-pipe-play__stage">
                 <div className="sb-pipe-play__stagehead">
-                  <b>실제 렌더링 — 프로덕션 스트리밍 그대로</b>
+                  <b>실제 렌더링{pgTab === 'flow' ? ' — 프로덕션 스트리밍 그대로' : ''}</b>
                   <div className="sb-admin-fb-seg" role="group" aria-label="실렌더 미리보기 단계">
                     <button
                       type="button"
-                      className={'sb-admin-fb-seg__btn' + (flowShownStage === 'survey' ? ' is-on' : '')}
-                      onClick={() => setFlowView('survey')}
+                      className={'sb-admin-fb-seg__btn' + (shownStage === 'survey' ? ' is-on' : '')}
+                      onClick={() => setPreviewStage('survey')}
                     >
                       설문
                     </button>
                     <button
                       type="button"
-                      className={'sb-admin-fb-seg__btn' + (flowShownStage === 'plan' ? ' is-on' : '')}
-                      disabled={!flowPlanPreview}
-                      title={flowPlanPreview ? undefined : '계획 구간을 실행하면 열려요'}
-                      onClick={() => setFlowView('plan')}
+                      className={'sb-admin-fb-seg__btn' + (shownStage === 'plan' ? ' is-on' : '')}
+                      disabled={!planPreview}
+                      title={planPreview ? undefined : '계획 구간을 실행하면 열려요'}
+                      onClick={() => setPreviewStage('plan')}
                     >
                       계획
                     </button>
                   </div>
                 </div>
                 <FlowRunPreview
-                  stage={flowShownStage}
-                  page={flowShownStage === 'survey' ? flowSurveyPreviewPage : flowPlanPreview?.page || null}
+                  stage={shownStage}
+                  page={shownStage === 'survey' ? surveyPreviewPage : planPreview?.page || null}
                   streaming={
-                    flowShownStage === 'survey'
+                    pgTab === 'flow' &&
+                    (shownStage === 'survey'
                       ? flowRunning === 'survey'
-                      : flowRunning === 'plan' && !flowSkeletonRef.current
+                      : flowRunning === 'plan' && !flowSkeletonRef.current)
                   }
-                  pendingSlots={flowShownStage === 'plan' ? flowPlanPreview?.pending || [] : []}
-                  statusMessage={pgStatus || flowNote}
+                  pendingSlots={shownStage === 'plan' ? planPreview?.pending || [] : []}
+                  statusMessage={
+                    pgTab === 'flow'
+                      ? pgStatus || flowNote
+                      : running
+                        ? pgStatus
+                        : shownStage === 'plan'
+                          ? prodResult
+                            ? '자리 비어 있음 — 검증 게이트 통과 섹션이 없어요 (드롭 로그 참고)'
+                            : '자리 — ✦ 상품·콘텐츠 실행(4+5b→6)이 채워요'
+                          : null
+                  }
                   answers={pgAnswers}
                   onAnswer={flowBusy ? null : setFlowAnswer}
                   surveySummary={flowSummary}
-                  overall={flowOverall}
+                  overall={previewOverall}
                 />
               </div>
             )}
-
-            {pgTab === 'stage' && svResult?.survey && (
-              <div className="sb-pipe-play__stage">
-                <div className="sb-pipe-play__stagehead">
-                  <b>설문 결과</b>
-                  <span className="sb-admin__muted">{metaLine(svResult.meta)}</span>
-                  {svResult.promptCustom && <span className="sb-admin-prompt-chip sb-admin-prompt-chip--custom">임시/재정의 프롬프트</span>}
-                </div>
-                <p className="sb-pipe-play__intro">{svResult.survey.intro}</p>
-                <div className="sb-pipe-play__grid">
-                  <div className="sb-pipe-play__answers">
-                    {svResult.survey.questions.map((question) => (
-                      <div key={question.id} className="sb-pipe-play__q">
-                        <p>
-                          {question.question}
-                          {question.multi && <span className="sb-admin__muted"> (복수)</span>}
-                        </p>
-                        <div className="sb-pipe-play__opts">
-                          {question.options.map((option) => {
-                            const on = (pgAnswers[question.id] || []).includes(option)
-                            return (
-                              <button
-                                key={option}
-                                type="button"
-                                className={'sb-pipe-play__opt' + (on ? ' is-on' : '')}
-                                onClick={() => toggleAnswer(question, option)}
-                              >
-                                {option}
-                              </button>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                    <div className="sb-pipe-play__actions">
-                      <button
-                        type="button"
-                        className="sb-btn sb-btn--ai sb-btn--small"
-                        disabled={!planReady || running !== null || flowRunning !== null}
-                        title={planReady ? undefined : '답변을 하나 이상 선택하세요'}
-                        onClick={() => runStage('plan-skeleton')}
-                      >
-                        {running === 'plan-skeleton' ? '실행 중…' : '✦ 계획 뼈대 실행 (5a)'}
-                      </button>
-                      <button
-                        type="button"
-                        className="sb-btn sb-btn--ai sb-btn--small"
-                        disabled={!planReady || running !== null || flowRunning !== null}
-                        title={planReady ? undefined : '답변을 하나 이상 선택하세요'}
-                        onClick={() => runStage('plan-products')}
-                      >
-                        {running === 'plan-products' ? '실행 중…' : '✦ 상품·콘텐츠 실행 (4+5b→6)'}
-                      </button>
-                    </div>
-                    {svResult.ledger?.trendKeywords?.length > 0 && (
-                      <p className="sb-admin__muted">원장 키워드: {svResult.ledger.trendKeywords.join(', ')}</p>
-                    )}
-                  </div>
-                  {previewThread && (
-                    <div className="sb-pipe-play__preview">
-                      <AdminThreadPreview thread={previewThread} stage="survey" />
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {pgTab === 'stage' && skResult?.skeleton && (
-              <div className="sb-pipe-play__stage">
-                <div className="sb-pipe-play__stagehead">
-                  <b>계획 뼈대 결과</b>
-                  <span className="sb-admin__muted">{metaLine(skResult.meta)}</span>
-                </div>
-                <p className="sb-pipe-play__intro">
-                  <b>{skResult.skeleton.headline}</b> — {skResult.skeleton.summary}
-                </p>
-                <ul className="sb-pipe-sections">
-                  {skResult.skeleton.sections.map((section, index) => (
-                    <li key={index} className="sb-pipe-sections__row">
-                      <span className="sb-admin-prompt-chip">{section.kind}</span>
-                      <div>
-                        <b>{section.title}</b>
-                        {section.kind === 'guide' && <p>{section.body}</p>}
-                        {section.kind === 'steps' && <p>{(section.steps || []).join(' → ')}</p>}
-                        {(section.kind === 'products' || section.kind === 'contents') && (
-                          <p className="sb-admin__muted">자리 — 검색 단계가 채워요 · 기준: {section.reason}</p>
-                        )}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {pgTab === 'stage' && prodResult && (
-              <div className="sb-pipe-play__stage">
-                <div className="sb-pipe-play__stagehead">
-                  <b>상품·콘텐츠 결과 (검증 게이트 통과분)</b>
-                  <span className="sb-admin__muted">{metaLine(prodResult.meta)}</span>
-                </div>
-                {(prodResult.sections || []).map((section, index) => (
-                  <div key={index} className="sb-pipe-play__section">
-                    <p>
-                      <span className="sb-admin-prompt-chip">{section.kind}</span> <b>{section.title}</b>{' '}
-                      <span className="sb-admin__muted">{section.reason}</span>
-                    </p>
-                    {section.kind === 'products' && (
-                      <ul className="sb-pipe-products">
-                        {section.products.map((product) => (
-                          <li key={product.id}>
-                            <b>{product.brand}</b> {product.name}
-                            <span className="sb-admin__muted">
-                              {' '}
-                              {product.price?.toLocaleString('ko-KR')}원 · {product.mall || '지마켓'}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                    {section.kind === 'contents' && (
-                      <ul className="sb-pipe-products">
-                        {section.items.map((item, itemIndex) => (
-                          <li key={itemIndex}>
-                            <b>{item.source}</b> {item.title}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                ))}
-                {(prodResult.sections || []).length === 0 && (
-                  <p className="sb-admin__muted">검증 게이트를 통과한 섹션이 없어요 — 아래 드롭 사유를 확인하세요.</p>
-                )}
-                <div className="sb-pipe-play__droplog">
-                  <p className="sb-panel-label">드롭 로그 ({(prodResult.dropLog || []).length})</p>
-                  {(prodResult.dropLog || []).length === 0 && <p className="sb-admin__muted">드롭 없음</p>}
-                  <ul>
-                    {(prodResult.dropLog || []).map((drop, dropIndex) => (
-                      <li key={dropIndex}>
-                        <span className="sb-admin-prompt-chip sb-admin-prompt-chip--warn">{drop.code}</span> {drop.message}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            )}
-
           </div>
         </div>
       </div>

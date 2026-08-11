@@ -13,7 +13,7 @@ import {
   type GroundingDrop,
   type PromptDefId,
 } from '@ddak/pipeline'
-import type { CoreClientService } from '../core-client.service'
+import { CoreClientService } from '../core-client.service'
 import { KnowledgeService } from '../llm/knowledge.service'
 import { LlmService } from '../llm/llm.service'
 import type { DryRunPromptTrace } from './dry-run.service'
@@ -24,7 +24,11 @@ import type { ThreadGraphStateType } from './state'
 /*
  * 파이프라인 플레이그라운드 전체 플로우 실행 (flow-run) — 단계 단독 dry-run과 달리
  * **실제 LangGraph 그래프를 통째로** 돈다: 병렬(5a∥5b)·interrupt(답변 대기)·검증 게이트까지
- * 운영과 같은 토폴로지다. 다른 점은 기록뿐 — core는 no-op 스텁(쓰레드·스텝 기록 없음),
+ * 운영과 같은 토폴로지다. **기록도 실제다**: 플로우 시작 시 admin 프로필(FLOW_USER)의
+ * core 쓰레드를 만들고 그래프 노드가 설문·답변·계획 스텝을 그대로 남긴다 — 운영 콘솔
+ * "쓰레드·평가" 탭에서 열람·평가·케이스 승격이 가능한 평가 대상 쓰레드가 된다.
+ * core 미연결 환경(로컬 등)은 쓰레드 생성 실패를 삼키고 임시 flow- id로 기록 없이
+ * 돈다(그래프 내부 기록도 persistAll이 실패를 삼킨다 — 관측·미리보기는 그대로).
  * 체크포인터는 전용 MemorySaver(운영 lg 스키마와 격리, 유실 시 body 시딩 재실행 폴백).
  *
  * 실시간 관측: updates 스트림(노드 완료마다 개별 청크 — 병렬 노드도 각자 완료 시점에 도착)을
@@ -33,7 +37,8 @@ import type { ThreadGraphStateType } from './state'
  * custom 스트림(설문 질문·계획 섹션 조각)은 onContent로 그대로 흘린다.
  */
 
-/** 플로우 실행 소유자 표식 — 지식 서비스의 직전 피드백 조회에서 자연히 빈 결과가 된다 */
+/** 플레이그라운드 쓰레드의 소유자 = admin 프로필 id — 사용자 쓰레드 목록(디바이스 id)과
+ * 갈리고, 지식 서비스의 직전 피드백 조회도 이 id 기준으로 자연히 묶인다 */
 const FLOW_USER = 'ops-playground'
 
 /** 그래프 노드 이름 → 다이어그램 단계 id (PIPELINE_STAGES · 'gate'=답변 대기) */
@@ -97,6 +102,8 @@ export type FlowRunEvents = {
 export type FlowRunResult = {
   phase: AdminFlowRunBody['phase']
   flowId: string
+  /** core 쓰레드로 저장됐는지 — false면 core 미연결 임시 플로우(flow- 접두 id, 기록 없음) */
+  recorded: boolean
   ledger: ConstraintLedger | null
   /** phase=survey */
   survey?: SurveyPageWire | null
@@ -127,6 +134,8 @@ class FlowStageEmitter {
     private readonly llm: LlmService,
     private readonly events: FlowRunEvents,
     seed: { intent: string; profile: Profile | null; survey: SurveyPageWire | null; answers: Answer[] | null },
+    /** s7-record 완료 요약 — 실제 저장 여부(쓰레드 id)를 실행 시점에 확정해 받는다 */
+    private readonly recordNote: string,
   ) {
     this.acc = { ledger: null, ...seed }
   }
@@ -278,7 +287,7 @@ class FlowStageEmitter {
           summary: `병합 ${patch.page?.sections.length ?? 0}섹션 · 드롭 ${patch.dropLog?.length ?? 0}`,
         }
       case 's7-record':
-        return { summary: '기록 생략 — 플레이그라운드 (core 스텁)' }
+        return { summary: this.recordNote }
       default:
         return {}
     }
@@ -293,18 +302,16 @@ export class PipelineFlowRunService {
   constructor(
     private readonly llm: LlmService,
     private readonly knowledge: KnowledgeService,
+    private readonly core: CoreClientService,
   ) {}
 
-  /** 플로우 전용 그래프 — core 쓰기는 no-op 스텁, 체크포인터는 전용 MemorySaver.
-   * (MemorySaver는 프로세스 수명 — 플레이그라운드 저빈도 사용 전제. 인스턴스가 갈리면
-   * plan 페이즈가 body 시딩 재실행 폴백을 탄다) */
+  /** 플로우 전용 그래프 — core 기록은 실제(그래프 persistAll이 실패를 삼켜 core 미연결에도
+   * 흐름은 산다), 체크포인터는 전용 MemorySaver. (MemorySaver는 프로세스 수명 —
+   * 플레이그라운드 저빈도 사용 전제. 인스턴스가 갈리면 plan 페이즈가 body 시딩 재실행
+   * 폴백을 탄다 — 진실 원천은 언제나 core 스텝) */
   private getGraph(): ThreadGraph {
     if (!this.graph) {
-      const stubCore = {
-        upsertStep: async () => null,
-        updateThread: async () => null,
-      } as unknown as CoreClientService
-      this.graph = buildThreadGraph({ llm: this.llm, core: stubCore, knowledge: this.knowledge }, new MemorySaver())
+      this.graph = buildThreadGraph({ llm: this.llm, core: this.core, knowledge: this.knowledge }, new MemorySaver())
     }
     return this.graph
   }
@@ -319,17 +326,40 @@ export class PipelineFlowRunService {
 
   async run(body: AdminFlowRunBody, events: FlowRunEvents = {}): Promise<FlowRunResult> {
     const graph = this.getGraph()
-    const flowId = body.phase === 'survey' ? `flow-${randomUUID()}` : body.flowId
-    if (!flowId) throw new BadRequestException('plan 페이즈에는 flowId(설문 페이즈 응답)가 필요합니다')
+    let flowId: string
+    if (body.phase === 'survey') {
+      // 플로우 1건 = admin 프로필(FLOW_USER)의 core 쓰레드 1건 — 쓰레드 id가 곧 flowId
+      // (그래프 노드가 이 id로 스텝을 기록한다). core 미연결이면 임시 id로 기록 없이 돈다
+      try {
+        const thread = await this.core.createThread({
+          userId: FLOW_USER,
+          title: body.intent,
+          source: { kind: 'search', query: body.intent },
+        })
+        flowId = thread.id
+      } catch (e) {
+        this.logger.warn(`플레이그라운드 쓰레드 생성 실패 — 기록 없이 실행: ${(e as Error).message}`)
+        flowId = `flow-${randomUUID()}`
+      }
+    } else {
+      if (!body.flowId) throw new BadRequestException('plan 페이즈에는 flowId(설문 페이즈 응답)가 필요합니다')
+      flowId = body.flowId
+    }
+    const recorded = !flowId.startsWith('flow-')
     const coord = new PlanStreamCoordinator()
     const config = { configurable: { thread_id: flowId, planCoord: coord } }
 
-    const emitter = new FlowStageEmitter(this.llm, events, {
-      intent: body.intent,
-      profile: body.profile ?? null,
-      survey: body.survey ?? null,
-      answers: body.answers ?? null,
-    })
+    const emitter = new FlowStageEmitter(
+      this.llm,
+      events,
+      {
+        intent: body.intent,
+        profile: body.profile ?? null,
+        survey: body.survey ?? null,
+        answers: body.answers ?? null,
+      },
+      recorded ? `쓰레드 ${flowId} 저장 — admin 프로필(${FLOW_USER})` : '기록 생략 — core 미연결 (임시 플로우)',
+    )
 
     let runInput: Parameters<ThreadGraph['stream']>[0]
     if (body.phase === 'survey') {
@@ -401,6 +431,7 @@ export class PipelineFlowRunService {
       return {
         phase: 'survey',
         flowId,
+        recorded,
         survey: values.survey,
         ledger: values.ledger ?? null,
         meta: values.surveyMeta ?? null,
@@ -412,6 +443,7 @@ export class PipelineFlowRunService {
     return {
       phase: 'plan',
       flowId,
+      recorded,
       page: values.page,
       dropLog: values.dropLog ?? [],
       ledger: values.ledger ?? null,

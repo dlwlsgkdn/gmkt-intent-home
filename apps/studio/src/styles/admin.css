@@ -1833,3 +1833,21 @@
 .sb-pipe-knowledge-card .sb-pipe-knowledge__row {
   flex-wrap: wrap;
 }
+
+/* ── 이번 실행 관측 — 흐름 카드(다이어그램 아래)에 녹인 단계 타임라인 + 그래프 상태.
+   타임라인·상태 패널 규칙은 위 .sb-pipe-flowlog/.sb-pipe-state 그대로, 여기선 420px
+   카드 폭에 맞는 배치 보정만 한다 (상태 키 폭 축소) */
+.sb-flow-observe {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--sb-n-200);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sb-flow-observe .sb-pipe-flowlog {
+  margin-top: 0;
+}
+.sb-flow-observe .sb-pipe-state__key {
+  flex-basis: 150px;
+}
