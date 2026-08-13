@@ -12,6 +12,10 @@ import AdminThreadPreview, { threadPreviewPages } from './AdminThreadPreview.jsx
 import PipelineStudio from './PipelineStudio.jsx'
 import ExperimentStudio from './ExperimentStudio.jsx'
 import { promoteEvalCase } from '../lib/adminApi.js'
+import AdminDashboard from './AdminDashboard.jsx'
+import AdminKnowledge from './AdminKnowledge.jsx'
+import AdminPromptLibrary from './AdminPromptLibrary.jsx'
+import TaggingStudio from './TaggingStudio.jsx'
 
 /*
  * 운영 콘솔 — 진입은 홈 드로어 도구 행의 버튼 또는 #ops 해시 (구 #admin 호환).
@@ -24,7 +28,28 @@ import { promoteEvalCase } from '../lib/adminApi.js'
 /** admin 프로필 — 플레이그라운드 플로우 실행이 만드는 쓰레드의 소유자 (실사용자와 구분 축) */
 const ADMIN_USER = 'ops-playground'
 
+const NAV_GROUPS = [
+  { label: '한눈에 보기', items: [['dashboard', '◈', '대시보드']] },
+  {
+    label: '서비스 품질',
+    items: [
+      ['threads', '◎', '고객 여정·평가'],
+      ['tagging', '⊞', '상품 태깅'],
+      ['knowledge', '◇', '운영 지식'],
+    ],
+  },
+  {
+    label: 'AI 운영',
+    items: [
+      ['pipeline', '⌁', '생성 파이프라인'],
+      ['prompts', '⌘', '프롬프트'],
+      ['experiment', '△', '실험·회귀'],
+    ],
+  },
+]
+
 export default function AdminView({ api, tab }) {
+  const [mode, setMode] = useState('lab')
   const [threads, setThreads] = useState([])
   const [nextCursor, setNextCursor] = useState(null)
   const [listLoading, setListLoading] = useState(false)
@@ -154,60 +179,59 @@ export default function AdminView({ api, tab }) {
     </button>
   )
 
+  const activeLabel = NAV_GROUPS.flatMap((group) => group.items).find(([value]) => value === tab)?.[2] || '대시보드'
+
   return (
-    <div className="sb-builder">
-      {/* 페이지형 화면 공통 상단바 — 프로필·키워드 사전 편집기(ExploreEditor)와 같은 문법:
-          ← 이전 화면 · 이모지 타이틀 · 상태 문구 · 우측 액션. 탭 3곳(해시) 모두에 걸린다 */}
-      <div className="sb-topbar">
-        <div className="sb-topbar__row">
-          <button type="button" className="sb-icon-btn" onClick={api.exitAdmin} aria-label="이전 화면으로">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M15 19l-7-7 7-7" /></svg>
-          </button>
-          <div className="sb-topbar__meta">
-            <span className="sb-title-static">🧵 운영 콘솔</span>
-          </div>
-          <span className="sb-autosave">라이브 생성 운영 한곳 — 쓰레드·평가 · 파이프라인 · 실험</span>
-          <div className="sb-topbar__actions">
-            <button
-              type="button"
-              className="sb-btn sb-btn--ghost sb-btn--small"
-              onClick={() => {
-                loadList()
-                loadFeedback()
-              }}
-            >
-              새로고침
-            </button>
-          </div>
+    <div className="sb-builder sb-admin-app">
+      <aside className="sb-admin-sidebar">
+        <div className="sb-admin-sidebar__brand">
+          <button type="button" onClick={api.exitAdmin} aria-label="DDAK 홈으로">D</button>
+          <span><b>DDAK</b><small>운영 센터</small></span>
         </div>
-      </div>
+        <div className="sb-admin-mode" role="group" aria-label="운영 화면 모드">
+          <button type="button" className={mode === 'lab' ? 'is-on' : ''} onClick={() => setMode('lab')}>실험실</button>
+          <button type="button" className={mode === 'ops' ? 'is-on' : ''} onClick={() => setMode('ops')}>실서비스</button>
+        </div>
+        <nav className="sb-admin-nav" aria-label="운영 센터 메뉴">
+          {NAV_GROUPS.map((group) => (
+            <div key={group.label} className="sb-admin-nav__group">
+              <p>{group.label}</p>
+              {group.items.map(([value, icon, label]) => (
+                <button key={value} type="button" className={tab === value ? 'is-on' : ''} aria-current={tab === value ? 'page' : undefined} onClick={() => api.setAdminTab(value)}>
+                  <i>{icon}</i><span>{label}</span>
+                  {value === 'threads' && (feedback?.items?.length || 0) > 0 && <em>{feedback.items.length}</em>}
+                </button>
+              ))}
+            </div>
+          ))}
+        </nav>
+        <div className="sb-admin-sidebar__foot">
+          <span><i /> {listError || feedbackError ? '일부 데이터 연결 안 됨' : '운영 데이터 연결됨'}</span>
+          <button type="button" onClick={api.exitAdmin}>시나리오 스튜디오로 돌아가기</button>
+        </div>
+      </aside>
+
+      <div className="sb-admin-shell__body">
+        <header className="sb-admin-mobilebar">
+          <button type="button" className="sb-icon-btn" onClick={api.exitAdmin} aria-label="이전 화면으로">←</button>
+          <b>{activeLabel}</b>
+          <button type="button" className="sb-btn sb-btn--ghost sb-btn--tiny" onClick={() => { loadList(); loadFeedback() }}>새로고침</button>
+        </header>
 
     {/* 파이프라인 탭은 3컬럼(지식·다이어그램·플레이그라운드)이라 넓은 컨테이너 변형을 쓴다 */}
-    <section className={'sb-admin' + (tab === 'pipeline' ? ' sb-admin--wide' : '')}>
+    <main className={'sb-admin' + (tab === 'pipeline' || tab === 'tagging' ? ' sb-admin--wide' : '')}>
 
-      {/* 탭 — 운영(쓰레드·평가) / 파이프라인(단계·프롬프트·지식·플레이그라운드) */}
-      <div className="sb-admin-tabs" role="tablist" aria-label="관리 영역">
-        {[
-          ['threads', '쓰레드·평가'],
-          ['pipeline', '파이프라인'],
-          ['experiment', '실험'],
-        ].map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            role="tab"
-            aria-selected={tab === value}
-            className={'sb-admin-tabs__btn' + (tab === value ? ' is-on' : '')}
-            onClick={() => api.setAdminTab(value)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {tab === 'dashboard' && <AdminDashboard api={api} threads={threads} feedback={feedback} loading={listLoading} mode={mode} />}
 
       {/* 파이프라인 탭 — 세로 흐름 다이어그램(엔진·모델 설정 포함) ∥ 플레이그라운드·지식.
           시스템 프롬프트는 별도 카드 없이 다이어그램의 단계 레이어 모달에서 열람·수정한다 */}
       {tab === 'pipeline' && <PipelineStudio api={api} />}
+
+      {tab === 'prompts' && <AdminPromptLibrary api={api} />}
+
+      {tab === 'knowledge' && <AdminKnowledge api={api} />}
+
+      {tab === 'tagging' && <TaggingStudio api={api} embedded />}
 
       {/* 실험 탭 — 골든 케이스 실행·채점 + 전환 판정 계기판 */}
       {tab === 'experiment' && <ExperimentStudio />}
@@ -423,7 +447,8 @@ export default function AdminView({ api, tab }) {
           </section>
         </div>
       )}
-    </section>
+    </main>
+    </div>
     </div>
   )
 }

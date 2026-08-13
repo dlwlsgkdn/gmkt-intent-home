@@ -34,7 +34,7 @@ function UnitThumb({ unit, className }) {
   return <span className={className}>{productEmoji(unit.catalogTags)}</span>
 }
 
-export default function TaggingStudio({ api }) {
+export default function TaggingStudio({ api, embedded = false }) {
   const [units, setUnits] = useState(loadTaggingReview)
   const [selectedId, setSelectedId] = useState(() => units[0]?.id ?? null)
   const [listFilter, setListFilter] = useState('all')
@@ -162,7 +162,7 @@ export default function TaggingStudio({ api }) {
   }
 
   return (
-    <section className="sb-tagging">
+    <section className={'sb-tagging' + (embedded ? ' sb-tagging--embedded' : '')}>
       <div className="sb-tagging__head">
         <div className="sb-tagging__title">
           <h1><span className="sb-tagging__mark">◈</span>상품 태깅 검토 스튜디오</h1>
@@ -201,9 +201,9 @@ export default function TaggingStudio({ api }) {
           <button type="button" className="sb-btn sb-btn--ghost sb-btn--small" onClick={resetAll}>
             원본으로 초기화
           </button>
-          <button type="button" className="sb-btn sb-btn--ghost sb-btn--small" onClick={api.closeTaggingStudio}>
+          {!embedded && <button type="button" className="sb-btn sb-btn--ghost sb-btn--small" onClick={api.closeTaggingStudio}>
             홈으로
-          </button>
+          </button>}
         </div>
       </div>
 

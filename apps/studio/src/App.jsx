@@ -27,9 +27,9 @@ import TaggingStudio from './components/TaggingStudio.jsx'
 
 /** 해시 → 페이지 라우트 (모르는 해시·#s= 공유 링크는 null = 홈/공유 모드 처리) */
 function routeFromHash(hash) {
-  const ops = hash.match(/^#ops(?:\/(threads|pipeline|experiment))?$/)
-  if (ops) return { name: 'admin', tab: ops[1] || 'threads' }
-  if (hash === '#admin') return { name: 'admin', tab: 'threads' } // 구 주소 호환
+  const ops = hash.match(/^#ops(?:\/(dashboard|threads|tagging|knowledge|pipeline|prompts|experiment))?$/)
+  if (ops) return { name: 'admin', tab: ops[1] || 'dashboard' }
+  if (hash === '#admin') return { name: 'admin', tab: 'dashboard' } // 구 주소 호환
   if (hash === '#tagging') return { name: 'tagging' }
   if (hash === '#explore-editor') return { name: 'explore-editor' }
   const builder = hash.match(/^#builder\/(.+)$/)
@@ -269,9 +269,9 @@ export default function App() {
     playLive: (query) => setRoute({ name: 'live', query, runId: Date.now() }),
     resumeLive: (threadId) => setRoute({ name: 'live', resumeThreadId: threadId, runId: Date.now() }),
     /* 페이지형 화면 진입·이탈 — 전부 해시 히스토리 엔트리라 브라우저 앞/뒤로가기가 동작한다 */
-    openAdmin: () => pushRoute('#ops', { name: 'admin', tab: 'threads' }),
+    openAdmin: () => pushRoute('#ops', { name: 'admin', tab: 'dashboard' }),
     /* 운영 콘솔 탭 전환도 해시 엔트리 — 새로고침·앞뒤로가기가 탭을 유지한다 */
-    setAdminTab: (tab) => pushRoute(tab === 'threads' ? '#ops' : `#ops/${tab}`, { name: 'admin', tab }),
+    setAdminTab: (tab) => pushRoute(tab === 'dashboard' ? '#ops' : `#ops/${tab}`, { name: 'admin', tab }),
     exitAdmin: goHome,
     openExploreEditor: () => pushRoute('#explore-editor', { name: 'explore-editor' }),
     closeExploreEditor: goHome,
@@ -344,7 +344,7 @@ export default function App() {
         /* key: 같은 검색어라도 runId마다 새 쓰레드로 다시 생성한다 */
         <LivePlayer key={route.runId} api={api} query={route.query} resumeThreadId={route.resumeThreadId} />
       )}
-      {route.name === 'admin' && <AdminView api={api} tab={route.tab || 'threads'} />}
+      {route.name === 'admin' && <AdminView api={api} tab={route.tab || 'dashboard'} />}
       {route.name === 'tagging' && <TaggingStudio api={api} />}
       {route.name !== 'home' && route.name !== 'explore-editor' && route.name !== 'live' && route.name !== 'admin' && route.name !== 'tagging' && !current && <HomeView api={api} />}
 
