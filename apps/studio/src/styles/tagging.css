@@ -64,6 +64,7 @@
 }
 .sb-tagging-pill--unreviewed b { color: var(--sb-warn-ink); }
 .sb-tagging-pill--fix b { color: var(--sb-danger); }
+.sb-tagging-pill--needs b { color: var(--sb-pink); }
 .sb-tagging-pill.is-on b { color: inherit; }
 .sb-tagging-pill:hover { border-color: var(--sb-n-400); }
 .sb-tagging-pill.is-on {
@@ -78,6 +79,10 @@
 .sb-tagging-pill--fix.is-on {
   border-color: var(--sb-danger);
   background: var(--sb-danger);
+}
+.sb-tagging-pill--needs.is-on {
+  border-color: var(--sb-pink);
+  background: var(--sb-pink);
 }
 
 /* 3컬럼 골격 */
@@ -300,6 +305,11 @@
   font-weight: 500;
   color: var(--sb-ink);
 }
+.sb-tagging-center-hd p {
+  margin-top: 2px;
+  font-size: var(--sb-t-micro);
+  color: var(--sb-muted);
+}
 .sb-tagging-sw {
   display: flex;
   align-items: center;
@@ -309,6 +319,34 @@
   cursor: pointer;
 }
 .sb-tagging-sw input { accent-color: var(--sb-pink); }
+
+/* 검수 초점 바 — 전체 필드 중 사람이 볼 것과 잠긴 완료분을 한눈에 가른다 */
+.sb-tagging-review-focus {
+  display: grid;
+  grid-template-columns: auto minmax(90px, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--sb-pink) 30%, var(--sb-n-200));
+  border-radius: var(--sb-r-lg);
+  background: var(--sb-pink-soft);
+}
+.sb-tagging-review-focus > span { color: var(--sb-pink-ink); font-size: var(--sb-t-caption); }
+.sb-tagging-review-focus > span b { font-weight: 500; }
+.sb-tagging-review-focus > i {
+  height: 6px;
+  border-radius: var(--sb-r-pill);
+  background: var(--sb-n-200);
+  overflow: hidden;
+}
+.sb-tagging-review-focus > i b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--sb-success);
+}
+.sb-tagging-review-focus > small { color: var(--sb-muted); font-size: var(--sb-t-micro); }
 
 /* 필드 식별색 — 편집 카드(가운데)와 최종 적용 태그(우측)가 같은 색을 공유한다 */
 .sb-tagging-field--k-category, .sb-tagging-ftag--k-category { --sb-f: var(--sb-tag-c1); }
@@ -336,6 +374,11 @@
   border-color: color-mix(in srgb, var(--sb-danger) 50%, var(--sb-n-200));
   background: color-mix(in srgb, var(--sb-danger) 3%, var(--sb-n-0));
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--sb-danger) 12%, transparent);
+}
+.sb-tagging-field--locked {
+  border-color: var(--sb-n-200);
+  border-left-color: color-mix(in srgb, var(--sb-f, var(--sb-n-300)) 45%, var(--sb-n-200));
+  background: var(--sb-n-50);
 }
 .sb-tagging-field__hd {
   display: flex;
@@ -417,6 +460,30 @@
   background: var(--sb-info-soft);
   color: var(--sb-info);
 }
+.sb-tagging-lock {
+  padding: 3px 8px;
+  border: 1px solid var(--sb-n-200);
+  border-radius: var(--sb-r-pill);
+  color: var(--sb-muted);
+  background: var(--sb-n-0);
+  font-size: var(--sb-t-micro);
+  font-weight: 400;
+  cursor: pointer;
+}
+.sb-tagging-lock:hover { border-color: var(--sb-n-400); color: var(--sb-ink); }
+.sb-tagging-lock.is-open {
+  border-color: var(--sb-info);
+  color: var(--sb-info);
+  background: var(--sb-info-soft);
+}
+.sb-tagging-locked-note {
+  margin: 0 0 8px;
+  padding: 7px 9px;
+  border-radius: var(--sb-r-md);
+  color: var(--sb-muted);
+  background: var(--sb-n-100);
+  font-size: var(--sb-t-micro);
+}
 
 /* 태그 선택 칩 (+대표 ★) */
 .sb-tagging-opts {
@@ -448,6 +515,10 @@
   font-weight: 500;
   color: var(--sb-f, var(--sb-pink-ink));
 }
+.sb-tagging-opts.is-locked { opacity: .62; }
+.sb-tagging-opt__body:disabled,
+.sb-tagging-opt__star:disabled { cursor: not-allowed; }
+.sb-tagging-opts.is-locked .sb-tagging-opt:hover { border-color: var(--sb-n-200); }
 .sb-tagging-opt__star {
   display: flex;
   align-items: center;
@@ -491,6 +562,8 @@
   background: var(--sb-warn);
   color: var(--sb-n-0);
 }
+.sb-tagging-mini--restore { margin-left: auto; color: var(--sb-info); }
+.sb-tagging-mini:disabled { opacity: .45; cursor: not-allowed; }
 .sb-tagging-rationale {
   margin-top: 8px;
   padding: 8px 10px;
@@ -500,6 +573,21 @@
   color: var(--sb-muted);
   line-height: 1.55;
 }
+.sb-tagging-review-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 28px 18px;
+  border: 1px dashed var(--sb-n-300);
+  border-radius: var(--sb-r-xl);
+  color: var(--sb-success);
+  background: var(--sb-n-0);
+  text-align: center;
+}
+.sb-tagging-review-empty b { font-size: var(--sb-t-body); font-weight: 500; }
+.sb-tagging-review-empty span { margin-bottom: 8px; color: var(--sb-muted); font-size: var(--sb-t-caption); }
+.sb-tagging-restore-unit { width: 100%; margin-top: 8px; }
 
 /* 태그 게이지 — 최소/최대 규칙 시각화 */
 .sb-tagging-gauge {
