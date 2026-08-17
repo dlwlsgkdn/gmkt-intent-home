@@ -3,36 +3,50 @@
   "configurations": [
     {
       "name": "scenario-studio",
-      "runtimeExecutable": "/bin/sh",
+      "runtimeExecutable": "cmd",
       "runtimeArgs": [
-        "-c",
-        "PATH=/Users/jinhalee/.nvm/versions/node/v24.5.0/bin:/opt/homebrew/bin:$PATH node node_modules/vite/bin/vite.js apps/studio --port ${PORT:-5173} --strictPort"
+        "/d",
+        "/s",
+        "/v:on",
+        "/c",
+        "(if not defined PORT set PORT=5173) & C:\\Users\\seachoe\\AppData\\Local\\nodejs-v24\\node-v24.19.0-win-x64\\node.exe node_modules/vite/bin/vite.js apps/studio --port !PORT! --strictPort"
       ],
       "port": 5173,
       "autoPort": true
     },
     {
       "name": "scenario-studio-prodapi",
-      "runtimeExecutable": "/bin/sh",
+      "runtimeExecutable": "cmd",
       "runtimeArgs": [
-        "-c",
-        "VITE_DATA_PROFILE=prod PATH=/Users/jinhalee/.nvm/versions/node/v24.5.0/bin:/opt/homebrew/bin:$PATH node node_modules/vite/bin/vite.js apps/studio --port 5175 --strictPort"
+        "/d",
+        "/s",
+        "/c",
+        "set VITE_DATA_PROFILE=prod&& \"C:\\Users\\seachoe\\AppData\\Local\\nodejs-v24\\node-v24.19.0-win-x64\\node.exe\" node_modules/vite/bin/vite.js apps/studio --port 5175 --strictPort"
       ],
       "port": 5175
     },
     {
       "name": "scenario-studio-mockdb",
-      "runtimeExecutable": "/bin/sh",
+      "runtimeExecutable": "cmd",
       "runtimeArgs": [
-        "-c",
-        "VITE_DATA_PROFILE=prod VITE_API_PROXY=http://localhost:8123 PATH=/Users/jinhalee/.nvm/versions/node/v24.5.0/bin:/opt/homebrew/bin:$PATH node node_modules/vite/bin/vite.js apps/studio --port 5174 --strictPort"
+        "/d",
+        "/s",
+        "/c",
+        "set VITE_DATA_PROFILE=prod&& set VITE_API_PROXY=http://localhost:8123&& \"C:\\Users\\seachoe\\AppData\\Local\\nodejs-v24\\node-v24.19.0-win-x64\\node.exe\" node_modules/vite/bin/vite.js apps/studio --port 5174 --strictPort"
       ],
       "port": 5174
     },
     {
       "name": "pages-static",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8899", "--directory", "apps/studio/dist"],
+      "runtimeExecutable": "C:\\Users\\seachoe\\AppData\\Local\\nodejs-v24\\node-v24.19.0-win-x64\\node.exe",
+      "runtimeArgs": [
+        "node_modules/vite/bin/vite.js",
+        "preview",
+        "apps/studio",
+        "--port",
+        "8899",
+        "--strictPort"
+      ],
       "port": 8899
     }
   ]
