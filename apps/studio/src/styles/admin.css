@@ -577,7 +577,7 @@
 
 .sb-pipe-layout {
   display: grid;
-  grid-template-columns: minmax(250px, 300px) 420px minmax(0, 1fr);
+  grid-template-columns: minmax(280px, 340px) 420px minmax(0, 1fr);
   grid-template-areas: 'knowledge flow side';
   gap: 20px;
   align-items: start;
@@ -968,17 +968,38 @@
   font-size: var(--sb-t-micro);
   color: var(--sb-subtle);
 }
+.sb-know-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sb-know-head .sb-panel-label {
+  margin: 0;
+}
+/* 강조(hover/고정)는 카드 안쪽 여백까지 번지게 한다 — 행에 좌우 padding을 주고 같은 값만큼
+   음수 margin으로 되돌려, 글자 시작선은 그대로 두면서 배경·강조 막대가 텍스트를 밟지 않게 */
 .sb-pipe-knowledge__row {
+  padding-left: 9px;
+  padding-right: 9px;
+  margin-left: -9px;
+  margin-right: -9px;
   border-radius: var(--sb-r-md);
   transition: background var(--sb-dur) var(--sb-ease), box-shadow var(--sb-dur) var(--sb-ease);
 }
 .sb-pipe-knowledge__row.is-linked,
 .sb-pipe-knowledge__row.is-active {
-  background: color-mix(in srgb, var(--sb-info) 8%, transparent);
-  box-shadow: inset 2px 0 0 var(--sb-info);
+  background: color-mix(in srgb, var(--sb-info) 7%, transparent);
+  box-shadow: inset 3px 0 0 var(--sb-info);
 }
 .sb-pipe-knowledge__row.is-empty .sb-pipe-knowledge__main > .sb-know-row__btn {
   opacity: 0.72;
+}
+.sb-know-row__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 0 0 auto;
 }
 /* 행 본문은 "결선 고정" 토글 버튼이다 — 카드 안이라 버튼 크롬 없이 텍스트만 */
 .sb-know-row__btn {
@@ -994,11 +1015,18 @@
 .sb-know-row__btn[aria-pressed='true'] .sb-pipe-stage__title b {
   color: var(--sb-info);
 }
+/* 실을 단계 선택 — 켜진 칩 = 그 단계 프롬프트에 자리표시자가 들어 있음 */
 .sb-know-chips {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 4px;
-  margin-top: 6px;
+  margin-top: 7px;
+}
+.sb-know-chips__label {
+  font-size: var(--sb-t-micro);
+  color: var(--sb-subtle);
+  margin-right: 2px;
 }
 .sb-know-chip {
   display: inline-flex;
@@ -1009,8 +1037,10 @@
   padding: 2px 7px 2px 4px;
   background: var(--sb-n-0);
   font-size: var(--sb-t-micro);
-  color: var(--sb-ink-2);
+  color: var(--sb-muted);
   cursor: pointer;
+  transition: border-color var(--sb-dur) var(--sb-ease), background var(--sb-dur) var(--sb-ease),
+    color var(--sb-dur) var(--sb-ease);
 }
 .sb-know-chip b {
   display: inline-flex;
@@ -1025,26 +1055,73 @@
   font-size: var(--sb-t-micro);
   font-weight: 500;
 }
-.sb-know-chip:hover,
-.sb-know-chip.is-on {
+/* 켜짐 = 실린다 */
+.sb-know-chip.is-in {
+  border-color: var(--sb-info);
+  background: color-mix(in srgb, var(--sb-info) 9%, transparent);
+  color: var(--sb-info);
+}
+.sb-know-chip.is-in b {
+  background: color-mix(in srgb, var(--sb-info) 18%, transparent);
+  color: var(--sb-info);
+}
+/* 꺼짐 = 후보. 눌러서 실을 수 있다 */
+.sb-know-chip.is-out {
+  border-style: dashed;
+}
+.sb-know-chip:not(:disabled):hover {
   border-color: var(--sb-info);
   color: var(--sb-info);
 }
-.sb-know-chip:hover b,
-.sb-know-chip.is-on b {
-  background: color-mix(in srgb, var(--sb-info) 14%, transparent);
-  color: var(--sb-info);
+.sb-know-chip.is-on {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sb-info) 18%, transparent);
 }
-.sb-know-chip.is-dropped {
-  border-style: dashed;
-  border-color: var(--sb-warn);
-  color: var(--sb-warn);
-}
-.sb-know-chip--none {
-  border-style: dashed;
-  color: var(--sb-subtle);
+.sb-know-chip.is-fixed {
+  border-style: solid;
+  border-color: var(--sb-n-300);
+  background: var(--sb-n-50);
+  color: var(--sb-ink-2);
   cursor: default;
-  padding: 2px 7px;
+}
+.sb-know-chip:disabled:not(.is-fixed) {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* 새 지식 소스 폼 */
+.sb-know-new {
+  margin: 10px 0 4px;
+  border: 1px solid var(--sb-n-200);
+  border-radius: var(--sb-r-lg);
+  padding: 11px;
+  background: var(--sb-n-0);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.sb-know-new__head {
+  margin: 0;
+  font-size: var(--sb-t-caption);
+  font-weight: 500;
+  color: var(--sb-ink-2);
+}
+.sb-know-new label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: var(--sb-t-micro);
+  color: var(--sb-muted);
+}
+.sb-know-new input,
+.sb-know-new textarea {
+  border: 1px solid var(--sb-n-200);
+  border-radius: var(--sb-r-md);
+  padding: 6px 8px;
+  font-size: var(--sb-t-caption);
+  font-family: inherit;
+  color: var(--sb-ink);
+  background: var(--sb-n-0);
+  resize: vertical;
 }
 
 /* 단계 레이어 모달 — "이 단계에 실리는 지식" */

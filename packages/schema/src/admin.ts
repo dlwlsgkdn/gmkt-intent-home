@@ -169,6 +169,10 @@ export const AdminKnowledgeEntry = z.object({
   editable: z.boolean(),
   /** 현재 KV 원문 (없거나 core 파생이면 null) */
   value: z.string().nullable(),
+  /** 운영자가 화면에서 추가한 지식인가 — true면 삭제할 수 있다 (붙박이 카탈로그는 false) */
+  custom: z.boolean(),
+  /** 시스템 자리표시자 치환 시 값 위에 붙는 제목 줄 (자리표시자가 없으면 null) */
+  heading: z.string().nullable(),
 })
 export type AdminKnowledgeEntry = z.infer<typeof AdminKnowledgeEntry>
 
@@ -184,6 +188,19 @@ export const PutAdminKnowledgeBody = z.object({
   value: z.string().max(20000).nullable(),
 })
 export type PutAdminKnowledgeBody = z.infer<typeof PutAdminKnowledgeBody>
+
+/** 새 지식 소스 등록 — 주입은 언제나 시스템 자리표시자다 (원장·게이트 주입은 코드 배선) */
+export const PostAdminKnowledgeSourceBody = z.object({
+  label: z.string().min(1).max(60),
+  /** `{{NAME}}` 또는 `NAME` — 서버가 정규화하고 예약·중복 토큰은 거절한다 */
+  placeholder: z.string().min(1).max(40),
+  /** 치환 시 값 위에 붙는 제목 줄 — 비우면 라벨로 만든다 */
+  heading: z.string().max(200).optional(),
+  note: z.string().max(500).optional(),
+  /** 최초 값 — 비우면 값 없는 소스로 만들어진다 */
+  value: z.string().max(20000).nullable().optional(),
+})
+export type PostAdminKnowledgeSourceBody = z.infer<typeof PostAdminKnowledgeSourceBody>
 
 export const PutAdminEngineBody = z.object({
   /** null = 설정을 지우고 기본값(legacy) 복귀 */

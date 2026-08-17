@@ -1,8 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { ThreadStageFeedback } from '@ddak/schema'
 import {
+  CUSTOM_KNOWLEDGE_SETTING_KEY,
   GUARD_BLOCKLIST_SETTING_KEY,
   knowledgeSettingKey,
+  customKnowledgeSettingKey,
+  parseCustomSources,
+  type CustomKnowledgeSource,
   type SystemKnowledge,
 } from '@ddak/pipeline'
 import { CoreClientService } from '../core-client.service'
@@ -55,15 +59,28 @@ export class KnowledgeService {
     this.cache.clear()
   }
 
-  /** 시스템 자리표시자 4종 — resolveSystem(렌더)에서 소비 */
+  /** 운영자가 관리 페이지에서 추가한 지식 소스 목록 (값은 별도 KV — systemKnowledge가 함께 싣는다) */
+  async customSources(): Promise<CustomKnowledgeSource[]> {
+    return parseCustomSources(await this.kv(CUSTOM_KNOWLEDGE_SETTING_KEY))
+  }
+
+  /** 시스템 자리표시자 — 붙박이 4종 + 운영자 추가분. resolveSystem(렌더)에서 소비 */
   async systemKnowledge(): Promise<SystemKnowledge> {
-    const [vocab, rules, criteria, fewshot] = await Promise.all([
+    const [vocab, rules, criteria, fewshot, sources] = await Promise.all([
       this.kv(knowledgeSettingKey('consumer-vocab')),
       this.kv(knowledgeSettingKey('survey-rules')),
       this.kv(knowledgeSettingKey('selection-criteria')),
       this.kv(knowledgeSettingKey('fewshot')),
+      this.customSources(),
     ])
-    return { vocab, rules, criteria, fewshot }
+    const custom = await Promise.all(
+      sources.map(async (source) => ({
+        token: source.placeholder,
+        heading: source.heading,
+        value: await this.kv(customKnowledgeSettingKey(source.id)),
+      })),
+    )
+    return { vocab, rules, criteria, fewshot, custom }
   }
 
   /** 지금 뜨는 키워드 — 원장 trendKeywords로 (줄바꿈·쉼표 구분) */

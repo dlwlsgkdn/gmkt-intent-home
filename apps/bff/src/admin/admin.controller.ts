@@ -42,6 +42,7 @@ import {
   PromoteEvalCaseBody,
   type EvalJudgeRubricEntry,
   PutAdminEngineBody,
+  PostAdminKnowledgeSourceBody,
   PutAdminKnowledgeBody,
   PutAdminModelBody,
   PutAdminPromptBody,
@@ -63,6 +64,7 @@ import { ZodValidationPipe } from '../common/zod-validation.pipe'
 import { toOpenApi } from '../common/openapi'
 import { DEFAULT_MODEL, LLM_MODEL_SETTING_KEY, LlmService, MODEL_OPTIONS, promptSettingKey } from '../llm/llm.service'
 import {
+  CUSTOM_KNOWLEDGE_SETTING_KEY,
   GUARD_BLOCKLIST_SETTING_KEY,
   JudgeGen,
   JudgeSurveyGen,
@@ -71,12 +73,18 @@ import {
   PIPELINE_STAGES,
   PROMPT_DEFS,
   PROMPT_VERSION,
+  RESERVED_PLACEHOLDERS,
   buildJudgeRequest,
   buildJudgeSurveyRequest,
+  customKnowledgeId,
+  customKnowledgeSettingKey,
   judgeRubricEntries,
   judgeSurveyRubricEntries,
   knowledgeSettingKey,
   mergePlanSections,
+  normalizePlaceholderToken,
+  parseCustomSources,
+  serializeCustomSources,
 } from '@ddak/pipeline'
 import { SEQ, combineMeta, intentOf } from '../threads/thread-io'
 import { KnowledgeService } from '../llm/knowledge.service'
@@ -301,6 +309,8 @@ export class AdminController {
           note: source.note,
           editable,
           value: typeof setting?.value === 'string' && setting.value.trim() ? setting.value : null,
+          custom: false,
+          heading: null,
         }
       }),
     )
@@ -315,7 +325,25 @@ export class AdminController {
       editable: true,
       value:
         typeof blocklistSetting?.value === 'string' && blocklistSetting.value.trim() ? blocklistSetting.value : null,
+      custom: false,
+      heading: null,
     })
+    // 운영자가 추가한 지식 — 붙박이 뒤에 붙는다 (주입은 언제나 시스템 자리표시자)
+    for (const source of await this.customSources()) {
+      const setting = await this.core.getSetting(customKnowledgeSettingKey(source.id))
+      knowledge.push({
+        id: source.id,
+        label: source.label,
+        backing: 'kv',
+        injection: 'system',
+        placeholder: source.placeholder,
+        note: source.note || `운영자가 추가한 지식 — ${source.placeholder} 자리표시자가 있는 단계 프롬프트에 실린다.`,
+        editable: true,
+        value: typeof setting?.value === 'string' && setting.value.trim() ? setting.value : null,
+        custom: true,
+        heading: source.heading,
+      })
+    }
     return {
       engine: {
         current: await this.engineFlag.resolve(),
@@ -340,15 +368,101 @@ export class AdminController {
     @Param('id') id: string,
     @Body(new ZodValidationPipe(PutAdminKnowledgeBody)) body: PutAdminKnowledgeBody,
   ): Promise<AdminPipelineWire> {
-    const source = KNOWLEDGE_SOURCES.find((s) => s.id === id && s.backing === 'kv')
-    const key =
-      id === GUARD_BLOCKLIST_SETTING_KEY ? GUARD_BLOCKLIST_SETTING_KEY : source ? knowledgeSettingKey(source.id) : null
+    const key = await this.knowledgeValueKey(id)
     if (!key) throw new BadRequestException('편집할 수 없는 지식 소스입니다')
     const value = body.value?.trim() ? body.value : null
     if (value === null) await this.core.deleteSetting(key)
     else await this.core.putSetting(key, value)
     this.knowledge.invalidate()
     this.llm.invalidatePromptCache() // 시스템 자리표시자 지식이 바뀌면 렌더된 프롬프트도 갱신돼야 한다
+    return this.getPipeline()
+  }
+
+  /** 지식 id → 값 저장 키. 붙박이 KV·블록리스트·운영자 추가분만 편집 대상(core 파생은 null) */
+  private async knowledgeValueKey(id: string): Promise<string | null> {
+    if (id === GUARD_BLOCKLIST_SETTING_KEY) return GUARD_BLOCKLIST_SETTING_KEY
+    const builtin = KNOWLEDGE_SOURCES.find((s) => s.id === id && s.backing === 'kv')
+    if (builtin) return knowledgeSettingKey(builtin.id)
+    const custom = (await this.customSources()).find((s) => s.id === id)
+    return custom ? customKnowledgeSettingKey(custom.id) : null
+  }
+
+  /** 추가 지식 목록 — 저장 원천은 설정 KV 한 칸(knowledge-custom)의 JSON 배열 */
+  private async customSources() {
+    const setting = await this.core.getSetting(CUSTOM_KNOWLEDGE_SETTING_KEY)
+    return parseCustomSources(typeof setting?.value === 'string' ? setting.value : null)
+  }
+
+  @Post('knowledge')
+  @ApiOperation({
+    summary: '지식 소스 추가 — 시스템 자리표시자 주입',
+    description:
+      '운영자가 새 지식 타입을 만든다. 목록은 설정 KV(knowledge-custom) JSON 배열, 값은 붙박이와 같은 ' +
+      'knowledge-<id> 키에 저장된다. 자리표시자는 {{NAME}} 꼴로 정규화되며 예약 토큰·중복은 거절한다. ' +
+      '만들기만 하면 아직 어느 단계에도 실리지 않는다 — 단계 프롬프트에 토큰을 넣어야 주입된다.',
+  })
+  @ApiBody({ schema: toOpenApi(PostAdminKnowledgeSourceBody) })
+  @ApiOkResponse({ schema: toOpenApi(AdminPipelineWire) })
+  async postKnowledgeSource(
+    @Body(new ZodValidationPipe(PostAdminKnowledgeSourceBody)) body: PostAdminKnowledgeSourceBody,
+  ): Promise<AdminPipelineWire> {
+    const placeholder = normalizePlaceholderToken(body.placeholder)
+    if (!placeholder) {
+      throw new BadRequestException('자리표시자는 영문 대문자·숫자·밑줄 2~31자여야 해요 (예: MY_BRIEF)')
+    }
+    if (RESERVED_PLACEHOLDERS.includes(placeholder)) {
+      throw new BadRequestException(`${placeholder}는 코드가 쓰는 예약 자리표시자예요`)
+    }
+    const sources = await this.customSources()
+    const id = customKnowledgeId(placeholder)
+    if (sources.some((s) => s.id === id || s.placeholder === placeholder)) {
+      throw new BadRequestException(`${placeholder}를 쓰는 지식이 이미 있어요`)
+    }
+    const label = body.label.trim()
+    const next = [
+      ...sources,
+      {
+        id,
+        label,
+        placeholder,
+        heading: body.heading?.trim() || `${label}:`,
+        note: body.note?.trim() || '',
+      },
+    ]
+    await this.core.putSetting(CUSTOM_KNOWLEDGE_SETTING_KEY, serializeCustomSources(next))
+    const value = body.value?.trim() ? body.value : null
+    if (value) await this.core.putSetting(customKnowledgeSettingKey(id), value)
+    this.knowledge.invalidate()
+    this.llm.invalidatePromptCache()
+    return this.getPipeline()
+  }
+
+  @Delete('knowledge/:id')
+  @ApiOperation({
+    summary: '추가 지식 소스 삭제 — 붙박이 카탈로그는 지울 수 없다',
+    description:
+      '목록에서 빼고 값 KV도 지운다. 남은 토큰이 프롬프트에 원문으로 새어 나가지 않도록 ' +
+      '재정의 프롬프트에서 그 자리표시자도 함께 제거한다 (기본값 템플릿에는 애초에 없다).',
+  })
+  @ApiParam({ name: 'id', description: '추가 지식 소스 id (custom- 접두)' })
+  @ApiOkResponse({ schema: toOpenApi(AdminPipelineWire) })
+  async deleteKnowledgeSource(@Param('id') id: string): Promise<AdminPipelineWire> {
+    const sources = await this.customSources()
+    const target = sources.find((s) => s.id === id)
+    if (!target) throw new BadRequestException('삭제할 수 있는 추가 지식이 아니에요')
+    await this.core.putSetting(CUSTOM_KNOWLEDGE_SETTING_KEY, serializeCustomSources(sources.filter((s) => s.id !== id)))
+    await this.core.deleteSetting(customKnowledgeSettingKey(id))
+    // 재정의 프롬프트에 남은 토큰 청소 — 안 지우면 {{TOKEN}} 원문이 그대로 모델에 나간다
+    for (const def of PROMPT_DEFS) {
+      const setting = await this.core.getSetting(promptSettingKey(def.id))
+      const configured = typeof setting?.value === 'string' ? setting.value : null
+      if (!configured?.includes(target.placeholder)) continue
+      const cleaned = configured.split(target.placeholder).join('')
+      if (cleaned.trim() && cleaned !== def.template) await this.core.putSetting(promptSettingKey(def.id), cleaned)
+      else await this.core.deleteSetting(promptSettingKey(def.id))
+    }
+    this.knowledge.invalidate()
+    this.llm.invalidatePromptCache()
     return this.getPipeline()
   }
 

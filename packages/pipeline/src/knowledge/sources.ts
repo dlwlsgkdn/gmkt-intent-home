@@ -79,6 +79,81 @@ export const KNOWLEDGE_SOURCES: KnowledgeSourceDef[] = [
 
 export const KNOWLEDGE_BY_ID = new Map(KNOWLEDGE_SOURCES.map((s) => [s.id, s]))
 
+/* ── 운영자가 추가하는 지식 소스 (관리 페이지 파이프라인 탭) ────────────────────
+ * 위 카탈로그는 코드가 소유한 붙박이 5종이고, 그 밖의 지식은 운영자가 화면에서 만든다.
+ * 목록은 core 설정 KV 한 칸(knowledge-custom)에 JSON 배열로, 값은 붙박이와 같은
+ * `knowledge-<id>` 키에 원문으로 저장된다 — 조회·캐시·주입 경로가 붙박이와 한 벌이다.
+ * 주입은 언제나 시스템 자리표시자다: 어느 단계에 실릴지는 그 단계 프롬프트에 토큰이
+ * 들어 있는지로 정해진다 (원장·검증 게이트 주입은 코드 배선이라 화면에서 만들 수 없다). */
+
+export const CUSTOM_KNOWLEDGE_SETTING_KEY = 'knowledge-custom'
+
+export type CustomKnowledgeSource = {
+  /** 설정 키에 쓰는 id — 언제나 `custom-` 접두 (붙박이 id와 섞이지 않는다) */
+  id: string
+  label: string
+  /** 시스템 자리표시자 토큰 — `{{NAME}}` */
+  placeholder: string
+  /** 치환 시 값 위에 붙는 제목 줄 — 모델에게 이 지식이 무엇인지 알려 준다 */
+  heading: string
+  note: string
+}
+
+/** 코드가 소유한 자리표시자 — 추가 지식이 이 토큰을 뺏을 수 없다 */
+export const RESERVED_PLACEHOLDERS = ['{{CATALOG}}', '{{VOCAB}}', '{{RULES}}', '{{CRITERIA}}', '{{FEWSHOT}}']
+
+/** 입력을 `{{NAME}}` 꼴로 정규화 — 규칙에 못 맞추면 null (호출부가 400) */
+export function normalizePlaceholderToken(raw: string): string | null {
+  const name = raw
+    .trim()
+    .replace(/^\{+/, '')
+    .replace(/\}+$/, '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+  if (!/^[A-Z][A-Z0-9_]{1,30}$/.test(name)) return null
+  return `{{${name}}}`
+}
+
+/** 토큰 → 설정 키 id (`{{MY_THING}}` → `custom-my-thing`) */
+export const customKnowledgeId = (placeholder: string) =>
+  `custom-${placeholder.replace(/[{}]/g, '').toLowerCase().replace(/_/g, '-')}`
+
+/** 추가 지식의 값 저장 키 — 붙박이(knowledgeSettingKey)와 같은 `knowledge-<id>` 문법 */
+export const customKnowledgeSettingKey = (id: string) => `knowledge-${id}`
+
+/** 설정 KV 원문 → 추가 지식 목록. 깨진 값은 조용히 버린다 (지식 없이도 파이프라인은 돈다) */
+export function parseCustomSources(raw: string | null): CustomKnowledgeSource[] {
+  if (!raw?.trim()) return []
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return []
+  }
+  if (!Array.isArray(parsed)) return []
+  const out: CustomKnowledgeSource[] = []
+  for (const row of parsed) {
+    if (!row || typeof row !== 'object') continue
+    const r = row as Record<string, unknown>
+    const placeholder = typeof r.placeholder === 'string' ? normalizePlaceholderToken(r.placeholder) : null
+    if (!placeholder || RESERVED_PLACEHOLDERS.includes(placeholder)) continue
+    const id = typeof r.id === 'string' && r.id.startsWith('custom-') ? r.id : customKnowledgeId(placeholder)
+    if (out.some((s) => s.id === id || s.placeholder === placeholder)) continue
+    out.push({
+      id,
+      placeholder,
+      label: typeof r.label === 'string' && r.label.trim() ? r.label.trim() : placeholder,
+      heading: typeof r.heading === 'string' && r.heading.trim() ? r.heading.trim() : `${r.label ?? placeholder}:`,
+      note: typeof r.note === 'string' ? r.note : '',
+    })
+  }
+  return out
+}
+
+export const serializeCustomSources = (list: CustomKnowledgeSource[]) => JSON.stringify(list)
+
 /** KV 게터 주입형 조회 — 구현체(BFF core 클라이언트·테스트 목·추후 DB)가 게터만 제공한다 */
 export type KnowledgeGetter = (key: string) => Promise<string | null>
 

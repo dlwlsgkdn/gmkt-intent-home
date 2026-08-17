@@ -1,16 +1,18 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  deleteAdminKnowledgeSource,
   dryRunStage,
   fetchAdminModel,
   fetchAdminPipeline,
   fetchAdminPrompts,
   flowRunPipeline,
+  postAdminKnowledgeSource,
   putAdminEngine,
   putAdminKnowledge,
   putAdminModel,
   putAdminPrompt,
 } from '../lib/adminApi.js'
-import { INJECTION_GROUPS, knowledgeRouting } from '../lib/pipelineKnowledge.js'
+import { INJECTION_GROUPS, addPlaceholder, knowledgeRouting, removePlaceholder } from '../lib/pipelineKnowledge.js'
 import FlowRunPreview from './FlowRunPreview.jsx'
 import PipelineFlow, { KIND_LABEL, SHORT_LABEL, metaLine } from './PipelineFlow.jsx'
 
@@ -126,6 +128,10 @@ export default function PipelineStudio({ api }) {
   const [hoverKnowledge, setHoverKnowledge] = useState(null)
   const [focusKnowledge, setFocusKnowledge] = useState(null)
   const [hoverStage, setHoverStage] = useState(null)
+  const [routeSaving, setRouteSaving] = useState(null) // 유입 토글 진행 중 `${지식id}:${단계id}`
+  /* 새 지식 소스 추가 폼 — 열려 있으면 객체 */
+  const [newSource, setNewSource] = useState(null)
+  const [newSourceSaving, setNewSourceSaving] = useState(false)
 
   /* LLM 모델 — 다이어그램 카드의 런타임 설정 (구 "생성 모델" 카드가 여기로 녹았다) */
   const [model, setModel] = useState(null) // { current, defaultModel, configured, options }
@@ -269,6 +275,79 @@ export default function PipelineStudio({ api }) {
       setError(e.message)
     } finally {
       setKnowledgeSaving(false)
+    }
+  }
+
+  /* 지식 → 단계 유입 토글. 시스템 자리표시자 지식의 "어느 단계에 실릴지"는 곧 그 단계 프롬프트에
+     토큰이 있느냐이므로, 토글은 프롬프트 재정의를 저장하는 것과 같다 (기존 저장 경로 그대로).
+     토큰을 넣으면 템플릿 끝에 붙고, 위치를 손보려면 단계 레이어의 프롬프트 편집기를 쓴다 */
+  const toggleKnowledgeStage = async (entry, stage) => {
+    if (!entry.placeholder || !stage.promptId || routeSaving) return
+    const prompt = promptEntryOf(stage.promptId)
+    if (!prompt) return
+    const current = prompt.configured ?? prompt.defaultText
+    const on = current.includes(entry.placeholder)
+    const next = on ? removePlaceholder(current, entry.placeholder) : addPlaceholder(current, entry.placeholder)
+    setRouteSaving(`${entry.id}:${stage.id}`)
+    try {
+      const nextPrompts = await putAdminPrompt(prompt.id, next)
+      setPrompts(nextPrompts)
+      const updated = nextPrompts.prompts.find((p) => p.id === prompt.id)
+      // 노드의 재정의 점 표식도 와이어 재조회 없이 맞춘다 (savePrompt와 같은 규칙)
+      setWire((prev) =>
+        prev
+          ? {
+              ...prev,
+              stages: prev.stages.map((s) =>
+                s.promptId === prompt.id ? { ...s, promptCustom: Boolean(updated?.configured) } : s,
+              ),
+            }
+          : prev,
+      )
+      api.showToast(
+        on
+          ? `「${entry.label}」를 ${stage.no} ${stage.label}에서 뺐어요.`
+          : `「${entry.label}」를 ${stage.no} ${stage.label}에 실었어요.`,
+      )
+    } catch (e) {
+      api.showToast(e.message || '유입 단계를 바꾸지 못했어요.')
+    } finally {
+      setRouteSaving(null)
+    }
+  }
+
+  const createSource = async () => {
+    const form = newSource
+    if (!form?.label.trim() || !form.placeholder.trim()) return
+    setNewSourceSaving(true)
+    try {
+      setWire(
+        await postAdminKnowledgeSource({
+          label: form.label.trim(),
+          placeholder: form.placeholder.trim(),
+          heading: form.heading.trim() || undefined,
+          note: form.note.trim() || undefined,
+          value: form.value.trim() || null,
+        }),
+      )
+      setNewSource(null)
+      api.showToast('지식 소스를 추가했어요 — 아래 단계 칩으로 실을 곳을 골라 주세요.')
+    } catch (e) {
+      api.showToast(e.message || '지식 소스를 추가하지 못했어요.')
+    } finally {
+      setNewSourceSaving(false)
+    }
+  }
+
+  const removeSource = async (entry) => {
+    if (!window.confirm(`「${entry.label}」 지식 소스를 지울까요?\n값과 단계 프롬프트에 남은 ${entry.placeholder} 자리도 함께 지워져요.`)) return
+    try {
+      setWire(await deleteAdminKnowledgeSource(entry.id))
+      setPrompts(await fetchAdminPrompts()) // 서버가 프롬프트에서 토큰을 뺐으므로 결선도 다시 읽는다
+      if (focusKnowledge === entry.id) setFocusKnowledge(null)
+      api.showToast(`「${entry.label}」를 지웠어요.`)
+    } catch (e) {
+      api.showToast(e.message || '지식 소스를 지우지 못했어요.')
     }
   }
 
@@ -783,31 +862,67 @@ export default function PipelineStudio({ api }) {
   const activeKnowledge = hoverKnowledge || focusKnowledge
   /* 노드에 손을 얹었을 때 밝아질 지식 행 */
   const linkedKnowledge = hoverStage ? routing.byStage.get(hoverStage) || [] : []
-  /** 지식 행의 단계 칩 — 누르면 그 단계 레이어가 열린다 */
-  const stageChip = (stageId, dropped) => {
-    const stage = stageById.get(stageId)
-    if (!stage) return null
+  /** 자리표시자 지식이 실릴 수 있는 후보 = LLM 단계 전부 (주입 자리가 시스템 프롬프트라서) */
+  const llmStages = useMemo(() => (wire?.stages || []).filter((s) => s.promptId), [wire?.stages])
+
+  /** 지식 행의 단계 칩. 자리표시자 지식은 **유입 토글**(누르면 그 단계 프롬프트에 토큰을 넣고 뺀다),
+   *  코드 배선 지식은 읽기 전용 표식이다 */
+  const stageChip = (entry, stage, { fixed = false } = {}) => {
+    const on = fixed || (routing.byKnowledge.get(entry.id)?.stageIds || []).includes(stage.id)
+    const saving = routeSaving === `${entry.id}:${stage.id}`
+    const dropped = !fixed && (routing.byKnowledge.get(entry.id)?.dropped || []).includes(stage.id)
+    const cls = [
+      'sb-know-chip',
+      on ? 'is-in' : 'is-out',
+      fixed ? 'is-fixed' : '',
+      hoverStage === stage.id ? 'is-on' : '',
+    ]
+    const title = fixed
+      ? `${stage.label} — 코드 배선이라 화면에서 바꿀 수 없어요`
+      : on
+        ? `${stage.label}에 실려 있어요 — 누르면 뺍니다`
+        : `${stage.label}에 안 실려요 — 누르면 싣습니다${dropped ? ' (기본 프롬프트에는 있던 자리예요)' : ''}`
     return (
       <button
-        key={(dropped ? 'x' : '') + stageId}
+        key={stage.id}
         type="button"
-        className={'sb-know-chip' + (dropped ? ' is-dropped' : '') + (hoverStage === stageId ? ' is-on' : '')}
-        title={
-          dropped
-            ? `${stage.label} — 재정의 프롬프트에서 자리표시자가 빠져 이 지식이 실리지 않아요`
-            : `${stage.label} 단계에 실려요 — 눌러서 열기`
-        }
+        className={cls.filter(Boolean).join(' ')}
+        aria-pressed={on}
+        disabled={fixed || Boolean(routeSaving)}
+        title={title}
         onClick={(event) => {
           event.stopPropagation()
-          setSelectedStage(stageId)
+          toggleKnowledgeStage(entry, stage)
         }}
-        onMouseEnter={() => setHoverStage(stageId)}
+        onMouseEnter={() => setHoverStage(stage.id)}
         onMouseLeave={() => setHoverStage(null)}
       >
         <b>{stage.no}</b>
-        {SHORT_LABEL[stageId] || stage.label}
-        {dropped && ' 빠짐'}
+        {SHORT_LABEL[stage.id] || stage.label}
+        {saving && ' …'}
       </button>
+    )
+  }
+
+  /** 한 지식 행의 단계 선택 줄 */
+  const stageChips = (entry) => {
+    if (entry.placeholder) {
+      return (
+        <div className="sb-know-chips">
+          <span className="sb-know-chips__label">실을 단계</span>
+          {llmStages.map((stage) => stageChip(entry, stage))}
+        </div>
+      )
+    }
+    const fixedIds = routing.byKnowledge.get(entry.id)?.stageIds || []
+    return (
+      <div className="sb-know-chips">
+        <span className="sb-know-chips__label">고정 배선</span>
+        {fixedIds.map((id) => {
+          const stage = stageById.get(id)
+          return stage ? stageChip(entry, stage, { fixed: true }) : null
+        })}
+      </div>
     )
   }
 
@@ -823,11 +938,80 @@ export default function PipelineStudio({ api }) {
             단계 칩을 달아 관계를 정지 상태로도 읽히게 한다. 행에 손을 얹으면 다이어그램의 소비 노드가
             밝아지고(activeKnowledge), 노드에 손을 얹으면 반대로 이 행이 밝아진다(linkedKnowledge). */}
         <div className="sb-admin-card sb-pipe-knowledge-card">
-          <p className="sb-panel-label">지식 소스 → 파이프라인</p>
+          <div className="sb-know-head">
+            <p className="sb-panel-label">지식 소스 → 파이프라인</p>
+            <button
+              type="button"
+              className="sb-btn sb-btn--ghost sb-btn--tiny"
+              onClick={() =>
+                setNewSource(newSource ? null : { label: '', placeholder: '', heading: '', note: '', value: '' })
+              }
+            >
+              {newSource ? '취소' : '+ 지식 소스'}
+            </button>
+          </div>
           <p className="sb-admin__muted">
-            팀 데이터 v0 — DB화 전의 수동 입력(설정 KV) 자리예요. 각 지식이 <b>어느 단계에 실리는지</b>가 아래 단계 칩과 오른쪽
-            흐름도의 유입 점으로 이어져요. 편집은 새 생성부터 반영돼요 (서버 캐시 최대 30초).
+            팀 데이터 v0 — DB화 전의 수동 입력(설정 KV) 자리예요. <b>실을 단계</b> 칩으로 각 지식이 어느 단계 프롬프트에 실릴지
+            직접 고르고, 오른쪽 흐름도의 유입 점으로 결과를 확인해요. 편집은 새 생성부터 반영돼요 (서버 캐시 최대 30초).
           </p>
+
+          {/* 새 지식 소스 — 주입 자리는 시스템 자리표시자 한 가지다 (원장·게이트 주입은 코드 배선) */}
+          {newSource && (
+            <div className="sb-know-new">
+              <p className="sb-know-new__head">새 지식 소스</p>
+              <label>
+                <span>이름</span>
+                <input
+                  value={newSource.label}
+                  placeholder="예: 시즌 프로모션 브리프"
+                  onChange={(e) => setNewSource((prev) => ({ ...prev, label: e.target.value }))}
+                />
+              </label>
+              <label>
+                <span>자리표시자</span>
+                <input
+                  value={newSource.placeholder}
+                  placeholder="예: SEASON_BRIEF"
+                  spellCheck={false}
+                  onChange={(e) => setNewSource((prev) => ({ ...prev, placeholder: e.target.value }))}
+                />
+              </label>
+              <label>
+                <span>제목 줄</span>
+                <input
+                  value={newSource.heading}
+                  placeholder="비우면 이름으로 만들어요 — 모델이 보는 블록 제목"
+                  onChange={(e) => setNewSource((prev) => ({ ...prev, heading: e.target.value }))}
+                />
+              </label>
+              <label>
+                <span>값</span>
+                <textarea
+                  value={newSource.value}
+                  rows={3}
+                  placeholder="지금 넣지 않아도 돼요 — 만든 뒤 편집으로 채울 수 있어요"
+                  onChange={(e) => setNewSource((prev) => ({ ...prev, value: e.target.value }))}
+                />
+              </label>
+              <p className="sb-admin__muted">
+                자리표시자는 영문 대문자·숫자·밑줄 2~31자예요 (`{'{{SEASON_BRIEF}}'}` 꼴로 저장돼요). 만든 뒤 <b>실을 단계</b>{' '}
+                칩으로 실을 곳을 고르면 그때부터 주입돼요.
+              </p>
+              <div className="sb-json-dialog__actions">
+                <button type="button" className="sb-btn sb-btn--ghost" disabled={newSourceSaving} onClick={() => setNewSource(null)}>
+                  취소
+                </button>
+                <button
+                  type="button"
+                  className="sb-btn sb-btn--primary"
+                  disabled={newSourceSaving || !newSource.label.trim() || !newSource.placeholder.trim()}
+                  onClick={createSource}
+                >
+                  {newSourceSaving ? '추가 중…' : '추가'}
+                </button>
+              </div>
+            </div>
+          )}
           {wire &&
             INJECTION_GROUPS.map((group) => {
               const rows = wire.knowledge.filter((entry) => entry.injection === group.id)
@@ -840,7 +1024,6 @@ export default function PipelineStudio({ api }) {
                   </div>
                   <ul className="sb-pipe-knowledge">
                     {rows.map((entry) => {
-                      const route = routing.byKnowledge.get(entry.id)
                       const isActive = activeKnowledge === entry.id
                       const isLinked = linkedKnowledge.includes(entry.id)
                       return (
@@ -866,6 +1049,7 @@ export default function PipelineStudio({ api }) {
                               <div className="sb-pipe-stage__title">
                                 <b>{entry.label}</b>
                                 {entry.placeholder && <code>{entry.placeholder}</code>}
+                                {entry.custom && <span className="sb-admin-prompt-chip">추가됨</span>}
                                 {!entry.editable && <span className="sb-admin-prompt-chip">실데이터 파생</span>}
                                 {entry.editable && !entry.value && (
                                   <span className="sb-admin-prompt-chip sb-admin-prompt-chip--warn">비어 있음</span>
@@ -879,26 +1063,29 @@ export default function PipelineStudio({ api }) {
                                   : entry.note}
                               </p>
                             </button>
-                            <div className="sb-know-chips">
-                              {route?.stageIds.length ? (
-                                route.stageIds.map((stageId) => stageChip(stageId, false))
-                              ) : (
-                                <span className="sb-know-chip sb-know-chip--none">
-                                  {prompts ? '실리는 단계 없음' : '결선 확인 중…'}
-                                </span>
-                              )}
-                              {route?.dropped.map((stageId) => stageChip(stageId, true))}
-                            </div>
+                            {prompts ? stageChips(entry) : <p className="sb-pipe-stage__note">결선 확인 중…</p>}
                           </div>
-                          {entry.editable && (
-                            <button
-                              type="button"
-                              className="sb-btn sb-btn--ghost sb-btn--tiny"
-                              onClick={() => openKnowledge(entry)}
-                            >
-                              편집
-                            </button>
-                          )}
+                          <div className="sb-know-row__actions">
+                            {entry.editable && (
+                              <button
+                                type="button"
+                                className="sb-btn sb-btn--ghost sb-btn--tiny"
+                                onClick={() => openKnowledge(entry)}
+                              >
+                                편집
+                              </button>
+                            )}
+                            {entry.custom && (
+                              <button
+                                type="button"
+                                className="sb-btn sb-btn--ghost sb-btn--tiny"
+                                title="이 지식 소스를 지워요"
+                                onClick={() => removeSource(entry)}
+                              >
+                                삭제
+                              </button>
+                            )}
+                          </div>
                         </li>
                       )
                     })}

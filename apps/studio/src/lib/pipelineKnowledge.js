@@ -37,6 +37,21 @@ export const INJECTION_GROUPS = [
   },
 ]
 
+/** 프롬프트 원문에서 자리표시자를 뺀다 (그 단계로의 유입 끊기) */
+export function removePlaceholder(text, token) {
+  return text.split(token).join('')
+}
+
+/**
+ * 프롬프트 원문에 자리표시자를 넣는다 (그 단계로 유입 켜기).
+ * 붙박이 지식이 관례상 템플릿 끝에 붙어 있으므로 끝에 이어 붙인다 — 이미 있으면 그대로 둔다.
+ * 위치를 손보고 싶으면 단계 레이어 모달의 프롬프트 편집기에서 직접 옮기면 된다.
+ */
+export function addPlaceholder(text, token) {
+  if (text.includes(token)) return text
+  return text.replace(/\s*$/, '') + `\n${token}`
+}
+
 /**
  * 지식 ↔ 단계 결선 계산.
  * @param knowledge AdminKnowledgeEntry[] (wire.knowledge)

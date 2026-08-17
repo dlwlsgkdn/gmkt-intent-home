@@ -91,6 +91,17 @@ export function putAdminKnowledge(id, value) {
   return req('PUT', `/knowledge/${encodeURIComponent(id)}`, { value })
 }
 
+/** 지식 소스 추가 — { label, placeholder, heading?, note?, value? }. 주입은 시스템 자리표시자 한 가지다
+ * (만들기만 해서는 어느 단계에도 실리지 않는다 — 단계 프롬프트에 토큰을 넣어야 유입된다) */
+export function postAdminKnowledgeSource(body) {
+  return req('POST', '/knowledge', body)
+}
+
+/** 추가 지식 소스 삭제 — 값 KV와 재정의 프롬프트에 남은 토큰까지 서버가 함께 지운다 */
+export function deleteAdminKnowledgeSource(id) {
+  return req('DELETE', `/knowledge/${encodeURIComponent(id)}`)
+}
+
 /** 생성 엔진 플래그 — engine: 'legacy' | 'langgraph' | null(기본값 legacy 복귀) */
 export function putAdminEngine(engine) {
   return req('PUT', '/engine', { engine })

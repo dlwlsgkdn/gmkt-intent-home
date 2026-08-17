@@ -47,9 +47,18 @@ export type SystemKnowledge = {
   rules?: string | null // knowledge-survey-rules — 설문조사 증류 규칙
   criteria?: string | null // knowledge-selection-criteria — 선택 기준 브리프
   fewshot?: string | null // knowledge-fewshot — 모범 예시 쌍
+  /** 운영자가 관리 페이지에서 추가한 지식 (knowledge/sources.ts CustomKnowledgeSource) —
+   * 토큰·제목이 붙박이처럼 코드에 없고 값과 함께 실려 온다. 값이 비면 붙박이와 같이 자리가 사라진다 */
+  custom?: CustomKnowledgeValue[]
 }
 
-export const KNOWLEDGE_PLACEHOLDERS: Record<keyof SystemKnowledge, { token: string; heading: string }> = {
+export type CustomKnowledgeValue = { token: string; heading: string; value: string | null }
+
+/** 붙박이 자리표시자 4종 (운영자 추가분은 SystemKnowledge.custom으로 값과 함께 실려 온다) */
+export const KNOWLEDGE_PLACEHOLDERS: Record<
+  'vocab' | 'rules' | 'criteria' | 'fewshot',
+  { token: string; heading: string }
+> = {
   vocab: { token: '{{VOCAB}}', heading: '소비자 어휘 사전 — 사용자가 쓰는 말을 생성물에도 그대로 쓴다:' },
   rules: { token: '{{RULES}}', heading: '서비스 설문조사에서 증류한 규칙:' },
   criteria: { token: '{{CRITERIA}}', heading: '선택 기준 지식 (트렌드 인터뷰 브리프):' },
@@ -59,10 +68,15 @@ export const KNOWLEDGE_PLACEHOLDERS: Record<keyof SystemKnowledge, { token: stri
 /** 템플릿 → 실제 시스템 프롬프트. 치환값이 같으면 결과도 바이트 고정이라 캐시 적중에 문제없다 */
 export function renderSystemTemplate(template: string, knowledge?: SystemKnowledge): string {
   let text = template.split(CATALOG_PLACEHOLDER).join(CATALOG_BLOCK)
-  for (const key of Object.keys(KNOWLEDGE_PLACEHOLDERS) as (keyof SystemKnowledge)[]) {
+  for (const key of Object.keys(KNOWLEDGE_PLACEHOLDERS) as (keyof typeof KNOWLEDGE_PLACEHOLDERS)[]) {
     const { token, heading } = KNOWLEDGE_PLACEHOLDERS[key]
-    const value = knowledge?.[key]?.trim()
+    const value = typeof knowledge?.[key] === 'string' ? (knowledge[key] as string).trim() : ''
     text = text.split(token).join(value ? `\n${heading}\n${value}\n` : '')
+  }
+  // 운영자 추가 지식 — 붙박이와 같은 규칙(값 있으면 제목 붙은 블록, 없으면 자리 삭제)
+  for (const entry of knowledge?.custom || []) {
+    const value = entry.value?.trim()
+    text = text.split(entry.token).join(value ? `\n${entry.heading}\n${value}\n` : '')
   }
   return text
 }
