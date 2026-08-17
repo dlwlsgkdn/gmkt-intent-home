@@ -246,13 +246,15 @@ try {
   ok(drResult?.prompt?.system?.includes('무너짐'), 'dry-run 프롬프트 — 치환 완료 시스템 전문 (지식 KV 포함)')
   ok(drResult?.prompt?.user?.includes('가을 파운데이션 추천'), 'dry-run 프롬프트 — 요청 가변부 원문')
 
-  // ── 9.5 전체 플로우 실행 (flow-run) — 실제 그래프, 기록 없음 ──
+  // ── 9.5 전체 플로우 실행 (flow-run) — 실제 그래프 + admin 프로필(ops-playground) 쓰레드로 실기록.
+  //     (core 미연결 환경에서만 flow- 임시 id로 강등된다 — 모의 core는 쓰레드를 받아 주므로 여기선 기록된다) ──
   console.log('9.5) 전체 플로우 실행 (flow-run)')
   const callsBeforeFlow = await llmCalls()
   const fr1 = await sse('/api/admin/pipeline/flow-run', { phase: 'survey', intent: '여름 쿠션 플로우 확인' }, plain)
   const fr1Result = last(fr1, 'result')?.data
   ok(!last(fr1, 'error'), '플로우 설문 구간 오류 없음')
-  ok(typeof fr1Result?.flowId === 'string' && fr1Result.flowId.startsWith('flow-'), `flowId 발급 (${fr1Result?.flowId})`)
+  ok(/^\d{19}$/.test(fr1Result?.flowId ?? ''), `flowId = core 쓰레드 id (${fr1Result?.flowId})`)
+  ok(fr1Result?.recorded === true, 'flow-run 실기록 플래그(recorded)')
   ok(fr1Result?.survey?.questions?.length === 3, `플로우 설문 3문항 (${fr1Result?.survey?.questions?.length})`)
   ok(fr1Result?.ledger?.trendKeywords?.includes('스킨플러딩'), '플로우 원장에 트렌드 키워드 주입')
   const fr1Stages = fr1.filter((e) => e.event === 'stage').map((e) => e.data)
@@ -291,7 +293,15 @@ try {
   ok(stageOf(fr2Stages, 'plan-skeleton', 'done') && stageOf(fr2Stages, 'plan-products', 'done'), 'stage 이벤트 — 병렬 5a·5b done')
   const verifyStage = stageOf(fr2Stages, 'verify', 'done')
   ok(verifyStage?.pass === 3 && verifyStage?.drops >= 1, `stage 이벤트 — 검증 게이트 통과 ${verifyStage?.pass}·드롭 ${verifyStage?.drops}`)
-  ok((stageOf(fr2Stages, 'record', 'done')?.summary ?? '').includes('기록 생략'), 'stage 이벤트 — 기록 생략 (core 스텁)')
+  ok(
+    (stageOf(fr2Stages, 'record', 'done')?.summary ?? '').includes('admin 프로필(ops-playground)'),
+    'stage 이벤트 — admin 프로필 쓰레드로 기록',
+  )
+  // 기록이 말뿐이 아닌지 core에서 되읽는다 — 쓰레드·평가 탭이 이 스텝을 그린다
+  const flowThread = await fetch(`${MOCK}/internal/threads/${fr1Result.flowId}`).then((r) => r.json())
+  ok(flowThread?.userId === 'ops-playground', `플로우 쓰레드 소유자 (${flowThread?.userId})`)
+  const flowStages = (flowThread?.steps ?? []).map((s) => s.stage)
+  ok(flowStages.includes('survey') && flowStages.includes('plan'), `플로우 스텝 기록 (${flowStages.join(',')})`)
   const fr2States = fr2.filter((e) => e.event === 'state').map((e) => e.data)
   ok(fr2States[0]?.node === '(체크포인트 재개)' && fr2States[0]?.patch?.survey, 'state 이벤트 — 재개 스냅샷 (설문 포함)')
   ok(fr2States.some((s) => s.node === 'await-answers' && s.patch?.answers?.length === 1), 'state 이벤트 — 답변 주입 패치')
