@@ -577,7 +577,7 @@
 
 .sb-pipe-layout {
   display: grid;
-  grid-template-columns: minmax(230px, 260px) 420px minmax(0, 1fr);
+  grid-template-columns: minmax(250px, 300px) 420px minmax(0, 1fr);
   grid-template-areas: 'knowledge flow side';
   gap: 20px;
   align-items: start;
@@ -947,6 +947,160 @@
   text-overflow: ellipsis;
 }
 
+/* ── 지식 소스 → 파이프라인 결선 (지식 카드) ─────────────────────────────────
+   주입 위치로 묶고, 행마다 실리는 단계 칩을 단다. 행 hover = 다이어그램 노드 강조,
+   노드 hover = 이 행 강조(is-linked), 행 클릭 = 고정(is-active) */
+.sb-know-group {
+  margin-top: 12px;
+}
+.sb-know-group__head {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 0 0 5px;
+}
+.sb-know-group__head b {
+  font-size: var(--sb-t-caption);
+  font-weight: 500;
+  color: var(--sb-ink-2);
+}
+.sb-know-group__head span {
+  font-size: var(--sb-t-micro);
+  color: var(--sb-subtle);
+}
+.sb-pipe-knowledge__row {
+  border-radius: var(--sb-r-md);
+  transition: background var(--sb-dur) var(--sb-ease), box-shadow var(--sb-dur) var(--sb-ease);
+}
+.sb-pipe-knowledge__row.is-linked,
+.sb-pipe-knowledge__row.is-active {
+  background: color-mix(in srgb, var(--sb-info) 8%, transparent);
+  box-shadow: inset 2px 0 0 var(--sb-info);
+}
+.sb-pipe-knowledge__row.is-empty .sb-pipe-knowledge__main > .sb-know-row__btn {
+  opacity: 0.72;
+}
+/* 행 본문은 "결선 고정" 토글 버튼이다 — 카드 안이라 버튼 크롬 없이 텍스트만 */
+.sb-know-row__btn {
+  display: block;
+  width: 100%;
+  border: none;
+  background: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+.sb-know-row__btn[aria-pressed='true'] .sb-pipe-stage__title b {
+  color: var(--sb-info);
+}
+.sb-know-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.sb-know-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--sb-n-200);
+  border-radius: var(--sb-r-pill);
+  padding: 2px 7px 2px 4px;
+  background: var(--sb-n-0);
+  font-size: var(--sb-t-micro);
+  color: var(--sb-ink-2);
+  cursor: pointer;
+}
+.sb-know-chip b {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 15px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: var(--sb-r-pill);
+  background: var(--sb-n-100);
+  color: var(--sb-muted);
+  font-size: var(--sb-t-micro);
+  font-weight: 500;
+}
+.sb-know-chip:hover,
+.sb-know-chip.is-on {
+  border-color: var(--sb-info);
+  color: var(--sb-info);
+}
+.sb-know-chip:hover b,
+.sb-know-chip.is-on b {
+  background: color-mix(in srgb, var(--sb-info) 14%, transparent);
+  color: var(--sb-info);
+}
+.sb-know-chip.is-dropped {
+  border-style: dashed;
+  border-color: var(--sb-warn);
+  color: var(--sb-warn);
+}
+.sb-know-chip--none {
+  border-style: dashed;
+  color: var(--sb-subtle);
+  cursor: default;
+  padding: 2px 7px;
+}
+
+/* 단계 레이어 모달 — "이 단계에 실리는 지식" */
+.sb-know-fed {
+  margin: 10px 0 2px;
+  border: 1px solid var(--sb-n-200);
+  border-radius: var(--sb-r-lg);
+  padding: 9px 11px;
+  background: var(--sb-n-0);
+}
+.sb-know-fed__head {
+  font-size: var(--sb-t-caption);
+  font-weight: 500;
+  color: var(--sb-ink-2);
+}
+.sb-know-fed ul {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sb-know-fed__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sb-know-fed__dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--sb-info);
+}
+.sb-know-fed__row.is-dropped .sb-know-fed__dot {
+  background: none;
+  border: 1px dashed var(--sb-warn);
+}
+.sb-know-fed__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: var(--sb-t-caption);
+}
+.sb-know-fed__main b {
+  font-weight: 500;
+}
+.sb-know-fed__main code {
+  font-size: var(--sb-t-micro);
+  color: var(--sb-muted);
+}
+
 /* 플레이그라운드 */
 .sb-pipe-play__intent {
   display: flex;
@@ -1284,6 +1438,44 @@
   border-radius: 50%;
   background: var(--sb-info);
 }
+/* 지식 유입 점 — 노드 왼쪽 가장자리(지식 카드가 있는 방향)에 세로로 선다.
+   점 하나 = 지식 하나, 채움 = 값 있음 / 테두리만 = 비어 있음 */
+.sb-flow__feed {
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.sb-flow__feed-dot {
+  width: 5px;
+  height: 5px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--sb-info) 55%, transparent);
+  transition: transform var(--sb-dur) var(--sb-ease), background var(--sb-dur) var(--sb-ease);
+}
+.sb-flow__feed-dot.is-empty {
+  background: none;
+  border: 1px solid color-mix(in srgb, var(--sb-info) 45%, transparent);
+}
+.sb-flow__feed.is-on .sb-flow__feed-dot {
+  background: color-mix(in srgb, var(--sb-info) 25%, transparent);
+}
+.sb-flow__feed-dot.is-on {
+  background: var(--sb-info);
+  transform: scale(1.5);
+}
+.sb-flow__feed-dot.is-on.is-empty {
+  background: none;
+  border-color: var(--sb-info);
+}
+.sb-flow__node.is-fed {
+  border-color: var(--sb-info);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sb-info) 16%, transparent);
+}
 /* 연결선 — 평시에도 중립색 대시가 천천히 흘러 "데이터가 지나는 관"임을 보여주고,
    실행(is-live) 중에는 보라(ai) 대시가 빠르게 흐른다 (세로 — 위→아래) */
 .sb-flow__link {
@@ -1396,6 +1588,13 @@
   height: 2px;
   border-radius: 1px;
   background: repeating-linear-gradient(90deg, var(--sb-ai) 0 3px, transparent 3px 6px);
+}
+.sb-flow-legend__sw--feed {
+  border: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--sb-info) 55%, transparent);
 }
 .sb-flow-status {
   display: flex;

@@ -8,12 +8,18 @@ import React, { useMemo } from 'react'
  * 노드 클릭 = 단계 레이어 모달(설명·최근 실행·시스템 프롬프트 열람·수정 — PipelineStudio 소유).
  * 플레이그라운드 실행(running) 동안 그 경로의 연결선에 대시가 흐르고 실행 중인 LLM 노드가
  * 맥동한다. 결과가 도착하면 노드에 ✓ 지연·검증 통과/드롭 요약이 남는다. 표현 전용.
+ *
+ * **지식 유입 표시**(feedByStage — lib/pipelineKnowledge.js가 계산): 지식이 실리는 노드는 왼쪽
+ * 가장자리에 유입 점 줄을 달고(지식 카드가 다이어그램 왼쪽에 있으므로 방향이 그대로 읽힌다),
+ * 점 하나가 지식 하나다 — 값이 있으면 채워지고 비어 있으면 테두리만. 지식 카드의 행에
+ * 손을 얹으면(activeKnowledge) 그 지식이 실리는 노드만 강조되고, 노드에 손을 얹으면
+ * (onHoverStage) 반대로 지식 카드의 해당 행이 강조된다.
  */
 
 export const KIND_LABEL = { llm: 'LLM', deterministic: '결정적', 'interrupt-boundary': '대기 지점' }
 
-/** 노드 폭에 맞춘 짧은 표시 라벨 (레이어 모달은 와이어의 전체 라벨) */
-const SHORT_LABEL = {
+/** 노드 폭에 맞춘 짧은 표시 라벨 (레이어 모달은 와이어의 전체 라벨) — 지식 행의 단계 칩도 이 라벨을 쓴다 */
+export const SHORT_LABEL = {
   objective: '목적어 입력',
   intent: '의도 정규화',
   ledger: '제약 원장',
@@ -51,9 +57,38 @@ export default function PipelineFlow({
   results, // { [stageId]: { meta?, custom?, pass?, drops?, summary?, prompt? } } — 플레이그라운드 결과 요약
   selectedId,
   onSelect, // 노드 클릭 → 단계 레이어 모달 열기 (PipelineStudio)
+  feedByStage, // Map<단계id, 지식id[]> — 이 단계에 실리는 지식 (pipelineKnowledge.knowledgeRouting)
+  knowledgeById, // Map<지식id, AdminKnowledgeEntry> — 유입 점의 라벨·값 유무
+  activeKnowledge, // 지식 카드에서 손을 얹은 지식 id | null — 소비 노드를 강조
+  onHoverStage, // 노드 hover → 지식 카드 역강조 (id | null)
 }) {
   const byId = useMemo(() => new Map((stages || []).map((stage) => [stage.id, stage])), [stages])
   const run = running ? RUN_PATHS[running] : null
+
+  /** 노드 왼쪽 유입 점 줄 — 점 하나 = 지식 하나 (채움 = 값 있음) */
+  const feed = (id) => {
+    const fed = feedByStage?.get(id)
+    if (!fed?.length) return null
+    const entries = fed.map((kid) => knowledgeById?.get(kid)).filter(Boolean)
+    if (!entries.length) return null
+    const hit = activeKnowledge ? fed.includes(activeKnowledge) : false
+    const title =
+      '실리는 지식 — ' + entries.map((e) => `${e.label}${e.value ? '' : ' (비어 있음)'}`).join(', ')
+    return (
+      <span className={'sb-flow__feed' + (hit ? ' is-on' : '')} title={title}>
+        {entries.map((entry) => (
+          <i
+            key={entry.id}
+            className={
+              'sb-flow__feed-dot' +
+              (entry.value ? '' : ' is-empty') +
+              (activeKnowledge === entry.id ? ' is-on' : '')
+            }
+          />
+        ))}
+      </span>
+    )
+  }
 
   const node = (id) => {
     const stage = byId.get(id)
@@ -85,6 +120,7 @@ export default function PipelineFlow({
     if (isLive) cls.push('is-live')
     else if (onPath && running) cls.push('is-path')
     if (selectedId === id) cls.push('is-on')
+    if (activeKnowledge && feedByStage?.get(id)?.includes(activeKnowledge)) cls.push('is-fed')
     return (
       <button
         key={id}
@@ -94,7 +130,12 @@ export default function PipelineFlow({
         aria-haspopup="dialog"
         aria-pressed={selectedId === id}
         onClick={() => onSelect(id)}
+        onMouseEnter={() => onHoverStage?.(id)}
+        onMouseLeave={() => onHoverStage?.(null)}
+        onFocus={() => onHoverStage?.(id)}
+        onBlur={() => onHoverStage?.(null)}
       >
+        {feed(id)}
         {(stage.promptCustom || result?.custom) && <i className="sb-flow__flag" title="프롬프트 재정의 사용 중" />}
         <span className="sb-flow__no">{stage.no}</span>
         <span className="sb-flow__text">
@@ -165,8 +206,12 @@ export default function PipelineFlow({
         <span><i className="sb-flow-legend__sw" /> 결정적</span>
         <span><i className="sb-flow-legend__sw sb-flow-legend__sw--planned" /> 예정</span>
         <span><i className="sb-flow-legend__sw sb-flow-legend__sw--live" /> 실행 흐름</span>
+        <span><i className="sb-flow-legend__sw sb-flow-legend__sw--feed" /> 지식 유입 (점 = 지식 1개, 빈 점 = 값 없음)</span>
       </div>
-      <p className="sb-flow-hint">단계를 누르면 설명·시스템 프롬프트가 레이어로 열려요. 플레이그라운드 실행이 이 흐름 위에 그대로 비쳐요.</p>
+      <p className="sb-flow-hint">
+        단계를 누르면 설명·실리는 지식·시스템 프롬프트가 레이어로 열려요. 왼쪽 지식 카드의 행에 손을 얹으면 그 지식이 실리는
+        단계가, 단계에 손을 얹으면 거기 실리는 지식이 서로 밝아져요. 플레이그라운드 실행도 이 흐름 위에 그대로 비쳐요.
+      </p>
     </>
   )
 }

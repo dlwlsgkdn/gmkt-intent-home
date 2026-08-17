@@ -10,8 +10,9 @@ import {
   putAdminModel,
   putAdminPrompt,
 } from '../lib/adminApi.js'
+import { INJECTION_GROUPS, knowledgeRouting } from '../lib/pipelineKnowledge.js'
 import FlowRunPreview from './FlowRunPreview.jsx'
-import PipelineFlow, { KIND_LABEL, metaLine } from './PipelineFlow.jsx'
+import PipelineFlow, { KIND_LABEL, SHORT_LABEL, metaLine } from './PipelineFlow.jsx'
 
 /*
  * 파이프라인 스튜디오 (운영 콘솔 "파이프라인" 탭 — DESIGN-PIPELINE-LANGGRAPH.md 페이즈 4).
@@ -121,6 +122,10 @@ export default function PipelineStudio({ api }) {
   const [knowledgeEdit, setKnowledgeEdit] = useState(null) // AdminKnowledgeEntry
   const [knowledgeText, setKnowledgeText] = useState('')
   const [knowledgeSaving, setKnowledgeSaving] = useState(false)
+  /* 지식 ↔ 단계 상호 강조 — 손을 얹으면 잠깐(hover), 누르면 고정(focus)해 다이어그램을 살펴볼 수 있다 */
+  const [hoverKnowledge, setHoverKnowledge] = useState(null)
+  const [focusKnowledge, setFocusKnowledge] = useState(null)
+  const [hoverStage, setHoverStage] = useState(null)
 
   /* LLM 모델 — 다이어그램 카드의 런타임 설정 (구 "생성 모델" 카드가 여기로 녹았다) */
   const [model, setModel] = useState(null) // { current, defaultModel, configured, options }
@@ -765,6 +770,47 @@ export default function PipelineStudio({ api }) {
   const selectedResult = selected ? flowResults[selected.id] : null
   const modelDirty = model && (model.configured ?? '') !== modelChoice
 
+  /* 지식 ↔ 단계 결선 — 자리표시자는 실효 프롬프트(재정의 우선)에서 판정하므로 프롬프트를 고치면 바로 따라온다 */
+  const routing = useMemo(
+    () => knowledgeRouting(wire?.knowledge, wire?.stages, prompts),
+    [wire?.knowledge, wire?.stages, prompts],
+  )
+  const knowledgeById = useMemo(
+    () => new Map((wire?.knowledge || []).map((entry) => [entry.id, entry])),
+    [wire?.knowledge],
+  )
+  const stageById = useMemo(() => new Map((wire?.stages || []).map((s) => [s.id, s])), [wire?.stages])
+  const activeKnowledge = hoverKnowledge || focusKnowledge
+  /* 노드에 손을 얹었을 때 밝아질 지식 행 */
+  const linkedKnowledge = hoverStage ? routing.byStage.get(hoverStage) || [] : []
+  /** 지식 행의 단계 칩 — 누르면 그 단계 레이어가 열린다 */
+  const stageChip = (stageId, dropped) => {
+    const stage = stageById.get(stageId)
+    if (!stage) return null
+    return (
+      <button
+        key={(dropped ? 'x' : '') + stageId}
+        type="button"
+        className={'sb-know-chip' + (dropped ? ' is-dropped' : '') + (hoverStage === stageId ? ' is-on' : '')}
+        title={
+          dropped
+            ? `${stage.label} — 재정의 프롬프트에서 자리표시자가 빠져 이 지식이 실리지 않아요`
+            : `${stage.label} 단계에 실려요 — 눌러서 열기`
+        }
+        onClick={(event) => {
+          event.stopPropagation()
+          setSelectedStage(stageId)
+        }}
+        onMouseEnter={() => setHoverStage(stageId)}
+        onMouseLeave={() => setHoverStage(null)}
+      >
+        <b>{stage.no}</b>
+        {SHORT_LABEL[stageId] || stage.label}
+        {dropped && ' 빠짐'}
+      </button>
+    )
+  }
+
   return (
     <>
       {error && <p className="sb-admin-gate__error">{error}</p>}
@@ -772,40 +818,94 @@ export default function PipelineStudio({ api }) {
       {/* 지식 소스(왼쪽) ∥ 세로 흐름 카드(가운데 히어로) ∥ 플레이그라운드(오른쪽) —
           실행이 가운데 흐름에 비친다. 배치는 grid-template-areas (admin.css .sb-pipe-layout) */}
       <div className="sb-pipe-layout">
-        {/* 지식 소스 — KV 편집 (왼쪽 컬럼) */}
+        {/* 지식 소스 — KV 편집 + 파이프라인 결선 (왼쪽 컬럼).
+            주입 위치로 묶고(시스템 자리표시자 / 원장 가변부 / 검증 게이트), 행마다 그 지식이 실리는
+            단계 칩을 달아 관계를 정지 상태로도 읽히게 한다. 행에 손을 얹으면 다이어그램의 소비 노드가
+            밝아지고(activeKnowledge), 노드에 손을 얹으면 반대로 이 행이 밝아진다(linkedKnowledge). */}
         <div className="sb-admin-card sb-pipe-knowledge-card">
-          <p className="sb-panel-label">지식 소스 (팀 데이터 v0 — 설정 KV)</p>
+          <p className="sb-panel-label">지식 소스 → 파이프라인</p>
           <p className="sb-admin__muted">
-            DB화 전의 수동 입력 자리예요. 시스템 자리표시자 지식은 프롬프트 캐시에 흡수되고, 가변부·게이트 값은 요청마다
-            실려요. 편집은 새 생성부터 반영돼요 (서버 캐시 최대 30초).
+            팀 데이터 v0 — DB화 전의 수동 입력(설정 KV) 자리예요. 각 지식이 <b>어느 단계에 실리는지</b>가 아래 단계 칩과 오른쪽
+            흐름도의 유입 점으로 이어져요. 편집은 새 생성부터 반영돼요 (서버 캐시 최대 30초).
           </p>
-          {wire && (
-            <ul className="sb-pipe-knowledge">
-              {wire.knowledge.map((entry) => (
-                <li key={entry.id} className="sb-pipe-knowledge__row">
-                  <div className="sb-pipe-knowledge__main">
-                    <div className="sb-pipe-stage__title">
-                      <b>{entry.label}</b>
-                      <span className="sb-admin-prompt-chip">{INJECTION_LABEL[entry.injection] || entry.injection}</span>
-                      {entry.placeholder && <code>{entry.placeholder}</code>}
-                      {!entry.editable && <span className="sb-admin-prompt-chip">실데이터 파생</span>}
-                      {entry.editable && entry.value && (
-                        <span className="sb-admin-prompt-chip sb-admin-prompt-chip--custom">값 있음</span>
-                      )}
-                    </div>
-                    <p className="sb-pipe-stage__note">
-                      {entry.editable ? (entry.value ? entry.value.split('\n')[0] : '비어 있음 — 지식 없이 생성돼요') : entry.note}
-                    </p>
+          {wire &&
+            INJECTION_GROUPS.map((group) => {
+              const rows = wire.knowledge.filter((entry) => entry.injection === group.id)
+              if (!rows.length) return null
+              return (
+                <div key={group.id} className="sb-know-group">
+                  <div className="sb-know-group__head">
+                    <b>{group.label}</b>
+                    <span>{group.note}</span>
                   </div>
-                  {entry.editable && (
-                    <button type="button" className="sb-btn sb-btn--ghost sb-btn--tiny" onClick={() => openKnowledge(entry)}>
-                      편집
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
+                  <ul className="sb-pipe-knowledge">
+                    {rows.map((entry) => {
+                      const route = routing.byKnowledge.get(entry.id)
+                      const isActive = activeKnowledge === entry.id
+                      const isLinked = linkedKnowledge.includes(entry.id)
+                      return (
+                        <li
+                          key={entry.id}
+                          className={
+                            'sb-pipe-knowledge__row' +
+                            (isActive ? ' is-active' : '') +
+                            (isLinked ? ' is-linked' : '') +
+                            (entry.editable && !entry.value ? ' is-empty' : '')
+                          }
+                          onMouseEnter={() => setHoverKnowledge(entry.id)}
+                          onMouseLeave={() => setHoverKnowledge(null)}
+                        >
+                          <div className="sb-pipe-knowledge__main">
+                            <button
+                              type="button"
+                              className="sb-know-row__btn"
+                              aria-pressed={focusKnowledge === entry.id}
+                              title="흐름도에서 이 지식이 실리는 단계를 고정해 보기"
+                              onClick={() => setFocusKnowledge((prev) => (prev === entry.id ? null : entry.id))}
+                            >
+                              <div className="sb-pipe-stage__title">
+                                <b>{entry.label}</b>
+                                {entry.placeholder && <code>{entry.placeholder}</code>}
+                                {!entry.editable && <span className="sb-admin-prompt-chip">실데이터 파생</span>}
+                                {entry.editable && !entry.value && (
+                                  <span className="sb-admin-prompt-chip sb-admin-prompt-chip--warn">비어 있음</span>
+                                )}
+                              </div>
+                              <p className="sb-pipe-stage__note">
+                                {entry.editable
+                                  ? entry.value
+                                    ? entry.value.split('\n')[0]
+                                    : '값이 없어 이 자리는 비운 채로 나가요'
+                                  : entry.note}
+                              </p>
+                            </button>
+                            <div className="sb-know-chips">
+                              {route?.stageIds.length ? (
+                                route.stageIds.map((stageId) => stageChip(stageId, false))
+                              ) : (
+                                <span className="sb-know-chip sb-know-chip--none">
+                                  {prompts ? '실리는 단계 없음' : '결선 확인 중…'}
+                                </span>
+                              )}
+                              {route?.dropped.map((stageId) => stageChip(stageId, true))}
+                            </div>
+                          </div>
+                          {entry.editable && (
+                            <button
+                              type="button"
+                              className="sb-btn sb-btn--ghost sb-btn--tiny"
+                              onClick={() => openKnowledge(entry)}
+                            >
+                              편집
+                            </button>
+                          )}
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              )
+            })}
         </div>
 
         <div className="sb-admin-card sb-flow-card">
@@ -901,6 +1001,10 @@ export default function PipelineStudio({ api }) {
                 results={flowResults}
                 selectedId={selectedStage}
                 onSelect={setSelectedStage}
+                feedByStage={routing.byStage}
+                knowledgeById={knowledgeById}
+                activeKnowledge={activeKnowledge}
+                onHoverStage={setHoverStage}
               />
               {(running || flowRunning) && (
                 <p className="sb-flow-status">
@@ -1228,6 +1332,57 @@ export default function PipelineStudio({ api }) {
                 )}
               </div>
               <p className="sb-pipe-stage__note">{selected.note}</p>
+
+              {/* 이 단계에 실리는 지식 — 왼쪽 카드의 결선을 단계 쪽에서 되읽는 자리.
+                  재정의로 자리표시자가 빠진 지식은 "빠짐"으로 따로 세운다 */}
+              {(() => {
+                const fed = routing.byStage.get(selected.id) || []
+                const dropped = routing.droppedByStage.get(selected.id) || []
+                if (!fed.length && !dropped.length) return null
+                const row = (kid, isDropped) => {
+                  const entry = knowledgeById.get(kid)
+                  if (!entry) return null
+                  return (
+                    <li key={(isDropped ? 'x' : '') + kid} className={'sb-know-fed__row' + (isDropped ? ' is-dropped' : '')}>
+                      <span className="sb-know-fed__dot" aria-hidden="true" />
+                      <span className="sb-know-fed__main">
+                        <b>{entry.label}</b>
+                        <span className="sb-admin-prompt-chip">{INJECTION_LABEL[entry.injection] || entry.injection}</span>
+                        {entry.placeholder && <code>{entry.placeholder}</code>}
+                        {isDropped ? (
+                          <span className="sb-admin-prompt-chip sb-admin-prompt-chip--warn">
+                            재정의에서 자리표시자가 빠져 실리지 않아요
+                          </span>
+                        ) : entry.editable && !entry.value ? (
+                          <span className="sb-admin-prompt-chip sb-admin-prompt-chip--warn">비어 있음</span>
+                        ) : null}
+                      </span>
+                      {entry.editable && (
+                        <button
+                          type="button"
+                          className="sb-btn sb-btn--ghost sb-btn--tiny"
+                          onClick={() => {
+                            setSelectedStage(null)
+                            openKnowledge(entry)
+                          }}
+                        >
+                          편집
+                        </button>
+                      )}
+                    </li>
+                  )
+                }
+                return (
+                  <div className="sb-know-fed">
+                    <b className="sb-know-fed__head">이 단계에 실리는 지식</b>
+                    <ul>
+                      {fed.map((kid) => row(kid, false))}
+                      {dropped.map((kid) => row(kid, true))}
+                    </ul>
+                  </div>
+                )
+              })()}
+
               {selectedResult?.meta && <p className="sb-admin__muted">최근 실행: {metaLine(selectedResult.meta)}</p>}
               {selectedResult?.summary && <p className="sb-admin__muted">최근 실행 요약: {selectedResult.summary}</p>}
               {selectedResult?.pass != null && (
