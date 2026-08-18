@@ -70,11 +70,13 @@ export function useWorkspace({ showToast, onReset }) {
   useEffect(() => { saveViewerDevice(viewerDevice) }, [viewerDevice])
 
   /* ── 프로필(계정) 관리 ── */
-  const switchAccount = (id) => {
+  const switchAccount = (id, options = {}) => {
     const account = accounts.find((candidate) => candidate.id === id)
     if (!account || id === activeAccountId) return
     setActiveAccountId(id)
-    onReset()
+    /* 홈 프로필 전환은 열린 체험·편집 상태를 닫지만, 운영 센터의 프로필 탭은
+       같은 #ops/studio 화면 안에서 목록만 바꿔야 하므로 현재 화면을 유지한다. */
+    if (!options.keepRoute) onReset()
     /* 전환은 쓰기 트랜잭션이 아니다 — 계정 데이터가 안 바뀌므로 자동 싱크하지 않는다.
        대신 그 계정의 콘텐츠·쓰레드를 백그라운드로 서버와 맞춘다 */
     sync.ensureAccountSynced(id).catch(() => {})

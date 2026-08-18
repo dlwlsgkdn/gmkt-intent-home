@@ -26,6 +26,37 @@ export default function AdminScenarioStudio({ api, onEdit }) {
         </button>
       </header>
 
+      <section className="sb-admin-card sb-admin-studio__accounts" aria-labelledby="sb-admin-studio-account-title">
+        <div className="sb-admin-card__head">
+          <div>
+            <h2 id="sb-admin-studio-account-title">프로필별 작업 공간</h2>
+            <p>유진·둥둥이처럼 프로필마다 시나리오가 따로 있어요. 이름을 누르면 해당 목록으로 바뀝니다.</p>
+          </div>
+          <span className="sb-admin-studio__account-count">전체 {api.accounts.length}명</span>
+        </div>
+        <div className="sb-admin-studio__account-tabs">
+          {api.accounts.map((account) => {
+            const active = account.id === api.activeAccountId
+            return (
+              <button
+                key={account.id}
+                type="button"
+                className={active ? 'is-on' : ''}
+                aria-current={active ? 'true' : undefined}
+                onClick={() => {
+                  onEdit(null)
+                  api.switchAccount(account.id, { keepRoute: true })
+                }}
+              >
+                <span>{String(account.profile?.name || '사용자').slice(0, 1)}</span>
+                <b>{account.profile?.name || '이름 없음'}</b>
+                <small>시나리오 {account.scenarios?.length || 0}개</small>
+              </button>
+            )
+          })}
+        </div>
+      </section>
+
       <div className="sb-admin-studio__summary" aria-label="시나리오 현황">
         <div><b>{api.scenarios.length}</b><span>전체 시나리오</span></div>
         <div><b>{publishedCount}</b><span>발행됨</span></div>

@@ -870,6 +870,40 @@
 .sb-admin-studio { display: flex; flex-direction: column; gap: 18px; }
 .sb-admin-studio__head { margin-bottom: 0; }
 .sb-admin-studio__head .sb-admin__muted { margin: 7px 0 0; }
+.sb-admin-studio__accounts { padding: 18px 20px; }
+.sb-admin-studio__account-count { color: var(--sb-muted); font-size: var(--sb-t-caption); }
+.sb-admin-studio__account-tabs { display: flex; gap: 8px; margin-top: 13px; overflow-x: auto; padding-bottom: 2px; }
+.sb-admin-studio__account-tabs > button {
+  min-width: 150px;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 9px;
+  align-items: center;
+  border: 1px solid var(--sb-n-200);
+  border-radius: var(--sb-r-lg);
+  padding: 10px 12px;
+  color: var(--sb-ink);
+  background: var(--sb-n-0);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.sb-admin-studio__account-tabs > button:hover { border-color: var(--sb-n-400); }
+.sb-admin-studio__account-tabs > button.is-on { border-color: var(--sb-accent); background: var(--sb-accent-soft); }
+.sb-admin-studio__account-tabs > button > span {
+  grid-row: 1 / 3;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--sb-n-0);
+  background: var(--sb-accent);
+  font-size: var(--sb-t-body);
+}
+.sb-admin-studio__account-tabs b { overflow: hidden; color: var(--sb-ink); font-size: var(--sb-t-body); font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.sb-admin-studio__account-tabs small { color: var(--sb-muted); font-size: var(--sb-t-micro); }
 .sb-admin-studio__summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .sb-admin-studio__summary > div {
   display: flex;
