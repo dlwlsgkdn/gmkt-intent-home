@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react'
 import { loadTaggingReview, unitStatusKey } from '../lib/taggingCatalog.js'
 import { statusLabel } from '../lib/adminReport.jsx'
+import { TREND_KEYWORDS } from '../lib/trendKeywords.js'
 
 const ADMIN_USER = 'ops-playground'
 
@@ -31,7 +32,7 @@ export default function AdminDashboard({ api, threads, feedback, loading, mode }
         { value: tagQueue, label: '태깅 검토 대기', note: `전체 ${tagging.length}개 작업 단위`, tone: tagQueue ? 'warn' : 'good', tab: 'tagging' },
         { value: feedbackItems.length, label: '평가 제출', note: `낮은 평가 ${lowFeedback}건`, tone: lowFeedback ? 'warn' : 'good', tab: 'threads' },
         { value: drafts.length, label: '작성 중 시나리오', note: `발행 ${published.length}개`, tab: 'experiment' },
-        { value: api.keywords.length, label: '등록 키워드', note: '설명·사용 포인트 사전', tab: 'knowledge' },
+        { value: TREND_KEYWORDS.length, label: '트렌드 키워드', note: '뷰티 트렌드 사전', tab: 'knowledge' },
       ]
     : [
         { value: realThreads.length, label: '실사용자 여정', note: loading ? '불러오는 중…' : `완료율 ${pct(completed, realThreads.length)}%`, tab: 'threads' },

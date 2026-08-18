@@ -35,7 +35,7 @@ const NAV_GROUPS = [
     items: [
       ['threads', '◎', '고객 여정·평가'],
       ['tagging', '⊞', '상품 태깅'],
-      ['knowledge', '◇', '운영 지식'],
+      ['knowledge', '◇', '트렌드 사전'],
     ],
   },
   {
