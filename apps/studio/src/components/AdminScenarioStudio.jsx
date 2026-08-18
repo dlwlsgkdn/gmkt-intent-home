@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { TEMPLATES } from '../lib/templates.js'
 import ScenarioGenerationDialog from './builder/ScenarioGenerationDialog.jsx'
 
-export default function AdminScenarioStudio({ api }) {
+export default function AdminScenarioStudio({ api, onEdit }) {
   const [query, setQuery] = useState('')
   const [scenarioGenOpen, setScenarioGenOpen] = useState(false)
   const needle = query.trim().toLowerCase().replace(/[\s_·/]+/g, '')
@@ -38,7 +38,14 @@ export default function AdminScenarioStudio({ api }) {
         </div>
         <div className="sb-admin-studio__template-grid">
           {TEMPLATES.map((template) => (
-            <button key={template.key} type="button" onClick={() => api.newAdminScenario(template)}>
+            <button
+              key={template.key}
+              type="button"
+              onClick={() => {
+                const scenario = api.newAdminScenario(template)
+                onEdit(scenario.id)
+              }}
+            >
               <span>{template.icon}</span>
               <b>{template.name}</b>
               <small>{template.desc}</small>
@@ -78,7 +85,13 @@ export default function AdminScenarioStudio({ api }) {
                 </div>
               </div>
               <div className="sb-admin-studio__row-actions">
-                <button type="button" className="sb-btn sb-btn--primary sb-btn--small" onClick={() => api.openAdminBuilder(scenario.id)}>편집</button>
+                <button
+                  type="button"
+                  className="sb-btn sb-btn--primary sb-btn--small"
+                  onClick={() => api.openAdminBuilder(scenario.id, onEdit)}
+                >
+                  편집
+                </button>
                 <button type="button" className="sb-btn sb-btn--small" onClick={() => api.playScenario(scenario.id)}>시험</button>
                 <button type="button" className="sb-btn sb-btn--small" onClick={() => api.copyScenario(scenario.id)}>복제</button>
                 <button
@@ -99,7 +112,10 @@ export default function AdminScenarioStudio({ api }) {
       {scenarioGenOpen && (
         <ScenarioGenerationDialog
           profile={api.profile}
-          onCreate={(partial) => api.newAdminScenarioFrom(partial)}
+          onCreate={(partial) => {
+            const scenario = api.newAdminScenarioFrom(partial)
+            onEdit(scenario.id)
+          }}
           onImport={(list) => {
             api.importScenarios(list)
             api.showToast('시나리오를 가져왔어요. 목록에서 편집을 눌러주세요.')

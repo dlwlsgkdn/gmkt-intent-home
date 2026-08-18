@@ -114,6 +114,10 @@ export default function App() {
     if (routeRef.current.name === next.name && routeRef.current.id === next.id) return
     openSynced(workspace.ensureStudioSynced(next.id), () => {
       if (workspace.getFreshActiveScenarios().some((scenario) => scenario.id === next.id)) {
+        if (isAdminStudioEditor) {
+          /* 예전 ID 포함 주소로 들어와도 즉시 고정 주소로 정리한다. 선택 ID는 화면 상태에만 둔다. */
+          history.replaceState(null, '', location.pathname + location.search + '#ops/studio')
+        }
         setRoute(isAdminStudioEditor ? { name: 'admin', tab: 'studio', id: next.id } : { name: 'builder', id: next.id })
       } else {
         showToast('이 계정에 없는 시나리오예요.')
@@ -177,7 +181,7 @@ export default function App() {
   const registerScenario = (scenario, destination = 'builder') => {
     setScenarios((prev) => [...prev, scenario])
     if (destination === 'admin') {
-      pushRoute(`#ops/studio/${encodeURIComponent(scenario.id)}`, { name: 'admin', tab: 'studio', id: scenario.id })
+      pushRoute('#ops/studio', { name: 'admin', tab: 'studio' })
     } else {
       pushRoute(`#builder/${encodeURIComponent(scenario.id)}`, { name: 'builder', id: scenario.id })
     }
@@ -193,7 +197,7 @@ export default function App() {
   ))
 
   /* 운영 센터 안에서 만든 시나리오는 독립 빌더 화면으로 빠지지 않고
-     #ops/studio/<id>에 머물러 같은 어드민 셸 안에서 바로 편집한다. */
+     고정 주소 #ops/studio의 어드민 셸 안에서 바로 편집한다. */
   const newAdminScenario = (template) => registerScenario(createScenario(
     template && template.key && template.key !== 'blank'
       ? { title: template.name, chip: template.chip, stages: template.build() }
@@ -299,9 +303,10 @@ export default function App() {
     openAdmin: () => pushRoute('#ops', { name: 'admin', tab: 'dashboard' }),
     /* 운영 콘솔 탭 전환도 해시 엔트리 — 새로고침·앞뒤로가기가 탭을 유지한다 */
     setAdminTab: (tab) => pushRoute(tab === 'dashboard' ? '#ops' : `#ops/${tab}`, { name: 'admin', tab }),
-    openAdminBuilder: (id) =>
-      openSynced(workspace.ensureStudioSynced(id), () =>
-        pushRoute(`#ops/studio/${encodeURIComponent(id)}`, { name: 'admin', tab: 'studio', id })),
+    /* 어드민 스튜디오는 URL을 #ops/studio 하나로 고정한다.
+       시나리오 선택은 AdminView 내부 상태라 ID가 주소에 노출되지 않는다. */
+    openAdminBuilder: (id, onReady) =>
+      openSynced(workspace.ensureStudioSynced(id), () => onReady && onReady(id)),
     exitAdmin: goHome,
     openExploreEditor: () => pushRoute('#explore-editor', { name: 'explore-editor' }),
     closeExploreEditor: goHome,

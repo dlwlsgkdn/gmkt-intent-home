@@ -53,6 +53,7 @@ const NAV_GROUPS = [
 
 export default function AdminView({ api, tab, studioScenarioId }) {
   const [mode, setMode] = useState('lab')
+  const [selectedStudioId, setSelectedStudioId] = useState(studioScenarioId || null)
   const [threads, setThreads] = useState([])
   const [nextCursor, setNextCursor] = useState(null)
   const [listLoading, setListLoading] = useState(false)
@@ -184,7 +185,7 @@ export default function AdminView({ api, tab, studioScenarioId }) {
 
   const activeLabel = NAV_GROUPS.flatMap((group) => group.items).find(([value]) => value === tab)?.[2] || '대시보드'
   const studioScenario = tab === 'studio'
-    ? api.scenarios.find((scenario) => scenario.id === studioScenarioId)
+    ? api.scenarios.find((scenario) => scenario.id === selectedStudioId)
     : null
 
   return (
@@ -232,8 +233,8 @@ export default function AdminView({ api, tab, studioScenarioId }) {
     }>
 
       {tab === 'studio' && (studioScenario
-        ? <Builder api={{ ...api, goHome: () => api.setAdminTab('studio') }} scenario={studioScenario} />
-        : <AdminScenarioStudio api={api} />)}
+        ? <Builder api={{ ...api, goHome: () => setSelectedStudioId(null) }} scenario={studioScenario} />
+        : <AdminScenarioStudio api={api} onEdit={setSelectedStudioId} />)}
 
       {tab === 'dashboard' && <AdminDashboard api={api} threads={threads} feedback={feedback} loading={listLoading} mode={mode} />}
 
