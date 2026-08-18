@@ -16,6 +16,8 @@ import AdminDashboard from './AdminDashboard.jsx'
 import AdminKnowledge from './AdminKnowledge.jsx'
 import AdminPromptLibrary from './AdminPromptLibrary.jsx'
 import TaggingStudio from './TaggingStudio.jsx'
+import Builder from './Builder.jsx'
+import AdminScenarioStudio from './AdminScenarioStudio.jsx'
 
 /*
  * 운영 콘솔 — 진입은 홈 드로어 도구 행의 버튼 또는 #ops 해시 (구 #admin 호환).
@@ -30,6 +32,7 @@ const ADMIN_USER = 'ops-playground'
 
 const NAV_GROUPS = [
   { label: '한눈에 보기', items: [['dashboard', '◈', '대시보드']] },
+  { label: '콘텐츠 제작', items: [['studio', '▣', '시나리오 스튜디오']] },
   {
     label: '서비스 품질',
     items: [
@@ -48,7 +51,7 @@ const NAV_GROUPS = [
   },
 ]
 
-export default function AdminView({ api, tab }) {
+export default function AdminView({ api, tab, studioScenarioId }) {
   const [mode, setMode] = useState('lab')
   const [threads, setThreads] = useState([])
   const [nextCursor, setNextCursor] = useState(null)
@@ -180,6 +183,9 @@ export default function AdminView({ api, tab }) {
   )
 
   const activeLabel = NAV_GROUPS.flatMap((group) => group.items).find(([value]) => value === tab)?.[2] || '대시보드'
+  const studioScenario = tab === 'studio'
+    ? api.scenarios.find((scenario) => scenario.id === studioScenarioId)
+    : null
 
   return (
     <div className="sb-builder sb-admin-app">
@@ -188,10 +194,6 @@ export default function AdminView({ api, tab }) {
           <button type="button" onClick={api.exitAdmin} aria-label="DDAK 홈으로">D</button>
           <span><b>DDAK</b><small>운영 센터</small></span>
         </div>
-        <button type="button" className="sb-admin-studio-link" onClick={api.exitAdmin}>
-          <span aria-hidden="true">←</span>
-          <b>시나리오 스튜디오</b>
-        </button>
         <div className="sb-admin-mode" role="group" aria-label="운영 화면 모드">
           <button type="button" className={mode === 'lab' ? 'is-on' : ''} onClick={() => setMode('lab')}>실험실</button>
           <button type="button" className={mode === 'ops' ? 'is-on' : ''} onClick={() => setMode('ops')}>실서비스</button>
@@ -211,19 +213,27 @@ export default function AdminView({ api, tab }) {
         </nav>
         <div className="sb-admin-sidebar__foot">
           <span><i /> {listError || feedbackError ? '일부 데이터 연결 안 됨' : '운영 데이터 연결됨'}</span>
-          <button type="button" onClick={api.exitAdmin}>시나리오 스튜디오로 돌아가기</button>
+          <button type="button" onClick={api.exitAdmin}>DDAK 서비스 화면으로</button>
         </div>
       </aside>
 
       <div className="sb-admin-shell__body">
-        <header className="sb-admin-mobilebar">
-          <button type="button" className="sb-admin-mobilebar__studio" onClick={api.exitAdmin}>← 스튜디오</button>
+        {!studioScenario && <header className="sb-admin-mobilebar">
+          <button type="button" className="sb-admin-mobilebar__studio" onClick={api.exitAdmin}>← DDAK 홈</button>
           <b>{activeLabel}</b>
           <button type="button" className="sb-btn sb-btn--ghost sb-btn--tiny" onClick={() => { loadList(); loadFeedback() }}>새로고침</button>
-        </header>
+        </header>}
 
     {/* 파이프라인 탭은 3컬럼(지식·다이어그램·플레이그라운드)이라 넓은 컨테이너 변형을 쓴다 */}
-    <main className={'sb-admin' + (tab === 'pipeline' || tab === 'tagging' ? ' sb-admin--wide' : '')}>
+    <main className={
+      'sb-admin'
+      + (tab === 'pipeline' || tab === 'tagging' ? ' sb-admin--wide' : '')
+      + (studioScenario ? ' sb-admin--studio-editor' : '')
+    }>
+
+      {tab === 'studio' && (studioScenario
+        ? <Builder api={{ ...api, goHome: () => api.setAdminTab('studio') }} scenario={studioScenario} />
+        : <AdminScenarioStudio api={api} />)}
 
       {tab === 'dashboard' && <AdminDashboard api={api} threads={threads} feedback={feedback} loading={listLoading} mode={mode} />}
 

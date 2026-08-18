@@ -27,6 +27,8 @@ import TaggingStudio from './components/TaggingStudio.jsx'
 
 /** 해시 → 페이지 라우트 (모르는 해시·#s= 공유 링크는 null = 홈/공유 모드 처리) */
 function routeFromHash(hash) {
+  const opsStudio = hash.match(/^#ops\/studio(?:\/(.+))?$/)
+  if (opsStudio) return { name: 'admin', tab: 'studio', id: opsStudio[1] ? decodeURIComponent(opsStudio[1]) : null }
   const ops = hash.match(/^#ops(?:\/(dashboard|threads|tagging|knowledge|pipeline|prompts|experiment))?$/)
   if (ops) return { name: 'admin', tab: ops[1] || 'dashboard' }
   if (hash === '#admin') return { name: 'admin', tab: 'dashboard' } // 구 주소 호환
@@ -45,7 +47,11 @@ export default function App() {
   const [route, setRoute] = useState(() => {
     if (typeof location === 'undefined') return { name: 'home' }
     const fromHash = routeFromHash(location.hash)
-    return fromHash && fromHash.name !== 'builder' ? fromHash : { name: 'home' }
+    const needsStudioData = fromHash && (
+      fromHash.name === 'builder'
+      || (fromHash.name === 'admin' && fromHash.tab === 'studio' && fromHash.id)
+    )
+    return fromHash && !needsStudioData ? fromHash : { name: 'home' }
   })
   const [toast, setToast] = useState(null)
   const showToast = (message) => setToast(message)
@@ -100,18 +106,24 @@ export default function App() {
       if (routeRef.current.name !== 'home') setRoute({ name: 'home' })
       return
     }
-    if (next.name !== 'builder') {
+    const isAdminStudioEditor = next.name === 'admin' && next.tab === 'studio' && next.id
+    if (next.name !== 'builder' && !isAdminStudioEditor) {
       setRoute(next)
       return
     }
-    if (routeRef.current.name === 'builder' && routeRef.current.id === next.id) return
+    if (routeRef.current.name === next.name && routeRef.current.id === next.id) return
     openSynced(workspace.ensureStudioSynced(next.id), () => {
       if (workspace.getFreshActiveScenarios().some((scenario) => scenario.id === next.id)) {
-        setRoute({ name: 'builder', id: next.id })
+        setRoute(isAdminStudioEditor ? { name: 'admin', tab: 'studio', id: next.id } : { name: 'builder', id: next.id })
       } else {
-        showToast('이 계정에 없는 시나리오예요 — 홈으로 이동해요.')
-        history.replaceState(null, '', location.pathname + location.search)
-        setRoute({ name: 'home' })
+        showToast('이 계정에 없는 시나리오예요.')
+        if (isAdminStudioEditor) {
+          history.replaceState(null, '', location.pathname + location.search + '#ops/studio')
+          setRoute({ name: 'admin', tab: 'studio' })
+        } else {
+          history.replaceState(null, '', location.pathname + location.search)
+          setRoute({ name: 'home' })
+        }
       }
     })
   }
@@ -162,9 +174,13 @@ export default function App() {
     setRoute(next)
   }
 
-  const registerScenario = (scenario) => {
+  const registerScenario = (scenario, destination = 'builder') => {
     setScenarios((prev) => [...prev, scenario])
-    pushRoute(`#builder/${encodeURIComponent(scenario.id)}`, { name: 'builder', id: scenario.id })
+    if (destination === 'admin') {
+      pushRoute(`#ops/studio/${encodeURIComponent(scenario.id)}`, { name: 'admin', tab: 'studio', id: scenario.id })
+    } else {
+      pushRoute(`#builder/${encodeURIComponent(scenario.id)}`, { name: 'builder', id: scenario.id })
+    }
     requestAutoSync()
     return scenario
   }
@@ -176,8 +192,17 @@ export default function App() {
       : {}
   ))
 
+  /* 운영 센터 안에서 만든 시나리오는 독립 빌더 화면으로 빠지지 않고
+     #ops/studio/<id>에 머물러 같은 어드민 셸 안에서 바로 편집한다. */
+  const newAdminScenario = (template) => registerScenario(createScenario(
+    template && template.key && template.key !== 'blank'
+      ? { title: template.name, chip: template.chip, stages: template.build() }
+      : {}
+  ), 'admin')
+
   /* AI가 만든 시나리오 초안(설문 + 골든 계획 케이스)을 그대로 등록하고 빌더로 이동 */
   const newScenarioFrom = (partial) => registerScenario(createScenario(partial))
+  const newAdminScenarioFrom = (partial) => registerScenario(createScenario(partial), 'admin')
 
   /* 홈 칩 드래그 순서 변경: dragId를 targetId 위치로 이동 */
   const reorderScenario = (dragId, targetId) => {
@@ -244,6 +269,8 @@ export default function App() {
     removeScenario,
     newScenario,
     newScenarioFrom,
+    newAdminScenario,
+    newAdminScenarioFrom,
     copyScenario,
     reorderScenario,
     importScenarios,
@@ -272,6 +299,9 @@ export default function App() {
     openAdmin: () => pushRoute('#ops', { name: 'admin', tab: 'dashboard' }),
     /* 운영 콘솔 탭 전환도 해시 엔트리 — 새로고침·앞뒤로가기가 탭을 유지한다 */
     setAdminTab: (tab) => pushRoute(tab === 'dashboard' ? '#ops' : `#ops/${tab}`, { name: 'admin', tab }),
+    openAdminBuilder: (id) =>
+      openSynced(workspace.ensureStudioSynced(id), () =>
+        pushRoute(`#ops/studio/${encodeURIComponent(id)}`, { name: 'admin', tab: 'studio', id })),
     exitAdmin: goHome,
     openExploreEditor: () => pushRoute('#explore-editor', { name: 'explore-editor' }),
     closeExploreEditor: goHome,
@@ -344,7 +374,7 @@ export default function App() {
         /* key: 같은 검색어라도 runId마다 새 쓰레드로 다시 생성한다 */
         <LivePlayer key={route.runId} api={api} query={route.query} resumeThreadId={route.resumeThreadId} />
       )}
-      {route.name === 'admin' && <AdminView api={api} tab={route.tab || 'dashboard'} />}
+      {route.name === 'admin' && <AdminView api={api} tab={route.tab || 'dashboard'} studioScenarioId={route.id} />}
       {route.name === 'tagging' && <TaggingStudio api={api} />}
       {route.name !== 'home' && route.name !== 'explore-editor' && route.name !== 'live' && route.name !== 'admin' && route.name !== 'tagging' && !current && <HomeView api={api} />}
 
