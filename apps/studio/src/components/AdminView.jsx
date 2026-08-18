@@ -188,6 +188,10 @@ export default function AdminView({ api, tab }) {
           <button type="button" onClick={api.exitAdmin} aria-label="DDAK 홈으로">D</button>
           <span><b>DDAK</b><small>운영 센터</small></span>
         </div>
+        <button type="button" className="sb-admin-studio-link" onClick={api.exitAdmin}>
+          <span aria-hidden="true">←</span>
+          <b>시나리오 스튜디오</b>
+        </button>
         <div className="sb-admin-mode" role="group" aria-label="운영 화면 모드">
           <button type="button" className={mode === 'lab' ? 'is-on' : ''} onClick={() => setMode('lab')}>실험실</button>
           <button type="button" className={mode === 'ops' ? 'is-on' : ''} onClick={() => setMode('ops')}>실서비스</button>
@@ -213,7 +217,7 @@ export default function AdminView({ api, tab }) {
 
       <div className="sb-admin-shell__body">
         <header className="sb-admin-mobilebar">
-          <button type="button" className="sb-icon-btn" onClick={api.exitAdmin} aria-label="이전 화면으로">←</button>
+          <button type="button" className="sb-admin-mobilebar__studio" onClick={api.exitAdmin}>← 스튜디오</button>
           <b>{activeLabel}</b>
           <button type="button" className="sb-btn sb-btn--ghost sb-btn--tiny" onClick={() => { loadList(); loadFeedback() }}>새로고침</button>
         </header>
