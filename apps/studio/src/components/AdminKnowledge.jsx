@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
+import { fetchAdminPipeline, putAdminKnowledge } from '../lib/adminApi.js'
 import {
   AREAS,
   CONDITIONS,
@@ -50,6 +51,38 @@ export default function AdminKnowledge({ api }) {
       return [entry.word, entry.desc, entry.brands || '', entry.related.join(' ')].join(' ').toLowerCase().includes(query)
     })
   }, [trendLevel, trendQuery])
+
+  /* 파이프라인 연동 — 생성이 실제로 읽는 트렌드 키워드는 core KV(knowledge-trend-keywords).
+     여기서 사전의 필터 결과를 그 KV로 실어 원장 trendKeywords(설문·계획 가변부)에 반영한다 */
+  const [pipeValue, setPipeValue] = useState(undefined) // undefined=로딩, null=연결 실패, string=현재 KV 원문
+  const [pipeBusy, setPipeBusy] = useState(false)
+  useEffect(() => {
+    let alive = true
+    fetchAdminPipeline()
+      .then((wire) => {
+        if (!alive) return
+        const entry = (wire.knowledge || []).find((row) => row.id === 'trend-keywords')
+        setPipeValue(String(entry?.value ?? ''))
+      })
+      .catch(() => { if (alive) setPipeValue(null) })
+    return () => { alive = false }
+  }, [])
+  const loadedTrendWords = typeof pipeValue === 'string'
+    ? pipeValue.split('\n').map((line) => line.trim()).filter(Boolean)
+    : []
+  const saveTrendToPipeline = async (value) => {
+    setPipeBusy(true)
+    try {
+      const wire = await putAdminKnowledge('trend-keywords', value)
+      const entry = (wire.knowledge || []).find((row) => row.id === 'trend-keywords')
+      setPipeValue(String(entry?.value ?? ''))
+      api.showToast(value == null ? '파이프라인 트렌드 키워드를 비웠어요.' : '트렌드 키워드를 파이프라인에 실었어요. 새 생성부터 반영됩니다.')
+    } catch (e) {
+      api.showToast(e.message || '파이프라인에 싣지 못했어요.')
+    } finally {
+      setPipeBusy(false)
+    }
+  }
 
   const tagUsage = useMemo(() => {
     const counts = {}
@@ -132,6 +165,31 @@ export default function AdminKnowledge({ api }) {
               ))}
             </ul>
           </details>
+          <div className="sb-admin-callout">
+            <span>i</span>
+            {pipeValue === undefined && <p>생성 파이프라인의 현재 트렌드 키워드를 확인하는 중…</p>}
+            {pipeValue === null && <p><b>파이프라인에 연결되지 않았어요.</b> 아래 사전은 볼 수 있지만, 키워드 싣기는 BFF 연결 후 가능합니다.</p>}
+            {typeof pipeValue === 'string' && (
+              <p>
+                <b>지금 생성에 실린 키워드 {loadedTrendWords.length}개.</b>{' '}
+                {loadedTrendWords.length > 0 ? `${loadedTrendWords.slice(0, 6).join(', ')}${loadedTrendWords.length > 6 ? ' 외' : ''} — ` : ''}
+                아래 필터 결과를 실으면 원장을 거쳐 설문·계획 생성에 반영됩니다(새 생성부터).
+              </p>
+            )}
+            <span className="sb-admin-trend-pipe-actions">
+              {typeof pipeValue === 'string' && loadedTrendWords.length > 0 && (
+                <button type="button" className="sb-btn sb-btn--ghost sb-btn--tiny" disabled={pipeBusy} onClick={() => saveTrendToPipeline(null)}>비우기</button>
+              )}
+              <button
+                type="button"
+                className="sb-btn sb-btn--primary sb-btn--tiny"
+                disabled={pipeBusy || typeof pipeValue !== 'string' || trendRows.length === 0}
+                onClick={() => saveTrendToPipeline(trendRows.map((entry) => entry.word).join('\n'))}
+              >
+                {pipeBusy ? '싣는 중…' : `필터 결과 ${trendRows.length}개 싣기`}
+              </button>
+            </span>
+          </div>
           <div className="sb-admin-trend-tools">
             <div className="sb-admin-subtabs" role="group" aria-label="트렌드 등급 필터">
               {[['all', `전체 ${TREND_KEYWORDS.length}`]]

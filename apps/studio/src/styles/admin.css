@@ -2478,3 +2478,4 @@
   .sb-admin-trend-tools > input { max-width: none; }
   .sb-admin-trend-table__desc { min-width: 240px; }
 }
+.sb-admin-trend-pipe-actions { display: inline-flex; align-items: center; gap: 6px; }
