@@ -14,6 +14,9 @@ export const TREND_LEVEL_DEFS = [
 
 export const TREND_LEVEL_OPTIONS = TREND_LEVEL_DEFS.map((def) => def.label)
 
+/** "관련" 열의 닫힌 값 — 원본 시트 드롭다운과 동일 (인물,컨텐츠는 한 태그) */
+export const TREND_RELATED_OPTIONS = ['성분', '상품', '상황', '형용사', '인물·컨텐츠']
+
 export const TREND_KEYWORDS = [
   { no: 1, author: '최선아', word: 'PDRN', levels: ['트렌드(1Y~5Y)'], related: ['성분', '상품', '상황'], desc: '연어에서 추출한 재생 DNA로, 인체와 유사해 부작용 없이 세포 재생과 염증 완화를 돕는 고기능성 원료.' },
   { no: 2, author: '최선아', word: '롱제비티', levels: ['트렌드(1Y~5Y)'], related: ['상황', '형용사', '성분', '상품'], desc: "노화를 억지로 거부하는 안티에이징의 대안으로, 피부 세포의 자생력을 키워 '피부 건강수명'을 늘리는 최신 뷰티 트렌드. '안티에이징(Anti-aging)' 개념의 올드함과 인위적인 느낌을 탈피하고, 자연스럽고 건강하게 나이 드는 가치를 소비하는 시장 변화에서 등장." },
