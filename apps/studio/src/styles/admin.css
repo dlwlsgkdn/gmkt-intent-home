@@ -2460,3 +2460,21 @@
   margin-left: 4px;
   padding: 0 6px;
 }
+
+/* ── 운영 지식 · 트렌드 사전 ─────────────────────────────────────── */
+.sb-admin-trend-defs { margin: 0 0 12px; border: 1px solid var(--sb-n-200); border-radius: var(--sb-r-lg); background: var(--sb-n-50); }
+.sb-admin-trend-defs > summary { padding: 9px 13px; color: var(--sb-ink-2); font-size: var(--sb-t-caption); cursor: pointer; }
+.sb-admin-trend-defs > ul { list-style: none; margin: 0; padding: 2px 13px 11px; display: flex; flex-direction: column; gap: 5px; }
+.sb-admin-trend-defs li { display: flex; gap: 8px; font-size: var(--sb-t-caption); color: var(--sb-muted); }
+.sb-admin-trend-defs li b { flex: 0 0 auto; color: var(--sb-ink); font-weight: 500; }
+.sb-admin-trend-tools { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.sb-admin-trend-tools .sb-admin-subtabs { margin: 0; }
+.sb-admin-trend-tools > input { flex: 1 1 200px; max-width: 260px; box-sizing: border-box; border: 1px solid var(--sb-n-200); border-radius: var(--sb-r-pill); padding: 8px 13px; color: var(--sb-ink); background: var(--sb-n-0); font: inherit; font-size: var(--sb-t-caption); }
+.sb-admin-trend-level { display: inline-block; margin: 1px 4px 1px 0; padding: 2px 7px; border: 1px solid var(--sb-n-200); border-radius: var(--sb-r-pill); color: var(--sb-ink-2); background: var(--sb-n-50); font-size: var(--sb-t-micro); white-space: nowrap; }
+.sb-admin-trend-table td { vertical-align: top; }
+.sb-admin-trend-table__desc { min-width: 320px; max-width: 520px; color: var(--sb-ink-2); }
+@media (max-width: 1100px) {
+  .sb-admin-trend-tools { align-items: stretch; flex-direction: column; }
+  .sb-admin-trend-tools > input { max-width: none; }
+  .sb-admin-trend-table__desc { min-width: 240px; }
+}
