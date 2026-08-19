@@ -4,3 +4,5 @@
 !.env.example
 node_modules/
 dist/
+# MediaPipe 런타임 — 설치된 패키지에서 predev/prebuild가 복사한다 (12MB 바이너리)
+apps/studio/public/mediapipe/wasm/

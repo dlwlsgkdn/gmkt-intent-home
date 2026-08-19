@@ -66,7 +66,9 @@ export function liveSurveyItems(page) {
 }
 
 /** opts.photo — 설문에서 고른 얼굴 사진(데이터 URL). 가상 메이크업 결과(look) 섹션의
- * BEFORE·AFTER 재료다: 서버는 어떤 룩인지(tone)만 정하고 합성은 화면이 한다.
+ * BEFORE 재료다: 서버는 어떤 룩인지(tone)만 정하고 합성은 화면이 한다.
+ * opts.photoAfter — 메이크업이 올라간 AFTER 이미지(로컬 랜드마크 합성 또는 정밀 렌더). 늦게
+ * 도착하므로 없을 수도 있고, 그때는 같은 사진에 tone 프리셋을 얹어 보여준다.
  * opts.pendingSlots — 뼈대 조기 확정 뒤 아직 검색 결과가 안 채운 자리 인덱스. 이 자리는
  * LivePlayer가 로딩 카드로 렌더하는 `livePending` 아이템으로 투영된다 (레지스트리 밖 타입 —
  * id도 `live-plan-s#` 문법 밖이라 피드백 앵커 판정에 걸리지 않는다) */
@@ -118,6 +120,10 @@ export function livePlanItems(page, opts = {}) {
          없으므로 룩 설명만 안내 카드로 정직하게 그린다 */
       const photo = opts.photo || ''
       if (photo) {
+        /* AFTER는 셋 중 하나다 (좋은 순): ① 외부 이미지 모델의 정밀 렌더 ② 얼굴 랜드마크로
+           입술·볼에만 색을 얹은 로컬 합성(makeupComposite) ③ 둘 다 없으면 같은 사진 + tone
+           프리셋(CSS). ①②가 있으면 이미 색이 발린 이미지라 tone을 비워 겹칠하지 않는다 */
+        const after = opts.photoAfter || photo
         items.push({
           id: base,
           type: 'beforeAfter',
@@ -125,8 +131,8 @@ export function livePlanItems(page, opts = {}) {
             title: section.title,
             desc: section.desc || '',
             beforeImage: photo,
-            afterImage: photo, // 같은 사진 — 차이는 tone 프리셋이 만든다
-            tone: section.tone || '',
+            afterImage: after,
+            tone: opts.photoAfter ? '' : section.tone || '',
             beforeLabel: '내 사진',
             afterLabel: 'AI 메이크업',
             split: '50',

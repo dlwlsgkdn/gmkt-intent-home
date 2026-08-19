@@ -4,6 +4,7 @@ import { isQuestionType, renderItem } from '../lib/registry.jsx'
 import BottomSheet from './ui/BottomSheet.jsx'
 import { fetchLiveThread, recordLiveEvent, sendLiveFeedback, startLiveThread, streamLivePlan, streamLiveSurvey } from '../lib/liveApi.js'
 import { PHOTO_ANSWER, isPhotoValue, livePlanItems, liveSurveyItems } from '../lib/livePage.js'
+import { composeMakeup } from '../lib/makeupComposite.js'
 import { BgBlobs, FloatingBar, ViewerDeviceControl } from './Frame.jsx'
 import ThreadPanel from './ThreadPanel.jsx'
 import ProductDetailPanel from './ProductDetailPanel.jsx'
@@ -175,6 +176,9 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   /* 계획 조기 확정(skeleton 이벤트) 뒤 아직 검색 결과가 안 채운 자리 인덱스 — 비어 있지
      않으면 페이지는 확정 렌더지만 상품·콘텐츠가 비동기로 들어오는 중이다 */
   const [pendingSlots, setPendingSlots] = useState([])
+  /* 메이크업이 올라간 AFTER 이미지 — 얼굴 랜드마크 합성은 모델 로드가 걸려 늦게 온다.
+     그동안 화면은 tone 프리셋으로 이미 그려져 있고, 도착하면 조용히 갈아끼운다 */
+  const [lookAfter, setLookAfter] = useState(null)
   const [pendingMessage, setPendingMessage] = useState(null) // 자리 로딩 카드에 띄울 진행 문구 (검색 status)
   const planRunRef = useRef(0) // 계획 생성 실행 토큰 — 조기 확정 뒤 겹칠 수 있는 옛 스트림 이벤트를 무시한다
   const skeletonDoneRef = useRef(false) // 이번 계획 생성에서 skeleton(조기 확정)을 받았는지
@@ -473,6 +477,24 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     savePhotoStore(threadId, photoAnswersOf(surveyPage.questions || [], answers))
   }, [threadId, surveyPage, answers])
 
+  /* 가상 메이크업 합성 — 계획에 룩 섹션이 있고 사진이 있을 때만. 실패(모델 미로드·얼굴
+     미검출)는 null 유지 = tone 프리셋 렌더 그대로다 (향상 계층이라 체험을 막지 않는다) */
+  const lookTone = ((planPage && planPage.sections) || []).find((s) => s && s.kind === 'look')?.tone || ''
+  useEffect(() => {
+    if (!lookTone || !livePhoto) {
+      setLookAfter(null)
+      return undefined
+    }
+    let cancelled = false
+    setLookAfter(null) // 룩·사진이 바뀌면 이전 합성부터 내린다 (엉뚱한 얼굴이 남지 않게)
+    composeMakeup(livePhoto, lookTone).then((url) => {
+      if (!cancelled && url) setLookAfter(url)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [lookTone, livePhoto])
+
   /* 워크스페이스 쓰레드 기록 — Player와 같은 upsert 흐름, live 마커로 구분한다.
      threadId(스노우플레이크)가 나온 뒤부터 단계 이동/답변/담기/완료마다 갱신 */
   useEffect(() => {
@@ -587,8 +609,11 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     [surveyPage, surveyLocked]
   )
   const planItems = useMemo(
-    () => (planPage ? livePlanItems(planPage, { pendingSlots, query: liveQuery, photo: livePhoto }) : []),
-    [planPage, pendingSlots, liveQuery, livePhoto]
+    () =>
+      planPage
+        ? livePlanItems(planPage, { pendingSlots, query: liveQuery, photo: livePhoto, photoAfter: lookAfter })
+        : [],
+    [planPage, pendingSlots, liveQuery, livePhoto, lookAfter]
   )
   const allItems = stageKey === 'plan' ? planItems : surveyItems
   const topItems = allItems.filter((it) => !it.parentId)

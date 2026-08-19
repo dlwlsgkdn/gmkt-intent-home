@@ -4,11 +4,14 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/copy-mediapipe-wasm.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/copy-mediapipe-wasm.mjs",
     "build": "vite build && cp -R ../../legacy dist/legacy",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "^1.0.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
