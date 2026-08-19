@@ -306,6 +306,11 @@ try {
     ok(!JSON.stringify(dumpM?.steps ?? []).includes('data:image/'), '사진 원본은 스텝에 남지 않는다')
   }
 
+  {
+    const caps = await fetch(BFF + '/api/threads/capabilities', { headers: H }).then((r) => r.json())
+    ok(caps?.imageEdit === true, `정밀 렌더 가용성 노출 (imageEdit=${caps?.imageEdit})`)
+  }
+
   // ── 9. 파이프라인 스튜디오 API (페이즈 4) ──
   console.log('9) 파이프라인 스튜디오 API')
   const pipe = await fetch(BFF + '/api/admin/pipeline').then((r) => r.json())

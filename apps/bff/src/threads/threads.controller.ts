@@ -224,6 +224,18 @@ export class ThreadsController {
     return this.threads.recordEvent(id, body)
   }
 
+  @Get('capabilities')
+  @ApiOperation({
+    summary: '체험 기능 가용성',
+    description:
+      'FE가 화면 흐름을 정하는 데 쓰는 준비 상태. imageEdit=false면 가상 메이크업 정밀 렌더를 시도하지 않는다 ' +
+      '(기기 안 합성에서 멈춘다). **`:id` 라우트보다 먼저 선언해야 한다** — 뒤에 두면 threadId로 잡힌다.',
+  })
+  @ApiOkResponse({ schema: { type: 'object', properties: { imageEdit: { type: 'boolean' } } } })
+  capabilities() {
+    return { imageEdit: this.threads.imageEditReady }
+  }
+
   @Get(':id')
   @ApiOperation({ summary: '이어보기', description: '단계별 페이지(survey/answers/plan)를 복원한다.' })
   @ApiParam(THREAD_ID_PARAM)

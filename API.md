@@ -105,10 +105,11 @@ CatalogProduct = { id, name, brand, price, tags[], url?, mall?, imageUrl? }
 // http(s) 검증 통과분만. 없거나 로드 실패면 FE가 이모지 목업 블록으로 렌더한다
 ```
 
+**체험 기능 가용성** (`GET /api/threads/capabilities`): `{ imageEdit }` — 정밀 렌더를 쓸 수 있는 배포인지. FE는 이 값이 true일 때만 2단계를 시도한다(`:id` 라우트보다 먼저 선언해야 threadId로 잡히지 않는다).
+
 **가상 메이크업 정밀 렌더** (`POST /api/threads/:id/look-render`): 계획의 `look` 섹션은 기본적으로
 **기기 안에서** 그려진다(얼굴 랜드마크로 입술·볼에만 색을 얹는 캔버스 합성 — 사진이 서버로 오지
-않는다). 이 엔드포인트는 그보다 나은 그림을 원할 때 **사용자가 화면에서 명시로 요청**하면 호출되는
-별도 경로다: 사진(data URL)을 받아 외부 이미지 편집 모델(OpenAI images.edits — Anthropic API에는
+않는다). 이 엔드포인트는 1단계 합성이 화면에 뜬 뒤 **FE가 이어서 자동으로** 부르는 2단계다: 사진(data URL)을 받아 외부 이미지 편집 모델(OpenAI images.edits — Anthropic API에는
 이미지 생성·편집이 없다)로 룩을 실제로 올려 돌려준다. 계약은 `LookRenderBody`/`LookRenderResult`,
 포트는 `@ddak/pipeline` `ImageEditPort`(프로바이더 중립)다. **사진은 요청 본문에만 있고 스텝에는
 톤·모델·지연만 남는다.** 실패 본문은 SSE와 같은 문법(`{ code, message, retryable }`) —

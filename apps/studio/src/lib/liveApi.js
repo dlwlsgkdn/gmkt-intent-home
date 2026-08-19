@@ -76,9 +76,21 @@ export async function startLiveThread(body) {
   return res.json()
 }
 
+/* 체험 기능 가용성 — 정밀 렌더(이미지 편집 모델)를 쓸 수 있는 배포인지. 세션당 한 번만 묻고
+   실패는 "없음"으로 본다 (부가 기능이라 조회 실패가 체험을 막지 않는다) */
+let capabilitiesPromise = null
+export function fetchLiveCapabilities() {
+  if (!capabilitiesPromise) {
+    capabilitiesPromise = fetch(`${BASE}/threads/capabilities`, { headers: headers(false) })
+      .then((res) => (res.ok ? res.json() : { imageEdit: false }))
+      .catch(() => ({ imageEdit: false }))
+  }
+  return capabilitiesPromise
+}
+
 /* 가상 메이크업 정밀 렌더 — 올린 사진을 이미지 편집 모델이 실제로 편집한다.
-   기본 경로(기기 안 랜드마크 합성)와 달리 **사진이 서버로 나가므로** 사용자가 화면에서
-   명시로 요청했을 때만 부른다 (LivePlayer 확인 다이얼로그). 실패 본문은 SSE 실패 안내와
+   기기 안 랜드마크 합성(1단계)이 끝나면 이어서 자동으로 부른다 — **사진이 서버로 나가는
+   호출**이라 화면에는 진행 상태를 계속 보여 준다. 실패 본문은 SSE 실패 안내와
    같은 문법 { code, message, retryable } — 그대로 사용자 문구로 쓴다 */
 export async function renderLiveLook(threadId, body) {
   let res

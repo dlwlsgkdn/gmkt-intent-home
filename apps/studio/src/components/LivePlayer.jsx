@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { DEVICE_PRESETS, STAGES } from '../lib/store.js'
 import { isQuestionType, renderItem, resolveSampleFace } from '../lib/registry.jsx'
 import BottomSheet from './ui/BottomSheet.jsx'
-import { fetchLiveThread, recordLiveEvent, renderLiveLook, sendLiveFeedback, startLiveThread, streamLivePlan, streamLiveSurvey } from '../lib/liveApi.js'
+import { fetchLiveCapabilities, fetchLiveThread, recordLiveEvent, renderLiveLook, sendLiveFeedback, startLiveThread, streamLivePlan, streamLiveSurvey } from '../lib/liveApi.js'
 import { PHOTO_ANSWER, isPhotoValue, livePlanItems, liveSurveyItems } from '../lib/livePage.js'
 import { composeMakeup, toPhotoDataUrl } from '../lib/makeupComposite.js'
 import { BgBlobs, FloatingBar, ViewerDeviceControl } from './Frame.jsx'
@@ -77,6 +77,33 @@ function savePhotoStore(threadId, photos) {
     localStorage.setItem(PHOTO_STORE_KEY, JSON.stringify(store))
   } catch {
     /* 용량 초과 등 — 보관 실패는 조용히 넘어간다 */
+  }
+}
+
+/* 정밀 렌더 결과 보관 — 이어보기 때마다 다시 만들면 **유료 호출이 반복되고** 그림도 매번
+   달라진다. 쓰레드+색조가 같으면 지난 결과를 그대로 쓴다. 저장 전에 720px로 줄여
+   (원본은 1254px·2MB대) localStorage 용량을 지킨다 */
+const LOOK_STORE_KEY = 'ddak-live-look-v1'
+const LOOK_STORE_LIMIT = 3
+
+function readLookStore() {
+  try {
+    return JSON.parse(localStorage.getItem(LOOK_STORE_KEY) || '{}') || {}
+  } catch {
+    return {}
+  }
+}
+
+function saveLookStore(threadId, tone, image) {
+  if (!threadId || !image) return
+  try {
+    const store = readLookStore()
+    store[threadId] = { tone, image }
+    const keys = Object.keys(store).sort() // 스노우플레이크 = 시간순
+    for (const stale of keys.slice(0, Math.max(0, keys.length - LOOK_STORE_LIMIT))) delete store[stale]
+    localStorage.setItem(LOOK_STORE_KEY, JSON.stringify(store))
+  } catch {
+    /* 용량 초과 등 — 보관 실패는 체험을 막지 않는다 */
   }
 }
 
@@ -179,10 +206,12 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   /* 메이크업이 올라간 AFTER 이미지 — 얼굴 랜드마크 합성은 모델 로드가 걸려 늦게 온다.
      그동안 화면은 tone 프리셋으로 이미 그려져 있고, 도착하면 조용히 갈아끼운다 */
   const [lookAfter, setLookAfter] = useState(null)
-  /* 정밀 렌더(외부 이미지 편집 모델) — 'idle' | 'confirm'(확인 다이얼로그) | 'loading' | 'done'.
-     기기 합성과 달리 사진이 서버로 나가므로 확인을 거쳐 사용자가 누를 때만 실행한다 */
-  const [lookRender, setLookRender] = useState('idle')
+  /* 가상 메이크업 AFTER의 진행 단계 — 'skeleton'(아직 아무 합성도 없음) | 'landmark'(1단계
+     기기 합성 표시 중) | 'refining'(그 위에서 2단계 정밀 렌더 진행 중) | 'precise'(2단계 완료).
+     사용자가 누를 것이 없다: 계획에 룩이 뜨면 1단계 → (가능하면) 2단계까지 알아서 이어 간다 */
+  const [lookStage, setLookStage] = useState('skeleton')
   const preciseRef = useRef(false) // 정밀 렌더가 적용된 뒤에는 늦게 끝난 기기 합성이 덮지 않게
+  const refineRef = useRef(null) // 2단계를 이미 시작한 룩 키 (중복 호출 방지)
   const [pendingMessage, setPendingMessage] = useState(null) // 자리 로딩 카드에 띄울 진행 문구 (검색 status)
   const planRunRef = useRef(0) // 계획 생성 실행 토큰 — 조기 확정 뒤 겹칠 수 있는 옛 스트림 이벤트를 무시한다
   const skeletonDoneRef = useRef(false) // 이번 계획 생성에서 skeleton(조기 확정)을 받았는지
@@ -494,15 +523,24 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   useEffect(() => {
     if (!lookTone || !livePhoto) {
       setLookAfter(null)
+      setLookStage('skeleton')
       return undefined
     }
     let cancelled = false
     setLookAfter(null) // 룩·사진이 바뀌면 이전 합성부터 내린다 (엉뚱한 얼굴이 남지 않게)
     preciseRef.current = false
-    setLookRender('idle')
+    refineRef.current = null
+    setLookStage('skeleton')
     composeMakeup(livePhoto, lookTone).then((url) => {
       // 정밀 렌더가 이미 적용됐으면 덮지 않는다 (기기 합성이 늦게 끝나는 경우)
-      if (!cancelled && url && !preciseRef.current) setLookAfter(url)
+      if (cancelled || preciseRef.current) return
+      if (url) {
+        setLookAfter(url)
+        setLookStage('landmark')
+      } else {
+        // 얼굴을 못 찾았어도 사진 자체는 보여 준다 (tone 프리셋이 얹힌 AFTER)
+        setLookStage('landmark')
+      }
     })
     return () => {
       cancelled = true
@@ -545,32 +583,64 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     setExcludedProfile((prev) => (prev.includes(label) ? prev.filter((l) => l !== label) : [...prev, label]))
   }
 
-  /* 정밀 렌더 실행 — 확인 다이얼로그에서 "보내기"를 누른 뒤에만 온다.
-     실패해도 화면은 기기 합성을 그대로 유지하고 토스트로만 알린다 (부가 기능이라 체험을 막지 않는다) */
-  const runLookRender = async () => {
-    const look = ((planPage && planPage.sections) || []).find((s) => s && s.kind === 'look')
-    if (!threadId || !livePhoto || !look) return
-    setLookRender('loading')
-    try {
-      // 샘플 얼굴은 상대 URL이라 그대로 못 보낸다 — 계약(data URL)에 맞춰 변환한다
-      const photo = await toPhotoDataUrl(livePhoto)
-      if (!photo) throw new Error('사진을 읽지 못했어요. 다시 선택해 주세요.')
-      const { image } = await renderLiveLook(threadId, {
-        photo,
-        tone: look.tone,
-        title: look.title,
-        points: look.points,
-      })
-      if (cancelledRef.current) return
-      preciseRef.current = true
-      setLookAfter(image)
-      setLookRender('done')
-    } catch (e) {
-      if (cancelledRef.current) return
-      setLookRender('idle')
-      api.showToast(e.message)
+  /* 2단계(정밀 렌더) 자동 실행 — 1단계 합성이 화면에 뜬 뒤 이어서 돈다.
+     이 배포에 이미지 편집 모델이 없으면(capabilities.imageEdit=false) 아예 시도하지 않아
+     1단계에서 깔끔히 멈춘다. 실패도 1단계 그림을 그대로 두고 조용히 끝낸다 —
+     이미 볼 만한 결과가 화면에 있으므로 오류 문구로 체험을 끊지 않는다 */
+  /* 의존성은 **단계가 아니라 "1단계가 끝났는가"(불리언)** 다 — lookStage를 넣으면 이 효과가
+     스스로 바꾼 상태('refining') 때문에 재실행되고, 정리 함수가 진행 중인 요청을 취소해 버린다.
+     planPage도 스트리밍 중 참조가 계속 바뀌므로 ref로 읽는다 */
+  const landmarkReady = lookStage !== 'skeleton'
+  const planPageRef = useRef(planPage)
+  planPageRef.current = planPage
+  useEffect(() => {
+    if (!landmarkReady || !threadId || !livePhoto || !lookTone) return undefined
+    const key = `${threadId}:${lookTone}:${livePhoto.length}`
+    if (refineRef.current === key) return undefined
+    refineRef.current = key
+    let cancelled = false
+    ;(async () => {
+      // 지난 결과가 있으면 그대로 — 같은 쓰레드·색조에 유료 호출을 반복하지 않는다
+      const cached = readLookStore()[threadId]
+      if (cached && cached.tone === lookTone && cached.image) {
+        if (cancelled || cancelledRef.current) return
+        preciseRef.current = true
+        setLookAfter(cached.image)
+        setLookStage('precise')
+        return
+      }
+      const caps = await fetchLiveCapabilities()
+      if (cancelled || cancelledRef.current || !caps.imageEdit) return
+      const look = ((planPageRef.current && planPageRef.current.sections) || []).find((s) => s && s.kind === 'look')
+      if (!look) return
+      setLookStage('refining')
+      try {
+        // 샘플 얼굴은 상대 URL이라 그대로 못 보낸다 — 계약(data URL)에 맞춰 변환한다
+        const photo = await toPhotoDataUrl(livePhoto)
+        if (!photo) throw new Error('사진을 읽지 못했어요.')
+        const { image } = await renderLiveLook(threadId, {
+          photo,
+          tone: look.tone,
+          title: look.title,
+          points: look.points,
+        })
+        if (cancelled || cancelledRef.current) return
+        preciseRef.current = true
+        setLookAfter(image)
+        setLookStage('precise')
+        // 다음 이어보기에서 재호출하지 않도록 축소본을 남긴다 (실패해도 화면은 그대로)
+        toPhotoDataUrl(image, 720).then((small) => saveLookStore(threadId, lookTone, small || image))
+      } catch (e) {
+        if (cancelled || cancelledRef.current) return
+        console.warn('[look] 정밀 렌더 실패 — 기기 합성을 유지합니다:', e.message)
+        setLookStage('landmark')
+      }
+    })()
+    return () => {
+      cancelled = true
     }
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [landmarkReady, threadId, livePhoto, lookTone])
 
   const playerApi = {
     query: liveQuery,
@@ -579,10 +649,6 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     answers,
     setAnswer: (itemId, value) => setAnswers((prev) => ({ ...prev, [itemId]: value })),
     cart, // 상품 카드가 "담기 / ✓담음"을 가르는 기준
-    /* 가상 메이크업 정밀 렌더 — beforeAfter 카드의 버튼이 부른다. 사진을 보내는 동작이라
-       바로 실행하지 않고 확인 다이얼로그부터 연다 */
-    lookRenderState: lookRender,
-    renderLook: livePhoto ? () => setLookRender('confirm') : undefined,
     /* 화면 헤더의 홈·뒤로 — 뒤로는 질문 → 단계 → 홈 순으로 한 칸씩 물러난다 */
     goHome: api.goHome,
     goBack: () => {
@@ -661,10 +727,10 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
             query: liveQuery,
             photo: livePhoto,
             photoAfter: lookAfter,
-            photoAfterPrecise: lookRender === 'done',
+            lookStage,
           })
         : [],
-    [planPage, pendingSlots, liveQuery, livePhoto, lookAfter, lookRender]
+    [planPage, pendingSlots, liveQuery, livePhoto, lookAfter, lookStage]
   )
   const allItems = stageKey === 'plan' ? planItems : surveyItems
   const topItems = allItems.filter((it) => !it.parentId)
@@ -1094,33 +1160,6 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
       <ProductDetailPanel product={productDetail} onClose={() => setProductDetail(null)} />
 
       {/* 설문 재선택 확인 — 잠금 해제는 이 다이얼로그를 거쳐서만 */}
-      {lookRender === 'confirm' && (
-        <div
-          className="sb-llm-modal"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setLookRender('idle')
-          }}
-        >
-          <section className="sb-llm-dialog sb-json-dialog" role="dialog" aria-modal="true" aria-labelledby="sb-live-render-title">
-            <div className="sb-json-dialog__body">
-              <div className="sb-json-dialog__head">
-                <h2 id="sb-live-render-title" className="sb-json-dialog__title">사진을 보내 정밀 렌더를 만들까요?</h2>
-                <button type="button" className="sb-icon-btn" onClick={() => setLookRender('idle')} aria-label="닫기">×</button>
-              </div>
-              {/* 기본 경로와 무엇이 다른지 한 문장으로 — 이 화면이 사진이 기기를 떠나는 유일한 지점이다 */}
-              <p className="sb-json-dialog__note">
-                지금 보이는 미리보기는 기기 안에서 만든 거예요. 정밀 렌더는 올린 사진을 외부 이미지 편집 모델로 보내
-                실제로 메이크업을 올려 줍니다. 사진은 이번 요청에만 쓰이고, 쓰레드 기록에는 룩 색조·모델·소요 시간만 남아요.
-              </p>
-              <div className="sb-live-reselect__actions">
-                <button type="button" className="sb-btn sb-btn--ghost" onClick={() => setLookRender('idle')}>취소</button>
-                <button type="button" className="sb-btn sb-btn--ai" onClick={runLookRender}>✦ 사진 보내고 만들기</button>
-              </div>
-            </div>
-          </section>
-        </div>
-      )}
       {reselectConfirm && (
         <div
           className="sb-llm-modal"

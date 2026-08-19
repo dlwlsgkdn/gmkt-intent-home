@@ -1441,7 +1441,35 @@
   color: var(--dk-ink-2);
   white-space: nowrap;
 }
-.sb-ba__render { margin-top: 12px; width: 100%; justify-content: center; }
+/* AFTER 자리의 진행 표시 — 합성 전(skeleton)은 그 자리를 통째로, 정밀 렌더 중(is-soft)은
+   1단계 그림 위에 반투명으로 얹는다. clip-path로 손잡이 오른쪽(=AFTER 영역)만 덮는다 */
+.sb-ba__loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(100deg, var(--sb-n-100) 30%, var(--sb-n-50) 50%, var(--sb-n-100) 70%);
+  background-size: 220% 100%;
+  animation: sb-ba-shimmer 1.4s linear infinite;
+}
+.sb-ba__loading.is-soft { background-color: transparent; opacity: 0.62; }
+.sb-ba__loading-label {
+  padding: 6px 12px;
+  border-radius: var(--sb-r-pill);
+  background: rgba(255, 255, 255, 0.92);
+  font-size: var(--sb-t-micro);
+  font-weight: 400;
+  color: var(--sb-ink-2);
+  white-space: nowrap;
+}
+@keyframes sb-ba-shimmer {
+  from { background-position: 180% 0; }
+  to { background-position: -80% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sb-ba__loading { animation: none; }
+}
 .sb-ba__note { margin: 10px 0 0; font-size: var(--sb-t-micro); font-weight: 300; color: var(--dk-muted); }
 
 /* 가상 메이크업 합성 — AFTER 레이어에 룩 색조(tone)를 올린다. 립·볼 자리에 색을 얹고

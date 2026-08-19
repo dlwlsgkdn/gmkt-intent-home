@@ -69,7 +69,8 @@ export function liveSurveyItems(page) {
  * BEFORE 재료다: 서버는 어떤 룩인지(tone)만 정하고 합성은 화면이 한다.
  * opts.photoAfter — 메이크업이 올라간 AFTER 이미지(로컬 랜드마크 합성 또는 정밀 렌더). 늦게
  * 도착하므로 없을 수도 있고, 그때는 같은 사진에 tone 프리셋을 얹어 보여준다.
- * opts.photoAfterPrecise — 그 AFTER가 외부 이미지 편집 모델의 정밀 렌더인지 (배지 문구만 다르다).
+ * opts.lookStage — AFTER 자리의 진행 단계(skeleton|landmark|refining|precise). 원본(BEFORE)은
+ * 언제나 바로 보이고, 합성이 아직이거나 정밀 렌더가 도는 동안은 그 자리에 로딩을 얹는다.
  * opts.pendingSlots — 뼈대 조기 확정 뒤 아직 검색 결과가 안 채운 자리 인덱스. 이 자리는
  * LivePlayer가 로딩 카드로 렌더하는 `livePending` 아이템으로 투영된다 (레지스트리 밖 타입 —
  * id도 `live-plan-s#` 문법 밖이라 피드백 앵커 판정에 걸리지 않는다) */
@@ -124,6 +125,10 @@ export function livePlanItems(page, opts = {}) {
         /* AFTER는 셋 중 하나다 (좋은 순): ① 외부 이미지 모델의 정밀 렌더 ② 얼굴 랜드마크로
            입술·볼에만 색을 얹은 로컬 합성(makeupComposite) ③ 둘 다 없으면 같은 사진 + tone
            프리셋(CSS). ①②가 있으면 이미 색이 발린 이미지라 tone을 비워 겹칠하지 않는다 */
+        /* AFTER 자리의 단계 — 'skeleton'(합성 전: 원본만 보이고 오른쪽은 로딩)
+           → 'landmark'(기기 합성 표시) → 'refining'(그 위에서 정밀 렌더 진행)
+           → 'precise'(정밀 렌더 적용). BEFORE(원본)는 어느 단계에서든 바로 보인다 */
+        const stage = opts.lookStage || (opts.photoAfter ? 'landmark' : 'skeleton')
         const after = opts.photoAfter || photo
         items.push({
           id: base,
@@ -135,10 +140,10 @@ export function livePlanItems(page, opts = {}) {
             afterImage: after,
             tone: opts.photoAfter ? '' : section.tone || '',
             beforeLabel: '내 사진',
-            afterLabel: opts.photoAfterPrecise ? 'AI 메이크업 · 정밀' : 'AI 메이크업',
-            renderable: true, // 라이브 전용 — 카드에 "정밀 렌더" 버튼을 세운다
+            afterLabel: stage === 'precise' ? 'AI 메이크업 · 정밀' : 'AI 메이크업',
+            afterState: stage,
             split: '50',
-            hint: '손잡이를 끌어 비교',
+            hint: '',
             disclaimer: 'AI가 올려 본 미리보기예요. 실제 발색은 피부톤 · 조명에 따라 다를 수 있어요.',
           },
         })

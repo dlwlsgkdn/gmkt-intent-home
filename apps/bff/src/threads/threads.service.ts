@@ -335,6 +335,11 @@ export class ThreadsService {
     return section
   }
 
+  /** 정밀 렌더를 쓸 수 있는 환경인가 — FE가 2단계를 시도할지 정하는 데 쓴다 */
+  get imageEditReady(): boolean {
+    return this.imageEdit.configured
+  }
+
   /** 가상 메이크업 정밀 렌더 — 외부 이미지 편집 모델이 올린 사진에 실제로 메이크업을 얹는다.
    * 기본 경로(기기 안 랜드마크 합성)와 달리 **사진이 서버 밖으로 나가므로** 사용자가 화면에서
    * 명시로 요청할 때만 호출된다. 사진은 요청 본문에만 있고 스텝에는 톤·모델·지연만 남긴다 —

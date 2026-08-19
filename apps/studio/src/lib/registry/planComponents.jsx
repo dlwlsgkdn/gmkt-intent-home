@@ -114,13 +114,28 @@ function BeforeAfter({ p, ctx }) {
       onPointerCancel={() => { dragging.current = false }}
     >
       {/* AFTER — 룩 톤(tone)이 있으면 같은 사진 위에 그 색조를 올린 "가상 메이크업" 표현이다.
-          실제 합성 엔진이 아니라 화면에서 보여주는 미리보기라 하단 고지 문구와 한 벌로 쓴다 */}
+          실제 합성 엔진이 아니라 화면에서 보여주는 미리보기라 하단 고지 문구와 한 벌로 쓴다.
+          afterState는 라이브 전용 진행 표시다: 'skeleton'이면 아직 합성이 없어 이 자리를 통째로
+          로딩으로 덮고(원본은 왼쪽에 그대로 보인다), 'refining'이면 1단계 그림 위에 반투명
+          로딩을 얹어 "더 정밀한 그림을 만드는 중"을 보여 준다 */}
       <div
         className={'sb-ba__layer sb-ba__layer--after' + (p.tone ? ' sb-ba__layer--synth' : '')}
         data-tone={p.tone || undefined}
       >
-        <Img src={p.afterImage || p.beforeImage} alt={p.afterLabel || 'AFTER'} />
+        {p.afterState !== 'skeleton' && <Img src={p.afterImage || p.beforeImage} alt={p.afterLabel || 'AFTER'} />}
       </div>
+      {p.afterState === 'skeleton' || p.afterState === 'refining' ? (
+        <div
+          className={'sb-ba__loading' + (p.afterState === 'refining' ? ' is-soft' : '')}
+          style={{ clipPath: `inset(0 0 0 ${split}%)` }}
+          role="status"
+          aria-live="polite"
+        >
+          <span className="sb-ba__loading-label">
+            {p.afterState === 'refining' ? '더 정밀하게 만드는 중…' : '메이크업을 올리는 중…'}
+          </span>
+        </div>
+      ) : null}
       <div className="sb-ba__layer sb-ba__layer--before" style={{ clipPath: `inset(0 ${100 - split}% 0 0)` }}>
         <Img src={p.beforeImage} alt={p.beforeLabel || 'BEFORE'} />
       </div>
@@ -131,26 +146,6 @@ function BeforeAfter({ p, ctx }) {
       <span className="sb-ba__badge sb-ba__badge--after">{kText(p.afterLabel, ctx, 'afterLabel')}</span>
       {p.hint ? <span className="sb-ba__hint">◉ {kText(p.hint, ctx, 'hint')}</span> : null}
     </div>
-  )
-}
-
-/* 정밀 렌더 버튼 — 라이브 생성 체험에서만 뜬다(renderable + ctx.player.renderLook).
-   지금 보이는 AFTER는 기기 안에서 만든 합성이고, 이 버튼이 사진을 서버로 보내 이미지 편집
-   모델로 실제 렌더를 받아 온다. ✦를 쓰는 자리다 — 진짜로 눌러서 만들어지는 동작이므로 */
-function LookRenderButton({ p, ctx }) {
-  if (!p.renderable || ctx.mode !== 'player' || !ctx.player || !ctx.player.renderLook) return null
-  const state = ctx.player.lookRenderState || 'idle'
-  const label =
-    state === 'loading' ? '정밀 렌더를 만드는 중이에요…' : state === 'done' ? '✓ 정밀 렌더 적용됨' : '✦ 정밀 렌더 만들기'
-  return (
-    <button
-      type="button"
-      className="sb-btn sb-btn--ai sb-btn--small sb-ba__render"
-      disabled={state === 'loading' || state === 'done'}
-      onClick={() => ctx.player.renderLook()}
-    >
-      {label}
-    </button>
   )
 }
 
@@ -627,7 +622,7 @@ export const PLAN_COMPONENTS = {
       afterImage: '', // 비우면 BEFORE와 같은 사진 — 차이는 tone이 만든다 (가상 메이크업 투영)
       tone: '',
       split: '50',
-      hint: '꾹 눌러 원본 보기',
+      hint: '', // 기본은 표시하지 않는다 — 손잡이는 보면 아는 조작이라 알약이 그림을 가린다
       disclaimer: '실제 발색은 피부톤 · 조명에 따라 다를 수 있어요',
     },
     fields: [
@@ -662,7 +657,6 @@ export const PLAN_COMPONENTS = {
         {p.desc ? <p className="sb-ba__desc">{kText(p.desc, ctx, 'desc')}</p> : null}
         <BeforeAfter p={p} ctx={ctx} />
         {p.disclaimer ? <p className="sb-ba__note">{kText(p.disclaimer, ctx, 'disclaimer')}</p> : null}
-        <LookRenderButton p={p} ctx={ctx} />
       </div>
     ),
   },
