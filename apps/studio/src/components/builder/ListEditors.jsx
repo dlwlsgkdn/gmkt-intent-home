@@ -177,10 +177,11 @@ export function ListFieldEditor({ kind, value, onChange, textFieldProps }) {
 /* ── 테이블 편집기 (kind: 'table') ──
    rows 필드가 headersKey의 헤더 원문("제품|용량|가격")까지 함께 편집한다.
    열 수 = 헤더 셀 수(없으면 행 중 최대 셀 수, 최소 1) */
-export function TableFieldEditor({ value, headers, onChange, onChangeHeaders, textFieldProps }) {
+export function TableFieldEditor({ value, headers, onChange, onChangeHeaders, textFieldProps, showHeaders = true }) {
   const rowsText = String(value ?? '')
   const headText = String(headers ?? '')
-  const parseHead = (t) => String(t || '').split('|').map((s) => s.trim())
+  // headersKey 없는 필드(예: 성분 비교표의 "왼쪽|항목|오른쪽")는 헤더 행 자체가 없다
+  const parseHead = (t) => (showHeaders ? String(t || '').split('|').map((s) => s.trim()) : [])
   const [grid, setGrid] = React.useState(() => ({ head: parseHead(headText), body: parseTableRows(rowsText) }))
   const [textMode, setTextMode] = React.useState(false)
   const lastRef = React.useRef({ rows: rowsText, head: headText })
@@ -205,7 +206,7 @@ export function TableFieldEditor({ value, headers, onChange, onChangeHeaders, te
     const serializedHead = next.head.map((s) => String(s || '').trim()).join('|')
     lastRef.current = { rows: serializedRows, head: serializedHead }
     if (serializedRows !== rowsText) onChange(serializedRows)
-    if (serializedHead !== headText) onChangeHeaders(serializedHead)
+    if (showHeaders && serializedHead !== headText) onChangeHeaders(serializedHead)
   }
   // 셀 값에 구분자가 섞이지 않게 정리 (| = 셀 구분, 줄바꿈 = 행 구분)
   const clean = (v) => v.replace(/[|\n]+/g, ' ')
@@ -252,9 +253,11 @@ export function TableFieldEditor({ value, headers, onChange, onChangeHeaders, te
     return (
       <div className="sb-optlist">
         <EditorHead count={grid.body.filter((cells) => cells.some((c) => String(c).trim())).length} textMode onToggle={() => setTextMode(false)} />
-        <div className="sb-field" style={{ marginBottom: 0 }}>
-          <input type="text" value={headText} placeholder="헤더 (| 구분)" onChange={(e) => onChangeHeaders(e.target.value)} />
-        </div>
+        {showHeaders && (
+          <div className="sb-field" style={{ marginBottom: 0 }}>
+            <input type="text" value={headText} placeholder="헤더 (| 구분)" onChange={(e) => onChangeHeaders(e.target.value)} />
+          </div>
+        )}
         <textarea rows={5} value={rowsText} onChange={(e) => onChange(e.target.value)} {...textFieldProps} />
         <p className="sb-optlist__hint">셀은 <code>|</code>, 행은 줄바꿈으로 구분 — 셀 안에 쉼표를 쓸 수 있어요.</p>
       </div>
@@ -279,18 +282,22 @@ export function TableFieldEditor({ value, headers, onChange, onChangeHeaders, te
           </button>
         ))}
         <span />
-        {/* 헤더 행 */}
-        {Array.from({ length: cols }, (_, ci) => (
-          <input
-            key={`h${ci}`}
-            type="text"
-            className="sb-tbledit__headcell"
-            value={grid.head[ci] ?? ''}
-            placeholder={`헤더 ${ci + 1}`}
-            onChange={(e) => patchHead(ci, e.target.value)}
-          />
-        ))}
-        <span />
+        {/* 헤더 행 — headersKey가 있는 필드만 */}
+        {showHeaders && (
+          <>
+            {Array.from({ length: cols }, (_, ci) => (
+              <input
+                key={`h${ci}`}
+                type="text"
+                className="sb-tbledit__headcell"
+                value={grid.head[ci] ?? ''}
+                placeholder={`헤더 ${ci + 1}`}
+                onChange={(e) => patchHead(ci, e.target.value)}
+              />
+            ))}
+            <span />
+          </>
+        )}
         {/* 본문 행 */}
         {grid.body.map((cells, ri) => (
           <React.Fragment key={ri}>

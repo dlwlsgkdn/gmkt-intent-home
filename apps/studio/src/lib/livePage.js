@@ -12,7 +12,7 @@ export function liveSurveyItems(page) {
     {
       id: 'live-survey-intro',
       type: 'surveyIntro',
-      props: { kicker: 'Personal Brief', title: page.intro || '몇 가지만 알려주세요', desc: '' },
+      props: { kicker: '', title: page.intro || '몇 가지만 알려주세요', desc: '' },
     },
     {
       id: 'live-profile-panel',
@@ -29,8 +29,8 @@ export function liveSurveyItems(page) {
         options: joinTextList(q.options || []), // 줄바꿈 직렬화 — 선택지 안 쉼표 보존
         multi: !!q.multi,
         maxPerRow: String(Math.min(4, Math.max(2, (q.options || []).length))),
-        optionShape: 'card',
-        horizontalScroll: true,
+        optionShape: 'list', // Figma 설문 기준 — 전폭 세로 리스트
+        horizontalScroll: false,
         defaultAnswer: '',
         locked: false,
       },
@@ -45,7 +45,17 @@ export function liveSurveyItems(page) {
 export function livePlanItems(page, opts = {}) {
   const pendingSlots = opts.pendingSlots || []
   const items = [
-    { id: 'live-plan-title', type: 'planTitle', props: { kicker: 'AI Plan', title: page.headline || '' } },
+    {
+      id: 'live-plan-title',
+      type: 'planTitle',
+      props: {
+        query: opts.query || '', // 사용자 질의 — 비면 인용 줄이 숨는다
+        title: page.headline || '',
+        notice: 'AI가 만든 계획이에요. 내용이 사실과 다를 수 있으니 확인해 주세요.',
+        noticeOpen: false,
+        highlight: true,
+      },
+    },
   ]
   if (page.summary) {
     items.push({ id: 'live-plan-summary', type: 'noticeCard', props: { title: '이렇게 정리했어요', body: page.summary } })
@@ -55,7 +65,6 @@ export function livePlanItems(page, opts = {}) {
     type: 'surveySummary',
     props: { title: '설문 요약', hiddenProfile: '', hiddenQuestions: '' },
   })
-  let stepNo = 0
   const sections = page.sections || []
   ;(sections).forEach((section, i) => {
     // 단계 하위 표시 — 단계 안내(guide) 바로 뒤의 상품 섹션(자리 포함)은 그 단계에 속한
@@ -70,11 +79,11 @@ export function livePlanItems(page, opts = {}) {
     }
     const base = `live-plan-s${i}`
     if (section.kind === 'guide') {
-      stepNo += 1
       items.push({
         id: base,
         type: 'planStep',
-        props: { no: String(stepNo), title: section.title, desc: section.body, points: '' },
+        // 와이어 guide는 제목 + 문단뿐이라 Figma "메인타이틀 + 문단" 변형으로 투영한다
+        props: { badge: '', title: section.title, subtitle: '', points: '', body: section.body },
       })
     } else if (section.kind === 'steps') {
       items.push({
@@ -86,20 +95,21 @@ export function livePlanItems(page, opts = {}) {
       if (section.reason) {
         items.push({ id: `${base}-reason`, type: 'textBlock', stepSub, props: { kicker: '', title: '', body: section.reason } })
       }
-      items.push({ id: base, type: 'hscroll', stepSub, props: { title: section.title, cardW: '232', items: '' } })
+      items.push({ id: base, type: 'hscroll', stepSub, props: { title: section.title, cardW: '200', items: '' } })
       ;(section.products || []).forEach((product, j) => {
         items.push({
           id: `${base}-p${j}`,
           type: 'productCard',
           parentId: base,
           slot: j,
-          w: 232,
+          w: 200,
           props: {
             brand: product.brand || '',
             name: product.name,
             price: Number(product.price || 0).toLocaleString('ko-KR'),
             was: '',
-            score: '',
+            score: '', // 와이어에 추천도가 없으면 배지를 그리지 않는다
+            matchLabel: 'MATCH',
             summary: '',
             emoji: product.imageUrl ? '' : '🧴', // 썸네일 없는 상품만 이모지 목업 블록으로 렌더
             gradient: '',
@@ -116,9 +126,9 @@ export function livePlanItems(page, opts = {}) {
       if (section.reason) {
         items.push({ id: `${base}-reason`, type: 'textBlock', props: { kicker: '', title: '', body: section.reason } })
       }
-      items.push({ id: base, type: 'hscroll', props: { title: section.title, cardW: '260', items: '' } })
+      items.push({ id: base, type: 'hscroll', props: { title: section.title, cardW: '174', items: '' } })
       ;(section.items || []).forEach((c, j) => {
-        const common = { id: `${base}-c${j}`, parentId: base, slot: j, w: 260 }
+        const common = { id: `${base}-c${j}`, parentId: base, slot: j, w: 174 }
         if (c.type === 'video') {
           items.push({
             ...common,

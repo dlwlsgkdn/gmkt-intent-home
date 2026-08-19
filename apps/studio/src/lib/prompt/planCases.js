@@ -17,6 +17,10 @@ const NON_GENERATED_FIELDS = new Set([
   'emoji', 'no', 'badge', 'cardW', 'panelH', 'cols', 'maxPerRow', 'optionShape',
   'defaultAnswer', 'hidden', 'hiddenProfile', 'hiddenQuestions', 'items', 'contentCatalog', 'answerLabel', 'catalogId',
   'source', 'channel', 'duration', 'scrollbar', 'options',
+
+  // Figma 기준으로 추가된 설정·자산 필드 — 사람이 인스펙터로만 정한다
+  'photoUrl', 'beforeImage', 'afterImage', 'split', 'state', 'current', 'total',
+  'customOption', 'noticeOpen', 'highlight', 'matchLabel', 'samples',
 ])
 
 /* 외부 콘텐츠(영상 등)는 사실 필드라 생성 대상에서 제외 — 골든 케이스 것을 그대로 복제 */

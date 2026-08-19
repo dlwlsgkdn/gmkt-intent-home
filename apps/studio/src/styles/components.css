@@ -382,3 +382,353 @@
 }
 .sb-seltb__sizes button:hover { background: var(--sb-n-100); }
 
+
+/* ── 설문 컴포넌트 (Figma "설문" 섹션 기준) ──────────────────────────────
+   리스트형 선택지·직접 입력·진행 표시·사진 업로드·날짜 입력.
+   기존 도형(card/pill/square/circle)은 위 규칙 그대로 두고 여기서 리스트형만 더한다. */
+.sb-survey-intro h2,
+.sb-survey-intro p { white-space: pre-line; }
+
+/* 진행 표시 — "1 / 3" + 밑줄 막대 */
+.sb-survey-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 0 4px;
+}
+.sb-survey-progress__count { font-size: var(--sb-t-caption); font-weight: 400; color: var(--dk-ink); }
+.sb-survey-progress__track {
+  display: block;
+  height: 2px;
+  border-radius: var(--sb-r-pill);
+  background: var(--dk-line);
+  overflow: hidden;
+}
+.sb-survey-progress__bar {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--dk-ink);
+  transition: width var(--sb-dur-slow) var(--sb-ease);
+}
+
+/* 리스트형 선택지 — 전폭 세로 행 (원본 .info-card 계열을 쓰지 않아 !important 충돌이 없다) */
+.sb-survey-option--list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  min-height: 0;
+  padding: 14px 16px;
+  text-align: left;
+  border: 1px solid var(--dk-line);
+  border-radius: 6px; /* Figma option r6 */
+  background: var(--dk-surface);
+  color: var(--dk-ink);
+  cursor: pointer;
+  transition: border-color var(--sb-dur) var(--sb-ease), box-shadow var(--sb-dur) var(--sb-ease);
+}
+.sb-survey-option--list:hover { border-color: var(--dk-ink-2); }
+.sb-survey-option--list.is-selected {
+  border-color: var(--dk-ink);
+  box-shadow: inset 0 0 0 1px var(--dk-ink);
+}
+.sb-survey-option--list .sb-survey-option__main {
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--dk-ink);
+  line-height: 1.4;
+  word-break: keep-all;
+  white-space: normal;
+}
+.sb-survey-option--list .sb-survey-option__sub {
+  font-size: var(--sb-t-caption);
+  font-weight: 300;
+  color: var(--dk-muted);
+  line-height: 1.5;
+  word-break: keep-all;
+  white-space: normal;
+}
+/* 직접 입력 선택지 — 고르면 같은 행 안에서 입력칸이 열린다 */
+.sb-survey-option--custom { cursor: text; }
+.sb-survey-option__input {
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--dk-line);
+  border-radius: var(--sb-r-xs);
+  background: var(--dk-surface);
+  font: inherit;
+  font-size: var(--sb-t-small);
+  font-weight: 300;
+  color: var(--dk-ink);
+}
+
+/* 사진 업로드 질문 — 점선 드롭존 */
+.sb-photo-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 190px;
+  padding: 24px;
+  border: 1px dashed var(--dk-line);
+  border-radius: var(--sb-r-md);
+  background: var(--dk-surface);
+  cursor: pointer;
+}
+.sb-photo-drop__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: var(--dk-thumb);
+  font-size: var(--sb-t-caption);
+  font-weight: 300;
+  color: var(--dk-muted);
+}
+.sb-photo-drop__label { font-size: var(--sb-t-small); font-weight: 400; color: var(--dk-ink); }
+.sb-photo-drop.is-filled { min-height: 0; padding: 18px; }
+.sb-photo-drop__preview {
+  display: block;
+  max-width: 100%;
+  max-height: 220px;
+  border-radius: var(--sb-r-xs);
+  object-fit: contain;
+}
+
+/* 날짜 입력 질문 — 탭하면 기기 기본 날짜 선택이 열린다 */
+.sb-date-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 16px;
+  border: 1px solid var(--dk-line);
+  border-radius: var(--sb-r-md);
+  background: var(--dk-surface);
+  cursor: pointer;
+}
+.sb-date-field__value {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--sb-t-body);
+  font-weight: 300;
+  color: var(--dk-muted);
+}
+.sb-date-field.is-filled .sb-date-field__value { font-weight: 400; color: var(--dk-ink); }
+.sb-date-field__chevron { flex: 0 0 auto; font-size: var(--sb-t-title); color: var(--dk-muted); }
+.sb-date-field { text-align: left; }
+
+/* 질문 문구와 선택지 사이 간격 — 크기·색은 viewer.css의 질문 라벨 규칙이 잡는다 */
+.clean-home-page .clean-question-list label { margin-bottom: 10px !important; }
+
+/* 설문 질문 한 화면 = 진행 표시 + 질문 + 항목 + 다음 버튼 (Figma 설문 화면 한 장).
+   화면 세로 리듬 20px은 Figma 프레임 auto-layout gap과 같다 */
+.sb-survey-card {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.sb-survey-card .clean-question-list { margin: 0; }
+.sb-survey-card__next {
+  width: 100%;
+  min-height: 58px;
+  padding: 16px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--dk-ink);
+  font-size: 15px;
+  font-weight: 500;
+  color: #fff;
+  cursor: pointer;
+  transition: background var(--sb-dur) var(--sb-ease);
+}
+.sb-survey-card__next:hover { background: var(--dk-ink-2); }
+
+/* 입력부는 질문 카드 폭을 그대로 쓴다 — 원본 .clean-question-list > div > div의
+   auto-fit 그리드(150px 최소폭)가 걸려 폭이 줄지 않게 블록으로 되돌린다 */
+.clean-question-list > div > .sb-survey-photo,
+.clean-question-list > div > .sb-survey-date {
+  display: block !important;
+  width: 100%;
+}
+
+/* 미응답 잠금 — 답을 고르기 전에는 다음으로 못 넘어간다 (Figma 비활성 「다음」) */
+.sb-survey-card__next:disabled {
+  background: var(--dk-line);
+  color: var(--dk-muted);
+  cursor: not-allowed;
+}
+.sb-survey-card__next:disabled:hover { background: var(--dk-line); }
+/* 건너뛰기 — 다음 버튼 바로 위 가운데 (Figma 생년월일 스킵) */
+.sb-survey-card__skip {
+  align-self: center;
+  margin-bottom: -8px;
+  border: 0;
+  background: none;
+  font-size: var(--sb-t-small);
+  font-weight: 300;
+  color: var(--dk-muted);
+  cursor: pointer;
+}
+.sb-survey-card__skip:hover { color: var(--dk-ink-2); text-decoration: underline; }
+
+/* ── 바텀 시트 (사진 가져오기 · 샘플 얼굴 · 날짜 선택) ── */
+.sb-sheet {
+  position: fixed;
+  inset: 0;
+  /* 하단 플로팅 바(150)·스튜디오 FAB(210)보다 위 — 시트가 열리면 화면을 온전히 덮는다 */
+  z-index: 260;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(31, 41, 51, 0.45);
+}
+.sb-sheet__panel {
+  width: min(430px, 100%);
+  max-height: 78vh;
+  overflow-y: auto;
+  padding: 10px 20px 26px;
+  border-radius: var(--sb-r-xl) var(--sb-r-xl) 0 0;
+  background: var(--dk-sunken);
+  box-shadow: var(--sb-shadow-lg);
+  animation: sb-sheet-up var(--sb-dur-slow) var(--sb-ease);
+}
+@keyframes sb-sheet-up { from { transform: translateY(14px); opacity: 0.6 } to { transform: none; opacity: 1 } }
+.sb-sheet__grip {
+  display: block;
+  width: 36px;
+  height: 4px;
+  margin: 0 auto 12px;
+  border-radius: var(--sb-r-pill);
+  background: var(--dk-line);
+}
+.sb-sheet__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--dk-line);
+}
+.sb-sheet__title { flex: 1; min-width: 0; margin: 0; font-size: var(--sb-t-body); font-weight: 400; color: var(--dk-ink); }
+.sb-sheet__close {
+  flex: 0 0 auto;
+  border: 0;
+  background: none;
+  font-size: var(--sb-t-body);
+  color: var(--dk-ink-2);
+  cursor: pointer;
+}
+.sb-sheet__menu { display: flex; flex-direction: column; }
+.sb-sheet__menu button {
+  padding: 16px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--dk-line);
+  background: none;
+  font-size: var(--sb-t-body);
+  font-weight: 300;
+  color: var(--dk-ink);
+  cursor: pointer;
+}
+.sb-sheet__menu button:last-child { border-bottom: 0; }
+.sb-sheet__menu button:hover { color: var(--dk-ink-2); }
+.sb-sheet__faces {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding-top: 16px;
+}
+.sb-sheet__face {
+  padding: 0;
+  border: 1px solid var(--dk-line);
+  border-radius: var(--sb-r-xs);
+  background: var(--dk-thumb);
+  overflow: hidden;
+  cursor: pointer;
+}
+.sb-sheet__face img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; }
+.sb-sheet__face:hover { border-color: var(--dk-ink); }
+
+/* ── 달력 (날짜 선택 시트) ── */
+.sb-cal { padding-top: 14px; }
+.sb-cal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 2px 14px;
+}
+.sb-cal__head strong { font-size: var(--sb-t-title); font-weight: 400; color: var(--dk-ink); }
+.sb-cal__head button {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  background: none;
+  font-size: var(--sb-t-title);
+  color: var(--dk-ink-2);
+  cursor: pointer;
+}
+.sb-cal__grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px 0;
+  place-items: center;
+}
+.sb-cal__grid--week { margin-bottom: 6px; }
+.sb-cal__wd { font-size: var(--sb-t-caption); font-weight: 300; color: var(--dk-muted); }
+.sb-cal__wd.is-sun { color: var(--sb-danger); }
+.sb-cal__day {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  font-size: var(--sb-t-small);
+  font-weight: 300;
+  color: var(--dk-ink);
+  cursor: pointer;
+}
+.sb-cal__day.is-sun { color: var(--sb-danger); }
+.sb-cal__day:hover { background: var(--dk-thumb); }
+.sb-cal__day.is-selected,
+.sb-cal__day.is-selected.is-sun { background: var(--dk-ink); color: #fff; font-weight: 400; }
+
+/* 키워드 설명 시트 본문 — 시트 껍데기는 사진·날짜와 공유(.sb-sheet*) */
+.sb-keyword-sheet { padding-top: 14px; }
+.sb-keyword-sheet p {
+  margin: 0;
+  font-size: var(--sb-t-body);
+  font-weight: 300;
+  color: var(--dk-ink-2);
+  line-height: 1.65;
+  word-break: keep-all;
+}
+.sb-keyword-sheet ul {
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sb-keyword-sheet li {
+  position: relative;
+  padding-left: 14px;
+  font-size: var(--sb-t-small);
+  font-weight: 300;
+  color: var(--dk-ink);
+  line-height: 1.55;
+  word-break: keep-all;
+}
+.sb-keyword-sheet li::before {
+  content: '·';
+  position: absolute;
+  left: 2px;
+  color: var(--dk-muted);
+}

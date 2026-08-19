@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { DEVICE_PRESETS } from '../lib/store.js'
 import Dropdown from './ui/Dropdown.jsx'
 
@@ -12,49 +12,20 @@ export function BgBlobs() {
   )
 }
 
-/* 버튼이 그룹 안에서 왼쪽/가운데/오른쪽 어디에 있는지 판별 — 패널 등장 방향에 사용 */
-function fabOrigin(e) {
-  const btn = e.currentTarget.getBoundingClientRect()
-  const nav = e.currentTarget.closest('nav')
-  if (!nav) return 'right'
-  const bar = nav.getBoundingClientRect()
-  const center = btn.left + btn.width / 2
-  const barCenter = bar.left + bar.width / 2
-  if (center < barCenter - 8) return 'left'
-  if (center > barCenter + 8) return 'right'
-  return 'center'
-}
-
 /* 하단 플로팅 바 — 원본 구성(홈/마이/쓰레드 히스토리) 유지 */
-export function FloatingBar({ onHome, onMy, onList, active }) {
+export function FloatingBar({ onList }) {
   return (
-    <nav className="clean-floating-actionbar" aria-label="빠른 이동">
+    <nav className="clean-floating-actionbar sb-fabbar" aria-label="빠른 이동">
       <button
         type="button"
-        className={'clean-floating-actionbar__btn' + (active === 'home' ? ' sb-fab-active' : '')}
-        aria-label="홈으로 이동"
-        title="홈"
-        onClick={onHome}
-      >
-        <svg aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M3.5 11.5 12 4l8.5 7.5M5.5 10.5V20h13v-9.5M9.5 20v-5.5h5V20" /></svg>
-      </button>
-      <button
-        type="button"
-        className="clean-floating-actionbar__btn"
-        aria-label="마이 페이지"
-        title="마이"
-        onClick={onMy}
-      >
-        <svg aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M5 20c0-3.3 3.1-6 7-6s7 2.7 7 6" /></svg>
-      </button>
-      <button
-        type="button"
-        className="clean-floating-actionbar__btn"
+        className="clean-floating-actionbar__btn sb-fabbar__btn"
         aria-label="쇼핑 쓰레드 히스토리"
         title="쇼핑 쓰레드 히스토리"
-        onClick={(e) => onList(fabOrigin(e))}
+        /* 버튼이 기기 프레임 우하단에 고정이라 쓰레드 패널은 언제나 오른쪽에서 열린다
+           (패널 자체는 left/center 등장도 지원 — ThreadPanel origin) */
+        onClick={() => onList('right')}
       >
-        <svg aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M4 6h16M4 12h16M4 18h10" /></svg>
+        <svg aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.1" d="M4 6h16M4 12h16M4 18h10" /></svg>
       </button>
     </nav>
   )
@@ -64,6 +35,11 @@ export function FloatingBar({ onHome, onMy, onList, active }) {
 export function ViewerDeviceControl({ deviceKey, onChange }) {
   const [open, setOpen] = useState(false)
   const device = DEVICE_PRESETS.find((d) => d.key === deviceKey) || DEVICE_PRESETS[0]
+  /* 지금 기기 폭을 CSS 변수로 알린다 — position:fixed인 플로팅 버튼이 가운데 놓인
+     기기 프레임의 오른쪽 아래에 붙으려면 프레임 폭을 알아야 한다 */
+  useEffect(() => {
+    document.documentElement.style.setProperty('--sb-viewer-w', `${device.w}px`)
+  }, [device.w])
   return (
     <div className="sb-viewer-ctl">
       <Dropdown

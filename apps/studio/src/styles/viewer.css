@@ -147,10 +147,14 @@
   font-size: 24px;
 }
 
-/* 질문 라벨: 원본은 vw 기준 — 좁은 캔버스에서는 컨테이너 기준으로 보정 */
+/* 질문 라벨: 원본은 vw 기준 clamp(19~28px) — Figma 설문 기준인 14px 회색 라벨로 고정한다
+   (선택지 본문 15px보다 작아야 질문이 "항목을 묶는 라벨"로 읽힌다) */
 .sb-canvas-item__content .clean-question-list label,
 .sb-player__item .clean-question-list label {
-  font-size: 22px !important;
+  font-size: var(--sb-t-body) !important;
+  font-weight: 400 !important;
+  color: var(--dk-muted) !important;
+  line-height: 1.45;
 }
 
 /* 설문 옵션: nowrap 해제 — 긴 선택지도 카드 안에서 줄바꿈 */
@@ -231,16 +235,6 @@
 @container (min-width: 341px) {
   .sb-media-card { flex-direction: row; align-items: center; }
   .sb-media-card__thumb { width: 96px; height: 96px; aspect-ratio: auto; }
-  .sb-product-card2 { flex-direction: row; align-items: stretch; }
-  .sb-product-card2 .sb-media-card__thumb {
-    width: 148px;
-    height: auto;
-    aspect-ratio: auto;
-    border-radius: 0;
-    border: 0;
-    border-right: 1px solid var(--sb-n-100);
-  }
-  .sb-product-card2__body { padding: 16px 20px; }
 }
 
 /* 마켓 태그 (지마켓/외부몰) */
@@ -466,7 +460,8 @@
 }
 .sb-player__head {
   width: min(760px, 100%);
-  margin: 0 auto 30px;
+  /* 시나리오 제목은 화면 헤더 컴포넌트가 맡는다 — 여기는 진입 경로 표기·재시작만 남은 얇은 줄 */
+  margin: 0 auto 14px;
 }
 .sb-player__head h2 {
   margin: 8px 0 0;
@@ -873,3 +868,749 @@
     border-left: 0;
   }
 }
+
+/* ── 계획 컴포넌트 (Figma "계획" 섹션 기준) ──────────────────────────────
+   타이틀·설문 요약 칩·계획 항목·상품 카드·콘텐츠 카드·성분 비교·주의 성분·
+   비포애프터·도움 여부·체크리스트·담기 요약. 위쪽 옛 규칙(.sb-media-card 계열)은
+   그대로 두고, 여기서 새 마크업의 값을 정한다 — 같은 특이도면 나중이 이긴다. */
+
+/* 계획 타이틀 — "질의"에 대한 + 형광 강조 + AI 안내 툴팁 */
+.sb-plan-head { padding: 2px 0 4px; }
+.sb-plan-head__query {
+  margin: 0 0 4px;
+  font-size: var(--sb-t-title);
+  font-weight: 300;
+  color: var(--dk-ink);
+  line-height: 1.5;
+  word-break: keep-all;
+}
+.sb-plan-head__title {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  font-size: 24px;
+  font-weight: 400;
+  color: var(--dk-ink-2);
+  line-height: 1.35;
+  word-break: keep-all;
+}
+/* 제목 아래 형광펜 바 — Figma 120×4, 제목 길이가 아니라 고정 폭이다 */
+.sb-plan-head__mark {
+  display: block;
+  width: 120px;
+  max-width: 100%;
+  height: 4px;
+  margin-top: 6px;
+  border-radius: 2px;
+  background: var(--dk-underline);
+}
+.sb-ai-notice__dot {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-top: 7px;
+  border: 1.4px solid var(--dk-ink-2);
+  border-radius: 50%;
+  background: none;
+  font-size: var(--sb-t-micro);
+  font-weight: 400;
+  line-height: 1;
+  color: var(--dk-ink-2);
+  cursor: pointer;
+}
+.sb-ai-notice__tip,
+.sb-match__tip {
+  position: absolute;
+  z-index: 8;
+  display: block;
+  padding: 12px 14px;
+  border-radius: var(--sb-r-sm);
+  background: var(--dk-tip);
+  color: #fff;
+  box-shadow: var(--sb-shadow-md);
+}
+.sb-ai-notice__tip {
+  left: 0;
+  right: 0;
+  top: calc(100% + 12px);
+  font-size: var(--sb-t-small);
+  font-weight: 300;
+  line-height: 1.55;
+  white-space: pre-line;
+}
+.sb-ai-notice__tip::before,
+.sb-match__tip::before {
+  content: '';
+  position: absolute;
+  top: -7px;
+  border: 7px solid transparent;
+  border-top: 0;
+  border-bottom-color: var(--dk-tip);
+}
+.sb-ai-notice__tip::before { left: 24px; }
+
+/* 설문 요약 — 라벨 위 / 값 아래 칩을 흘려 배치 */
+.sb-summary__chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.sb-summary__chip {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 100%;
+  padding: 8px 12px;
+  border-radius: var(--sb-r-md);
+  background: var(--dk-thumb);
+}
+.sb-summary__label { font-size: 10px; font-weight: 300; color: var(--dk-muted); }
+.sb-summary__value {
+  font-size: var(--sb-t-small);
+  font-weight: 400;
+  color: var(--dk-ink);
+  word-break: keep-all;
+}
+
+/* 계획 항목 — 제목 + 중요 배지 + 한 줄 요약 + 불릿 */
+.sb-plan-step { padding: 2px 0; }
+.sb-plan-step__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sb-plan-step__title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 400;
+  color: var(--dk-ink);
+  line-height: 1.25;
+  word-break: keep-all;
+}
+.sb-plan-step__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 9px;
+  border-radius: var(--sb-r-pill);
+  background: var(--dk-mark);
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--dk-ink-2);
+  white-space: nowrap;
+}
+.sb-plan-step__sub {
+  margin: 8px 0 0;
+  font-size: 15px;
+  font-weight: 300;
+  color: var(--dk-ink-2);
+  line-height: 1.5;
+  word-break: keep-all;
+}
+.sb-plan-step__bullets {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.sb-plan-step__bullets li {
+  display: flex;
+  gap: 8px;
+  font-size: var(--sb-t-small);
+  font-weight: 300;
+  color: var(--dk-ink);
+  line-height: 1.55;
+  word-break: keep-all;
+}
+.sb-plan-step__dot { flex: 0 0 auto; color: var(--dk-ink-2); }
+.sb-plan-step__body {
+  margin: 10px 0 0;
+  font-size: var(--sb-t-small);
+  font-weight: 300;
+  color: var(--dk-ink);
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: keep-all;
+}
+
+/* 상품 카드 — 정사각 썸네일 + 추천도/몰 배지 + 담기 */
+.sb-product-card2 {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  overflow: visible;
+  border: 1px solid var(--dk-line);
+  border-radius: var(--sb-r-2xl);
+  background: var(--dk-surface);
+  box-shadow: none;
+  text-align: left;
+}
+.sb-product-card2__thumb {
+  position: relative;
+  flex: 0 0 auto;
+  width: 100%;
+  aspect-ratio: 1; /* 가로:세로 1:1 고정 */
+  min-height: 0;   /* flex 자식의 min-height:auto가 내용물 높이로 비율을 깨는 것을 막는다 */
+  overflow: hidden;
+  border-radius: var(--sb-r-2xl) var(--sb-r-2xl) 0 0;
+  background: var(--dk-thumb);
+}
+/* 내용물을 absolute로 빼면 박스 높이 계산에서 빠져 aspect-ratio가 그대로 산다 */
+.sb-product-card2__thumb > img,
+.sb-product-card2__thumb > .sb-product-card2__mock {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.sb-product-card2__thumb[role='button'] { cursor: pointer; }
+.sb-product-card2__body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 18px 18px;
+}
+.sb-product-card2__brand { margin: 0; font-size: var(--sb-t-micro); font-weight: 300; color: var(--dk-muted); }
+.sb-product-card2__name {
+  margin: 0;
+  font-size: var(--sb-t-body);
+  font-weight: 400;
+  color: var(--dk-ink);
+  line-height: 1.35;
+  word-break: keep-all;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.sb-product-card2__pricebox { display: flex; flex-direction: column; gap: 1px; margin-top: 2px; }
+.sb-product-card2__price { display: flex; align-items: baseline; gap: 4px; }
+.sb-product-card2__price b { font-size: 18px; font-weight: 500; color: var(--dk-ink-2); }
+.sb-product-card2__price em { font-style: normal; font-size: var(--sb-t-micro); font-weight: 300; color: var(--dk-muted); }
+
+/* 추천도 배지 + 설명 말풍선 (Figma 상품카드/MatchTooltip) */
+.sb-match { position: absolute; top: 12px; left: 12px; z-index: 5; }
+.sb-match__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 9px;
+  border: 1px solid var(--dk-line);
+  border-radius: var(--sb-r-md);
+  background: rgba(255, 255, 255, 0.95);
+  cursor: pointer;
+}
+.sb-match__label { font-size: 9px; font-weight: 500; letter-spacing: 0.02em; color: var(--dk-muted); }
+.sb-match__score { font-size: var(--sb-t-micro); font-weight: 500; color: var(--dk-ink-2); }
+.sb-match__tip {
+  top: calc(100% + 9px);
+  left: 0;
+  width: max-content;
+  max-width: 232px;
+}
+.sb-match__tip::before { left: 16px; }
+.sb-match__tip b { display: block; font-size: var(--sb-t-caption); font-weight: 500; }
+.sb-match__tip em {
+  display: block;
+  margin-top: 5px;
+  font-style: normal;
+  font-size: var(--sb-t-micro);
+  font-weight: 300;
+  color: rgba(255, 255, 255, 0.78);
+  line-height: 1.55;
+}
+
+/* 몰 배지 — 지마켓/올리브영은 브랜드 색, 그 밖은 중립 */
+.sb-mall-badge {
+  position: absolute;
+  top: 14px;
+  right: 12px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: var(--sb-r-md);
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.sb-mall-badge--gmarket { background: var(--dk-gmarket-soft); color: var(--dk-gmarket); }
+.sb-mall-badge--oliveyoung { background: var(--dk-oliveyoung-soft); color: var(--dk-oliveyoung); }
+.sb-mall-badge--plain { background: var(--dk-sunken); color: var(--dk-muted); }
+
+/* 담기 버튼 — 기본 / 담음 / 담기불가 */
+.sb-cart-btn {
+  width: 100%;
+  margin-top: 8px;
+  padding: 12px;
+  border: 0;
+  border-radius: 11px;
+  background: var(--dk-ink);
+  font-size: var(--sb-t-micro);
+  font-weight: 500;
+  color: #fff;
+  cursor: pointer;
+  transition: background var(--sb-dur) var(--sb-ease);
+}
+.sb-cart-btn:hover:not(:disabled):not(.is-added) { background: var(--dk-ink-2); }
+.sb-cart-btn.is-added { background: var(--dk-sunken); color: var(--dk-muted); cursor: default; }
+.sb-cart-btn.is-blocked { background: var(--dk-sunken); color: var(--dk-muted); cursor: not-allowed; }
+
+/* 참고 콘텐츠 카드 (영상·게시글) — 썸네일 + 출처 · 매체 ↗ + 제목 */
+.sb-content-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--dk-line);
+  border-radius: var(--sb-r-md);
+  background: var(--dk-surface);
+  text-align: left;
+}
+.sb-content-card[role='link'] { cursor: pointer; }
+.sb-content-card[role='link']:focus-visible { outline: 3px solid var(--sb-info-soft); outline-offset: 2px; }
+.sb-content-card__thumb {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: var(--dk-thumb);
+  overflow: hidden;
+}
+.sb-content-card__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sb-content-card__play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: rgba(31, 41, 51, 0.55);
+  color: #fff;
+}
+.sb-content-card__play svg { width: 20px; height: 20px; margin-left: 2px; }
+.sb-content-card__duration {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 2px 6px;
+  border-radius: var(--sb-r-xs);
+  background: rgba(31, 41, 51, 0.7);
+  font-size: 10px;
+  font-weight: 400;
+  color: #fff;
+}
+.sb-content-card__meta { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px 12px; }
+.sb-content-card__source {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  font-size: 9px;
+  font-weight: 400;
+  color: var(--dk-ink-2);
+}
+.sb-content-card__source span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-content-card__source i { font-style: normal; color: var(--dk-muted); }
+.sb-content-card__source b { margin-left: auto; font-size: 10px; font-weight: 400; color: var(--dk-muted); }
+.sb-content-card__title {
+  margin: 0;
+  font-size: var(--sb-t-caption);
+  font-weight: 300;
+  color: var(--dk-ink);
+  line-height: 1.4;
+  word-break: keep-all;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.sb-content-card__snippet {
+  margin: 2px 0 0;
+  font-size: var(--sb-t-micro);
+  font-weight: 300;
+  color: var(--dk-muted);
+  line-height: 1.5;
+  word-break: keep-all;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 성분 비교표 — 추천 vs 대안 */
+.sb-compare {
+  overflow: hidden;
+  border: 1px solid var(--dk-line);
+  border-radius: 18px;
+  background: var(--dk-surface);
+}
+.sb-compare__caption {
+  padding: 13px 16px;
+  background: var(--dk-sunken);
+  font-size: var(--sb-t-small);
+  font-weight: 400;
+  color: var(--dk-ink);
+  word-break: keep-all;
+}
+.sb-compare__body { padding: 14px 16px 16px; }
+.sb-compare__head { display: flex; align-items: stretch; gap: 6px; }
+.sb-compare__product {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 11px;
+  border: 1px solid var(--dk-line);
+  border-radius: var(--sb-r-sm);
+  background: var(--dk-sunken);
+}
+.sb-compare__product.is-pick { border-color: var(--dk-ink); }
+.sb-compare__tag { font-size: 8px; font-weight: 500; letter-spacing: 0.04em; color: var(--dk-muted); }
+.sb-compare__product.is-pick .sb-compare__tag { color: var(--dk-ink); }
+.sb-compare__name {
+  margin: 0;
+  font-size: var(--sb-t-caption);
+  font-weight: 400;
+  color: var(--dk-ink);
+  line-height: 1.35;
+  word-break: keep-all;
+}
+.sb-compare__meta { margin: 0; font-size: 10px; font-weight: 300; color: var(--dk-muted); }
+.sb-compare__vs {
+  flex: 0 0 auto;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--dk-ink);
+  font-size: 8px;
+  font-weight: 500;
+  color: #fff;
+}
+.sb-compare__rows { margin-top: 10px; }
+.sb-compare__row {
+  display: grid;
+  grid-template-columns: 1fr 72px 1fr;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0;
+  border-top: 1px solid var(--dk-line);
+}
+.sb-compare__row:first-child { border-top: 0; }
+.sb-compare__cell {
+  font-size: var(--sb-t-micro);
+  font-weight: 300;
+  color: var(--dk-ink);
+  text-align: center;
+  word-break: keep-all;
+}
+.sb-compare__key { font-size: 9px; font-weight: 500; color: var(--dk-muted); text-align: center; word-break: keep-all; }
+
+/* 주의 성분 카드 */
+.sb-caution {
+  padding: 16px 18px;
+  border: 1px solid var(--dk-line);
+  border-radius: 18px;
+  background: var(--dk-surface);
+}
+.sb-caution__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: var(--sb-t-body);
+  font-weight: 500;
+  color: var(--dk-ink);
+}
+.sb-caution__mark { color: var(--dk-caution); }
+.sb-caution__desc {
+  margin: 10px 0 0;
+  font-size: var(--sb-t-caption);
+  font-weight: 300;
+  color: var(--dk-muted);
+  line-height: 1.6;
+  word-break: keep-all;
+}
+.sb-caution__rows { margin-top: 12px; display: flex; flex-direction: column; gap: 9px; }
+.sb-caution__row { display: flex; align-items: baseline; gap: 10px; }
+.sb-caution__name {
+  flex: 0 0 80px;
+  font-size: var(--sb-t-micro);
+  font-weight: 500;
+  color: var(--dk-ink);
+  word-break: keep-all;
+}
+.sb-caution__note {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--sb-t-micro);
+  font-weight: 300;
+  color: var(--dk-muted);
+  line-height: 1.5;
+  word-break: keep-all;
+}
+
+/* 비포/애프터 비교 — 손잡이를 끌면 경계가 움직인다 */
+.sb-ba__title { margin: 0; font-size: 22px; font-weight: 400; color: var(--dk-ink); line-height: 1.25; word-break: keep-all; }
+.sb-ba__desc {
+  margin: 6px 0 0;
+  font-size: var(--sb-t-small);
+  font-weight: 300;
+  color: var(--dk-ink-2);
+  line-height: 1.55;
+  word-break: keep-all;
+}
+.sb-ba__photo {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  margin-top: 14px;
+  overflow: hidden;
+  border: 1px solid var(--dk-line);
+  border-radius: var(--sb-r-lg);
+  background: var(--dk-thumb);
+  touch-action: none;
+  user-select: none;
+}
+.sb-ba__layer { position: absolute; inset: 0; }
+.sb-ba__layer img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sb-ba__seam {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: rgba(255, 255, 255, 0.92);
+}
+.sb-ba__handle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1.5px solid var(--dk-ink);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.95);
+  font-size: var(--sb-t-caption);
+  font-weight: 500;
+  color: var(--dk-ink);
+  cursor: ew-resize;
+}
+.sb-ba__badge {
+  position: absolute;
+  bottom: 14px;
+  padding: 4px 10px;
+  border-radius: var(--sb-r-pill);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+}
+.sb-ba__badge--before { left: 14px; background: #fff; color: var(--dk-muted); }
+.sb-ba__badge--after { right: 14px; background: var(--dk-ink); color: #fff; }
+.sb-ba__hint {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--dk-line);
+  border-radius: var(--sb-r-pill);
+  background: rgba(255, 255, 255, 0.92);
+  font-size: var(--sb-t-micro);
+  font-weight: 400;
+  color: var(--dk-ink-2);
+  white-space: nowrap;
+}
+.sb-ba__note { margin: 10px 0 0; font-size: var(--sb-t-micro); font-weight: 300; color: var(--dk-muted); }
+
+/* 도움 여부 카드 */
+.sb-fbcard {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 14px 14px 20px;
+  border: 1px solid var(--dk-line);
+  border-radius: var(--sb-r-2xl);
+  background: rgba(255, 255, 255, 0.9);
+}
+.sb-fbcard__q { flex: 1; min-width: 0; margin: 0; font-size: 15px; font-weight: 400; color: var(--dk-ink); word-break: keep-all; }
+.sb-fbcard__btns { display: flex; flex: 0 0 auto; gap: 8px; }
+.sb-fbcard__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 49px;
+  height: 37px;
+  border: 1px solid var(--dk-line);
+  border-radius: var(--sb-r-md);
+  background: #fff;
+  color: var(--dk-ink-2);
+  cursor: pointer;
+  transition: background var(--sb-dur) var(--sb-ease), color var(--sb-dur) var(--sb-ease);
+}
+.sb-fbcard__btn svg { width: 17px; height: 17px; }
+.sb-fbcard__btn.is-on { border-color: var(--dk-ink); background: var(--dk-ink); color: #fff; }
+
+/* 체크리스트 카드 */
+.sb-checklist {
+  padding: 16px 18px;
+  border: 1px solid var(--dk-line);
+  border-radius: 18px;
+  background: var(--dk-sunken);
+}
+.sb-checklist__title { margin: 0 0 10px; font-size: var(--sb-t-caption); font-weight: 400; color: var(--dk-muted); }
+.sb-checklist__items { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 9px; }
+.sb-checklist__items li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: var(--sb-t-small);
+  font-weight: 300;
+  color: var(--dk-ink);
+  line-height: 1.5;
+  word-break: keep-all;
+}
+.sb-checklist__box {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  width: 15px;
+  height: 15px;
+  border: 1.5px solid var(--dk-line);
+  border-radius: 4px;
+}
+
+/* 담기 요약 · 결제 바 */
+.sb-cta-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 20px;
+  border: 1px solid var(--dk-line);
+  border-radius: 18px;
+  background: var(--dk-surface);
+  box-shadow: none;
+}
+.sb-cta-bar__sum { flex: 1; min-width: 0; }
+.sb-cta-bar__count { margin: 0; font-size: var(--sb-t-micro); font-weight: 300; color: var(--dk-muted); }
+.sb-cta-bar__price { margin: 3px 0 0; font-size: 22px; font-weight: 500; color: var(--dk-ink); }
+.sb-cta-bar__btn {
+  flex: 0 0 auto;
+  padding: 14px 22px;
+  border: 0;
+  border-radius: var(--sb-r-md);
+  background: var(--dk-ink);
+  font-size: var(--sb-t-small);
+  font-weight: 500;
+  color: #fff;
+  cursor: pointer;
+}
+@container (max-width: 480px) {
+  .sb-cta-bar { flex-direction: column; align-items: stretch; }
+}
+
+/* 콘텐츠 카드 가로 모드 — 참고 콘텐츠는 캐러셀 밖(전폭)에 놓이면 썸네일을 왼쪽으로 눕힌다.
+   상품 카드는 폭과 무관하게 언제나 세로형(썸네일 1:1 상단 + 이름·가격 + 담기)이라 제외한다 */
+@container (min-width: 341px) {
+  .sb-content-card { flex-direction: row; align-items: center; }
+  .sb-content-card__thumb { flex: 0 0 148px; width: 148px; aspect-ratio: 16 / 10; }
+  .sb-content-card__meta { flex: 1; min-width: 0; padding: 12px 14px; }
+}
+
+
+/* 단독으로 놓인 상품 카드의 폭 — 캐러셀 안 카드(레지스트리 defaultW 200px)와 같은 값으로
+   고정한다. 본문(이름·가격·담기)은 높이가 고정인데 썸네일만 1:1로 따라 커져서, 폭이 다르면
+   카드 전체 비율(0.588 vs 0.611…)과 썸네일 비중이 어긋난다 — 같은 폭이어야 같은 카드로 보인다.
+   좁은 컨테이너에서는 3/5를 넘지 않게 max-width가 먼저 걸린다.
+   캐러셀·그리드 안의 카드는 슬롯 폭(item.w)이 크기를 정하므로 직계 자식일 때만 건다 */
+.sb-player__item > .sb-product-card2,
+.sb-canvas-item__content > .sb-product-card2 {
+  width: 200px;
+  max-width: 60%;
+}
+
+/* 화면 헤더 (Figma 설문·계획 TopBar) — 뒤로 · 가운데 제목 · 홈 */
+.sb-screen-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 54px;
+  padding: 0 2px;
+  border-bottom: 1px solid var(--dk-line);
+}
+.sb-screen-header__title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--sb-t-title);
+  font-weight: 400;
+  color: var(--dk-ink);
+  text-align: center;
+  word-break: keep-all;
+}
+.sb-screen-header__icon,
+.sb-screen-header__gap {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+}
+.sb-screen-header__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dk-ink);
+  cursor: pointer;
+}
+.sb-screen-header__icon svg { width: 22px; height: 22px; }
+.sb-screen-header__icon:hover { color: var(--dk-ink-2); }
+
+/* 플로팅 버튼 — Figma "진입점: 계획(또는 설문) 페이지 플로팅 버튼".
+   홈·마이는 빠지고 쇼핑 쓰레드 히스토리 하나만 남는다: 68px 원형·흰 면·파란 링·우하단.
+   원본 .clean-floating-actionbar가 알약 바(가운데 정렬·패딩·테두리)를 !important로 고정하므로
+   같은 자리에서 되돌린다 */
+.sb-fabbar {
+  left: auto !important;
+  right: max(16px, calc(50% - var(--sb-viewer-w, 390px) / 2 + 16px));
+  bottom: calc(28px + env(safe-area-inset-bottom));
+  transform: none !important;
+  gap: 0;
+  padding: 0 !important;
+  width: 68px;
+  height: 68px;
+  border: 3px solid var(--dk-ring) !important;
+  border-radius: 50%;
+  background: #fff !important;
+  box-shadow: 0 18px 44px rgba(31, 41, 51, 0.18) !important;
+  backdrop-filter: blur(24px);
+}
+.sb-fabbar__btn {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0;
+  border-radius: 50%;
+  color: var(--dk-ink);
+}
+.sb-fabbar__btn svg { width: 22px; height: 22px; }

@@ -178,9 +178,10 @@ export default function Inspector({
             <TableFieldEditor
               key={selected.id}
               value={fieldValue(f)}
-              headers={selected.props[f.headersKey] ?? ''}
+              headers={f.headersKey ? selected.props[f.headersKey] ?? '' : ''}
+              showHeaders={!!f.headersKey}
               onChange={(v) => updateProps(selected.id, f.key, v)}
-              onChangeHeaders={(v) => updateProps(selected.id, f.headersKey, v)}
+              onChangeHeaders={(v) => { if (f.headersKey) updateProps(selected.id, f.headersKey, v) }}
               textFieldProps={{
                 'data-fkey': f.key,
                 onSelect: (e) => onFieldSelect(f.key, e.target, f.list),

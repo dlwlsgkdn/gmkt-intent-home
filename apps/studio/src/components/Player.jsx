@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { STAGES, DEVICE_PRESETS, resolvePlanCase, uid, visibleProfileItems } from '../lib/store.js'
-import { renderItem } from '../lib/registry.jsx'
+import { isQuestionType, renderItem } from '../lib/registry.jsx'
+import BottomSheet from './ui/BottomSheet.jsx'
 import { BgBlobs, FloatingBar, StudioFab, ViewerDeviceControl } from './Frame.jsx'
 import ThreadPanel from './ThreadPanel.jsx'
 import ProductDetailPanel from './ProductDetailPanel.jsx'
@@ -39,6 +40,7 @@ export default function Player({ api, scenario, resume }) {
   const [productDetail, setProductDetail] = useState(null) // 상품 상세보기 사이드 패널 (null=닫힘)
   const [completed, setCompleted] = useState(() => (resumeThread ? resumeThread.status === 'completed' : false))
   const [threadOrigin, setThreadOrigin] = useState(null) // 쓰레드 히스토리 패널 (null=닫힘)
+  const [qStep, setQStep] = useState(0) // 설문은 질문 하나씩 — 지금 보여줄 질문 인덱스
 
   const stage = STAGES[stageIdx]
 
@@ -49,6 +51,7 @@ export default function Player({ api, scenario, resume }) {
     if (idx === stageIdx) return
     scrollMemRef.current[stage.key] = window.scrollY
     setStageIdx(idx)
+    setQStep(0)
   }
   useEffect(() => {
     const saved = scrollMemRef.current[STAGES[stageIdx].key]
@@ -75,19 +78,15 @@ export default function Player({ api, scenario, resume }) {
     () => stageItems.filter((it) => !it.hidden && !it.parentId),
     [stageItems]
   )
-
-  /* 처음부터 다시 체험 */
-  const restart = () => {
-    scrollMemRef.current = {}
-    setStageIdx(0)
-    setAnswers(defaultAnswersFor(scenario))
-    setExcludedProfile([])
-    setCart([])
-    setCompleted(false)
-    setQuery(scenario.query || '')
-    window.scrollTo(0, 0)
-    api.showToast('처음부터 다시 시작해요.')
-  }
+  /* 설문은 질문을 한 화면에 하나씩 보여준다 — 질문이 아닌 항목(헤더·프로필 패널 등)은
+     매 화면에 그대로 남고, 질문형만 qStep 인덱스의 하나로 걸러진다 */
+  const stepQuestions = useMemo(() => items.filter((it) => isQuestionType(it.type)), [items])
+  const step = stepQuestions.length ? Math.min(qStep, stepQuestions.length - 1) : 0
+  const visibleItems = useMemo(() => {
+    if (stage.key !== 'survey' || stepQuestions.length === 0) return items
+    const current = stepQuestions[step]
+    return items.filter((it) => !isQuestionType(it.type) || it.id === current.id)
+  }, [items, stepQuestions, step, stage.key])
 
   /* 쓰레드 기록 — 설문 진입(마운트) 시 생성되고, 단계 이동/담기/완료 때마다 갱신.
      이어보기(resume)면 새로 만들지 않고 같은 id로 이어서 기록한다 */
@@ -128,7 +127,7 @@ export default function Player({ api, scenario, resume }) {
     )
   }
 
-  const questions = (scenario.stages.survey || []).filter((it) => it.type === 'surveyQuestion')
+  const questions = (scenario.stages.survey || []).filter((it) => isQuestionType(it.type))
   const answerText = (it) => {
     const a = answers[it.id]
     if (a == null || (Array.isArray(a) && a.length === 0)) return '아무거나'
@@ -141,6 +140,22 @@ export default function Player({ api, scenario, resume }) {
     submitQuery: () => next(),
     answers,
     setAnswer: (itemId, value) => setAnswers((prev) => ({ ...prev, [itemId]: value })),
+    /* 화면 헤더의 홈·뒤로 — 뒤로는 질문 → 단계 → 홈 순으로 한 칸씩 물러난다 */
+    goHome: api.goHome,
+    goBack: () => {
+      if (stage.key === 'survey' && step > 0) setQStep(step - 1)
+      else if (stageIdx > 0) prev()
+      else api.goHome()
+    },
+    /* 질문 컴포넌트의 "다음" — 마지막 질문이면 다음 단계(계획)로 넘어간다 */
+    nextQuestion: () => {
+      if (step < stepQuestions.length - 1) {
+        setQStep(step + 1)
+      } else {
+        next()
+      }
+    },
+    cart, // 상품 카드가 "담기 / ✓담음"을 가르는 기준
     addToCart: (name) => {
       setCart((prev) => [...prev, name])
       api.showToast(`"${name}" 을(를) 쓰레드에 담았어요.`)
@@ -185,19 +200,10 @@ export default function Player({ api, scenario, resume }) {
     },
   }
 
-  const answeredCount = (scenario.stages.survey || []).filter(
-    (it) => it.type === 'surveyQuestion' && answers[it.id] != null && String(answers[it.id]).length > 0
-  ).length
-  const questionCount = (scenario.stages.survey || []).filter((it) => it.type === 'surveyQuestion').length
-
   return (
     <>
       <BgBlobs />
-      <FloatingBar
-        onHome={api.goHome}
-        onMy={() => api.showToast('마이 페이지는 프로토타입에서 준비 중이에요.')}
-        onList={(origin) => setThreadOrigin((v) => (v ? null : origin || 'right'))}
-      />
+      <FloatingBar onList={(origin) => setThreadOrigin((v) => (v ? null : origin || 'right'))} />
       <StudioFab label="이 시나리오 편집" onClick={() => api.openBuilder(scenario.id)} />
       <ViewerDeviceControl deviceKey={api.viewerDevice} onChange={api.setViewerDevice} />
 
@@ -226,49 +232,31 @@ export default function Player({ api, scenario, resume }) {
 
       <section className="sb-player min-h-screen relative z-10">
         <div className="sb-phone sb-phone--player" style={{ width: viewer.w }}>
-        <div className="sb-player__head">
-          <div className="sb-player__head-row">
-            <p className="sb-eyebrow">
-              #{scenario.chip} 칩으로 진입 · 탐색 완료
-              {stage.key === 'plan' && matchedPlanCase ? ` · ${matchedPlanCase.name}` : ''}
-            </p>
-            <button type="button" className="sb-player-restart" onClick={restart} title="응답을 초기화하고 처음부터">
-              ↺ 처음부터
-            </button>
-          </div>
-          <h2>{scenario.title}</h2>
-          {stage.key === 'survey' && questionCount > 0 && (
-            <div className="clean-survey-progress sb-player__progress" aria-label="설문 진행률">
-              <div className="clean-survey-progress__meta">
-                <span>{answeredCount} / {questionCount}</span>
-              </div>
-              <div className="clean-survey-progress__track">
-                <div
-                  className="clean-survey-progress__fill"
-                  style={{ width: `${questionCount ? (answeredCount / questionCount) * 100 : 0}%` }}
-                />
-              </div>
-            </div>
-          )}
-        </div>
-
-
         <div className="sb-player__stack">
-          {items.length === 0 && (
+          {visibleItems.length === 0 && (
             <div className="sb-player__empty">
               이 단계에 배치된 컴포넌트가 없어요.<br />
               <button type="button" onClick={() => api.openBuilder(scenario.id)}>스튜디오에서 편집하기</button>
             </div>
           )}
-          {items.map((it) => (
+          {visibleItems.map((it) => (
             <div key={it.id} className="sb-player__item">
               {renderItem(it, { mode: 'player', player: playerApi, profile: api.profile, allItems: stageItems })}
             </div>
           ))}
         </div>
 
+        {/* 하단 내비 — 설문에서는 질문 단위로 넘어가고, 마지막 질문에서만 다음 단계로 */}
         <div className="clean-survey-nav sb-player__nav">
-          {stageIdx > 0 ? (
+          {stage.key === 'survey' && step > 0 ? (
+            <button
+              type="button"
+              className="clean-survey-nav-btn clean-survey-nav-btn--ghost"
+              onClick={() => setQStep(step - 1)}
+            >
+              이전 질문
+            </button>
+          ) : stageIdx > 0 ? (
             <button type="button" className="clean-survey-nav-btn clean-survey-nav-btn--ghost" onClick={prev}>
               이전 단계
             </button>
@@ -277,7 +265,9 @@ export default function Player({ api, scenario, resume }) {
               홈으로
             </button>
           )}
-          {stageIdx < STAGES.length - 1 ? (
+          {/* 설문에서 앞으로 가는 버튼은 질문 컴포넌트 안에 있다 (진행 표시·질문·항목과 한 벌).
+             질문이 하나도 없는 설문만 여기서 다음 단계로 넘어갈 길을 열어 준다 */}
+          {stage.key === 'survey' && stepQuestions.length > 0 ? null : stageIdx < STAGES.length - 1 ? (
             <button type="button" className="clean-plan-submit" onClick={next}>
               맞춤 계획 확인하기
             </button>
@@ -300,23 +290,10 @@ export default function Player({ api, scenario, resume }) {
       {/* 상품 상세보기 사이드 패널 — 외부몰 페이지 iframe (모바일은 전체화면) */}
       <ProductDetailPanel product={productDetail} onClose={() => setProductDetail(null)} />
 
-      {/* 키워드 설명 모달 (원본 keyword-detail 스타일 재사용) */}
+      {/* 키워드 설명 — 설문 날짜/사진 시트와 같은 바텀 시트 문법 */}
       {keyword && (
-        <div className="keyword-detail-modal" role="dialog" aria-modal="true">
-          <button
-            type="button"
-            className="keyword-detail-modal__backdrop"
-            aria-label="키워드 설명 닫기"
-            onClick={() => setKeyword(null)}
-          />
-          <article className="keyword-detail-card">
-            <div className="keyword-detail-card__head">
-              <span>Keyword</span>
-              <button type="button" className="keyword-detail-card__close" aria-label="닫기" onClick={() => setKeyword(null)}>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </div>
-            <h3>{keyword.word}</h3>
+        <BottomSheet title={keyword.word} onClose={() => setKeyword(null)}>
+          <div className="sb-keyword-sheet">
             <p>{keyword.desc || '아직 설명이 등록되지 않은 키워드예요. 탐색 페이지 편집기의 "키워드 사전"에서 추가할 수 있어요.'}</p>
             {keyword.points ? (
               <ul>
@@ -325,8 +302,8 @@ export default function Player({ api, scenario, resume }) {
                 ))}
               </ul>
             ) : null}
-          </article>
-        </div>
+          </div>
+        </BottomSheet>
       )}
     </>
   )

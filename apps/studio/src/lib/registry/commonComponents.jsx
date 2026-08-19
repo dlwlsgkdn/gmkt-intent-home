@@ -1,8 +1,57 @@
 import React from 'react'
 import { Img, kText } from './support.jsx'
 
-/* 공통 콘텐츠 컴포넌트 — 어느 단계에나 놓을 수 있는 텍스트·안내·이미지 */
+/* 공통 콘텐츠 컴포넌트 — 어느 단계에나 놓을 수 있는 화면 헤더·텍스트·안내·이미지 */
 export const COMMON_COMPONENTS = {
+  screenHeader: {
+    label: '화면 헤더',
+    stage: 'common',
+    icon: '🔝',
+    hint: 'Figma 상단 바 — 뒤로 · 화면 제목 · 홈',
+    defaults: { title: '설문 단계', back: true, home: true },
+    fields: [
+      { key: 'title', label: '화면 제목', kind: 'text' },
+      { key: 'back', label: '뒤로 버튼 표시', kind: 'toggle', defaultValue: true },
+      { key: 'home', label: '홈 버튼 표시', kind: 'toggle', defaultValue: true },
+    ],
+    render: (p, ctx) => {
+      const isPlayer = ctx.mode === 'player'
+      // 양쪽 아이콘 자리는 꺼도 폭을 유지한다 — 제목이 가운데에서 밀리지 않게
+      const slot = (shown, node) => (shown ? node : <span className="sb-screen-header__gap" aria-hidden="true" />)
+      return (
+        <div className="sb-screen-header">
+          {slot(
+            p.back !== false,
+            <button
+              type="button"
+              className="sb-screen-header__icon"
+              aria-label="뒤로"
+              onClick={() => { if (isPlayer && ctx.player.goBack) ctx.player.goBack() }}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15 5l-7 7 7 7" />
+              </svg>
+            </button>
+          )}
+          <p className="sb-screen-header__title">{kText(p.title, ctx, 'title')}</p>
+          {slot(
+            p.home !== false,
+            <button
+              type="button"
+              className="sb-screen-header__icon"
+              aria-label="홈으로"
+              onClick={() => { if (isPlayer && ctx.player.goHome) ctx.player.goHome() }}
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 3.2 3 10.4V21h6.2v-5.6h5.6V21H21V10.4z" />
+              </svg>
+            </button>
+          )}
+        </div>
+      )
+    },
+  },
+
   textBlock: {
     label: '텍스트 블록',
     stage: 'common',

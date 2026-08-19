@@ -9,6 +9,23 @@ import { TOKEN_RE, richSpanPresentation, InlineEditor } from '../richtext.jsx'
 
 export const FALLBACK_IMG = './makeup-clone-assets/d9b261330f3ffccf.avif'
 
+/* 설문에서 "한 화면에 하나씩" 넘기는 단위 = 질문형 컴포넌트.
+   이 집합이 단일 원천이다 — 플레이어의 페이지 넘김도 registry.jsx가 re-export하는
+   isQuestionType으로 같은 판정을 쓴다 (여기는 leaf라 registry를 import하지 않는다) */
+export const QUESTION_TYPES = new Set(['surveyQuestion', 'surveyPhoto', 'surveyDate'])
+
+export function isQuestionType(type) {
+  return QUESTION_TYPES.has(type)
+}
+
+/* 이 질문이 설문에서 몇 번째인지 — 진행 표시와 "마지막이면 제출" 판정에 쓴다.
+   ctx.allItems는 캔버스·플레이어 모두 그 단계의 전체 아이템이라 두 모드에서 같은 답이 나온다 */
+export function questionPosition(ctx) {
+  const all = (ctx.allItems || []).filter((it) => isQuestionType(it.type) && !it.hidden && !it.parentId)
+  const index = all.findIndex((it) => it.id === ctx.itemId)
+  return { index: index < 0 ? 0 : index, total: all.length || 1 }
+}
+
 /* 유튜브 URL이면 별도 썸네일 입력 없이 공개 썸네일을 사용한다. */
 export function youtubeThumbnail(rawUrl) {
   const raw = String(rawUrl || '').trim()

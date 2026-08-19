@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { DEVICE_PRESETS, STAGES } from '../lib/store.js'
-import { renderItem } from '../lib/registry.jsx'
+import { isQuestionType, renderItem } from '../lib/registry.jsx'
+import BottomSheet from './ui/BottomSheet.jsx'
 import { fetchLiveThread, recordLiveEvent, sendLiveFeedback, startLiveThread, streamLivePlan, streamLiveSurvey } from '../lib/liveApi.js'
 import { livePlanItems, liveSurveyItems } from '../lib/livePage.js'
 import { BgBlobs, FloatingBar, ViewerDeviceControl } from './Frame.jsx'
@@ -113,6 +114,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const [threadId, setThreadId] = useState(resumeThreadId || null)
   const [liveQuery, setLiveQuery] = useState(query || '')
   const [surveyPage, setSurveyPage] = useState(null)
+  const [qStep, setQStep] = useState(0) // 설문은 질문 하나씩 — 지금 보여줄 질문 인덱스
   const [planPage, setPlanPage] = useState(null)
   const [planKey, setPlanKey] = useState(null) // 계획을 만든 시점의 답변 스냅샷 (변경 감지)
   const [stageKey, setStageKey] = useState('survey')
@@ -192,6 +194,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
       onResult: (page) => {
         if (cancelledRef.current) return
         setSurveyPage(page)
+        setQStep(0)
         setPartial(null)
         setLoading(null)
         setStageKey('survey')
@@ -338,7 +341,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
           if (cancelledRef.current) return
           const restoredQuery = (t.source && t.source.query) || t.title || ''
           if (restoredQuery) setLiveQuery(restoredQuery)
-          if (t.survey) setSurveyPage(t.survey)
+          if (t.survey) { setSurveyPage(t.survey); setQStep(0) }
           if (Array.isArray(t.answers) && t.survey) {
             const map = {}
             for (const entry of t.answers) {
@@ -437,6 +440,22 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     submitQuery: () => {},
     answers,
     setAnswer: (itemId, value) => setAnswers((prev) => ({ ...prev, [itemId]: value })),
+    cart, // 상품 카드가 "담기 / ✓담음"을 가르는 기준
+    /* 화면 헤더의 홈·뒤로 — 뒤로는 질문 → 단계 → 홈 순으로 한 칸씩 물러난다 */
+    goHome: api.goHome,
+    goBack: () => {
+      if (stageKey === 'survey' && qIndex > 0) setQStep(qIndex - 1)
+      else if (stageKey === 'plan') goStage(0)
+      else api.goHome()
+    },
+    /* 질문 컴포넌트의 "다음" — 마지막 질문이면 계획 생성으로 넘어간다 */
+    nextQuestion: () => {
+      if (qIndex < stepQuestions.length - 1) {
+        setQStep(qIndex + 1)
+      } else if (surveyPage) {
+        goPlan({ regenerate: true })
+      }
+    },
     addToCart: (name) => {
       setCart((prev) => [...prev, name])
       api.showToast(`"${name}" 을(를) 쓰레드에 담았어요.`)
@@ -493,11 +512,19 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     [surveyPage, surveyLocked]
   )
   const planItems = useMemo(
-    () => (planPage ? livePlanItems(planPage, { pendingSlots }) : []),
-    [planPage, pendingSlots]
+    () => (planPage ? livePlanItems(planPage, { pendingSlots, query: liveQuery }) : []),
+    [planPage, pendingSlots, liveQuery]
   )
   const allItems = stageKey === 'plan' ? planItems : surveyItems
-  const items = allItems.filter((it) => !it.parentId)
+  const topItems = allItems.filter((it) => !it.parentId)
+  /* 설문은 질문을 한 화면에 하나씩 — 헤더·프로필 패널 같은 비질문 항목은 매 화면에 남는다.
+     생성 중(partial) 미리보기는 도착 순서를 보여줘야 해서 이 걸러내기를 하지 않는다 */
+  const stepQuestions = topItems.filter((it) => isQuestionType(it.type))
+  const qIndex = stepQuestions.length ? Math.min(qStep, stepQuestions.length - 1) : 0
+  const items =
+    stageKey === 'survey' && stepQuestions.length > 0
+      ? topItems.filter((it) => !isQuestionType(it.type) || it.id === stepQuestions[qIndex].id)
+      : topItems
 
   /* 생성 중 부분 페이지 투영 — 최종과 같은 livePage 투영을 그대로 쓴다 (아이템 id가 인덱스
      기반이라 result 확정 때 React가 기존 컴포넌트를 재사용한다). 서버가 검증 실패·드롭으로
@@ -515,7 +542,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         // 희소 배열 그대로 — 2단계 생성에서 상품 섹션이 뼈대 섹션 "사이"(자리 인덱스)로
         // 나중에 끼어든다. forEach는 빈 슬롯을 건너뛰고 인덱스를 보존하므로 id도 안정적이다
         sections: (partial && partial.sections) || [],
-      })
+      }, { query: liveQuery })
       return headline ? items : items.filter((it) => it.id !== 'live-plan-title')
     }
     if (loading.step === 'survey') {
@@ -534,7 +561,6 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const displayStageKey = loading ? (loading.step === 'plan' ? 'plan' : 'survey') : stageKey
   const stageIdx = STAGES.findIndex((s) => s.key === displayStageKey)
   const viewer = DEVICE_PRESETS.find((d) => d.key === api.viewerDevice) || DEVICE_PRESETS[0]
-  const answeredCount = questions.filter((q) => answers[q.id] != null && String(answers[q.id]).length > 0).length
   const planStale = planPage && planKey !== JSON.stringify(answersWire())
 
   /* 피드백(평가) — 현재 단계의 상태와 미전송 여부. 저장은 명시적 버튼 한 번 = 제출 한 번 */
@@ -685,11 +711,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   return (
     <>
       <BgBlobs />
-      <FloatingBar
-        onHome={api.goHome}
-        onMy={() => api.showToast('마이 페이지는 프로토타입에서 준비 중이에요.')}
-        onList={(origin) => setThreadOrigin((v) => (v ? null : origin || 'right'))}
-      />
+      <FloatingBar onList={(origin) => setThreadOrigin((v) => (v ? null : origin || 'right'))} />
       <ViewerDeviceControl deviceKey={api.viewerDevice} onChange={api.setViewerDevice} />
 
       {/* 단계 스테퍼 — 시나리오 플레이어와 같은 골격 */}
@@ -745,19 +767,6 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
               </div>
             </div>
             <h2>{liveQuery || 'AI 실시간 생성 체험'}</h2>
-            {stageKey === 'survey' && questions.length > 0 && !loading && !error && (
-              <div className="clean-survey-progress sb-player__progress" aria-label="설문 진행률">
-                <div className="clean-survey-progress__meta">
-                  <span>{answeredCount} / {questions.length}</span>
-                </div>
-                <div className="clean-survey-progress__track">
-                  <div
-                    className="clean-survey-progress__fill"
-                    style={{ width: `${questions.length ? (answeredCount / questions.length) * 100 : 0}%` }}
-                  />
-                </div>
-              </div>
-            )}
           </div>
 
           {error ? (
@@ -833,7 +842,15 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
                 })}
               </div>
               <div className="clean-survey-nav sb-player__nav">
-                {stageKey === 'plan' ? (
+                {stageKey === 'survey' && qIndex > 0 ? (
+                  <button
+                    type="button"
+                    className="clean-survey-nav-btn clean-survey-nav-btn--ghost"
+                    onClick={() => setQStep(qIndex - 1)}
+                  >
+                    이전 질문
+                  </button>
+                ) : stageKey === 'plan' ? (
                   <button type="button" className="clean-survey-nav-btn clean-survey-nav-btn--ghost" onClick={() => goStage(0)}>
                     이전 단계
                   </button>
@@ -842,7 +859,8 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
                     홈으로
                   </button>
                 )}
-                {stageKey === 'plan' ? (
+                {/* 설문에서 앞으로 가는 버튼은 질문 컴포넌트 안에 있다 (진행 표시·질문·항목과 한 벌) */}
+                {stageKey === 'survey' && stepQuestions.length > 0 ? null : stageKey === 'plan' ? (
                   <button type="button" className="clean-plan-submit" onClick={playerApi.complete}>
                     체험 완료
                   </button>
@@ -966,23 +984,10 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         </div>
       )}
 
-      {/* 키워드 설명 모달 (Player와 동일한 원본 스타일) */}
+      {/* 키워드 설명 — 설문 날짜/사진 시트와 같은 바텀 시트 문법 (Player와 동일) */}
       {keyword && (
-        <div className="keyword-detail-modal" role="dialog" aria-modal="true">
-          <button
-            type="button"
-            className="keyword-detail-modal__backdrop"
-            aria-label="키워드 설명 닫기"
-            onClick={() => setKeyword(null)}
-          />
-          <article className="keyword-detail-card">
-            <div className="keyword-detail-card__head">
-              <span>Keyword</span>
-              <button type="button" className="keyword-detail-card__close" aria-label="닫기" onClick={() => setKeyword(null)}>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </div>
-            <h3>{keyword.word}</h3>
+        <BottomSheet title={keyword.word} onClose={() => setKeyword(null)}>
+          <div className="sb-keyword-sheet">
             <p>{keyword.desc || '아직 설명이 등록되지 않은 키워드예요. 탐색 페이지 편집기의 "키워드 사전"에서 추가할 수 있어요.'}</p>
             {keyword.points ? (
               <ul>
@@ -991,8 +996,8 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
                 ))}
               </ul>
             ) : null}
-          </article>
-        </div>
+          </div>
+        </BottomSheet>
       )}
     </>
   )

@@ -1,8 +1,331 @@
 import React from 'react'
 import { splitList, splitOptions } from '../store.js'
-import { ScrollTrack, isInteractionView, kText } from './support.jsx'
+import BottomSheet from '../../components/ui/BottomSheet.jsx'
+import { ScrollTrack, isInteractionView, kText, questionPosition } from './support.jsx'
 
-/* 설문 단계 컴포넌트 — 헤더·질문·프로필 요약 */
+/* 선택지 목록 — "직접 입력" 선택지의 활성 상태만 지역 상태로 들고 있다.
+   답변 자체는 언제나 ctx.player.answers[itemId] 한 곳에 남는다(빈 문자열 = 고른 뒤 미입력). */
+function SurveyOptions({ p, ctx, opts, shape, isPlayer }) {
+  const optionMains = opts.map((o) => o.main)
+  const answer = isPlayer ? ctx.player.answers[ctx.itemId] : undefined
+  const selectedSet = new Set(
+    p.multi ? (Array.isArray(answer) ? answer : []) : answer != null ? [answer] : []
+  )
+  const typedValues = [...selectedSet].filter((v) => v !== '' && !optionMains.includes(v))
+  const [customOpen, setCustomOpen] = React.useState(false)
+  const customActive = !!p.customOption && (customOpen || typedValues.length > 0)
+  const customText = typedValues[0] || ''
+
+  const isList = shape === 'list'
+  const maxPerRow = isList ? 1 : Math.max(1, Math.min(6, Number(p.maxPerRow) || 4))
+  const horizontalScroll = !isList && p.horizontalScroll !== false
+  const optionLayoutStyle = horizontalScroll
+    ? { gridAutoColumns: `calc(${100 / maxPerRow}% - ${(8 * (maxPerRow - 1)) / maxPerRow}px)` }
+    : { gridTemplateColumns: `repeat(${maxPerRow}, minmax(0, 1fr))` }
+
+  const pick = (value) => {
+    if (!isPlayer || p.locked) return
+    if (p.multi) {
+      const next = new Set(selectedSet)
+      next.has(value) ? next.delete(value) : next.add(value)
+      ctx.player.setAnswer(ctx.itemId, [...next])
+    } else {
+      ctx.player.setAnswer(ctx.itemId, value)
+    }
+  }
+
+  const optionClass = (selected) =>
+    isList
+      ? 'sb-survey-option sb-survey-option--list' + (selected ? ' is-selected' : '')
+      : `sb-survey-option sb-survey-option--${shape} info-card border-2 border-slate-100 transition-all bg-slate-50 hover:border-gmarket-blue text-center flex flex-col items-center justify-center gap-1` +
+        (selected ? ' active-card ring-4 ring-blue-100' : '')
+
+  return (
+    <>
+      <ScrollTrack
+        interactive={horizontalScroll && isInteractionView(ctx)}
+        className={
+          'sb-survey-options' +
+          (horizontalScroll ? ' sb-survey-options--scroll sb-scroll-hide' : ' sb-survey-options--grid')
+        }
+        style={optionLayoutStyle}
+      >
+        {opts.map((opt, i) => {
+          const selected = selectedSet.has(opt.main)
+          return (
+            <button
+              key={i}
+              type="button"
+              className={optionClass(selected)}
+              aria-disabled={!!p.locked}
+              aria-pressed={selected}
+              onClick={() => {
+                setCustomOpen(false)
+                pick(opt.main)
+              }}
+            >
+              <span className={'sb-survey-option__main' + (isList ? '' : ' text-sm font-semibold text-slate-800 whitespace-nowrap')}>{kText(opt.main, ctx)}</span>
+              {opt.sub ? <span className={'sb-survey-option__sub' + (isList ? '' : ' text-[11px] font-normal text-slate-400 whitespace-nowrap')}>{kText(opt.sub, ctx)}</span> : null}
+              {opt.desc ? <span className="sb-survey-option__desc">{kText(opt.desc, ctx)}</span> : null}
+            </button>
+          )
+        })}
+        {/* 직접 입력 선택지 — 고르면 같은 행 안에서 입력칸이 열린다 */}
+        {p.customOption ? (
+          <div
+            className={
+              'sb-survey-option sb-survey-option--list sb-survey-option--custom' +
+              (customActive ? ' is-selected' : '')
+            }
+            role="button"
+            tabIndex={0}
+            aria-pressed={customActive}
+            onClick={() => {
+              if (customActive) return
+              setCustomOpen(true)
+              if (isPlayer && !p.locked && !p.multi) ctx.player.setAnswer(ctx.itemId, '')
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                setCustomOpen(true)
+              }
+            }}
+          >
+            <span className="sb-survey-option__main">{kText(p.customLabel, ctx, 'customLabel')}</span>
+            {customActive ? (
+              <input
+                className="sb-survey-option__input"
+                type="text"
+                autoFocus={isPlayer}
+                value={customText}
+                placeholder={p.customPlaceholder || '직접 입력해주세요'}
+                readOnly={!isPlayer || !!p.locked}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => {
+                  if (!isPlayer || p.locked) return
+                  const text = e.target.value
+                  if (p.multi) {
+                    const kept = [...selectedSet].filter((v) => optionMains.includes(v))
+                    ctx.player.setAnswer(ctx.itemId, text ? [...kept, text] : kept)
+                  } else {
+                    ctx.player.setAnswer(ctx.itemId, text)
+                  }
+                }}
+              />
+            ) : null}
+          </div>
+        ) : null}
+      </ScrollTrack>
+    </>
+  )
+}
+
+/* 기본 샘플 얼굴 — Figma 파일에서 내보낸 이미지 (public/sample-faces) */
+const DEFAULT_SAMPLE_FACES = [
+  './sample-faces/face-1.png',
+  './sample-faces/face-2.png',
+  './sample-faces/face-3.png',
+  './sample-faces/face-4.png',
+]
+
+/* 사진 업로드 질문의 동선: 드롭존 → 선택 옵션 시트 → (카메라·앨범 = 파일 선택 / 샘플 얼굴 = 그리드) */
+function PhotoPicker({ p, ctx, picked }) {
+  const [sheet, setSheet] = React.useState(null) // null | 'options' | 'samples'
+  const fileRef = React.useRef(null)
+  const captureRef = React.useRef(null)
+  const isPlayer = ctx.mode === 'player'
+  const samples = (p.samples ? String(p.samples).split('\n') : DEFAULT_SAMPLE_FACES)
+    .map((u) => u.trim())
+    .filter(Boolean)
+
+  const choose = (url) => {
+    if (isPlayer) ctx.player.setAnswer(ctx.itemId, url)
+    setSheet(null)
+  }
+  const readFile = (e) => {
+    const file = e.target.files && e.target.files[0]
+    e.target.value = '' // 같은 파일 다시 고를 수 있게
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => choose(String(reader.result || ''))
+    reader.readAsDataURL(file)
+  }
+
+  return (
+    <div className="sb-survey-photo">
+      <button
+        type="button"
+        className={'sb-photo-drop' + (picked ? ' is-filled' : '')}
+        onClick={() => { if (isPlayer) setSheet('options') }}
+      >
+        {picked ? (
+          <img className="sb-photo-drop__preview" src={picked} alt={p.placeholder} draggable={false} />
+        ) : (
+          <>
+            <span className="sb-photo-drop__icon">{kText(p.iconLabel, ctx, 'iconLabel')}</span>
+            <span className="sb-photo-drop__label">{kText(p.placeholder, ctx, 'placeholder')}</span>
+          </>
+        )}
+      </button>
+      {/* 실제 파일 선택 — 카메라는 후면/전면 캡처 힌트만 다르다 */}
+      <input ref={fileRef} type="file" accept="image/*" hidden onChange={readFile} />
+      <input ref={captureRef} type="file" accept="image/*" capture="user" hidden onChange={readFile} />
+
+      {sheet === 'options' && (
+        <BottomSheet title="사진 가져오기" onClose={() => setSheet(null)}>
+          <div className="sb-sheet__menu">
+            <button type="button" onClick={() => captureRef.current?.click()}>카메라 촬영</button>
+            <button type="button" onClick={() => fileRef.current?.click()}>앨범에서 사진 선택</button>
+            <button type="button" onClick={() => setSheet('samples')}>샘플 얼굴 선택</button>
+          </div>
+        </BottomSheet>
+      )}
+      {sheet === 'samples' && (
+        <BottomSheet title="샘플 얼굴을 선택해주세요" onClose={() => setSheet(null)}>
+          <div className="sb-sheet__faces">
+            {samples.map((url, i) => (
+              <button type="button" key={i} className="sb-sheet__face" onClick={() => choose(url)}>
+                <img src={url} alt={`샘플 얼굴 ${i + 1}`} draggable={false} />
+              </button>
+            ))}
+          </div>
+        </BottomSheet>
+      )}
+    </div>
+  )
+}
+
+const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
+const pad2 = (n) => String(n).padStart(2, '0')
+const toISO = (y, m, d) => `${y}-${pad2(m + 1)}-${pad2(d)}`
+/* "2026-08-19" → "2026년 8월 19일" (필드에 보여줄 문구) */
+function dateLabel(value) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''))
+  return m ? `${Number(m[1])}년 ${Number(m[2])}월 ${Number(m[3])}일` : ''
+}
+
+/* 날짜 질문의 동선: 필드 → 달력 바텀 시트 → 날짜 탭 = 선택 후 닫힘 */
+function DatePicker({ p, ctx, value }) {
+  const [open, setOpen] = React.useState(false)
+  const parsed = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''))
+  const today = new Date()
+  const [view, setView] = React.useState(() =>
+    parsed ? { y: Number(parsed[1]), m: Number(parsed[2]) - 1 } : { y: today.getFullYear(), m: today.getMonth() }
+  )
+  const isPlayer = ctx.mode === 'player'
+  const first = new Date(view.y, view.m, 1).getDay()
+  const days = new Date(view.y, view.m + 1, 0).getDate()
+  const shift = (delta) => {
+    const next = new Date(view.y, view.m + delta, 1)
+    setView({ y: next.getFullYear(), m: next.getMonth() })
+  }
+  return (
+    <div className="sb-survey-date">
+      <button
+        type="button"
+        className={'sb-date-field' + (value ? ' is-filled' : '')}
+        onClick={() => { if (isPlayer) setOpen(true) }}
+      >
+        <span className="sb-date-field__value">
+          {dateLabel(value) || kText(p.placeholder, ctx, 'placeholder')}
+        </span>
+        <span className="sb-date-field__chevron" aria-hidden="true">›</span>
+      </button>
+
+      {open && (
+        <BottomSheet title={p.sheetTitle || '날짜 선택'} onClose={() => setOpen(false)}>
+          <div className="sb-cal">
+            <div className="sb-cal__head">
+              <button type="button" aria-label="이전 달" onClick={() => shift(-1)}>‹</button>
+              <strong>{view.y}년 {view.m + 1}월</strong>
+              <button type="button" aria-label="다음 달" onClick={() => shift(1)}>›</button>
+            </div>
+            <div className="sb-cal__grid sb-cal__grid--week">
+              {WEEKDAYS.map((w, i) => (
+                <span key={w} className={'sb-cal__wd' + (i === 0 ? ' is-sun' : '')}>{w}</span>
+              ))}
+            </div>
+            <div className="sb-cal__grid">
+              {Array.from({ length: first }, (_, i) => <span key={`b${i}`} />)}
+              {Array.from({ length: days }, (_, i) => {
+                const day = i + 1
+                const iso = toISO(view.y, view.m, day)
+                const selected = iso === value
+                return (
+                  <button
+                    key={day}
+                    type="button"
+                    className={
+                      'sb-cal__day' +
+                      (selected ? ' is-selected' : '') +
+                      ((first + i) % 7 === 0 ? ' is-sun' : '')
+                    }
+                    onClick={() => {
+                      if (isPlayer) ctx.player.setAnswer(ctx.itemId, iso)
+                      setOpen(false)
+                    }}
+                  >
+                    {day}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </BottomSheet>
+      )}
+    </div>
+  )
+}
+
+/* 설문 질문 한 화면의 공통 껍데기 — 진행 표시 + 질문 문구 + 항목 + 다음 버튼.
+   Figma "설문" 섹션의 화면 한 장이 곧 이 컴포넌트 하나다. 질문형 3종(선택지·사진·날짜)이
+   같은 껍데기를 쓰고 안쪽 입력부만 children으로 갈린다. */
+const NAV_DEFAULTS = { nextLabel: '다음', submitLabel: '맞춤 계획 확인하기' }
+const NAV_FIELDS = [
+  { key: 'nextLabel', label: '다음 버튼 문구', kind: 'text' },
+  { key: 'submitLabel', label: '마지막 질문일 때 버튼 문구', kind: 'text' },
+]
+
+function QuestionShell({ p, ctx, children, answered = true, foot = null }) {
+  const { index, total } = questionPosition(ctx)
+  const isLast = index >= total - 1
+  const fieldKey = isLast ? 'submitLabel' : 'nextLabel'
+  const label = (isLast ? p.submitLabel : p.nextLabel) || NAV_DEFAULTS[fieldKey]
+  // 캔버스는 목업이라 항상 활성처럼 보이고, 실제 체험에서만 답을 골라야 넘어간다
+  const blocked = ctx.mode === 'player' && !answered
+  return (
+    <div className="sb-survey-card">
+      <div className="sb-survey-progress" aria-label="설문 진행">
+        <span className="sb-survey-progress__count">{index + 1} / {total}</span>
+        <span className="sb-survey-progress__track">
+          <span className="sb-survey-progress__bar" style={{ width: `${((index + 1) / total) * 100}%` }} />
+        </span>
+      </div>
+      {/* 원본 clean-question-list 골격 유지 — 질문 라벨·선택지 그리드 스타일이 여기 걸려 있다 */}
+      <div className="clean-question-list">
+        <div>
+          <label className="text-sm font-medium text-slate-400 mb-3 block">{kText(p.question, ctx, 'question')}</label>
+          {children}
+        </div>
+      </div>
+      {foot}
+      <button
+        type="button"
+        className="sb-survey-card__next"
+        disabled={blocked}
+        title={blocked ? '먼저 답을 골라주세요' : undefined}
+        onClick={() => {
+          if (ctx.mode === 'player' && ctx.player.nextQuestion) ctx.player.nextQuestion()
+        }}
+      >
+        {kText(label, ctx, fieldKey)}
+      </button>
+    </div>
+  )
+}
+
+/* 설문 단계 컴포넌트 — 헤더·진행 표시·질문·사진/날짜 입력·프로필 요약 */
 export const SURVEY_COMPONENTS = {
   surveyIntro: {
     label: '설문 헤더',
@@ -10,18 +333,18 @@ export const SURVEY_COMPONENTS = {
     icon: '📋',
     hint: '설문 화면 상단 안내 문구',
     defaults: {
-      kicker: 'Personal Brief',
-      title: '상황에 맞는 계획을 위해 몇 가지만 알려주세요',
-      desc: '피부 타입, 무드, 예산을 가볍게 고르면 지금 목적에 맞는 뷰티 플랜을 정리해드려요.',
+      kicker: '',
+      title: '상황에 맞는 계획을 위해\n몇 가지만 알려주세요',
+      desc: '피부 타입, 무드, 예산을 가볍게 고르면 지금 목적에\n맞는 뷰티 플랜을 정리해드려요.',
     },
     fields: [
-      { key: 'kicker', label: '키커', kind: 'text' },
+      { key: 'kicker', label: '키커 (비우면 숨김)', kind: 'text' },
       { key: 'title', label: '제목', kind: 'textarea' },
       { key: 'desc', label: '설명', kind: 'textarea' },
     ],
     render: (p, ctx) => (
-      <div className="clean-info-header sb-static">
-        <span className="clean-info-kicker">{kText(p.kicker, ctx, 'kicker')}</span>
+      <div className="clean-info-header sb-static sb-survey-intro">
+        {p.kicker ? <span className="clean-info-kicker">{kText(p.kicker, ctx, 'kicker')}</span> : null}
         <h2>{kText(p.title, ctx, 'title')}</h2>
         <p>{kText(p.desc, ctx, 'desc')}</p>
       </div>
@@ -32,101 +355,141 @@ export const SURVEY_COMPONENTS = {
     label: '설문 질문',
     stage: 'survey',
     icon: '❓',
-    hint: '선택지 배치 수·도형·가로 스크롤을 조절하는 질문',
+    hint: '선택지 배치 수·도형·직접 입력 선택지를 조절하는 질문',
     defaults: {
-      question: '지금 피부에서 가장 신경 쓰이는 건?',
-      options: '유분 무너짐|오후 T존, 들뜸·건조|각질 부각, 톤 안 맞음|경계 표시, 커버력 부족|잡티',
+      question: '1. 아침 메이크업에 쓸 수 있는 시간은요?',
+      options:
+        '5분 이내 · 최소 루틴|쿠션과 립만 빠르게, 기초는 전날 밤에 끝내요\n10분 · 균형 루틴|베이스와 아이브로우까지 기본을 챙기는 데일리 루틴이에요\n15분 · 꼼꼼 루틴|음영과 블러셔까지 더해 또렷한 인상을 만들어요\n20분 이상 · 풀 메이크업|아이 메이크업과 픽서 세팅까지 완성도 있게 마무리해요',
       multi: false,
       maxPerRow: '4',
-      optionShape: 'card',
-      horizontalScroll: true,
+      optionShape: 'list',
+      horizontalScroll: false,
+      customOption: false,
+      customLabel: '직접 입력할게요',
+      customPlaceholder: '직접 입력해주세요',
       defaultAnswer: '',
       locked: false,
+      ...NAV_DEFAULTS,
     },
     fields: [
       { key: 'question', label: '질문 문구', kind: 'textarea' },
       { key: 'options', label: '선택지', kind: 'options', list: true },
       { key: 'multi', label: '복수 선택 허용', kind: 'toggle' },
       {
-        key: 'maxPerRow',
-        label: '한 줄에 보이는 최대 선택지',
-        kind: 'select',
-        defaultValue: '4',
-        options: ['1', '2', '3', '4', '5', '6'].map((value) => ({ value, label: `${value}개` })),
-      },
-      {
         key: 'optionShape',
         label: '선택지 도형',
         kind: 'select',
-        defaultValue: 'card',
+        defaultValue: 'list',
         options: [
+          { value: 'list', label: '리스트형 (전폭 세로)' },
           { value: 'card', label: '카드형' },
           { value: 'pill', label: '알약형' },
           { value: 'square', label: '정사각형' },
           { value: 'circle', label: '원형' },
         ],
       },
-      { key: 'horizontalScroll', label: '가로 스크롤 사용', kind: 'toggle', defaultValue: true },
+      {
+        key: 'maxPerRow',
+        label: '한 줄에 보이는 최대 선택지 (리스트형 제외)',
+        kind: 'select',
+        defaultValue: '4',
+        options: ['1', '2', '3', '4', '5', '6'].map((value) => ({ value, label: `${value}개` })),
+      },
+      { key: 'horizontalScroll', label: '가로 스크롤 사용 (리스트형 제외)', kind: 'toggle' },
+      { key: 'customOption', label: '"직접 입력" 선택지 추가', kind: 'toggle' },
+      { key: 'customLabel', label: '직접 입력 선택지 문구', kind: 'text' },
+      { key: 'customPlaceholder', label: '직접 입력 안내 문구', kind: 'text' },
       { key: 'defaultAnswer', label: '미리 선택할 답변', kind: 'text' },
       { key: 'locked', label: '미리 선택한 답변 고정', kind: 'toggle' },
+      ...NAV_FIELDS,
     ],
     render: (p, ctx) => {
       const opts = splitOptions(p.options)
       const isPlayer = ctx.mode === 'player'
-      const maxPerRow = Math.max(1, Math.min(6, Number(p.maxPerRow) || 4))
-      const shape = ['card', 'pill', 'square', 'circle'].includes(p.optionShape) ? p.optionShape : 'card'
-      const horizontalScroll = p.horizontalScroll !== false
-      const optionLayoutStyle = horizontalScroll
-        ? { gridAutoColumns: `calc(${100 / maxPerRow}% - ${(8 * (maxPerRow - 1)) / maxPerRow}px)` }
-        : { gridTemplateColumns: `repeat(${maxPerRow}, minmax(0, 1fr))` }
+      const shape = ['list', 'card', 'pill', 'square', 'circle'].includes(p.optionShape)
+        ? p.optionShape
+        : 'list'
       const answer = isPlayer ? ctx.player.answers[ctx.itemId] : undefined
-      const selectedSet = new Set(
-        p.multi ? (Array.isArray(answer) ? answer : []) : answer != null ? [answer] : []
-      )
-      // 원본 clean-home 설문 마크업 구조 그대로 (clean-question-list가 라벨/그리드 스타일 담당)
+      const answered = Array.isArray(answer)
+        ? answer.some((v) => String(v).trim())
+        : String(answer ?? '').trim() !== ''
       return (
-        <div className="clean-question-list">
-          <div>
-            <label className="text-sm font-medium text-slate-400 mb-3 block">{kText(p.question, ctx, 'question')}</label>
-            <ScrollTrack
-              interactive={horizontalScroll && isInteractionView(ctx)}
-              className={
-                'sb-survey-options' +
-                (horizontalScroll ? ' sb-survey-options--scroll sb-scroll-hide' : ' sb-survey-options--grid')
-              }
-              style={optionLayoutStyle}
-            >
-              {opts.map((opt, i) => {
-                const selected = selectedSet.has(opt.main)
-                return (
-                  <button
-                    key={i}
-                    type="button"
-                    className={
-                      `sb-survey-option sb-survey-option--${shape} info-card border-2 border-slate-100 transition-all bg-slate-50 hover:border-gmarket-blue text-center flex flex-col items-center justify-center gap-1` +
-                      (selected ? ' active-card ring-4 ring-blue-100' : '')
-                    }
-                    aria-disabled={!!p.locked}
-                    onClick={() => {
-                      if (!isPlayer || p.locked) return
-                      if (p.multi) {
-                        const next = new Set(selectedSet)
-                        next.has(opt.main) ? next.delete(opt.main) : next.add(opt.main)
-                        ctx.player.setAnswer(ctx.itemId, [...next])
-                      } else {
-                        ctx.player.setAnswer(ctx.itemId, opt.main)
-                      }
-                    }}
-                  >
-                    <span className="text-sm font-semibold text-slate-800 whitespace-nowrap">{kText(opt.main, ctx)}</span>
-                    {opt.sub ? <span className="text-[11px] font-normal text-slate-400 whitespace-nowrap">{kText(opt.sub, ctx)}</span> : null}
-                    {opt.desc ? <span className="sb-survey-option__desc">{kText(opt.desc, ctx)}</span> : null}
-                  </button>
-                )
-              })}
-            </ScrollTrack>
-          </div>
-        </div>
+        <QuestionShell p={p} ctx={ctx} answered={answered}>
+          <SurveyOptions p={p} ctx={ctx} opts={opts} shape={shape} isPlayer={isPlayer} />
+        </QuestionShell>
+      )
+    },
+  },
+
+  surveyPhoto: {
+    label: '사진 업로드 질문',
+    stage: 'survey',
+    icon: '📷',
+    hint: '얼굴 사진 등 이미지를 올려 받는 질문 (점선 드롭존)',
+    defaults: {
+      question: '1. 얼굴 사진을 올려주세요',
+      placeholder: '정면 얼굴 사진을 선택해주세요',
+      iconLabel: '사진 아이콘',
+      samples: '', // 비우면 Figma에서 내보낸 기본 샘플 얼굴 4종
+      photoUrl: '',
+      ...NAV_DEFAULTS,
+    },
+    fields: [
+      { key: 'question', label: '질문 문구', kind: 'textarea' },
+      { key: 'placeholder', label: '드롭존 안내 문구', kind: 'text' },
+      { key: 'iconLabel', label: '아이콘 자리 문구', kind: 'text' },
+      { key: 'samples', label: '샘플 얼굴 이미지 URL (비우면 기본 4종)', kind: 'stringList', list: true },
+      { key: 'photoUrl', label: '선택 완료 미리보기 이미지 URL', kind: 'url' },
+      ...NAV_FIELDS,
+    ],
+    render: (p, ctx) => {
+      const isPlayer = ctx.mode === 'player'
+      // 플레이어에서는 "고른 값"만이 선택 상태다 — 설정된 photoUrl로 폴백하면 해제가 안 된다
+      const picked = isPlayer ? ctx.player.answers[ctx.itemId] || '' : p.photoUrl
+      return (
+        <QuestionShell p={p} ctx={ctx} answered={!!picked}>
+          <PhotoPicker p={p} ctx={ctx} picked={picked} />
+        </QuestionShell>
+      )
+    },
+  },
+
+  surveyDate: {
+    label: '날짜 입력 질문',
+    stage: 'survey',
+    icon: '📅',
+    hint: '날짜를 골라 받는 질문 (탭하면 날짜 선택)',
+    defaults: {
+      question: '1. 소개팅이 언제예요?',
+      placeholder: '날짜를 골라주세요',
+      sheetTitle: '날짜 선택',
+      skipLabel: '',
+      ...NAV_DEFAULTS,
+    },
+    fields: [
+      { key: 'question', label: '질문 문구', kind: 'textarea' },
+      { key: 'placeholder', label: '비어 있을 때 문구', kind: 'text' },
+      { key: 'sheetTitle', label: '날짜 선택 시트 제목', kind: 'text' },
+      { key: 'skipLabel', label: '건너뛰기 문구 (비우면 숨김)', kind: 'text' },
+      ...NAV_FIELDS,
+    ],
+    render: (p, ctx) => {
+      const isPlayer = ctx.mode === 'player'
+      const value = isPlayer ? ctx.player.answers[ctx.itemId] || '' : ''
+      // 건너뛰기는 답 없이 다음으로 보내는 유일한 통로 — 잠금 게이트를 우회한다
+      const foot = p.skipLabel ? (
+        <button
+          type="button"
+          className="sb-survey-card__skip"
+          onClick={() => { if (isPlayer && ctx.player.nextQuestion) ctx.player.nextQuestion() }}
+        >
+          {kText(p.skipLabel, ctx, 'skipLabel')}
+        </button>
+      ) : null
+      return (
+        <QuestionShell p={p} ctx={ctx} answered={!!value} foot={foot}>
+          <DatePicker p={p} ctx={ctx} value={value} />
+        </QuestionShell>
       )
     },
   },

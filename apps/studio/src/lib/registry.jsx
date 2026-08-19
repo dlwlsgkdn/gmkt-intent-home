@@ -18,7 +18,7 @@ import { LAYOUT_COMPONENTS } from './registry/layoutComponents.jsx'
  * lib/registry/support.jsx에 있다. 여기는 조립 + LIBRARY를 아는 렌더 진입점만 남는다.
  */
 
-export { kText } from './registry/support.jsx'
+export { kText, isQuestionType } from './registry/support.jsx'
 
 export const LIBRARY = {
   ...EXPLORE_COMPONENTS,

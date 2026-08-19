@@ -66,6 +66,27 @@
   --sb-tag-c6: #ae3ec9; /* 결과 — 그레이프 */
   --sb-tag-c7: #0b7285; /* 조건 — 시안 */
 
+  /* DDAK 목업 팔레트 (Figma "DDAK 모바일 목업 — 홈·설문·계획" 기준).
+     캔버스/플레이어에 그려지는 설문·계획 컴포넌트 전용 — 스튜디오 크롬은 위의 --sb-*를 쓴다.
+     목업은 원본 화면 색을 그대로 재현해야 해서 중립 램프와 별도로 둔다. */
+  --dk-ink: #1f2933;      /* 제목·본문 */
+  --dk-ink-2: #34465a;    /* 부제·보조 본문 */
+  --dk-muted: #7b8490;    /* 라벨·설명 */
+  --dk-subtle: #828c9e;   /* 질의 인용 */
+  --dk-line: #d9e0e8;     /* 카드 테두리·구분선 */
+  --dk-surface: #fff;     /* 카드 면 */
+  --dk-sunken: #f6f8fa;   /* 가라앉은 면 (화면 배경·비활성 버튼) */
+  --dk-thumb: #eef3f7;    /* 썸네일·칩 바닥 */
+  --dk-mark: #fdf3d4;     /* 중요 배지 */
+  --dk-underline: #ffd200; /* 계획 타이틀 밑줄 바 */
+  --dk-tip: #2e3c4f;      /* 안내 말풍선 */
+  --dk-caution: #c08a2e;  /* 주의 성분 ⚠ */
+  --dk-ring: #007aff;     /* 플로팅 버튼 테두리 링 */
+  --dk-gmarket: #185fa5;
+  --dk-gmarket-soft: #eaf1fb;
+  --dk-oliveyoung: #2e7d32;
+  --dk-oliveyoung-soft: #e8f5e9;
+
   /* 평가 스튜디오가 쓰던 이름 — 전역 토큰의 별칭으로만 남긴다.
      (예전엔 .sb-qa 안에서만 정의돼 다이얼로그처럼 바깥에 뜨는 UI에서 값이 비었다) */
   --sb-qa-blue: var(--sb-info);

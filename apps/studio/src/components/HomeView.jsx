@@ -199,12 +199,7 @@ export default function HomeView({ api }) {
   return (
     <>
       <BgBlobs />
-      <FloatingBar
-        active="home"
-        onHome={() => { setDrawerOpen(false); setThreadOrigin(null) }}
-        onMy={() => api.showToast('마이 페이지는 프로토타입에서 준비 중이에요.')}
-        onList={(origin) => setThreadOrigin((v) => (v ? null : origin || 'right'))}
-      />
+      <FloatingBar onList={(origin) => setThreadOrigin((v) => (v ? null : origin || 'right'))} />
       <StudioFab onClick={() => setDrawerOpen(true)} />
       <div className="sb-topleft">
         <ViewerDeviceControl deviceKey={api.viewerDevice} onChange={api.setViewerDevice} />

@@ -9,6 +9,15 @@ function make(type, props, size) {
   return item
 }
 
+/* 컨테이너 + 자식 — 자식은 같은 배열에 parentId·slot으로 이어 붙인다 (플랫 모델 유지).
+   상품 카드는 캐러셀 안이 제자리라 기본 예제도 가로 스크롤 목록으로 깐다 */
+function nest(container, children) {
+  return [
+    container,
+    ...children.map((child, slot) => ({ ...child, parentId: container.id, slot })),
+  ]
+}
+
 /* 새 시나리오 생성 시 고를 수 있는 템플릿들 (Typeform 템플릿 갤러리 참고) */
 export const TEMPLATES = [
   {
@@ -27,6 +36,7 @@ export const TEMPLATES = [
     chip: '뷰티_브리프',
     build: () => ({
       survey: [
+        make('screenHeader', { title: '설문 단계' }),
         make('profilePanel', {}),
         make('surveyIntro', {}),
         make('surveyQuestion', {}),
@@ -36,20 +46,59 @@ export const TEMPLATES = [
         }),
       ],
       plan: [
+        make('screenHeader', { title: '계획 단계' }),
         make('surveySummary', {}),
         make('planTitle', {}),
         make('planStep', {
           title: '피부결 정돈 — 수분 [[프라이머]]',
-          desc: '유분은 T존에만, 광은 볼에만 남기는 [[프라이머]]부터 시작해요.',
+          subtitle: '유분은 T존에만, 광은 볼에만 남기는 [[프라이머]]부터 시작해요.',
+          points: '제품 수를 줄이고 순서를 단순하게 잡습니다.\n코·눈가처럼 먼저 무너지는 부위 기준으로 고정력을 봅니다.',
         }),
+        ...nest(
+          make('hscroll', { title: '이 단계에 맞는 상품', cardW: '200' }),
+          [
+            make('productCard', {}, { w: 200 }),
+            make('productCard', {
+              name: '논코메도 모공 프라이머',
+              price: '18,500',
+              score: '88',
+              imageUrl: './makeup-clone-assets/42072b0ad4be9333.avif',
+            }, { w: 200 }),
+            make('productCard', {
+              name: '데일리 브라운 섀도우 팔레트',
+              price: '15,200',
+              score: '84',
+              imageUrl: './makeup-clone-assets/d9b261330f3ffccf.avif',
+            }, { w: 200 }),
+          ]
+        ),
         make('planStep', {
-          no: '2',
+          badge: '',
           title: '[[픽서]]로 고정력 마무리',
-          desc: '마지막 단계에서 고정력을 높여 하루 종일 유지해요.',
-          points: '얼굴 20cm 거리에서 분사, T존 위주로 한 번 더',
+          subtitle: '마지막 단계에서 고정력을 높여 하루 종일 유지해요.',
+          points: '얼굴 20cm 거리에서 분사\nT존 위주로 한 번 더',
         }),
-        make('productCard', {}),
+        ...nest(
+          make('hscroll', { title: '마무리 단계 추천', cardW: '200' }),
+          [
+            make('productCard', {
+              name: '롱웨어 세팅 픽서 100ml',
+              price: '12,500',
+              score: '90',
+              external: true,
+              mall: '올리브영',
+              imageUrl: './makeup-clone-assets/8e01e19fb7cf7c96.avif',
+            }, { w: 200 }),
+            make('productCard', {
+              name: '무광 마무리 파우더 팩트',
+              price: '21,000',
+              score: '86',
+              imageUrl: './makeup-clone-assets/42072b0ad4be9333.avif',
+            }, { w: 200 }),
+          ]
+        ),
         make('ctaBar', {}),
+        make('feedbackCard', {}),
       ],
     }),
   },
@@ -61,6 +110,7 @@ export const TEMPLATES = [
     chip: '선물_추천',
     build: () => ({
       survey: [
+        make('screenHeader', { title: '설문 단계' }),
         make('profilePanel', { hidden: '피부타입, 퍼스널 컬러' }),
         make('surveyIntro', {
           kicker: 'Gift Brief',
@@ -82,26 +132,38 @@ export const TEMPLATES = [
         }),
       ],
       plan: [
+        make('screenHeader', { title: '계획 단계' }),
         make('surveySummary', {}),
         make('planTitle', { kicker: 'Gift Plan', title: '마음이 전해지는 선물 플랜' }),
         make('planStep', {
-          no: '1',
           title: '향으로 기억되는 선물',
-          desc: '취향을 크게 타지 않는 무난하면서도 고급스러운 향 카테고리부터 제안해요.',
-          points: '시향 후기 확인, 선물 포장 옵션 체크',
+          subtitle: '취향을 크게 타지 않는 무난하면서도 고급스러운 향 카테고리부터 제안해요.',
+          points: '시향 후기 확인\n선물 포장 옵션 체크',
         }),
-        make('productCard', {
-          name: '딥 모이스처 핸드크림 기프트 세트',
-          price: '32,000',
-          score: '91',
-          external: true,
-          mall: '올리브영',
-        }),
+        ...nest(
+          make('hscroll', { title: '선물하기 좋은 상품', cardW: '200' }),
+          [
+            make('productCard', {
+              name: '딥 모이스처 핸드크림 기프트 세트',
+              price: '32,000',
+              score: '91',
+              external: true,
+              mall: '올리브영',
+            }, { w: 200 }),
+            make('productCard', {
+              name: '퍼퓸 디퓨저 200ml 선물 박스',
+              price: '28,900',
+              score: '87',
+              imageUrl: './makeup-clone-assets/d9b261330f3ffccf.avif',
+            }, { w: 200 }),
+          ]
+        ),
         make('checklist', {
           title: '선물 전 확인 리스트',
           items: '선물 포장 여부, 선물용 영수증, 배송 예정일이 기념일 전인지',
         }),
         make('ctaBar', { countLabel: '선물 구성 2개', price: '48,900원', buttonText: '선물 포장으로 주문하기' }),
+        make('feedbackCard', { question: '이 선물 플랜이 도움이 되셨나요?' }),
       ],
     }),
   },
