@@ -8,9 +8,10 @@ export const COMMON_COMPONENTS = {
     stage: 'common',
     icon: '🔝',
     hint: 'Figma 상단 바 — 뒤로 · 화면 제목 · 홈',
-    defaults: { title: '설문 단계', back: true, home: true },
+    defaults: { title: '설문 단계', back: true, home: true, ai: false },
     fields: [
       { key: 'title', label: '화면 제목', kind: 'text' },
+      { key: 'ai', label: 'AI 생성 표식(✦) 표시', kind: 'toggle' },
       { key: 'back', label: '뒤로 버튼 표시', kind: 'toggle', defaultValue: true },
       { key: 'home', label: '홈 버튼 표시', kind: 'toggle', defaultValue: true },
     ],
@@ -33,7 +34,26 @@ export const COMMON_COMPONENTS = {
               </svg>
             </button>
           )}
-          <p className="sb-screen-header__title">{kText(p.title, ctx, 'title')}</p>
+          <p className="sb-screen-header__title">
+            {p.ai ? (
+              <span className="sb-screen-header__ai" title="AI가 실시간으로 만드는 쓰레드">✦</span>
+            ) : null}
+            {kText(p.title, ctx, 'title')}
+          </p>
+          {/* 플레이어가 넘긴 화면 액션 (예: 라이브 생성의 평가·새로 생성) — 홈 왼쪽에 붙는다 */}
+          {(isPlayer && ctx.player.headerActions ? ctx.player.headerActions : []).map((a) => (
+            <button
+              key={a.key}
+              type="button"
+              className={'sb-screen-header__icon' + (a.active ? ' is-on' : '')}
+              aria-label={a.label}
+              title={a.title || a.label}
+              disabled={!!a.disabled}
+              onClick={a.onClick}
+            >
+              {a.icon}
+            </button>
+          ))}
           {slot(
             p.home !== false,
             <button

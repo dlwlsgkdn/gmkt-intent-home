@@ -1614,3 +1614,15 @@
   color: var(--dk-ink);
 }
 .sb-fabbar__btn svg { width: 22px; height: 22px; }
+
+/* 화면 헤더 — AI 생성 표식과 플레이어 액션(평가·새로 생성) */
+.sb-screen-header__ai {
+  margin-right: 6px;
+  color: var(--sb-ai);
+  font-size: var(--sb-t-small);
+  vertical-align: 2px;
+}
+.sb-screen-header__icon.is-on { color: var(--sb-ai); }
+.sb-screen-header__icon:disabled { opacity: 0.35; cursor: not-allowed; }
+/* 이모지 액션은 svg가 아니라 글자라 크기를 따로 잡는다 */
+.sb-screen-header__icon { font-size: var(--sb-t-body); line-height: 1; }

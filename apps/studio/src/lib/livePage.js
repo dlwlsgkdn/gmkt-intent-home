@@ -10,7 +10,7 @@ import { joinTextList } from './store.js'
 export function liveSurveyItems(page) {
   const items = [
     // 화면 헤더는 클라이언트 소유 — LLM 산출물과 무관하게 생성 시작부터 늘 그린다
-    { id: 'live-survey-header', type: 'screenHeader', props: { title: '설문 단계', back: true, home: true } },
+    { id: 'live-survey-header', type: 'screenHeader', props: { title: '설문 단계', back: true, home: true, ai: true } },
     {
       id: 'live-survey-intro',
       type: 'surveyIntro',
@@ -48,7 +48,7 @@ export function livePlanItems(page, opts = {}) {
   const pendingSlots = opts.pendingSlots || []
   const items = [
     // 화면 헤더는 클라이언트 소유 — LLM 산출물과 무관하게 생성 시작부터 늘 그린다
-    { id: 'live-plan-header', type: 'screenHeader', props: { title: '계획 단계', back: true, home: true } },
+    { id: 'live-plan-header', type: 'screenHeader', props: { title: '계획 단계', back: true, home: true, ai: true } },
     {
       id: 'live-plan-title',
       type: 'planTitle',

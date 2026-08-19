@@ -594,6 +594,27 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const fbDirty =
     stageFeedbackSignature(stageFb) !== (fbSavedRef.current[stageKey] ?? stageFeedbackSignature(emptyStageFeedback()))
   const fbAvailable = !loading && !error && (stageKey === 'plan' ? !!planPage : !!surveyPage)
+  /* 화면 헤더 오른쪽 액션 — 옛 상단 크롬(평가·새로 생성)이 헤더로 들어왔다.
+     playerApi 리터럴은 fbMode/fbAvailable보다 앞이라 여기서 뒤늦게 매단다 */
+  playerApi.headerActions = [
+    {
+      key: 'feedback',
+      icon: '💬',
+      label: '평가',
+      title: '생성된 페이지에 별점과 코멘트를 남겨요 — 저장하면 쓰레드 기록에 함께 남아요',
+      active: fbMode,
+      disabled: !fbAvailable,
+      onClick: () => setFbMode((v) => !v),
+    },
+    {
+      key: 'regen',
+      icon: '↺',
+      label: '새로 생성',
+      title: '같은 검색어로 새 쓰레드를 시작해 처음부터 다시 생성해요',
+      disabled: !liveQuery || !!loading,
+      onClick: () => api.playLive(liveQuery),
+    },
+  ]
 
   const submitFeedback = async ({ quiet = false } = {}) => {
     if (!threadId || fbSending) return false
@@ -754,37 +775,6 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
       <section className="sb-player sb-player--live min-h-screen relative z-10">
         <div className={'sb-live-annotate' + (fbMode && fbAvailable ? ' is-on' : '')}>
         <div className="sb-phone sb-phone--player" ref={phoneRef} style={{ width: viewer.w }}>
-          <div className="sb-player__head">
-            <div className="sb-player__head-row">
-              {/* 상시 모드 배지 — 이 체험이 실시간 생성임을 저니 내내 보여준다 */}
-              <p className="sb-eyebrow sb-live-eyebrow">
-                <span className="sb-live-eyebrow__spark" aria-hidden="true">✦</span>
-                AI 실시간 생성{loading ? ' · 생성 중' : pendingSlots.length > 0 ? ' · 추천 찾는 중' : ''}
-              </p>
-              <div className="sb-player__head-actions">
-                <button
-                  type="button"
-                  className={'sb-player-restart sb-live-fb-toggle' + (fbMode ? ' is-on' : '')}
-                  title="생성된 페이지에 별점과 코멘트를 남겨요 — 저장하면 쓰레드 기록에 함께 남아요"
-                  disabled={!fbAvailable}
-                  onClick={() => setFbMode((v) => !v)}
-                >
-                  💬 평가{fbMode ? ' 닫기' : ''}
-                </button>
-                <button
-                  type="button"
-                  className="sb-player-restart"
-                  title="같은 검색어로 새 쓰레드를 시작해 처음부터 다시 생성해요"
-                  disabled={!liveQuery || !!loading}
-                  onClick={() => api.playLive(liveQuery)}
-                >
-                  ↺ 새로 생성
-                </button>
-              </div>
-            </div>
-            <h2>{liveQuery || 'AI 실시간 생성 체험'}</h2>
-          </div>
-
           {error ? (
             <LiveError error={error} onRetry={retry} fallbacks={fallbacks} onPlayScenario={api.playScenario} />
           ) : loading ? (
