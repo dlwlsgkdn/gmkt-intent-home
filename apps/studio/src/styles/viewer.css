@@ -1443,6 +1443,29 @@
 }
 .sb-ba__note { margin: 10px 0 0; font-size: var(--sb-t-micro); font-weight: 300; color: var(--dk-muted); }
 
+/* 가상 메이크업 합성 — AFTER 레이어에 룩 색조(tone)를 올린다. 립·볼 자리에 색을 얹고
+   전체를 살짝 화사하게 보정하는 화면 표현이다 (합성 엔진이 아니라 미리보기 — 고지 문구와 한 벌) */
+.sb-ba__layer--synth { --sb-ba-tint: transparent; }
+.sb-ba__layer--synth img { filter: saturate(1.2) contrast(1.04) brightness(1.03); }
+.sb-ba__layer--synth::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  mix-blend-mode: soft-light;
+  background:
+    radial-gradient(34% 20% at 50% 71%, color-mix(in srgb, var(--sb-ba-tint) 78%, transparent), transparent 72%),
+    radial-gradient(24% 13% at 27% 55%, color-mix(in srgb, var(--sb-ba-tint) 48%, transparent), transparent 74%),
+    radial-gradient(24% 13% at 73% 55%, color-mix(in srgb, var(--sb-ba-tint) 48%, transparent), transparent 74%),
+    linear-gradient(180deg, color-mix(in srgb, var(--sb-ba-tint) 14%, transparent), transparent 60%);
+}
+.sb-ba__layer--synth[data-tone='coral'] { --sb-ba-tint: #ff7a60; }
+.sb-ba__layer--synth[data-tone='rose'] { --sb-ba-tint: #e8668c; }
+.sb-ba__layer--synth[data-tone='red'] { --sb-ba-tint: #d63440; }
+.sb-ba__layer--synth[data-tone='peach'] { --sb-ba-tint: #ff9e78; }
+.sb-ba__layer--synth[data-tone='brown'] { --sb-ba-tint: #96604a; }
+.sb-ba__layer--synth[data-tone='plum'] { --sb-ba-tint: #92498c; }
+
 /* 도움 여부 카드 */
 .sb-fbcard {
   display: flex;

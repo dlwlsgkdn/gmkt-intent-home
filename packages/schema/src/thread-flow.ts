@@ -81,12 +81,31 @@ export type ThreadEventBody = z.infer<typeof ThreadEventBody>
 
 /* ── 와이어 페이지 (BFF → FE) ────────────────────────────────────────── */
 
-export const SurveyQuestionWire = z.object({
-  id: z.string(),
-  question: z.string(),
-  options: z.array(z.string()).min(2).max(6),
-  multi: z.boolean(),
-})
+/** 질문 유형 — choice(선택지, 기본) | photo(얼굴 사진 업로드).
+ * photo는 선택지가 없고 FE가 사진 업로드 컴포넌트(surveyPhoto)로 투영한다. 구 응답에는
+ * 필드 자체가 없으므로 optional — 없으면 choice로 읽는다 */
+export const SurveyQuestionKind = z.enum(['choice', 'photo'])
+export type SurveyQuestionKind = z.infer<typeof SurveyQuestionKind>
+
+/** 사진 질문의 답 — **사진 원본은 서버로 보내지 않는다**. 기기에 남기고, 와이어에는 제출
+ * 표식만 실린다 (데이터 URL은 수백 KB라 스텝 저장·프롬프트에 실을 것이 못 된다).
+ * 계획 생성 프롬프트도 이 표식으로 "사진을 올렸다"만 안다 */
+export const PHOTO_ANSWER = '사진 제출됨'
+
+export const SurveyQuestionWire = z
+  .object({
+    id: z.string(),
+    question: z.string(),
+    kind: SurveyQuestionKind.optional(),
+    options: z.array(z.string()).max(6),
+    multi: z.boolean(),
+    /** photo 전용 — 드롭존 안내 문구 (비면 FE 기본값) */
+    placeholder: z.string().optional(),
+  })
+  .refine((q) => q.kind === 'photo' || q.options.length >= 2, {
+    message: '선택지 질문은 선택지가 2개 이상이어야 합니다',
+    path: ['options'],
+  })
 export type SurveyQuestionWire = z.infer<typeof SurveyQuestionWire>
 
 export const SurveyPageWire = z.object({
@@ -124,8 +143,24 @@ export const PlanContentItem = z.object({
 })
 export type PlanContentItem = z.infer<typeof PlanContentItem>
 
+/** 가상 메이크업 결과의 색조 — FE가 올린 사진 위에 올려 보여줄 톤 프리셋 키.
+ * 값 집합은 FE 프리셋(registry beforeAfter TONE_PRESETS)과 한 벌이다 */
+export const LOOK_TONES = ['coral', 'rose', 'red', 'peach', 'brown', 'plum'] as const
+export const LookTone = z.enum(LOOK_TONES)
+export type LookTone = z.infer<typeof LookTone>
+
 export const PlanSectionWire = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('guide'), title: z.string(), body: z.string() }),
+  /* 가상 메이크업 결과 — 사진 질문에 답한 쓰레드에서만 만들어진다. FE는 기기에 남은 사진을
+     BEFORE로, 같은 사진에 tone 프리셋을 올린 것을 AFTER로 비포/애프터 컴포넌트에 투영한다
+     (합성은 화면에서 — 서버는 어떤 룩인지만 정한다) */
+  z.object({
+    kind: z.literal('look'),
+    title: z.string(),
+    desc: z.string(),
+    tone: LookTone,
+    points: z.array(z.string()).max(4).optional(),
+  }),
   z.object({
     kind: z.literal('products'),
     title: z.string(),

@@ -231,6 +231,50 @@ try {
   const planB = await sse(`/api/threads/${startB.threadId}/plan`, { answers: [{ questionId: 'q1', choices: ['건성'] }] }, plain)
   ok(last(planB, 'result')?.data?.page?.sections?.length === 3, 'legacy 계획 생성 정상')
 
+  // ── 8.5 가상 메이크업 저니 — 사진 질문 스캐폴드 + 가상 메이크업 결과(look) 섹션 ──
+  console.log('8.5) 가상 메이크업 저니 (graph)')
+  const startM = await fetch(BFF + '/api/threads', {
+    method: 'POST',
+    headers: H,
+    body: JSON.stringify({ query: '소개팅 가상 메이크업 해보고 싶어' }),
+  }).then((r) => r.json())
+  const svM = await sse(`/api/threads/${startM.threadId}/survey`, {}, H)
+  const svMPage = last(svM, 'result')?.data?.page
+  ok(svMPage?.questions?.length === 3, `사진 질문 포함 3문항 (${svMPage?.questions?.length})`)
+  const photoQ = svMPage?.questions?.[0]
+  ok(photoQ?.kind === 'photo' && photoQ?.id === 'p1', `첫 질문이 사진 질문 (${photoQ?.id}/${photoQ?.kind})`)
+  ok((photoQ?.options ?? []).length === 0, '사진 질문은 선택지가 없다')
+  ok(svMPage?.questions?.[1]?.id === 'q1', '선택지 질문 id는 q1부터 — 자리만 한 칸 밀린다')
+  ok(
+    svM.some((e) => e.event === 'question' && e.data.index === 0 && e.data.question?.kind === 'photo'),
+    '사진 질문이 스트리밍 index 0으로 도착',
+  )
+  ok(
+    svM.some((e) => e.event === 'question' && e.data.index === 1 && e.data.question?.id === 'q1'),
+    '스트리밍 자리도 확정 페이지와 같게 밀린다',
+  )
+  const planM = await sse(
+    `/api/threads/${startM.threadId}/plan`,
+    {
+      answers: [
+        { questionId: 'p1', choices: ['사진 제출됨'] }, // 사진 원본이 아니라 표식만 온다
+        { questionId: 'q1', choices: ['데이트'] },
+      ],
+    },
+    H,
+  )
+  const planMPage = last(planM, 'result')?.data?.page
+  ok(planMPage?.sections?.[0]?.kind === 'look', `가상 메이크업 결과가 계획 맨 앞 (${planMPage?.sections?.[0]?.kind})`)
+  const look = planMPage?.sections?.[0]
+  ok(look?.tone === 'coral', `룩 색조 전달 (${look?.tone})`)
+  ok((look?.points ?? []).length === 2, `룩 포인트 유지 (${(look?.points ?? []).length})`)
+  ok(planMPage?.sections?.some((s) => s.kind === 'products'), 'look과 상품 섹션이 함께 병합')
+  {
+    const skCall = (await llmCalls()).filter((c) => c.type === 'skeleton').at(-1)
+    ok(skCall?.user?.includes('얼굴 사진을 올렸습니다'), '사진 제출이 계획 가변부에 말로 실림')
+    ok(!skCall?.user?.includes('data:image'), '사진 원본은 프롬프트에 실리지 않는다')
+  }
+
   // ── 9. 파이프라인 스튜디오 API (페이즈 4) ──
   console.log('9) 파이프라인 스튜디오 API')
   const pipe = await fetch(BFF + '/api/admin/pipeline').then((r) => r.json())
@@ -381,7 +425,7 @@ try {
   const legacyM = engineMetrics?.engines?.find((e) => e.engine === 'legacy')
   ok(lg?.count >= 1, `전환 계기판 — langgraph 표본 (${lg?.count})`)
   ok(legacyM?.count >= 1, `전환 계기판 — legacy 표본 (${legacyM?.count})`)
-  ok(lg?.promptVersions?.includes('v15'), 'promptVersion 각인 (v15)')
+  ok(lg?.promptVersions?.includes('v16'), 'promptVersion 각인 (v16)')
 } finally {
   shutdown()
 }

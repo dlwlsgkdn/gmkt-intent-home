@@ -79,12 +79,17 @@ pending(재생성 게이트)으로 유지한다. **`skeleton`은 계획 전용 �
 | `llm_failed` | 호출 실패·파싱 실패 (SDK 자동 재시도 2회 후) | ○ |
 | `internal` | 그 외 서버 오류 (core 연결 등) | ○ |
 
-**와이어 페이지 형태** (스튜디오 레지스트리 투영 기준: question→`surveyQuestion`, guide→`planStep`, products→`productCard`, contents→`videoCard`/`articleCard`, steps→`checklist`):
+**와이어 페이지 형태** (스튜디오 레지스트리 투영 기준: question→`surveyQuestion`(사진 질문은 `surveyPhoto`), guide→`planStep`, look→`beforeAfter`, products→`productCard`, contents→`videoCard`/`articleCard`, steps→`checklist`):
 
 ```ts
-SurveyPageWire = { intro, questions: [{ id, question, options[2..6], multi }] }
+SurveyPageWire = { intro, questions: [{ id, question, kind?: 'choice'|'photo', options[0..6], multi, placeholder? }] }
+// kind 생략 = choice (구 응답 호환). kind='photo'는 선택지가 없는 얼굴 사진 질문 — id는 p1, 언제나 첫
+// 질문 자리다. **사진 원본은 서버로 오지 않는다**: 기기에 남고 답변에는 표식('사진 제출됨')만 실린다
+// (데이터 URL을 스텝·프롬프트에 싣지 않기 위해서 — 계획 프롬프트는 "사진을 올렸다"만 안다)
 PlanPageWire   = { headline, summary, sections: [
                    { kind: 'guide',    title, body } |                                 // 단계 안내 — 2~3개(다단계 계획), FE가 단계 번호를 붙인다
+                   { kind: 'look',     title, desc, tone, points?[0..4] } |            // 가상 메이크업 결과 — 사진 질문에 답한 쓰레드에서만. tone = coral|rose|red|peach|brown|plum
+                                                                                       // FE가 기기에 남은 사진을 BEFORE, 같은 사진에 tone을 올린 것을 AFTER로 비포/애프터 투영 (합성은 화면에서)
                    { kind: 'products', title, reason, products: CatalogProduct[] } |  // 카탈로그 id 검증 + 웹 상품 URL 검증 통과분만
                    { kind: 'contents', title, reason, items: PlanContentItem[] } |    // 참고 콘텐츠 — 웹 검색으로 확인한 게시글·영상 (URL 검증 통과분만)
                    { kind: 'steps',    title, steps[] } ] }

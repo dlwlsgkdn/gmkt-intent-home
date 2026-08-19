@@ -20,14 +20,14 @@ import {
   PlanSectionPartialGen,
   PlanSkeletonSectionGen,
   ProductsSectionGen,
-  SurveyQuestionGen,
-  SurveyQuestionPartialGen,
+  buildSurveyPage,
   completeSearchSection,
   groundContentsSection,
   groundProductsSection,
   isSlotKind,
   mergePlanSections,
   slotIndexesOf,
+  surveyStreamHandlers,
 } from '@ddak/pipeline'
 import { CoreClientService } from '../core-client.service'
 import { LlmService } from '../llm/llm.service'
@@ -93,8 +93,8 @@ export class ThreadsService {
     return { threadId: thread.id }
   }
 
-  /** 설문 페이지 생성 (LLM #1) — 생성 결과에 BFF가 질문 id를 부여한다.
-   * stream 핸들러가 있으면 질문 하나가 완성될 때마다 미리 내보낸다 (id 부여 규칙 동일 = q{i+1}).
+  /** 설문 페이지 생성 (LLM #1) — 생성 결과에 BFF가 질문 id를 부여한다 (선택지 질문 q1.., 사진 질문 p1).
+   * stream 핸들러가 있으면 질문 하나가 완성될 때마다 미리 내보낸다 (자리 규칙은 buildSurveyPage와 한 벌).
    * engineOverride(x-ddak-engine 헤더)·core KV `engine` 플래그가 langgraph면 그래프 엔진에 위임 */
   async generateSurvey(
     threadId: string,
@@ -110,39 +110,10 @@ export class ThreadsService {
     const { content, meta } = await this.llm.generateSurvey(
       intent,
       profile,
-      stream && {
-        arrayKey: 'questions',
-        headKeys: ['intro'],
-        onHead: (key, value) => {
-          if (key === 'intro') stream.onIntro?.(value)
-        },
-        onHeadPartial: (key, value) => {
-          if (key === 'intro') stream.onIntro?.(value)
-        },
-        onElement: (element, index) => {
-          const parsed = SurveyQuestionGen.safeParse(element)
-          if (parsed.success) stream.onQuestion?.({ id: `q${index + 1}`, ...parsed.data }, index)
-        },
-        // 자라는 중인 질문 — 문구가 나오기 시작하면 토큰 단위로 같은 index에 재전송한다
-        onElementPartial: (element, index) => {
-          const parsed = SurveyQuestionPartialGen.safeParse(element)
-          if (!parsed.success || !parsed.data.question) return
-          stream.onQuestion?.(
-            {
-              id: `q${index + 1}`,
-              question: parsed.data.question,
-              options: parsed.data.options ?? [],
-              multi: parsed.data.multi ?? false,
-            },
-            index,
-          )
-        },
-      },
+      stream && surveyStreamHandlers({ onIntro: stream.onIntro, onQuestion: stream.onQuestion }),
     )
-    const page: SurveyPageWire = {
-      intro: content.intro,
-      questions: content.questions.map((q, i) => ({ id: `q${i + 1}`, ...q })),
-    }
+    // 질문 자리(사진 질문이 있으면 맨 앞)는 스트리밍과 같은 규칙으로 — @ddak/pipeline 소유
+    const page: SurveyPageWire = buildSurveyPage(content)
     await this.persist(
       'survey',
       this.core.upsertStep(threadId, SEQ.survey, { stage: 'survey', payload: { page }, llmMeta: meta }),

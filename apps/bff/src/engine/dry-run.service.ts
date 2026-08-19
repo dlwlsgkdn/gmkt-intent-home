@@ -8,6 +8,7 @@ import {
   assembleLedger,
   buildPlanProductsRequest,
   buildPlanSkeletonRequest,
+  buildSurveyPage,
   buildSurveyRequest,
   groundContentsSection,
   groundProductsSection,
@@ -97,10 +98,8 @@ export class PipelineDryRunService {
         effort: this.effortOf('survey', 'low'),
         user,
       })
-      const survey: SurveyPageWire = {
-        intro: content.intro,
-        questions: content.questions.map((q, i) => ({ id: `q${i + 1}`, ...q })),
-      }
+      // 자리 규칙(사진 질문 맨 앞)은 운영 경로와 한 벌 — @ddak/pipeline buildSurveyPage 소유
+      const survey: SurveyPageWire = buildSurveyPage(content)
       return {
         stageId: body.stageId,
         ledger,

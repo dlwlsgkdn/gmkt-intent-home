@@ -3,7 +3,7 @@ import { DEVICE_PRESETS, STAGES } from '../lib/store.js'
 import { isQuestionType, renderItem } from '../lib/registry.jsx'
 import BottomSheet from './ui/BottomSheet.jsx'
 import { fetchLiveThread, recordLiveEvent, sendLiveFeedback, startLiveThread, streamLivePlan, streamLiveSurvey } from '../lib/liveApi.js'
-import { livePlanItems, liveSurveyItems } from '../lib/livePage.js'
+import { PHOTO_ANSWER, isPhotoValue, livePlanItems, liveSurveyItems } from '../lib/livePage.js'
 import { BgBlobs, FloatingBar, ViewerDeviceControl } from './Frame.jsx'
 import ThreadPanel from './ThreadPanel.jsx'
 import ProductDetailPanel from './ProductDetailPanel.jsx'
@@ -42,10 +42,50 @@ function wireFromAnswers(questions, answersMap) {
   return questions
     .map((q) => {
       const a = answersMap[q.id]
+      // 사진 답은 표식만 보낸다 — 원본(데이터 URL)은 기기에 남는다 (livePage PHOTO_ANSWER 주석)
+      if (q.kind === 'photo') return { questionId: q.id, choices: a ? [PHOTO_ANSWER] : [] }
       const choices = Array.isArray(a) ? a.filter(Boolean) : a != null && String(a).length > 0 ? [a] : []
       return { questionId: q.id, choices }
     })
     .filter((entry) => entry.choices.length > 0)
+}
+
+/* 올린 얼굴 사진의 기기 보관 — 서버로 보내지 않는 값이라, 이어보기로 돌아왔을 때 계획의
+   가상 메이크업 결과를 다시 그리려면 여기 남은 것이 유일한 재료다. 쓰레드별로 최근 몇 건만
+   두고(한 건 수십 KB), 저장 실패(용량 초과 등)는 체험을 막지 않는다 — 보관은 편의다 */
+const PHOTO_STORE_KEY = 'ddak-live-photos-v1'
+const PHOTO_STORE_LIMIT = 5
+
+function readPhotoStore() {
+  try {
+    return JSON.parse(localStorage.getItem(PHOTO_STORE_KEY) || '{}') || {}
+  } catch {
+    return {}
+  }
+}
+
+function savePhotoStore(threadId, photos) {
+  if (!threadId) return
+  try {
+    const store = readPhotoStore()
+    if (Object.keys(photos).length === 0) delete store[threadId]
+    else store[threadId] = photos
+    // 오래된 쓰레드부터 버린다 — id가 스노우플레이크라 문자열 정렬 = 시간순
+    const keys = Object.keys(store).sort()
+    for (const stale of keys.slice(0, Math.max(0, keys.length - PHOTO_STORE_LIMIT))) delete store[stale]
+    localStorage.setItem(PHOTO_STORE_KEY, JSON.stringify(store))
+  } catch {
+    /* 용량 초과 등 — 보관 실패는 조용히 넘어간다 */
+  }
+}
+
+/** 사진 질문의 답 중 실제 이미지만 추린다 (표식·빈 값 제외) */
+function photoAnswersOf(questions, answersMap) {
+  const photos = {}
+  for (const q of questions) {
+    if (q.kind === 'photo' && isPhotoValue(answersMap[q.id])) photos[q.id] = answersMap[q.id]
+  }
+  return photos
 }
 
 /* 생성 대기 스켈레톤 — 라이브 전용 연출. 시나리오 체험과 "다르게 느껴지는" 것이 목적이다 */
@@ -181,6 +221,16 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
 
   const questions = (surveyPage && surveyPage.questions) || []
   const answersWire = () => wireFromAnswers(questions, answers)
+  /* 계획의 가상 메이크업 결과가 쓰는 사진 — 설문에서 고른 첫 사진 답 (기기 안에서만 오간다) */
+  const livePhotos = photoAnswersOf(questions, answers)
+  const livePhoto = Object.values(livePhotos)[0] || ''
+  /* 워크스페이스 쓰레드 기록에는 사진 원본을 남기지 않는다 — 기록은 localStorage에 저장되고
+     서버로도 동기화되는 값이라, 와이어와 같은 표식으로 바꿔 싣는다 */
+  const answersForRecord = () => {
+    const out = { ...answers }
+    for (const q of questions) if (q.kind === 'photo' && out[q.id] != null) out[q.id] = PHOTO_ANSWER
+    return out
+  }
 
   const generateSurvey = (id) => {
     setError(null)
@@ -359,6 +409,12 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
               const q = t.survey.questions.find((question) => question.id === entry.questionId)
               map[entry.questionId] = q && q.multi ? entry.choices : entry.choices[0]
             }
+            /* 사진 답은 서버에 표식만 있다 — 기기에 남겨 둔 원본으로 되돌려 놓아야
+               설문 미리보기와 계획의 가상 메이크업 결과가 그대로 이어진다 */
+            const storedPhotos = readPhotoStore()[resumeThreadId] || {}
+            for (const q of t.survey.questions) {
+              if (q.kind === 'photo' && storedPhotos[q.id]) map[q.id] = storedPhotos[q.id]
+            }
             setAnswers(map)
             /* 키는 서버 원문이 아니라 로컬 재구성과 같은 경로로 — 위 wireFromAnswers 주석 참고 */
             if (t.plan) setPlanKey(JSON.stringify(wireFromAnswers(t.survey.questions, map)))
@@ -410,6 +466,13 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  /* 고른 사진을 기기에 남긴다 — 서버로 가지 않는 값이라 이어보기의 유일한 복원 재료다 */
+  useEffect(() => {
+    // 설문이 오기 전(이어보기 로드 중)에는 손대지 않는다 — 빈 답으로 저장하면 복원 재료를 지운다
+    if (!threadId || !surveyPage) return
+    savePhotoStore(threadId, photoAnswersOf(surveyPage.questions || [], answers))
+  }, [threadId, surveyPage, answers])
+
   /* 워크스페이스 쓰레드 기록 — Player와 같은 upsert 흐름, live 마커로 구분한다.
      threadId(스노우플레이크)가 나온 뒤부터 단계 이동/답변/담기/완료마다 갱신 */
   useEffect(() => {
@@ -424,7 +487,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
       query: liveQuery,
       stage: stageKey,
       stageLabel: stageKey === 'plan' ? '계획' : '설문',
-      answers,
+      answers: answersForRecord(),
       excludedProfile,
       cart,
       status: completed ? 'completed' : 'ongoing',
@@ -438,6 +501,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const answerText = (q) => {
     const a = answers[q.id]
     if (a == null || (Array.isArray(a) && a.length === 0)) return '아무거나'
+    if (q.kind === 'photo') return PHOTO_ANSWER // 데이터 URL을 요약 패널에 그대로 찍지 않는다
     return Array.isArray(a) ? a.join(', ') : a
   }
 
@@ -523,8 +587,8 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     [surveyPage, surveyLocked]
   )
   const planItems = useMemo(
-    () => (planPage ? livePlanItems(planPage, { pendingSlots, query: liveQuery }) : []),
-    [planPage, pendingSlots, liveQuery]
+    () => (planPage ? livePlanItems(planPage, { pendingSlots, query: liveQuery, photo: livePhoto }) : []),
+    [planPage, pendingSlots, liveQuery, livePhoto]
   )
   const allItems = stageKey === 'plan' ? planItems : surveyItems
   const topItems = allItems.filter((it) => !it.parentId)
@@ -554,7 +618,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         headline,
         summary: (partial && partial.summary) || '',
         sections,
-      }, { query: liveQuery, pendingSlots: pendingPreview })
+      }, { query: liveQuery, pendingSlots: pendingPreview, photo: livePhoto })
       return headline ? items : items.filter((it) => it.id !== 'live-plan-title')
     }
     if (loading.step === 'survey') {
@@ -566,7 +630,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
       return intro ? items : items.filter((it) => it.id !== 'live-survey-intro')
     }
     return [] // step 'start'(쓰레드 시작·이어보기 로드)는 그릴 재료가 없다 — 전체 스켈레톤
-  }, [loading, partial])
+  }, [loading, partial, livePhoto])
   /* 미리보기도 확정 렌더와 같은 한 화면 = 질문 하나 규칙을 따른다. allItems는 도착한 전체를
      그대로 넘겨서 진행 표시가 "1 / 2 → 1 / 3"으로 자라는 것을 보여준다 */
   const partialTopItems = partialAllItems.filter((it) => !it.parentId)

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { LookTone } from '@ddak/schema'
 
 /*
  * LLM 생성 출력 스키마 — 구조화 출력(zodOutputFormat)으로 강제된다.
@@ -16,6 +17,14 @@ export type SurveyQuestionGen = z.infer<typeof SurveyQuestionGen>
 
 export const SurveyGen = z.object({
   intro: z.string().describe('설문 페이지 머리 문구 — 사용자의 의도를 되짚는 한두 문장'),
+  /* 얼굴 사진 질문 — 화면이 첫 질문 자리에 사진 업로드를 세운다. 선택지 질문 배열과 형태가
+     달라(선택지 없음) 배열이 아닌 머리 필드로 둔다: 배열 스키마의 "선택지 2개 이상" 보장을
+     지키면서, 자리도 결정적으로 맨 앞에 고정된다 (id·배치는 BFF 스캐폴드 소유 원칙) */
+  photoQuestion: z
+    .string()
+    .describe(
+      '얼굴 사진이 있어야 답할 수 있는 의도(가상 메이크업·룩 제안·발색 확인·퍼스널 컬러)면 사진을 요청하는 질문 문구, 그 밖에는 빈 문자열',
+    ),
   // 전략 문서 3단계: 꼭 필요한 질문만 — 0문항(설문 스킵)은 FE 플로우 변경이 필요해 하한 1
   questions: z.array(SurveyQuestionGen).min(1).max(6),
 })
@@ -52,6 +61,16 @@ const GuideSectionGen = z.object({
   kind: z.literal('guide'),
   title: z.string(),
   body: z.string().describe('가이드 본문 — 답변을 근거로 든다'),
+})
+
+/** 가상 메이크업 결과 — 사진 질문에 답한 쓰레드에서만. 합성은 화면이 하고(올린 사진 + tone
+ * 프리셋), 이 단계는 "어떤 룩인지"만 정한다. 상품 자리와 달리 검색이 채울 자리가 아니다 */
+const LookSectionGen = z.object({
+  kind: z.literal('look'),
+  title: z.string().describe('룩 이름 — 예: 코랄 생기 데일리 룩'),
+  desc: z.string().describe('이 룩을 고른 이유 한두 문장 — 답변을 근거로'),
+  tone: LookTone.describe('룩의 기본 색조 — 화면이 올린 사진에 이 톤을 올려 보여준다'),
+  points: z.array(z.string()).max(4).describe('포인트 한 줄씩 — 예: 립 — 코랄 틴트를 안쪽부터 그라데이션'),
 })
 
 const StepsSectionGen = z.object({
@@ -125,6 +144,7 @@ const ContentsSlotGen = z.object({
 
 export const PlanSkeletonSectionGen = z.discriminatedUnion('kind', [
   GuideSectionGen,
+  LookSectionGen,
   ProductsSlotGen,
   ContentsSlotGen,
   StepsSectionGen,
@@ -218,9 +238,12 @@ export const SurveyQuestionPartialGen = z.object({
 export type SurveyQuestionPartialGen = z.infer<typeof SurveyQuestionPartialGen>
 
 export const PlanSectionPartialGen = z.object({
-  kind: z.enum(['guide', 'steps', 'products', 'contents']),
+  kind: z.enum(['guide', 'look', 'steps', 'products', 'contents']),
   title: z.string().optional(),
   body: z.string().optional(),
+  desc: z.string().optional(),
+  tone: LookTone.optional(),
+  points: z.array(z.string()).optional(),
   steps: z.array(z.string()).optional(),
 })
 export type PlanSectionPartialGen = z.infer<typeof PlanSectionPartialGen>

@@ -1,11 +1,19 @@
 /* 라이브 와이어 페이지 → 스튜디오 아이템 투영 (DESIGN-LLM-SERVICE.md §2-1).
-   매핑 기준: question→surveyQuestion, guide→planStep, products→hscroll+productCard,
+   매핑 기준: question→surveyQuestion(사진 질문은 surveyPhoto), guide→planStep,
+   look→beforeAfter(가상 메이크업 결과), products→hscroll+productCard,
    contents→hscroll+videoCard/articleCard, steps→checklist. 새 렌더 계층을 만들지 않고
    레지스트리 player 렌더러를 그대로 재사용하기 위한 얇은 변환이다. id는 결정적으로
    부여한다 — 설문 답변 키는 와이어 질문 id 그대로(= surveyQuestion 아이템 id)라 answers
    왕복에 재매핑이 없다. 좌표(x/y)는 넣지 않는다. */
 
 import { joinTextList } from './store.js'
+
+/** 사진 질문의 와이어 답 — @ddak/schema PHOTO_ANSWER와 같은 문자열이어야 한다.
+ * 사진 원본은 기기에 남고 서버로는 이 표식만 간다 (데이터 URL은 스텝·프롬프트에 실을 것이 못 된다) */
+export const PHOTO_ANSWER = '사진 제출됨'
+
+/** 답 값이 실제로 그릴 수 있는 이미지인지 — 이어보기·관리 페이지에서는 표식만 남는다 */
+export const isPhotoValue = (value) => /^(data:image\/|https?:\/\/|\.{0,2}\/)/.test(String(value || ''))
 
 export function liveSurveyItems(page) {
   const items = [
@@ -23,6 +31,22 @@ export function liveSurveyItems(page) {
     },
   ]
   for (const q of page.questions || []) {
+    /* 사진 질문 — 선택지가 없고 사진 업로드 컴포넌트로 그린다. 아이템 id는 여기서도 와이어
+       질문 id 그대로라, 고른 사진은 answers[q.id]에 담기고 계획 투영이 그 값을 다시 쓴다 */
+    if (q.kind === 'photo') {
+      items.push({
+        id: q.id,
+        type: 'surveyPhoto',
+        props: {
+          question: q.question,
+          placeholder: q.placeholder || '정면 얼굴 사진을 선택해주세요',
+          iconLabel: '사진 아이콘',
+          samples: '', // 기본 샘플 얼굴 4종
+          photoUrl: '',
+        },
+      })
+      continue
+    }
     items.push({
       id: q.id,
       type: 'surveyQuestion',
@@ -41,7 +65,9 @@ export function liveSurveyItems(page) {
   return items
 }
 
-/** opts.pendingSlots — 뼈대 조기 확정 뒤 아직 검색 결과가 안 채운 자리 인덱스. 이 자리는
+/** opts.photo — 설문에서 고른 얼굴 사진(데이터 URL). 가상 메이크업 결과(look) 섹션의
+ * BEFORE·AFTER 재료다: 서버는 어떤 룩인지(tone)만 정하고 합성은 화면이 한다.
+ * opts.pendingSlots — 뼈대 조기 확정 뒤 아직 검색 결과가 안 채운 자리 인덱스. 이 자리는
  * LivePlayer가 로딩 카드로 렌더하는 `livePending` 아이템으로 투영된다 (레지스트리 밖 타입 —
  * id도 `live-plan-s#` 문법 밖이라 피드백 앵커 판정에 걸리지 않는다) */
 export function livePlanItems(page, opts = {}) {
@@ -86,7 +112,45 @@ export function livePlanItems(page, opts = {}) {
       continue
     }
     const base = `live-plan-s${i}`
-    if (section.kind === 'guide') {
+    if (section.kind === 'look') {
+      /* 가상 메이크업 결과 — 올린 사진을 BEFORE로, 같은 사진에 룩 톤을 올린 것을 AFTER로.
+         사진이 없으면(이어보기로 기기 보관분이 없거나 관리 페이지 미리보기) 합성할 재료가
+         없으므로 룩 설명만 안내 카드로 정직하게 그린다 */
+      const photo = opts.photo || ''
+      if (photo) {
+        items.push({
+          id: base,
+          type: 'beforeAfter',
+          props: {
+            title: section.title,
+            desc: section.desc || '',
+            beforeImage: photo,
+            afterImage: photo, // 같은 사진 — 차이는 tone 프리셋이 만든다
+            tone: section.tone || '',
+            beforeLabel: '내 사진',
+            afterLabel: 'AI 메이크업',
+            split: '50',
+            hint: '손잡이를 끌어 비교',
+            disclaimer: 'AI가 올려 본 미리보기예요. 실제 발색은 피부톤 · 조명에 따라 다를 수 있어요.',
+          },
+        })
+      } else {
+        items.push({
+          id: base,
+          type: 'noticeCard',
+          props: { title: section.title, body: section.desc || '' },
+        })
+      }
+      const points = (section.points || []).filter(Boolean)
+      if (points.length) {
+        items.push({
+          id: `${base}-points`,
+          type: 'textBlock',
+          stepSub,
+          props: { kicker: '', title: '', body: points.map((pt) => `· ${pt}`).join('\n') },
+        })
+      }
+    } else if (section.kind === 'guide') {
       items.push({
         id: base,
         type: 'planStep',

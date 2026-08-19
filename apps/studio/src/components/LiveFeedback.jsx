@@ -15,6 +15,7 @@ const PLAN_SECTION_ID = /^live-plan-s\d+$/
 export function isLiveFeedbackTarget(item) {
   return (
     item.type === 'surveyQuestion' ||
+    item.type === 'surveyPhoto' || // 사진 질문도 LLM이 쓴 문구다 — 평가 대상
     item.id === 'live-survey-intro' ||
     item.id === 'live-plan-summary' ||
     PLAN_SECTION_ID.test(item.id)
@@ -22,7 +23,7 @@ export function isLiveFeedbackTarget(item) {
 }
 
 export function liveFeedbackLabel(item) {
-  if (item.type === 'surveyQuestion') return item.props.question || '질문'
+  if (item.type === 'surveyQuestion' || item.type === 'surveyPhoto') return item.props.question || '질문'
   if (item.id === 'live-survey-intro') return '인트로'
   if (item.id === 'live-plan-summary') return '요약'
   return item.props.title || '섹션'

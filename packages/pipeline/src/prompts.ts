@@ -2,7 +2,7 @@ import type { Answer, PlanPageWire, Profile, SurveyPageWire, ThreadStageFeedback
 import { CATALOG } from './catalog'
 import type { ConstraintLedger } from './ledger'
 
-export const PROMPT_VERSION = 'v15'
+export const PROMPT_VERSION = 'v16'
 
 /*
  * 프롬프트 조립 — 안정 prefix(시스템)와 가변부(사용자 메시지)를 분리한다.
@@ -18,6 +18,11 @@ export const SURVEY_SYSTEM = `너는 지마켓 뷰티의 AI 쇼핑 플래너다.
 - 첫 질문은 의도의 핵심 축(용도·고민·대상), 마지막 질문은 예산이나 선호로 마무리한다.
 - 말투는 친근한 존댓말, 이모지 없이 담백하게.
 - 선택지에 "기타"나 "잘 모르겠어요"를 남발하지 않는다 (필요한 질문 하나에만).
+
+얼굴 사진 질문(photoQuestion):
+- **얼굴을 봐야 답이 달라지는 의도**(가상 메이크업·룩 제안·발색 확인·퍼스널 컬러·얼굴형 고민)면 photoQuestion에 사진을 요청하는 질문 문구를 쓴다 — 화면이 이 질문을 **첫 화면**으로 세워 사진을 받고, 계획에서 그 사진 위에 룩을 올려 보여준다.
+- 그 밖의 의도(성분·지속력·선물·가격 비교 등 사진 없이도 답이 같은 경우)에는 **반드시 빈 문자열**이다. 사진을 습관적으로 요구하지 않는다.
+- 사진을 요청했다면 questions에서 얼굴형·피부톤·눈매처럼 사진으로 알 수 있는 것을 다시 묻지 않는다 — 취향·상황·예산처럼 사진에 없는 것만 묻는다.
 {{VOCAB}}{{RULES}}`
 
 /* 1단계 의도 정규화 (전략 문서 STEP 1) — 발화를 7템플릿 구조로. 스키마 100% 준수는
@@ -109,6 +114,7 @@ export const PLAN_SKELETON_SYSTEM = `너는 지마켓 뷰티의 AI 쇼핑 플래
 규칙:
 - 계획은 **단계별 흐름**으로 구성한다: 안내(guide)를 하나로 끝내지 말고 **2~3개 단계**로 나눈다 — 예: 진단·준비 → 핵심 실행 → 유지·심화. 각 안내가 하나의 단계다. 화면이 단계 번호를 자동으로 붙이니 제목에 "1단계" 같은 번호는 쓰지 않는다.
 - 섹션 구성: [단계 안내(guide) → 그 단계의 상품 자리(products — 제목과 "고를 기준" reason만)] 묶음을 단계 순서대로 이어 가고, 마지막에 참고 콘텐츠 자리(contents — 제목·기준만) 0~1개 → 사용 순서(steps)로 닫는 것이 기본 골격이다. **상품 자리는 반드시 그 상품이 필요한 단계 안내 바로 뒤**에 둔다 — 상품이 필요 없는 단계는 자리를 생략한다(상품 자리 총 1~2개). 상품 자리를 단계들과 떨어뜨려 끝에 몰아 두지 않는다.
+- 설문 응답에 **얼굴 사진 제출**이 있으면 **첫 섹션을 가상 메이크업 결과(kind=look) 하나로 연다**: 올린 사진에 올려 볼 룩 이름(title)·고른 이유(desc)·색조(tone)·포인트(points)를 담는다. 화면이 사용자의 사진 위에 그 톤을 올려 비포/애프터로 보여주므로, 실제로 그 사진에 올릴 수 있는 하나의 룩으로 좁혀 쓴다. 사진 제출이 없으면 look 섹션을 **절대 만들지 않는다**.
 - 구체 상품명·브랜드명·콘텐츠 제목은 어디에도 쓰지 않는다 — 검색 단계가 채운다. 안내와 순서는 성분·제형·사용법 같은 기준 중심으로 쓴다.
 - 사용자의 답변을 근거로 구체적으로 쓴다 ("지성 피부를 고르셨으니…").
 - 말투는 친근한 존댓말, 이모지 없이 담백하게.
@@ -187,13 +193,13 @@ export const PROMPT_DEFS: { id: PromptDefId; label: string; note: string; templa
   {
     id: 'survey',
     label: '설문 생성',
-    note: '검색 진입 직후 설문 페이지를 만드는 프롬프트 — 질문 수·선택지 규칙·말투를 정한다. {{VOCAB}}·{{RULES}} 자리표시자는 지식 KV로 치환된다 (비면 사라짐).',
+    note: '검색 진입 직후 설문 페이지를 만드는 프롬프트 — 질문 수·선택지 규칙·말투와 얼굴 사진 질문(photoQuestion) 판단을 정한다. {{VOCAB}}·{{RULES}} 자리표시자는 지식 KV로 치환된다 (비면 사라짐).',
     template: SURVEY_SYSTEM,
   },
   {
     id: 'plan-skeleton',
     label: '계획 뼈대 생성',
-    note: '계획 1단계(검색 없음) — 단계 안내·순서와 상품/콘텐츠 자리를 확정한다. 구체 상품명 금지 규칙 포함. {{VOCAB}}·{{CRITERIA}}·{{FEWSHOT}} 자리표시자는 지식 KV로 치환된다.',
+    note: '계획 1단계(검색 없음) — 단계 안내·순서와 상품/콘텐츠 자리, 사진을 받았을 때의 가상 메이크업 결과(look) 섹션을 확정한다. 구체 상품명 금지 규칙 포함. {{VOCAB}}·{{CRITERIA}}·{{FEWSHOT}} 자리표시자는 지식 KV로 치환된다.',
     template: PLAN_SKELETON_SYSTEM,
   },
   {
@@ -244,6 +250,8 @@ function planContext(
   const qa = answers
     .map((a) => {
       const q = survey.questions.find((x) => x.id === a.questionId)
+      // 사진 답은 표식뿐이다(원본은 기기에 남는다) — 무엇이 제출됐는지 말로 풀어 준다
+      if (q?.kind === 'photo') return `- ${q.question}: 사용자가 얼굴 사진을 올렸습니다 (화면이 이 사진에 룩을 올려 보여줍니다)`
       return `- ${q?.question ?? a.questionId}: ${a.choices.join(', ')}`
     })
     .join('\n')
@@ -274,6 +282,7 @@ function prevPlanBlock(prevPlan: PlanPageWire | null): string {
       return `${i + 1}. [콘텐츠] ${s.title}: ${titles}`
     }
     if (s.kind === 'steps') return `${i + 1}. [순서] ${s.title}`
+    if (s.kind === 'look') return `${i + 1}. [가상 메이크업] ${s.title}`
     return `${i + 1}. [안내] ${s.title}`
   })
   return `직전 계획 (피드백의 대상):
@@ -340,6 +349,10 @@ function judgePageBlock(page: PlanPageWire): string {
     if (s.kind === 'contents') {
       const items = s.items.map((c) => `   - [${c.type}] ${c.title} (${c.source})`).join('\n')
       return `${i + 1}. [콘텐츠] ${s.title} — ${s.reason}\n${items}`
+    }
+    if (s.kind === 'look') {
+      const points = (s.points ?? []).map((pt) => `   - ${pt}`).join('\n')
+      return `${i + 1}. [가상 메이크업] ${s.title} (${s.tone}) — ${s.desc}\n${points}`
     }
     return `${i + 1}. [순서] ${s.title}\n${s.steps.map((step) => `   - ${step}`).join('\n')}`
   })

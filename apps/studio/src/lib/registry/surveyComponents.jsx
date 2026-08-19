@@ -129,6 +129,34 @@ const DEFAULT_SAMPLE_FACES = [
   './sample-faces/face-4.png',
 ]
 
+/* 올린 사진의 최대 변 길이 — 답은 상태·기기 보관(라이브 사진)·계획 화면 합성까지 따라다니므로
+   원본(수 MB 데이터 URL)을 그대로 들고 다니지 않는다. 얼굴 미리보기엔 720px이면 충분하다 */
+const MAX_PHOTO_EDGE = 720
+
+/** 데이터 URL 축소 — 실패하면(캔버스 차단·디코드 실패) 원본을 그대로 넘긴다 */
+function downscalePhoto(dataUrl, done) {
+  const img = new Image()
+  img.onload = () => {
+    const scale = Math.min(1, MAX_PHOTO_EDGE / Math.max(img.width, img.height, 1))
+    if (scale >= 1 && dataUrl.length < 400000) return done(dataUrl)
+    try {
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.max(1, Math.round(img.width * scale))
+      canvas.height = Math.max(1, Math.round(img.height * scale))
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+      done(canvas.toDataURL('image/jpeg', 0.82))
+    } catch {
+      done(dataUrl)
+    }
+  }
+  img.onerror = () => done(dataUrl)
+  img.src = dataUrl
+}
+
+/** 답 값이 그릴 수 있는 이미지인지 — 라이브 이어보기·관리 페이지 미리보기의 답은 사진 원본이
+    아니라 "사진 제출됨" 표식이다 (원본은 기기에만 남는다). 그대로 img에 넣으면 깨진 이미지가 된다 */
+const isPhotoImage = (value) => /^(data:image\/|https?:\/\/|\.{0,2}\/)/.test(String(value || ''))
+
 /* 사진 업로드 질문의 동선: 드롭존 → 선택 옵션 시트 → (카메라·앨범 = 파일 선택 / 샘플 얼굴 = 그리드) */
 function PhotoPicker({ p, ctx, picked }) {
   const [sheet, setSheet] = React.useState(null) // null | 'options' | 'samples'
@@ -148,7 +176,7 @@ function PhotoPicker({ p, ctx, picked }) {
     e.target.value = '' // 같은 파일 다시 고를 수 있게
     if (!file) return
     const reader = new FileReader()
-    reader.onload = () => choose(String(reader.result || ''))
+    reader.onload = () => downscalePhoto(String(reader.result || ''), choose)
     reader.readAsDataURL(file)
   }
 
@@ -159,8 +187,14 @@ function PhotoPicker({ p, ctx, picked }) {
         className={'sb-photo-drop' + (picked ? ' is-filled' : '')}
         onClick={() => { if (isPlayer) setSheet('options') }}
       >
-        {picked ? (
+        {picked && isPhotoImage(picked) ? (
           <img className="sb-photo-drop__preview" src={picked} alt={p.placeholder} draggable={false} />
+        ) : picked ? (
+          /* 사진 원본 없이 제출 표식만 남은 경우 (이어보기·관리 페이지) — 답한 상태로만 보여준다 */
+          <>
+            <span className="sb-photo-drop__icon" aria-hidden="true">✓</span>
+            <span className="sb-photo-drop__label">{picked}</span>
+          </>
         ) : (
           <>
             <span className="sb-photo-drop__icon">{kText(p.iconLabel, ctx, 'iconLabel')}</span>

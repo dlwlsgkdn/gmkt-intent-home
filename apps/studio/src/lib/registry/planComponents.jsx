@@ -113,8 +113,13 @@ function BeforeAfter({ p, ctx }) {
       onPointerUp={() => { dragging.current = false }}
       onPointerCancel={() => { dragging.current = false }}
     >
-      <div className="sb-ba__layer sb-ba__layer--after">
-        <Img src={p.afterImage} alt={p.afterLabel || 'AFTER'} />
+      {/* AFTER — 룩 톤(tone)이 있으면 같은 사진 위에 그 색조를 올린 "가상 메이크업" 표현이다.
+          실제 합성 엔진이 아니라 화면에서 보여주는 미리보기라 하단 고지 문구와 한 벌로 쓴다 */}
+      <div
+        className={'sb-ba__layer sb-ba__layer--after' + (p.tone ? ' sb-ba__layer--synth' : '')}
+        data-tone={p.tone || undefined}
+      >
+        <Img src={p.afterImage || p.beforeImage} alt={p.afterLabel || 'AFTER'} />
       </div>
       <div className="sb-ba__layer sb-ba__layer--before" style={{ clipPath: `inset(0 ${100 - split}% 0 0)` }}>
         <Img src={p.beforeImage} alt={p.beforeLabel || 'BEFORE'} />
@@ -599,7 +604,8 @@ export const PLAN_COMPONENTS = {
       beforeLabel: 'BEFORE',
       afterLabel: 'AFTER',
       beforeImage: '',
-      afterImage: '',
+      afterImage: '', // 비우면 BEFORE와 같은 사진 — 차이는 tone이 만든다 (가상 메이크업 투영)
+      tone: '',
       split: '50',
       hint: '꾹 눌러 원본 보기',
       disclaimer: '실제 발색은 피부톤 · 조명에 따라 다를 수 있어요',
@@ -608,7 +614,22 @@ export const PLAN_COMPONENTS = {
       { key: 'title', label: '제목', kind: 'text' },
       { key: 'desc', label: '설명', kind: 'textarea' },
       { key: 'beforeImage', label: 'BEFORE 이미지 URL', kind: 'url' },
-      { key: 'afterImage', label: 'AFTER 이미지 URL', kind: 'url' },
+      { key: 'afterImage', label: 'AFTER 이미지 URL (비우면 BEFORE와 같은 사진)', kind: 'url' },
+      {
+        key: 'tone',
+        label: '올려 볼 룩 색조',
+        kind: 'select',
+        defaultValue: '',
+        options: [
+          { value: '', label: '없음 (사진 그대로)' },
+          { value: 'coral', label: '코랄' },
+          { value: 'rose', label: '로즈' },
+          { value: 'red', label: '레드' },
+          { value: 'peach', label: '피치' },
+          { value: 'brown', label: '브라운' },
+          { value: 'plum', label: '플럼' },
+        ],
+      },
       { key: 'beforeLabel', label: '왼쪽 배지', kind: 'text' },
       { key: 'afterLabel', label: '오른쪽 배지', kind: 'text' },
       { key: 'split', label: '경계 위치 (%)', kind: 'text' },

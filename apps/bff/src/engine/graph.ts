@@ -7,15 +7,15 @@ import {
   PlanSearchSectionGen,
   PlanSectionPartialGen,
   PlanSkeletonSectionGen,
-  SurveyQuestionGen,
-  SurveyQuestionPartialGen,
   assembleLedger,
+  buildSurveyPage,
   checkObjective,
   completeSearchSection,
   groundContentsSection,
   groundProductsSection,
   isSlotKind,
   mergePlanSections,
+  surveyStreamHandlers,
   type GroundingDrop,
   type GuardContext,
   type PlanRevisionContext,
@@ -134,44 +134,15 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
     const { content, meta } = await deps.llm.generateSurvey(
       state.intent,
       state.profile ?? undefined,
-      writer && {
-        arrayKey: 'questions',
-        headKeys: ['intro'],
-        onHead: (key, value) => {
-          if (key === 'intro') writer({ event: 'head', data: { intro: value } })
-        },
-        onHeadPartial: (key, value) => {
-          if (key === 'intro') writer({ event: 'head', data: { intro: value } })
-        },
-        onElement: (element, index) => {
-          const parsed = SurveyQuestionGen.safeParse(element)
-          if (parsed.success)
-            writer({ event: 'question', data: { index, question: { id: `q${index + 1}`, ...parsed.data } } })
-        },
-        // 자라는 중인 질문 — 문구가 나오기 시작하면 토큰 단위로 같은 index에 재전송한다
-        onElementPartial: (element, index) => {
-          const parsed = SurveyQuestionPartialGen.safeParse(element)
-          if (!parsed.success || !parsed.data.question) return
-          writer({
-            event: 'question',
-            data: {
-              index,
-              question: {
-                id: `q${index + 1}`,
-                question: parsed.data.question,
-                options: parsed.data.options ?? [],
-                multi: parsed.data.multi ?? false,
-              },
-            },
-          })
-        },
-      },
+      writer &&
+        surveyStreamHandlers({
+          onIntro: (intro) => writer({ event: 'head', data: { intro } }),
+          onQuestion: (question, index) => writer({ event: 'question', data: { index, question } }),
+        }),
       state.ledger,
     )
-    const page: SurveyPageWire = {
-      intro: content.intro,
-      questions: content.questions.map((q, i) => ({ id: `q${i + 1}`, ...q })),
-    }
+    // 질문 자리(사진 질문이 있으면 맨 앞)는 legacy 경로와 같은 규칙 — @ddak/pipeline 소유
+    const page: SurveyPageWire = buildSurveyPage(content)
     await persistAll('survey', [
       deps.core.upsertStep(state.threadId, SEQ.survey, { stage: 'survey', payload: { page }, llmMeta: meta }),
       deps.core.updateThread(state.threadId, { status: 'surveying' }),

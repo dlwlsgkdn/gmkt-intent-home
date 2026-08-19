@@ -14,10 +14,39 @@ export const llmCalls = [] // { type, system, user } — e2e가 프롬프트 주
 
 const SURVEY_JSON = JSON.stringify({
   intro: '모의 인트로입니다. 여름 쿠션을 찾아볼게요.',
+  photoQuestion: '', // 사진이 필요 없는 의도 — 사진 질문 자리가 생기지 않는다
   questions: [
     { question: '피부 타입은 어떻게 되세요?', options: ['지성', '건성', '복합성'], multi: false },
     { question: '가장 큰 고민은 무엇인가요?', options: ['모공', '수분', '지속력'], multi: true },
     { question: '예산은 어느 정도 생각하세요?', options: ['1만원대', '3만원대'], multi: false },
+  ],
+})
+
+/* 가상 메이크업 저니 — 얼굴을 봐야 답이 달라지는 의도라 사진 질문(머리 필드)이 붙는다.
+   BFF가 이 문구를 첫 질문(id=p1, kind=photo) 자리로 세운다 */
+const SURVEY_PHOTO_JSON = JSON.stringify({
+  intro: '올려주신 얼굴에 어울리는 룩을 찾아볼게요.',
+  photoQuestion: '얼굴이 잘 보이는 정면 사진을 올려주세요',
+  questions: [
+    { question: '어떤 자리에 갈 계획인가요?', options: ['데일리', '데이트', '행사'], multi: false },
+    { question: '평소 선호하는 색조는?', options: ['코랄', '로즈', '뉴트럴'], multi: false },
+  ],
+})
+
+/* 사진을 받은 계획 — 첫 섹션이 가상 메이크업 결과(look)다 (화면이 올린 사진에 tone을 올린다) */
+const SKELETON_LOOK_JSON = JSON.stringify({
+  headline: '모의 가상 메이크업 계획',
+  summary: '코랄 톤으로 생기를 올리는 모의 요약입니다.',
+  sections: [
+    {
+      kind: 'look',
+      title: '코랄 생기 데일리 룩',
+      desc: '데일리를 고르셔서 과하지 않은 코랄로 잡았어요.',
+      tone: 'coral',
+      points: ['립 — 코랄 틴트를 안쪽부터', '볼 — 같은 톤으로 얇게'],
+    },
+    { kind: 'guide', title: '베이스 정돈', body: '결을 먼저 정리해요.' },
+    { kind: 'products', title: '이 룩에 쓸 상품', reason: '코랄 톤 기준으로 고를 거예요.' },
   ],
 })
 
@@ -145,14 +174,18 @@ const server = http.createServer(async (req, res) => {
     }
     if (system.includes('뼈대')) {
       llmCalls.push({ type: 'skeleton', system, user })
-      return streamAnthropic(res, SKELETON_JSON, { delayMs: 4, chunkSize: 18 })
+      // 사진을 받은 쓰레드면 가상 메이크업 결과(look)로 여는 뼈대를 돌려준다
+      const lookPlan = user.includes('얼굴 사진을 올렸습니다')
+      return streamAnthropic(res, lookPlan ? SKELETON_LOOK_JSON : SKELETON_JSON, { delayMs: 4, chunkSize: 18 })
     }
     if (system.includes('정규화한다')) {
       llmCalls.push({ type: 'intent', system, user })
       return streamAnthropic(res, INTENT_JSON, { delayMs: 2, chunkSize: 30 })
     }
     llmCalls.push({ type: 'survey', system, user })
-    return streamAnthropic(res, SURVEY_JSON, { delayMs: 4, chunkSize: 18 })
+    // 가상 메이크업 의도만 사진 질문을 요청하는 설문을 돌려준다 (그 밖에는 photoQuestion='')
+    const wantsPhoto = user.includes('메이크업')
+    return streamAnthropic(res, wantsPhoto ? SURVEY_PHOTO_JSON : SURVEY_JSON, { delayMs: 4, chunkSize: 18 })
   }
 
   // ── 모의 core internal API ──────────────────────────────────────
