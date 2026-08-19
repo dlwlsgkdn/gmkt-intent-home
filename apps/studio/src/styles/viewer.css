@@ -482,12 +482,12 @@
 .sb-player__item { width: 100%; margin: 0 auto; }
 
 /* 단계 하위 콘텐츠 — 단계 안내(guide) 바로 뒤의 상품 섹션(추천 이유·카드 트랙·로딩 자리)을
-   그 단계에 속한 것처럼 위로 당겨 붙이고 연결선으로 들여 놓는다 (라이브 계획 전용, livePage stepSub) */
+   그 단계에 속한 것처럼 위로 당겨 붙인다 (라이브 계획 전용, livePage stepSub).
+   묶음 표시는 **간격만으로** 한다: 들여쓰기+연결선을 두면 카드 트랙이 본문보다 한 단 밀려
+   보이고, 가로 스크롤이라 오른쪽으로도 어긋나 보인다 — 좌우 정렬은 본문과 딱 맞춘다 */
 .sb-player__item--stepsub {
-  width: calc(100% - 16px);
-  margin: -10px 0 0 16px;
-  padding-left: 14px;
-  border-left: 2px solid var(--sb-n-200);
+  width: 100%;
+  margin: -10px 0 0;
 }
 /* 이유(textBlock) 뒤에 바로 오는 카드 트랙은 더 붙인다 — 한 묶음으로 보이게 */
 .sb-player__item--stepsub + .sb-player__item--stepsub { margin-top: -14px; }
