@@ -137,7 +137,7 @@ export function useWorkspace({ showToast, onReset }) {
     showToast(`"${entry.title}"을(를) 기본 시나리오에서 내렸어요.`)
   }
 
-  const addAccount = async (name) => {
+  const addAccount = async (name, options = {}) => {
     const label = String(name || '').trim() || `사용자 ${accounts.length + 1}`
     const account = createAccount()
     account.profile = { ...account.profile, name: label }
@@ -156,14 +156,14 @@ export function useWorkspace({ showToast, onReset }) {
     }
     setAccounts((prev) => [...prev, account])
     setActiveAccountId(account.id)
-    onReset()
+    if (!options.keepRoute) onReset()
     sync.requestAutoSync()
     showToast(account.scenarios.length > 0
       ? `"${label}" 프로필을 만들었어요. 기본 시나리오 ${account.scenarios.length}개를 가져왔어요.${missing > 0 ? ` (${missing}개는 서버에서 불러오지 못했어요)` : ''}`
       : `"${label}" 프로필을 만들었어요. 탐색 페이지와 시나리오가 새로 시작돼요.`)
   }
 
-  const removeAccount = (id) => {
+  const removeAccount = (id, options = {}) => {
     if (accounts.length <= 1) {
       showToast('마지막 프로필은 삭제할 수 없어요.')
       return
@@ -172,7 +172,7 @@ export function useWorkspace({ showToast, onReset }) {
     setAccounts(rest)
     if (id === activeAccountId) {
       setActiveAccountId(rest[0].id)
-      onReset()
+      if (!options.keepRoute) onReset()
     }
     sync.markAccountRemoved(id) // 명시적 삭제 — 서버의 이 계정 행 전부가 정리 대상
     sync.requestAutoSync()
@@ -187,14 +187,14 @@ export function useWorkspace({ showToast, onReset }) {
     return createDataBackup({ accounts, activeAccountId, keywords, viewerDevice })
   }
 
-  const importDataBackup = (payload) => {
+  const importDataBackup = (payload, options = {}) => {
     try {
       const restored = parseDataBackup(payload)
       setAccounts(restored.accounts)
       setActiveAccountId(restored.activeId)
       setKeywords(restored.keywords)
       setViewerDevice(restored.viewerDevice)
-      onReset()
+      if (!options.keepRoute) onReset()
       /* 전체 교체 — 이후 로컬이 전체 의도다: 전 행 전송 + 서버에만 있는 행 정리 */
       sync.claimLocalAuthority()
       sync.requestAutoSync()

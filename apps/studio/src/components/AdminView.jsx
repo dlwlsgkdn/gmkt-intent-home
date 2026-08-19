@@ -18,6 +18,7 @@ import AdminPromptLibrary from './AdminPromptLibrary.jsx'
 import TaggingStudio from './TaggingStudio.jsx'
 import Builder from './Builder.jsx'
 import AdminScenarioStudio from './AdminScenarioStudio.jsx'
+import ExploreEditor from './ExploreEditor.jsx'
 
 /*
  * 운영 콘솔 — 진입은 홈 드로어 도구 행의 버튼 또는 #ops 해시 (구 #admin 호환).
@@ -54,6 +55,7 @@ const NAV_GROUPS = [
 export default function AdminView({ api, tab, studioScenarioId }) {
   const [mode, setMode] = useState('lab')
   const [selectedStudioId, setSelectedStudioId] = useState(studioScenarioId || null)
+  const [studioSettingsOpen, setStudioSettingsOpen] = useState(false)
   const [threads, setThreads] = useState([])
   const [nextCursor, setNextCursor] = useState(null)
   const [listLoading, setListLoading] = useState(false)
@@ -187,6 +189,14 @@ export default function AdminView({ api, tab, studioScenarioId }) {
   const studioScenario = tab === 'studio'
     ? api.scenarios.find((scenario) => scenario.id === selectedStudioId)
     : null
+  const studioFullView = tab === 'studio' && (studioScenario || studioSettingsOpen)
+
+  useEffect(() => {
+    if (tab !== 'studio') {
+      setSelectedStudioId(null)
+      setStudioSettingsOpen(false)
+    }
+  }, [tab])
 
   return (
     <div className="sb-builder sb-admin-app">
@@ -219,7 +229,7 @@ export default function AdminView({ api, tab, studioScenarioId }) {
       </aside>
 
       <div className="sb-admin-shell__body">
-        {!studioScenario && <header className="sb-admin-mobilebar">
+        {!studioFullView && <header className="sb-admin-mobilebar">
           <button type="button" className="sb-admin-mobilebar__studio" onClick={api.exitAdmin}>← DDAK 홈</button>
           <b>{activeLabel}</b>
           <button type="button" className="sb-btn sb-btn--ghost sb-btn--tiny" onClick={() => { loadList(); loadFeedback() }}>새로고침</button>
@@ -229,12 +239,20 @@ export default function AdminView({ api, tab, studioScenarioId }) {
     <main className={
       'sb-admin'
       + (tab === 'pipeline' || tab === 'tagging' ? ' sb-admin--wide' : '')
-      + (studioScenario ? ' sb-admin--studio-editor' : '')
+      + (studioFullView ? ' sb-admin--studio-editor' : '')
     }>
 
-      {tab === 'studio' && (studioScenario
-        ? <Builder api={{ ...api, goHome: () => setSelectedStudioId(null) }} scenario={studioScenario} />
-        : <AdminScenarioStudio api={api} onEdit={setSelectedStudioId} />)}
+      {tab === 'studio' && (studioSettingsOpen
+        ? <ExploreEditor api={{ ...api, closeExploreEditor: () => setStudioSettingsOpen(false) }} />
+        : studioScenario
+          ? <Builder api={{ ...api, goHome: () => setSelectedStudioId(null) }} scenario={studioScenario} />
+          : <AdminScenarioStudio
+              api={api}
+              onEdit={setSelectedStudioId}
+              onOpenProfileEditor={() => setStudioSettingsOpen(true)}
+              onOpenTagging={() => api.setAdminTab('tagging')}
+              onOpenDashboard={() => api.setAdminTab('dashboard')}
+            />)}
 
       {tab === 'dashboard' && <AdminDashboard api={api} threads={threads} feedback={feedback} loading={listLoading} mode={mode} />}
 
