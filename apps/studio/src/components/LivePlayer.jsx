@@ -475,6 +475,12 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  /* 쓰레드가 생기면 주소를 #thread/<id>로 — 체험 도중에도 링크를 복사해 이어볼 수 있다 */
+  useEffect(() => {
+    if (threadId && api.markLiveThread) api.markLiveThread(threadId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threadId])
+
   /* 고른 사진을 기기에 남긴다 — 서버로 가지 않는 값이라 이어보기의 유일한 복원 재료다 */
   useEffect(() => {
     // 설문이 오기 전(이어보기 로드 중)에는 손대지 않는다 — 빈 답으로 저장하면 복원 재료를 지운다

@@ -22,13 +22,19 @@ import TaggingStudio from './components/TaggingStudio.jsx'
  * 쓰레드·평가/파이프라인/실험 탭까지 해시로 딥링크, 구 #admin 주소도 계속 받는다).
  * 진입은 location.hash 푸시(히스토리 엔트리 생성), 적용은 hashchange 핸들러 한 곳 —
  * 그래서 브라우저 앞/뒤로가기·새로고침·주소 직접 입력이 전부 동작한다.
- * player/live는 체험 1회의 일시 상태라 해시 없이 route 상태로만 산다 (공유는 #s= 별도).
+ * 라이브 쓰레드는 **쓰레드 id가 곧 주소**다 — #thread/<threadId>로 이어보기가 열리고,
+ * 새 체험도 쓰레드가 생기는 순간 그 주소로 바뀐다(replaceState — 히스토리는 늘리지 않는다).
+ * 운영 콘솔의 쓰레드 상세도 같은 문법으로 #ops/threads/<threadId>다.
+ * 시나리오 체험(player)만 여전히 일시 상태다 (공유는 #s= 별도).
  */
 
 /** 해시 → 페이지 라우트 (모르는 해시·#s= 공유 링크는 null = 홈/공유 모드 처리) */
 function routeFromHash(hash) {
   const opsStudio = hash.match(/^#ops\/studio(?:\/(.+))?$/)
   if (opsStudio) return { name: 'admin', tab: 'studio', id: opsStudio[1] ? decodeURIComponent(opsStudio[1]) : null }
+  // 운영 콘솔 쓰레드 상세 — 탭 해시 뒤에 쓰레드 id를 붙인 딥링크
+  const opsThread = hash.match(/^#ops\/threads\/(\d{19})$/)
+  if (opsThread) return { name: 'admin', tab: 'threads', threadId: opsThread[1] }
   const ops = hash.match(/^#ops(?:\/(dashboard|threads|tagging|knowledge|pipeline|prompts|experiment))?$/)
   if (ops) return { name: 'admin', tab: ops[1] || 'dashboard' }
   if (hash === '#admin') return { name: 'admin', tab: 'dashboard' } // 구 주소 호환
@@ -36,13 +42,17 @@ function routeFromHash(hash) {
   if (hash === '#explore-editor') return { name: 'explore-editor' }
   const builder = hash.match(/^#builder\/(.+)$/)
   if (builder) return { name: 'builder', id: decodeURIComponent(builder[1]) }
+  /* 라이브 쓰레드 이어보기 — runId를 id로 고정한다: 같은 주소를 다시 열어도 재마운트하지
+     않고(이어보기 재요청 없음), 다른 쓰레드로 가면 키가 바뀌어 새로 연다 */
+  const thread = hash.match(/^#thread\/(\d{19})$/)
+  if (thread) return { name: 'live', resumeThreadId: thread[1], runId: `t:${thread[1]}` }
   return null
 }
 
 export default function App() {
   // route: {name:'home'} | {name:'builder', id} | {name:'player', id, resume}
   //      | {name:'live', query?, resumeThreadId?, runId} | {name:'explore-editor'}
-  //      | {name:'tagging'} | {name:'admin', tab}
+  //      | {name:'tagging'} | {name:'admin', tab, threadId?}
   // 초기값: 데이터 게이트가 없는 해시는 즉시 반영, #builder/*는 하이드레이션 뒤 초기 효과가 연다
   const [route, setRoute] = useState(() => {
     if (typeof location === 'undefined') return { name: 'home' }
@@ -298,11 +308,23 @@ export default function App() {
     playScenario: (id, resume) => openSynced(workspace.ensureScenarioSynced(id), () => setRoute({ name: 'player', id, resume })),
     /* 라이브 생성 체험(BFF) — 자유 검색 진입. runId로 리마운트해 "새로 생성"이 새 쓰레드를 만든다 */
     playLive: (query) => setRoute({ name: 'live', query, runId: Date.now() }),
-    resumeLive: (threadId) => setRoute({ name: 'live', resumeThreadId: threadId, runId: Date.now() }),
+    resumeLive: (threadId) =>
+      pushRoute(`#thread/${threadId}`, { name: 'live', resumeThreadId: threadId, runId: `t:${threadId}` }),
+    /* 새 체험이 쓰레드를 받은 순간 — 주소를 그 쓰레드로 바꿔 링크가 곧 이어보기가 되게 한다.
+       replaceState라 히스토리 엔트리를 늘리지 않고, hashchange도 발화하지 않아 라우트는 그대로다 */
+    markLiveThread: (threadId) => {
+      if (routeRef.current.name !== 'live' || !threadId) return
+      const hash = `#thread/${threadId}`
+      if (location.hash !== hash) history.replaceState(null, '', location.pathname + location.search + hash)
+    },
     /* 페이지형 화면 진입·이탈 — 전부 해시 히스토리 엔트리라 브라우저 앞/뒤로가기가 동작한다 */
     openAdmin: () => pushRoute('#ops', { name: 'admin', tab: 'dashboard' }),
     /* 운영 콘솔 탭 전환도 해시 엔트리 — 새로고침·앞뒤로가기가 탭을 유지한다 */
     setAdminTab: (tab) => pushRoute(tab === 'dashboard' ? '#ops' : `#ops/${tab}`, { name: 'admin', tab }),
+    /* 쓰레드 상세도 주소가 원천 — 열면 딥링크가 남고, 닫으면 목록 주소로 돌아간다 */
+    openAdminThread: (threadId) =>
+      pushRoute(`#ops/threads/${threadId}`, { name: 'admin', tab: 'threads', threadId }),
+    closeAdminThread: () => pushRoute('#ops/threads', { name: 'admin', tab: 'threads' }),
     /* 어드민 스튜디오는 URL을 #ops/studio 하나로 고정한다.
        시나리오 선택은 AdminView 내부 상태라 ID가 주소에 노출되지 않는다. */
     openAdminBuilder: (id, onReady) =>
@@ -379,7 +401,9 @@ export default function App() {
         /* key: 같은 검색어라도 runId마다 새 쓰레드로 다시 생성한다 */
         <LivePlayer key={route.runId} api={api} query={route.query} resumeThreadId={route.resumeThreadId} />
       )}
-      {route.name === 'admin' && <AdminView api={api} tab={route.tab || 'dashboard'} studioScenarioId={route.id} />}
+      {route.name === 'admin' && (
+        <AdminView api={api} tab={route.tab || 'dashboard'} studioScenarioId={route.id} threadId={route.threadId} />
+      )}
       {route.name === 'tagging' && <TaggingStudio api={api} />}
       {route.name !== 'home' && route.name !== 'explore-editor' && route.name !== 'live' && route.name !== 'admin' && route.name !== 'tagging' && !current && <HomeView api={api} />}
 

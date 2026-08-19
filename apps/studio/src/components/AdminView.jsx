@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   archiveAdminThread,
   fetchAdminFeedback,
@@ -52,7 +52,7 @@ const NAV_GROUPS = [
   },
 ]
 
-export default function AdminView({ api, tab, studioScenarioId }) {
+export default function AdminView({ api, tab, studioScenarioId, threadId }) {
   const [mode, setMode] = useState('lab')
   const [selectedStudioId, setSelectedStudioId] = useState(studioScenarioId || null)
   const [studioSettingsOpen, setStudioSettingsOpen] = useState(false)
@@ -108,15 +108,41 @@ export default function AdminView({ api, tab, studioScenarioId }) {
     loadFeedback()
   }, [loadList, loadFeedback])
 
-  const openDetail = async (threadId) => {
+  /* 주소가 상세의 원천 — #ops/threads/<id>로 들어오면 열고, 목록 주소로 돌아가면 닫는다
+     (새로고침·뒤로가기·링크 붙여넣기가 전부 같은 경로로 동작한다) */
+  useEffect(() => {
+    if (threadId) {
+      if (detailRef.current?.id !== threadId) openDetailRef.current(threadId)
+    } else if (detailRef.current) {
+      setDetail(null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threadId])
+
+  const openDetail = async (id) => {
     setDetailLoading(true)
     setDetailView('doc')
     try {
-      setDetail(await fetchAdminThread(threadId))
+      setDetail(await fetchAdminThread(id))
     } catch (e) {
       handleError(e, '쓰레드를 불러오지 못했어요.')
     } finally {
       setDetailLoading(false)
+    }
+  }
+  const detailRef = useRef(detail)
+  detailRef.current = detail
+  const openDetailRef = useRef(openDetail)
+  openDetailRef.current = openDetail
+
+  /* 상세 링크 복사 — 쓰레드 id가 곧 주소다 (#ops/threads/<id>) */
+  const copyThreadLink = async (id) => {
+    const url = `${location.origin}${location.pathname}${location.search}#ops/threads/${id}`
+    try {
+      await navigator.clipboard.writeText(url)
+      api.showToast('쓰레드 링크를 복사했어요.')
+    } catch {
+      api.showToast('복사에 실패했어요. 주소창의 링크를 사용해주세요.')
     }
   }
 
@@ -272,7 +298,7 @@ export default function AdminView({ api, tab, studioScenarioId }) {
       {tab === 'threads' && (
       <>
       {/* 평가 모아보기 — 피드백 제출 대시보드 */}
-      <AdminFeedback wire={feedback} loading={feedbackLoading} error={feedbackError} onOpenThread={openDetail} />
+      <AdminFeedback wire={feedback} loading={feedbackLoading} error={feedbackError} onOpenThread={api.openAdminThread} />
 
       {/* 쓰레드 목록 */}
       <div className="sb-admin-card">
@@ -341,7 +367,7 @@ export default function AdminView({ api, tab, studioScenarioId }) {
                     </td>
                     <td title={t.updatedAt}>{timeAgo(t.updatedAt, { empty: '—' })}</td>
                     <td className="sb-admin-table__actions">
-                      <button type="button" className="sb-btn sb-btn--ghost sb-btn--tiny" onClick={() => openDetail(t.id)}>
+                      <button type="button" className="sb-btn sb-btn--ghost sb-btn--tiny" onClick={() => api.openAdminThread(t.id)}>
                         열람
                       </button>
                       {t.status !== 'archived' && (
@@ -384,7 +410,7 @@ export default function AdminView({ api, tab, studioScenarioId }) {
           className="sb-llm-modal"
           role="presentation"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setDetail(null)
+            if (event.target === event.currentTarget) api.closeAdminThread()
           }}
         >
           <section className="sb-llm-dialog sb-admin-dialog" role="dialog" aria-modal="true" aria-label="쓰레드 상세">
@@ -429,6 +455,13 @@ export default function AdminView({ api, tab, studioScenarioId }) {
                     >
                       평가 케이스로 저장
                     </button>
+                    <button
+                      type="button"
+                      className="sb-btn sb-btn--ghost sb-btn--tiny"
+                      onClick={() => copyThreadLink(detail.id)}
+                    >
+                      링크 복사
+                    </button>
                     {detail.status !== 'archived' && (
                       <button
                         type="button"
@@ -440,7 +473,7 @@ export default function AdminView({ api, tab, studioScenarioId }) {
                     )}
                   </>
                 )}
-                <button type="button" className="sb-icon-btn" aria-label="닫기" onClick={() => setDetail(null)}>×</button>
+                <button type="button" className="sb-icon-btn" aria-label="닫기" onClick={() => api.closeAdminThread()}>×</button>
               </div>
             </div>
             {detail && detailView === 'doc' && <div className="sb-admin-doc">{renderMarkdown(markdown)}</div>}

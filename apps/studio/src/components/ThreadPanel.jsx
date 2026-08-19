@@ -47,6 +47,18 @@ export default function ThreadPanel({ api, open, origin = 'right', onClose }) {
     }
   }
 
+  /* 링크 복사 — 라이브 쓰레드만 서버 id를 갖는다(#thread/<id>가 곧 이어보기 주소).
+     시나리오 체험 쓰레드는 기기 안 기록이라 공유할 주소가 없다 */
+  const copyLink = async (t) => {
+    const url = `${location.origin}${location.pathname}${location.search}#thread/${t.id}`
+    try {
+      await navigator.clipboard.writeText(url)
+      api.showToast('쓰레드 링크를 복사했어요.')
+    } catch {
+      api.showToast('복사에 실패했어요.')
+    }
+  }
+
   const newThread = () => {
     onClose()
     api.goHome()
@@ -196,6 +208,15 @@ export default function ThreadPanel({ api, open, origin = 'right', onClose }) {
                                 <span className="text-xs text-slate-400 font-bold">담은 상품</span>
                                 <span className="text-sm font-bold text-slate-800">{cart.length}개</span>
                               </div>
+                              {t.live && (
+                                <button
+                                  type="button"
+                                  className="w-full mb-2 py-2 text-slate-500 text-xs rounded-xl border border-slate-200 transition-all hover:bg-slate-50 active:scale-95"
+                                  onClick={() => copyLink(t)}
+                                >
+                                  링크 복사
+                                </button>
+                              )}
                               <div className="grid grid-cols-2 gap-2">
                                 <button
                                   type="button"
