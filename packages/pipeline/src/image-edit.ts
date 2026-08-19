@@ -29,6 +29,9 @@ export class ImageEditError extends Error {
     readonly code: 'image_not_configured' | 'image_refused' | 'image_failed',
     message: string,
     readonly retryable: boolean,
+    /** 프로바이더가 준 원인 원문(요약) — 사용자 문구가 아니라 운영자·개발자가 읽는 자리다.
+     * 키·조직 검증·모델 접근 같은 설정 문제는 이게 없으면 로그를 못 보는 환경에서 진단이 막힌다 */
+    readonly detail?: string,
   ) {
     super(message)
   }

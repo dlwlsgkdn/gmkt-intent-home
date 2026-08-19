@@ -198,7 +198,8 @@ export class ThreadsController {
       if (e instanceof ImageEditError) {
         this.logger.warn(`정밀 렌더 실패 안내 — code=${e.code}`)
         throw new HttpException(
-          { code: e.code, message: e.message, retryable: e.retryable },
+          // detail = 프로바이더 원인 원문 (운영 진단용 — FE는 message만 보여준다)
+          { code: e.code, message: e.message, retryable: e.retryable, detail: e.detail },
           e.code === 'image_not_configured' ? HttpStatus.SERVICE_UNAVAILABLE : HttpStatus.BAD_GATEWAY,
         )
       }

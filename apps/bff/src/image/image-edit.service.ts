@@ -58,7 +58,7 @@ export class ImageEditService implements ImageEditPort {
     if (!res.ok) {
       const text = await res.text().catch(() => '')
       this.logger.warn(`이미지 편집 실패 ${res.status}: ${text.slice(0, 400)}`)
-      // 4xx는 요청 자체가 거절된 것(정책·형식) — 재시도해도 같다. 5xx·429만 재시도 가치가 있다
+      // 4xx는 요청 자체가 거절된 것(정책·형식·모델 접근) — 재시도해도 같다. 5xx·429만 재시도 가치가 있다
       const retryable = res.status >= 500 || res.status === 429
       throw new ImageEditError(
         retryable ? 'image_failed' : 'image_refused',
@@ -66,6 +66,7 @@ export class ImageEditService implements ImageEditPort {
           ? '정밀 렌더 서버가 잠시 바빠요. 조금 뒤에 다시 시도해 주세요.'
           : '이 사진으로는 정밀 렌더를 만들지 못했어요. 기기에서 만든 미리보기로 보여드릴게요.',
         retryable,
+        `HTTP ${res.status} — ${summarizeUpstream(text)}`,
       )
     }
     const json = (await res.json()) as { data?: { b64_json?: string }[] }
@@ -79,6 +80,18 @@ export class ImageEditService implements ImageEditPort {
       meta: { model, latencyMs: Date.now() - startedAt },
     }
   }
+}
+
+/** 프로바이더 오류 본문 → 한 줄 요약. JSON이면 error.message만, 아니면 앞부분만 자른다 */
+function summarizeUpstream(text: string): string {
+  try {
+    const json = JSON.parse(text) as { error?: { message?: string; code?: string; type?: string } }
+    const e = json.error
+    if (e?.message) return [e.message, e.code, e.type].filter(Boolean).join(' · ').slice(0, 300)
+  } catch {
+    /* JSON이 아니면 원문 */
+  }
+  return text.replace(/\s+/g, ' ').trim().slice(0, 300)
 }
 
 function extOf(mediaType: string): string {
