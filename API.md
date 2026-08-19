@@ -105,6 +105,16 @@ CatalogProduct = { id, name, brand, price, tags[], url?, mall?, imageUrl? }
 // http(s) 검증 통과분만. 없거나 로드 실패면 FE가 이모지 목업 블록으로 렌더한다
 ```
 
+**가상 메이크업 정밀 렌더** (`POST /api/threads/:id/look-render`): 계획의 `look` 섹션은 기본적으로
+**기기 안에서** 그려진다(얼굴 랜드마크로 입술·볼에만 색을 얹는 캔버스 합성 — 사진이 서버로 오지
+않는다). 이 엔드포인트는 그보다 나은 그림을 원할 때 **사용자가 화면에서 명시로 요청**하면 호출되는
+별도 경로다: 사진(data URL)을 받아 외부 이미지 편집 모델(OpenAI images.edits — Anthropic API에는
+이미지 생성·편집이 없다)로 룩을 실제로 올려 돌려준다. 계약은 `LookRenderBody`/`LookRenderResult`,
+포트는 `@ddak/pipeline` `ImageEditPort`(프로바이더 중립)다. **사진은 요청 본문에만 있고 스텝에는
+톤·모델·지연만 남는다.** 실패 본문은 SSE와 같은 문법(`{ code, message, retryable }`) —
+`image_not_configured`(OPENAI_API_KEY 없음, 503) / `image_refused`(4xx, 502) / `image_failed`(5xx·타임아웃, 502).
+FE는 어떤 실패에서도 기기 합성을 그대로 유지하고 토스트로만 알린다.
+
 **피드백(사용자 평가)**: LivePlayer의 "💬 평가"가 스튜디오 평가 스튜디오와 같은 문법(별점 0~5 + 코멘트,
 null=미평가·0점 구분)으로 페이지 전체(`review`) + 컴포넌트별(`components[]` — livePage 투영 아이템 id·라벨 동봉)을
 받는다. 저장은 `POST /:id/events`에 `type=feedback`, `data=ThreadStageFeedback`(stage `survey|plan`) — **제출 1회 =

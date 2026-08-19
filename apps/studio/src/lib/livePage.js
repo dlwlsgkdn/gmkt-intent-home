@@ -69,6 +69,7 @@ export function liveSurveyItems(page) {
  * BEFORE 재료다: 서버는 어떤 룩인지(tone)만 정하고 합성은 화면이 한다.
  * opts.photoAfter — 메이크업이 올라간 AFTER 이미지(로컬 랜드마크 합성 또는 정밀 렌더). 늦게
  * 도착하므로 없을 수도 있고, 그때는 같은 사진에 tone 프리셋을 얹어 보여준다.
+ * opts.photoAfterPrecise — 그 AFTER가 외부 이미지 편집 모델의 정밀 렌더인지 (배지 문구만 다르다).
  * opts.pendingSlots — 뼈대 조기 확정 뒤 아직 검색 결과가 안 채운 자리 인덱스. 이 자리는
  * LivePlayer가 로딩 카드로 렌더하는 `livePending` 아이템으로 투영된다 (레지스트리 밖 타입 —
  * id도 `live-plan-s#` 문법 밖이라 피드백 앵커 판정에 걸리지 않는다) */
@@ -134,7 +135,8 @@ export function livePlanItems(page, opts = {}) {
             afterImage: after,
             tone: opts.photoAfter ? '' : section.tone || '',
             beforeLabel: '내 사진',
-            afterLabel: 'AI 메이크업',
+            afterLabel: opts.photoAfterPrecise ? 'AI 메이크업 · 정밀' : 'AI 메이크업',
+            renderable: true, // 라이브 전용 — 카드에 "정밀 렌더" 버튼을 세운다
             split: '50',
             hint: '손잡이를 끌어 비교',
             disclaimer: 'AI가 올려 본 미리보기예요. 실제 발색은 피부톤 · 조명에 따라 다를 수 있어요.',

@@ -13,6 +13,7 @@ import type {
   ThreadWithSteps,
 } from '@ddak/schema'
 import { ThreadStageFeedback } from '@ddak/schema'
+import type { LookRenderBody, LookRenderResult } from '@ddak/schema'
 import {
   ContentsSectionGen,
   GeneratedIndexAllocator,
@@ -20,17 +21,20 @@ import {
   PlanSectionPartialGen,
   PlanSkeletonSectionGen,
   ProductsSectionGen,
+  buildLookRenderPrompt,
   buildSurveyPage,
   completeSearchSection,
   groundContentsSection,
   groundProductsSection,
   isSlotKind,
   mergePlanSections,
+  parseDataUrl,
   slotIndexesOf,
   surveyStreamHandlers,
 } from '@ddak/pipeline'
 import { CoreClientService } from '../core-client.service'
 import { LlmService } from '../llm/llm.service'
+import { ImageEditService } from '../image/image-edit.service'
 import { EngineFlagService } from '../engine/engine-flag.service'
 import { GraphEngineService } from '../engine/graph-engine.service'
 import { SEQ, combineMeta, intentOf } from './thread-io'
@@ -69,6 +73,7 @@ export class ThreadsService {
   constructor(
     private readonly core: CoreClientService,
     private readonly llm: LlmService,
+    private readonly imageEdit: ImageEditService,
     private readonly engineFlag: EngineFlagService,
     private readonly graphEngine: GraphEngineService,
   ) {}
@@ -328,6 +333,35 @@ export class ThreadsService {
     const { section, drops } = groundContentsSection(s)
     if (!quiet) drops.forEach((d) => this.logger.warn(d.message))
     return section
+  }
+
+  /** 가상 메이크업 정밀 렌더 — 외부 이미지 편집 모델이 올린 사진에 실제로 메이크업을 얹는다.
+   * 기본 경로(기기 안 랜드마크 합성)와 달리 **사진이 서버 밖으로 나가므로** 사용자가 화면에서
+   * 명시로 요청할 때만 호출된다. 사진은 요청 본문에만 있고 스텝에는 톤·모델·지연만 남긴다 —
+   * 쓰레드 기록에 얼굴 사진을 남기지 않는다는 원칙은 여기서도 같다 */
+  async renderLook(threadId: string, body: LookRenderBody): Promise<LookRenderResult> {
+    const photo = parseDataUrl(body.photo)
+    if (!photo) throw new BadRequestException('photo는 data:image/*;base64 형식이어야 합니다')
+    const prompt = buildLookRenderPrompt({ tone: body.tone, title: body.title, points: body.points })
+    const result = await this.imageEdit.edit({
+      imageBase64: photo.base64,
+      mediaType: photo.mediaType,
+      prompt,
+    })
+    // 기록 실패는 렌더 결과를 버리지 않는다 (관측용 로그일 뿐)
+    try {
+      await this.recordEvent(threadId, {
+        type: 'look-render',
+        data: { tone: body.tone, model: result.meta.model ?? null, latencyMs: result.meta.latencyMs ?? null },
+      })
+    } catch (e) {
+      this.logger.warn(`정밀 렌더 기록 실패: ${(e as Error).message}`)
+    }
+    return {
+      image: `data:${result.mediaType};base64,${result.imageBase64}`,
+      model: result.meta.model,
+      latencyMs: result.meta.latencyMs,
+    }
   }
 
   /** 담기/완료 등 행동 기록 — 다음 빈 seq에 기록, complete면 상태 갱신 */

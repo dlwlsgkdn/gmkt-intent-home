@@ -9,6 +9,7 @@ DDAK BFF — threads API(SSE) + Claude 오케스트레이션 + core 기록.
 POST /api/threads                → 쓰레드 생성 (+탐색 스텝) → { threadId }
 POST /api/threads/:id/survey     → SSE: status → result { page: 설문 }   (LLM #1, effort medium)
 POST /api/threads/:id/plan       → SSE: status → result { page: 계획 }   (LLM #2, effort high, 카탈로그 그라운딩)
+POST /api/threads/:id/look-render → 가상 메이크업 정밀 렌더 (이미지 편집 모델, 사용자 명시 요청 시에만)
 POST /api/threads/:id/events     → 담기/완료 기록 (complete면 status=done)
 GET  /api/threads/:id            → 이어보기 (survey/answers/plan 복원)
 GET  /api/threads                → 쓰레드 목록 (x-device-id 기준)
@@ -16,6 +17,11 @@ GET  /healthz                     → 상태 (llm: configured|not_configured)
 ```
 
 - 사용자 식별: `x-device-id` 헤더 (익명 디바이스 id, 없으면 anonymous)
+- **이미지 편집만 다른 프로바이더**: Anthropic API에는 이미지 생성·편집이 없어(입력으로 읽기만 한다)
+  정밀 렌더는 OpenAI images.edits를 쓴다 — `OPENAI_API_KEY`(없으면 503 image_not_configured로 정상 강등),
+  `OPENAI_BASE_URL`(기본 https://api.openai.com — e2e는 모의 서버로 돌린다), `OPENAI_IMAGE_MODEL`(기본 gpt-image-2).
+  계약은 프로바이더 중립(`@ddak/pipeline` ImageEditPort)이라 교체는 image-edit.service 한 파일이다.
+  주의: 편집은 최대 2분까지 걸릴 수 있어 서버리스 함수 실행 시간 상한을 확인할 것
 - **실패 안내 정책**: LLM 실패(키 미설정·호출 실패·거절) 시 가짜 맞춤 콘텐츠로 대체하지 않고
   SSE `error` 이벤트(`{ code, message, retryable }`)로 정직하게 알린다 — 코드는
   `llm_not_configured` / `llm_refused` / `llm_failed` / `internal` (API.md 참고).

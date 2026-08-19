@@ -1441,6 +1441,7 @@
   color: var(--dk-ink-2);
   white-space: nowrap;
 }
+.sb-ba__render { margin-top: 12px; width: 100%; justify-content: center; }
 .sb-ba__note { margin: 10px 0 0; font-size: var(--sb-t-micro); font-weight: 300; color: var(--dk-muted); }
 
 /* 가상 메이크업 합성 — AFTER 레이어에 룩 색조(tone)를 올린다. 립·볼 자리에 색을 얹고

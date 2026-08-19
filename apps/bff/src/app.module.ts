@@ -3,6 +3,7 @@ import { ApiExcludeEndpoint, ApiOperation, ApiTags } from '@nestjs/swagger'
 import { CoreClientService } from './core-client.service'
 import { KnowledgeService } from './llm/knowledge.service'
 import { LlmService } from './llm/llm.service'
+import { ImageEditService } from './image/image-edit.service'
 import { AdminController } from './admin/admin.controller'
 import { EngineFlagService } from './engine/engine-flag.service'
 import { GraphEngineService } from './engine/graph-engine.service'
@@ -21,12 +22,13 @@ export class AppController {
   root() {}
 
   @Get('healthz')
-  @ApiOperation({ summary: '상태 확인', description: 'llm: configured|not_configured, core: configured|missing' })
+  @ApiOperation({ summary: '상태 확인', description: 'llm·imageEdit: configured|not_configured, core: configured|missing' })
   healthz() {
     return {
       ok: true,
       service: 'ddak-bff',
       llm: Boolean(process.env.ANTHROPIC_API_KEY) ? 'configured' : 'not_configured',
+      imageEdit: Boolean(process.env.OPENAI_API_KEY) ? 'configured' : 'not_configured',
       core: Boolean(process.env.CORE_URL) ? 'configured' : 'missing',
       now: new Date().toISOString(),
     }
@@ -39,6 +41,7 @@ export class AppController {
     CoreClientService,
     KnowledgeService,
     LlmService,
+    ImageEditService,
     EngineFlagService,
     GraphEngineService,
     PipelineDryRunService,

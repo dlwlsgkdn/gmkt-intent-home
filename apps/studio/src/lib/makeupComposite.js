@@ -86,6 +86,36 @@ function cheekCenter(points, side) {
 }
 
 /**
+ * 사진 → data URL (필요하면 축소). 샘플 얼굴은 상대 URL이라 그대로는 서버로 보낼 수 없고,
+ * 정밀 렌더 요청 본문은 언제나 data:image/*;base64여야 한다 (@ddak/schema LookRenderBody).
+ * 이미 data URL이면 그대로 돌려준다. 실패하면 null.
+ */
+export async function toPhotoDataUrl(src, maxEdge = MAX_EDGE) {
+  if (!src || typeof document === 'undefined') return null
+  if (String(src).startsWith('data:')) return src
+  let img
+  try {
+    img = await loadImage(src)
+  } catch {
+    return null
+  }
+  const natural = { w: img.naturalWidth || img.width, h: img.naturalHeight || img.height }
+  if (!natural.w || !natural.h) return null
+  const scale = Math.min(1, maxEdge / Math.max(natural.w, natural.h))
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.round(natural.w * scale)
+  canvas.height = Math.round(natural.h * scale)
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return null
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+  try {
+    return canvas.toDataURL('image/jpeg', 0.92)
+  } catch {
+    return null // 오염된 캔버스 (크로스 오리진)
+  }
+}
+
+/**
  * 사진 + 룩 색조 → 메이크업을 올린 데이터 URL.
  * 얼굴을 못 찾거나 모델이 없으면 **null** — 호출자는 CSS 색조 프리셋을 그대로 쓰면 된다.
  */

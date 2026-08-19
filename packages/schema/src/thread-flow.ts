@@ -12,6 +12,12 @@ import { ThreadId, ThreadSource, ThreadStatus } from './thread'
 export const Profile = z.array(z.object({ label: z.string(), value: z.string() }))
 export type Profile = z.infer<typeof Profile>
 
+/** 가상 메이크업 결과의 색조 — FE가 올린 사진 위에 올려 보여줄 톤 프리셋 키.
+ * 값 집합은 FE 프리셋(registry beforeAfter TONE_PRESETS)과 한 벌이다 */
+export const LOOK_TONES = ['coral', 'rose', 'red', 'peach', 'brown', 'plum'] as const
+export const LookTone = z.enum(LOOK_TONES)
+export type LookTone = z.infer<typeof LookTone>
+
 /* ── 요청 ────────────────────────────────────────────────────────────── */
 
 export const StartThreadBody = z
@@ -71,6 +77,29 @@ export const PlanRequestBody = z.object({
   feedback: ThreadStageFeedback.optional(),
 })
 export type PlanRequestBody = z.infer<typeof PlanRequestBody>
+
+/* ── 가상 메이크업 정밀 렌더 ──────────────────────────────────────────────
+ * 기본 경로(기기 안 랜드마크 합성)와 결정적으로 다르다: **사진이 서버와 외부 이미지 편집
+ * 모델로 나간다.** 그래서 자동으로 부르지 않고 사용자가 화면에서 명시로 요청할 때만 호출한다.
+ * 사진은 요청 본문에만 실리고 스텝에는 남기지 않는다 (기록되는 것은 톤·모델·지연뿐). */
+
+export const LookRenderBody = z.object({
+  /** 얼굴 사진 — data:image/*;base64 (FE가 720px로 줄인 것) */
+  photo: z.string().regex(/^data:image\/[a-zA-Z+]+;base64,/, 'photo는 data:image/*;base64 형식이어야 합니다'),
+  tone: LookTone,
+  /** 룩 이름·포인트 — 편집 지시문의 재료 (없으면 톤만으로 만든다) */
+  title: z.string().optional(),
+  points: z.array(z.string()).max(4).optional(),
+})
+export type LookRenderBody = z.infer<typeof LookRenderBody>
+
+export const LookRenderResult = z.object({
+  /** 메이크업이 올라간 이미지 — data:image/*;base64 */
+  image: z.string(),
+  model: z.string().optional(),
+  latencyMs: z.number().optional(),
+})
+export type LookRenderResult = z.infer<typeof LookRenderResult>
 
 export const ThreadEventBody = z.object({
   /** cartAdd | cartRemove | complete | restart | feedback 등 — FE 정의 이벤트 이름 */
@@ -142,12 +171,6 @@ export const PlanContentItem = z.object({
   duration: z.string().optional(),
 })
 export type PlanContentItem = z.infer<typeof PlanContentItem>
-
-/** 가상 메이크업 결과의 색조 — FE가 올린 사진 위에 올려 보여줄 톤 프리셋 키.
- * 값 집합은 FE 프리셋(registry beforeAfter TONE_PRESETS)과 한 벌이다 */
-export const LOOK_TONES = ['coral', 'rose', 'red', 'peach', 'brown', 'plum'] as const
-export const LookTone = z.enum(LOOK_TONES)
-export type LookTone = z.infer<typeof LookTone>
 
 export const PlanSectionWire = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('guide'), title: z.string(), body: z.string() }),

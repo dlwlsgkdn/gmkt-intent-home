@@ -59,6 +59,8 @@ const bff = spawn('node', [path.join(here, '..', 'dist', 'main.js')], {
     CORE_URL: MOCK,
     ANTHROPIC_BASE_URL: MOCK,
     ANTHROPIC_API_KEY: 'mock-key',
+    OPENAI_BASE_URL: MOCK, // 가상 메이크업 정밀 렌더 — 모의 이미지 편집 엔드포인트
+    OPENAI_API_KEY: 'mock-image-key',
     LANGGRAPH_DATABASE_URL: '', // MemorySaver — interrupt/재개는 프로세스 내에서 검증
     BFF_SERVICE_TOKEN: '',
   },
@@ -273,6 +275,35 @@ try {
     const skCall = (await llmCalls()).filter((c) => c.type === 'skeleton').at(-1)
     ok(skCall?.user?.includes('얼굴 사진을 올렸습니다'), '사진 제출이 계획 가변부에 말로 실림')
     ok(!skCall?.user?.includes('data:image'), '사진 원본은 프롬프트에 실리지 않는다')
+  }
+
+  // ── 8.7 가상 메이크업 정밀 렌더 (이미지 편집 모델) ──
+  console.log('8.7) 가상 메이크업 정밀 렌더')
+  // 1x1 PNG data URL — 왕복·기록 검증용 (합성 품질은 브라우저에서 본다)
+  const tinyPhoto =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+  const renderRes = await fetch(`${BFF}/api/threads/${startM.threadId}/look-render`, {
+    method: 'POST',
+    headers: H,
+    body: JSON.stringify({ photo: tinyPhoto, tone: 'coral', title: '코랄 생기 데일리 룩', points: ['립 — 코랄 틴트'] }),
+  })
+  const render = await renderRes.json()
+  ok(renderRes.status === 201, `정밀 렌더 응답 201 (${renderRes.status})`)
+  ok(String(render?.image || '').startsWith('data:image/png;base64,'), '편집된 이미지 data URL 수신')
+  ok(!!render?.model, `사용 모델 각인 (${render?.model})`)
+  {
+    const editCall = (await llmCalls()).filter((c) => c.type === 'image-edit').at(-1)
+    ok(!!editCall, '이미지 편집 모델 호출됨')
+    ok((editCall?.user || '').includes('same person'), '편집 지시문에 동일성 보존 지시 포함')
+    ok((editCall?.user || '').includes('coral'), '편집 지시문에 룩 색조 반영')
+  }
+  {
+    const dumpM = await fetch(MOCK + `/internal/dump/${startM.threadId}`).then((r) => r.json())
+    const renderStep = (dumpM?.steps ?? []).find((s) => s.payload?.type === 'look-render')
+    ok(!!renderStep, '정밀 렌더가 action 스텝으로 기록')
+    ok(renderStep?.payload?.data?.tone === 'coral', '기록에 룩 색조 포함')
+    // 얼굴 사진은 어떤 스텝에도 남지 않는다 — 기본 경로와 같은 원칙
+    ok(!JSON.stringify(dumpM?.steps ?? []).includes('data:image/'), '사진 원본은 스텝에 남지 않는다')
   }
 
   // ── 9. 파이프라인 스튜디오 API (페이즈 4) ──

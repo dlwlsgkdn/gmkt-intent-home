@@ -76,6 +76,34 @@ export async function startLiveThread(body) {
   return res.json()
 }
 
+/* 가상 메이크업 정밀 렌더 — 올린 사진을 이미지 편집 모델이 실제로 편집한다.
+   기본 경로(기기 안 랜드마크 합성)와 달리 **사진이 서버로 나가므로** 사용자가 화면에서
+   명시로 요청했을 때만 부른다 (LivePlayer 확인 다이얼로그). 실패 본문은 SSE 실패 안내와
+   같은 문법 { code, message, retryable } — 그대로 사용자 문구로 쓴다 */
+export async function renderLiveLook(threadId, body) {
+  let res
+  try {
+    res = await fetch(`${BASE}/threads/${threadId}/look-render`, {
+      method: 'POST',
+      headers: headers(true),
+      body: JSON.stringify(body),
+    })
+  } catch {
+    throw networkError()
+  }
+  if (!res.ok) {
+    let payload = null
+    try {
+      payload = await res.json()
+    } catch {
+      /* 본문 없음 */
+    }
+    if (payload && payload.code) throw new LiveApiError(payload.code, payload.message, !!payload.retryable)
+    throw await toLiveError(res)
+  }
+  return res.json()
+}
+
 /* 이어보기 — 단계별 페이지(survey/answers/plan) 복원 */
 export async function fetchLiveThread(threadId) {
   let res

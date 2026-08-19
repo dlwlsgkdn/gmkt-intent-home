@@ -149,8 +149,31 @@ const server = http.createServer(async (req, res) => {
   const chunks = []
   for await (const c of req) chunks.push(c)
   const bodyText = Buffer.concat(chunks).toString('utf8')
-  const body = bodyText ? JSON.parse(bodyText) : undefined
+  // 이미지 편집은 multipart라 JSON 파싱을 하면 안 된다 — content-type으로 가른다
+  const isJson = (req.headers['content-type'] ?? '').includes('application/json')
+  const body = isJson && bodyText ? JSON.parse(bodyText) : undefined
   const url = req.url ?? ''
+
+  // ── 모의 이미지 편집 (OpenAI images.edits) ──────────────────────
+  if (url === '/v1/images/edits' && req.method === 'POST') {
+    // multipart 본문에서 프롬프트만 건져 기록한다 (e2e가 동일성 보존 지시를 검증한다)
+    const prompt = /name="prompt"\r?\n\r?\n([\s\S]*?)\r?\n--/.exec(bodyText)?.[1] ?? ''
+    llmCalls.push({ type: 'image-edit', system: '', user: prompt })
+    res.setHeader('content-type', 'application/json')
+    res.writeHead(200)
+    // 1x1 투명 PNG — 내용이 아니라 왕복·기록을 검증하는 자리다
+    res.end(
+      JSON.stringify({
+        data: [
+          {
+            b64_json:
+              'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+          },
+        ],
+      }),
+    )
+    return
+  }
 
   // ── 모의 Anthropic ──────────────────────────────────────────────
   if (url === '/v1/messages' && req.method === 'POST') {

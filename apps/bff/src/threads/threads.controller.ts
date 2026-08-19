@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Logger, Param, Post, Query, Res, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Headers, HttpException, HttpStatus, Logger, Param, Post, Query, Res, UseGuards } from '@nestjs/common'
 import {
   ApiBearerAuth,
   ApiBody,
@@ -13,6 +13,8 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger'
 import {
+  LookRenderBody,
+  LookRenderResult,
   PlanRequestBody,
   StartThreadBody,
   StartThreadResult,
@@ -25,7 +27,7 @@ import { ServiceTokenGuard } from '../common/service-token.guard'
 import { ZodValidationPipe } from '../common/zod-validation.pipe'
 import { ParseThreadIdPipe } from '../common/thread-id.pipe'
 import { toOpenApi } from '../common/openapi'
-import { LlmGenerationError } from '@ddak/pipeline'
+import { ImageEditError, LlmGenerationError } from '@ddak/pipeline'
 import { ThreadsService } from './threads.service'
 import { openSse, sseClose, sseSend, type SseRes } from './sse'
 
@@ -172,6 +174,41 @@ export class ThreadsController {
       message: `일시적인 문제로 ${label}에 실패했어요. 잠시 후 다시 시도해 주세요.`,
       retryable: true,
     })
+  }
+
+  @Post(':id/look-render')
+  @ApiOperation({
+    summary: '가상 메이크업 정밀 렌더 (이미지 편집 모델)',
+    description:
+      '올린 얼굴 사진에 룩을 실제로 발라 준다. 기본 경로(기기 안 랜드마크 합성)와 달리 **사진이 서버·외부 모델로 나가므로** ' +
+      'FE는 사용자가 명시로 요청했을 때만 호출한다. 사진은 요청 본문에만 있고 쓰레드 스텝에는 톤·모델·지연만 남는다. ' +
+      'OPENAI_API_KEY 미설정이면 image_not_configured (화면은 기기 합성을 그대로 유지한다).',
+  })
+  @ApiParam(THREAD_ID_PARAM)
+  @ApiBody({ schema: toOpenApi(LookRenderBody) })
+  @ApiCreatedResponse({ schema: toOpenApi(LookRenderResult) })
+  async lookRender(
+    @Param('id', ParseThreadIdPipe) id: string,
+    @Body(new ZodValidationPipe(LookRenderBody)) body: LookRenderBody,
+  ) {
+    try {
+      return await this.threads.renderLook(id, body)
+    } catch (e) {
+      // 실패 안내는 SSE 경로와 같은 문법({ code, message, retryable })으로 — FE가 한 규칙으로 읽는다
+      if (e instanceof ImageEditError) {
+        this.logger.warn(`정밀 렌더 실패 안내 — code=${e.code}`)
+        throw new HttpException(
+          { code: e.code, message: e.message, retryable: e.retryable },
+          e.code === 'image_not_configured' ? HttpStatus.SERVICE_UNAVAILABLE : HttpStatus.BAD_GATEWAY,
+        )
+      }
+      if (e instanceof HttpException) throw e
+      this.logger.error(`정밀 렌더 오류: ${(e as Error).message}`)
+      throw new HttpException(
+        { code: 'internal', message: '일시적인 문제로 정밀 렌더에 실패했어요. 잠시 후 다시 시도해 주세요.', retryable: true },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      )
+    }
   }
 
   @Post(':id/events')

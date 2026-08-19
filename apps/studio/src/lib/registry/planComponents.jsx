@@ -134,6 +134,26 @@ function BeforeAfter({ p, ctx }) {
   )
 }
 
+/* 정밀 렌더 버튼 — 라이브 생성 체험에서만 뜬다(renderable + ctx.player.renderLook).
+   지금 보이는 AFTER는 기기 안에서 만든 합성이고, 이 버튼이 사진을 서버로 보내 이미지 편집
+   모델로 실제 렌더를 받아 온다. ✦를 쓰는 자리다 — 진짜로 눌러서 만들어지는 동작이므로 */
+function LookRenderButton({ p, ctx }) {
+  if (!p.renderable || ctx.mode !== 'player' || !ctx.player || !ctx.player.renderLook) return null
+  const state = ctx.player.lookRenderState || 'idle'
+  const label =
+    state === 'loading' ? '정밀 렌더를 만드는 중이에요…' : state === 'done' ? '✓ 정밀 렌더 적용됨' : '✦ 정밀 렌더 만들기'
+  return (
+    <button
+      type="button"
+      className="sb-btn sb-btn--ai sb-btn--small sb-ba__render"
+      disabled={state === 'loading' || state === 'done'}
+      onClick={() => ctx.player.renderLook()}
+    >
+      {label}
+    </button>
+  )
+}
+
 /* 도움이 되셨나요 — 좋아요/싫어요 (Figma 피드백/Card default·좋아요·싫어요) */
 function FeedbackButtons({ p, ctx }) {
   const [state, setState] = React.useState(p.state || 'none')
@@ -642,6 +662,7 @@ export const PLAN_COMPONENTS = {
         {p.desc ? <p className="sb-ba__desc">{kText(p.desc, ctx, 'desc')}</p> : null}
         <BeforeAfter p={p} ctx={ctx} />
         {p.disclaimer ? <p className="sb-ba__note">{kText(p.disclaimer, ctx, 'disclaimer')}</p> : null}
+        <LookRenderButton p={p} ctx={ctx} />
       </div>
     ),
   },
