@@ -34,7 +34,7 @@ const NON_LLM_EDITABLE_FIELDS = new Set([
 
   // Figma 기준으로 추가된 설정·자산 필드 — 사람이 인스펙터로만 정한다
   'photoUrl', 'beforeImage', 'afterImage', 'split', 'state', 'current', 'total',
-  'customOption', 'noticeOpen', 'highlight', 'matchLabel', 'samples',
+  'customOption', 'noticeOpen', 'highlight', 'samples',
 ])
 
 const positionSort = (left, right) =>

@@ -33,7 +33,7 @@ const FACT_FIELDS = new Set([
 
   // Figma 기준으로 추가된 설정·자산 필드 — 사람이 인스펙터로만 정한다
   'photoUrl', 'beforeImage', 'afterImage', 'split', 'state', 'current', 'total',
-  'customOption', 'noticeOpen', 'highlight', 'matchLabel', 'samples',
+  'customOption', 'noticeOpen', 'highlight', 'samples',
 ])
 
 /* 새로 추가된 미디어 카드는 url을 스스로 채울 수 있다(국내 기준 실제 주소만) — 검토 경고 대상 */

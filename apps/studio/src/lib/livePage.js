@@ -66,16 +66,20 @@ export function livePlanItems(page, opts = {}) {
     props: { title: '설문 요약', hiddenProfile: '', hiddenQuestions: '' },
   })
   const sections = page.sections || []
-  ;(sections).forEach((section, i) => {
+  /* forEach가 아니라 인덱스 순회다 — 스트리밍 중 partial.sections는 도착한 인덱스에만 값이
+     있는 희소 배열이고, forEach는 그 구멍을 아예 건너뛴다. 아직 안 온 자리에 로딩 카드를
+     제자리에 그리려면 구멍도 방문해야 한다 (렌더 여부는 pendingSlots가 정한다) */
+  for (let i = 0; i < sections.length; i += 1) {
+    const section = sections[i]
     // 단계 하위 표시 — 단계 안내(guide) 바로 뒤의 상품 섹션(자리 포함)은 그 단계에 속한
     // 콘텐츠처럼 들여 배치한다 (LivePlayer가 stepSub로 래퍼 클래스를 단다)
     const stepSub = sections[i - 1] != null && sections[i - 1].kind === 'guide'
     if (!section) {
-      // 빈 슬롯 — 아직 안 온 상품·콘텐츠 자리. 인덱스는 보존되고, 조기 확정 뒤에는 로딩 카드
+      // 빈 슬롯 — 아직 안 온 상품·콘텐츠 자리. 인덱스는 보존되고, 자리 표시는 로딩 카드
       if (pendingSlots.includes(i)) {
         items.push({ id: `live-plan-pending-${i}`, type: 'livePending', stepSub, props: {} })
       }
-      return
+      continue
     }
     const base = `live-plan-s${i}`
     if (section.kind === 'guide') {
@@ -109,7 +113,6 @@ export function livePlanItems(page, opts = {}) {
             price: Number(product.price || 0).toLocaleString('ko-KR'),
             was: '',
             score: '', // 와이어에 추천도가 없으면 배지를 그리지 않는다
-            matchLabel: 'MATCH',
             summary: '',
             emoji: product.imageUrl ? '' : '🧴', // 썸네일 없는 상품만 이모지 목업 블록으로 렌더
             gradient: '',
@@ -158,6 +161,6 @@ export function livePlanItems(page, opts = {}) {
         }
       })
     }
-  })
+  }
   return items
 }

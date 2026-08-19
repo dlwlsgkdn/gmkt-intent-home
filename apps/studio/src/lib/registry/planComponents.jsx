@@ -31,8 +31,10 @@ const MALL_TONE = {
 }
 
 /* 추천도 말풍선 — 배지를 누르면 왜 이 점수인지 설명한다 (Figma 상품카드/MatchTooltip) */
-function MatchBadge({ p, ctx, score, label }) {
+const MATCH_LABEL = '추천도' // Figma 상품카드 배지 — 영문 MATCH에서 한글로 통일
+function MatchBadge({ p, ctx, score }) {
   const [open, setOpen] = React.useState(false)
+  const label = MATCH_LABEL
   const note = p.matchNote || '프로필과 설문 답변을 전문가 기준으로 분석해 계산한 추천도예요.'
   return (
     <span className="sb-match">
@@ -294,7 +296,6 @@ export const PLAN_COMPONENTS = {
       price: '27,900',
       was: '',
       score: '92',
-      matchLabel: 'MATCH',
       matchHeadline: '잘 맞는 상품이에요',
       matchNote: '프로필과 설문 답변을 전문가 기준으로 분석해 계산한 추천도예요.',
       summary: '',
@@ -311,16 +312,6 @@ export const PLAN_COMPONENTS = {
       { key: 'price', label: '가격 (원 제외)', kind: 'text' },
       { key: 'was', label: '정가 (원 제외)', kind: 'text' },
       { key: 'score', label: '추천도 (%)', kind: 'text' },
-      {
-        key: 'matchLabel',
-        label: '추천도 배지 라벨',
-        kind: 'select',
-        defaultValue: 'MATCH',
-        options: [
-          { value: 'MATCH', label: 'MATCH' },
-          { value: '추천도', label: '추천도' },
-        ],
-      },
       { key: 'matchHeadline', label: '추천도 말풍선 한 줄', kind: 'text' },
       { key: 'matchNote', label: '추천도 말풍선 설명', kind: 'textarea' },
       { key: 'summary', label: '추천 이유 (줄바꿈 구분)', kind: 'textarea' },
@@ -358,7 +349,7 @@ export const PLAN_COMPONENTS = {
               }
             }}
           >
-            {score ? <MatchBadge p={p} ctx={ctx} score={score} label={p.matchLabel || 'MATCH'} /> : null}
+            {score ? <MatchBadge p={p} ctx={ctx} score={score} /> : null}
             <span className={'sb-mall-badge sb-mall-badge--' + tone}>{mall}</span>
             <ProductThumb p={p} ctx={ctx} />
           </div>

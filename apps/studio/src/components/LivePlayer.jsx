@@ -28,6 +28,16 @@ import LiveFeedbackBubble, {
 /* 답변 맵 → 와이어 형식. 계획 스냅샷 키(planKey)와 생성 요청 본문이 반드시 같은 코드로
    만들어져야 한다 — 서버가 돌려준 answers 원문으로 키를 만들면 직렬화 차이 때문에
    무변경 답변이 "바뀜"으로 오판돼 이어보기 후 단계 이동만 해도 계획을 다시 생성한다 */
+/* 설문은 질문을 한 화면에 하나씩 — 비질문 항목(헤더·프로필 패널)은 매 화면에 남는다.
+   확정 렌더와 생성 중 미리보기가 반드시 같은 규칙을 써야 한다: 미리보기만 도착한 질문을
+   전부 쌓으면 2번 질문이 1번 밑에 그려지다가 확정되는 순간 사라진다 */
+function pageQuestions(list, cursor) {
+  const questions = list.filter((it) => isQuestionType(it.type))
+  if (questions.length === 0) return list
+  const current = questions[Math.min(cursor, questions.length - 1)]
+  return list.filter((it) => !isQuestionType(it.type) || it.id === current.id)
+}
+
 function wireFromAnswers(questions, answersMap) {
   return questions
     .map((q) => {
@@ -176,6 +186,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     setError(null)
     setPartial(null)
     setLoading({ step: 'survey', message: '질문을 구성하고 있어요…' })
+    setQStep(0) // 새 설문 생성 = 첫 질문부터
     streamLiveSurvey(id, { profile: profileWire() }, {
       onStatus: (message) => { if (!cancelledRef.current) setLoading((prev) => ({ ...(prev || { step: 'survey' }), message })) },
       /* 부분 스트리밍 — 자라는 질문이 같은 index로 반복 도착한다 (토큰 단위 미리보기 → 완성본).
@@ -517,14 +528,9 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   )
   const allItems = stageKey === 'plan' ? planItems : surveyItems
   const topItems = allItems.filter((it) => !it.parentId)
-  /* 설문은 질문을 한 화면에 하나씩 — 헤더·프로필 패널 같은 비질문 항목은 매 화면에 남는다.
-     생성 중(partial) 미리보기는 도착 순서를 보여줘야 해서 이 걸러내기를 하지 않는다 */
   const stepQuestions = topItems.filter((it) => isQuestionType(it.type))
   const qIndex = stepQuestions.length ? Math.min(qStep, stepQuestions.length - 1) : 0
-  const items =
-    stageKey === 'survey' && stepQuestions.length > 0
-      ? topItems.filter((it) => !isQuestionType(it.type) || it.id === stepQuestions[qIndex].id)
-      : topItems
+  const items = stageKey === 'survey' ? pageQuestions(topItems, qStep) : topItems
 
   /* 생성 중 부분 페이지 투영 — 최종과 같은 livePage 투영을 그대로 쓴다 (아이템 id가 인덱스
      기반이라 result 확정 때 React가 기존 컴포넌트를 재사용한다). 서버가 검증 실패·드롭으로
@@ -536,13 +542,19 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     if (!loading) return []
     if (loading.step === 'plan') {
       const headline = (partial && partial.headline) || ''
+      // 희소 배열 그대로 — 2단계 생성에서 상품 섹션이 뼈대 섹션 "사이"(자리 인덱스)로
+      // 나중에 끼어든다. 인덱스가 보존되므로 id도 안정적이다
+      const sections = (partial && partial.sections) || []
+      /* 도착한 마지막 인덱스보다 앞의 빈 자리 = 상품·콘텐츠가 채울 자리가 확정된 곳.
+         스트리밍 중에도 그 자리에 로딩 카드를 미리 세워, 뼈대가 확정되는 순간 카드가
+         아래에서 제자리로 튀어 오르지 않게 한다 (id가 같아 그대로 이어진다) */
+      const pendingPreview = []
+      for (let i = 0; i < sections.length; i += 1) if (!sections[i]) pendingPreview.push(i)
       const items = livePlanItems({
         headline,
         summary: (partial && partial.summary) || '',
-        // 희소 배열 그대로 — 2단계 생성에서 상품 섹션이 뼈대 섹션 "사이"(자리 인덱스)로
-        // 나중에 끼어든다. forEach는 빈 슬롯을 건너뛰고 인덱스를 보존하므로 id도 안정적이다
-        sections: (partial && partial.sections) || [],
-      }, { query: liveQuery })
+        sections,
+      }, { query: liveQuery, pendingSlots: pendingPreview })
       return headline ? items : items.filter((it) => it.id !== 'live-plan-title')
     }
     if (loading.step === 'survey') {
@@ -555,7 +567,11 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     }
     return [] // step 'start'(쓰레드 시작·이어보기 로드)는 그릴 재료가 없다 — 전체 스켈레톤
   }, [loading, partial])
-  const partialItems = partialAllItems.filter((it) => !it.parentId)
+  /* 미리보기도 확정 렌더와 같은 한 화면 = 질문 하나 규칙을 따른다. allItems는 도착한 전체를
+     그대로 넘겨서 진행 표시가 "1 / 2 → 1 / 3"으로 자라는 것을 보여준다 */
+  const partialTopItems = partialAllItems.filter((it) => !it.parentId)
+  const partialItems =
+    loading && loading.step === 'survey' ? pageQuestions(partialTopItems, qStep) : partialTopItems
 
   /* 스테퍼 표시는 생성 중엔 생성 대상 단계를 따른다 (계획 스트리밍 중엔 계획 강조) */
   const displayStageKey = loading ? (loading.step === 'plan' ? 'plan' : 'survey') : stageKey
