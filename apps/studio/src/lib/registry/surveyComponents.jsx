@@ -131,6 +131,16 @@ const DEFAULT_SAMPLE_FACES = [
   './sample-faces/face-4.jpg',
 ]
 
+/* 옛 썸네일 경로(face-N.png)를 고해상도 파일로 올려 준다. 고른 사진은 기기 보관(라이브 사진)·
+   쓰레드 기록·시나리오 props에 **경로 문자열로** 남아 있어서, 파일명을 바꾸면 그 참조가 전부
+   깨진다. 읽는 시점에 올려 주면 옛 기록도 새 사진으로 살아난다.
+   (옛 png 파일 자체도 안전망으로 남겨 뒀다 — 여기서 못 잡는 참조까지 깨지지 않게) */
+const LEGACY_SAMPLE_FACE = /^(\.\/|\/)?sample-faces\/face-([1-4])\.png$/
+export function resolveSampleFace(url) {
+  const m = LEGACY_SAMPLE_FACE.exec(String(url || ''))
+  return m ? `./sample-faces/face-${m[2]}.jpg` : url
+}
+
 /* 올린 사진의 최대 변 길이 — 답은 상태·기기 보관(라이브 사진)·계획 화면 합성까지 따라다니므로
    원본(수 MB 데이터 URL)을 그대로 들고 다니지 않는다. 얼굴 미리보기엔 720px이면 충분하다 */
 const MAX_PHOTO_EDGE = 720
@@ -166,7 +176,7 @@ function PhotoPicker({ p, ctx, picked }) {
   const captureRef = React.useRef(null)
   const isPlayer = ctx.mode === 'player'
   const samples = (p.samples ? String(p.samples).split('\n') : DEFAULT_SAMPLE_FACES)
-    .map((u) => u.trim())
+    .map((u) => resolveSampleFace(u.trim()))
     .filter(Boolean)
 
   const choose = (url) => {
@@ -481,7 +491,7 @@ export const SURVEY_COMPONENTS = {
     render: (p, ctx) => {
       const isPlayer = ctx.mode === 'player'
       // 플레이어에서는 "고른 값"만이 선택 상태다 — 설정된 photoUrl로 폴백하면 해제가 안 된다
-      const picked = isPlayer ? ctx.player.answers[ctx.itemId] || '' : p.photoUrl
+      const picked = resolveSampleFace(isPlayer ? ctx.player.answers[ctx.itemId] || '' : p.photoUrl)
       return (
         <QuestionShell p={p} ctx={ctx} answered={!!picked}>
           <PhotoPicker p={p} ctx={ctx} picked={picked} />

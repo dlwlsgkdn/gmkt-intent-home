@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { DEVICE_PRESETS, STAGES } from '../lib/store.js'
-import { isQuestionType, renderItem } from '../lib/registry.jsx'
+import { isQuestionType, renderItem, resolveSampleFace } from '../lib/registry.jsx'
 import BottomSheet from './ui/BottomSheet.jsx'
 import { fetchLiveThread, recordLiveEvent, renderLiveLook, sendLiveFeedback, startLiveThread, streamLivePlan, streamLiveSurvey } from '../lib/liveApi.js'
 import { PHOTO_ANSWER, isPhotoValue, livePlanItems, liveSurveyItems } from '../lib/livePage.js'
@@ -231,7 +231,8 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const answersWire = () => wireFromAnswers(questions, answers)
   /* 계획의 가상 메이크업 결과가 쓰는 사진 — 설문에서 고른 첫 사진 답 (기기 안에서만 오간다) */
   const livePhotos = photoAnswersOf(questions, answers)
-  const livePhoto = Object.values(livePhotos)[0] || ''
+  // 옛 기록에 남은 썸네일 경로는 고해상도 파일로 올려 쓴다 (합성·정밀 렌더 입력이 곧 이 값이다)
+  const livePhoto = resolveSampleFace(Object.values(livePhotos)[0] || '')
   /* 워크스페이스 쓰레드 기록에는 사진 원본을 남기지 않는다 — 기록은 localStorage에 저장되고
      서버로도 동기화되는 값이라, 와이어와 같은 표식으로 바꿔 싣는다 */
   const answersForRecord = () => {

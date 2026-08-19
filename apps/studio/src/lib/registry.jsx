@@ -3,6 +3,8 @@ import { FONT_OPTIONS } from './richtext.jsx'
 import { isEditView, kText } from './registry/support.jsx'
 import { EXPLORE_COMPONENTS } from './registry/exploreComponents.jsx'
 import { SURVEY_COMPONENTS } from './registry/surveyComponents.jsx'
+// 옛 샘플 얼굴 경로 승격 — 저장된 경로를 읽는 쪽(LivePlayer)도 같은 규칙을 써야 한다
+export { resolveSampleFace } from './registry/surveyComponents.jsx'
 import { PLAN_COMPONENTS } from './registry/planComponents.jsx'
 import { COMMON_COMPONENTS } from './registry/commonComponents.jsx'
 import { LAYOUT_COMPONENTS } from './registry/layoutComponents.jsx'
