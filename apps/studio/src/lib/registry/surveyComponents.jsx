@@ -121,12 +121,14 @@ function SurveyOptions({ p, ctx, opts, shape, isPlayer }) {
   )
 }
 
-/* 기본 샘플 얼굴 — Figma 파일에서 내보낸 이미지 (public/sample-faces) */
+/* 기본 샘플 얼굴 — Figma 원본(2×2 시트)에서 잘라낸 627px 사진 (public/sample-faces).
+   해상도가 중요하다: 이 값이 그대로 가상 메이크업의 입력이라, 옛 77px 썸네일로는 랜드마크가
+   잡을 결도, 정밀 렌더가 보존할 이목구비도 남지 않았다 */
 const DEFAULT_SAMPLE_FACES = [
-  './sample-faces/face-1.png',
-  './sample-faces/face-2.png',
-  './sample-faces/face-3.png',
-  './sample-faces/face-4.png',
+  './sample-faces/face-1.jpg',
+  './sample-faces/face-2.jpg',
+  './sample-faces/face-3.jpg',
+  './sample-faces/face-4.jpg',
 ]
 
 /* 올린 사진의 최대 변 길이 — 답은 상태·기기 보관(라이브 사진)·계획 화면 합성까지 따라다니므로

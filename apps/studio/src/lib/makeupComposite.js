@@ -70,6 +70,14 @@ function loadImage(src) {
   })
 }
 
+/** #rrggbb → rgba(...) — 그라데이션 중간 stop의 투명도를 조절하려면 알파가 필요하다 */
+function rgba(hex, alpha) {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex)
+  if (!m) return hex
+  const [r, g, b] = [1, 2, 3].map((i) => parseInt(m[i], 16))
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
 const lerp = (a, b, t) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t })
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y)
 
@@ -161,13 +169,16 @@ export async function composeMakeup(src, tone) {
   for (const side of ['left', 'right']) {
     const center = cheekCenter(points, side)
     if (!center) continue
-    const radius = faceWidth * 0.15
+    const radius = faceWidth * 0.2
     const gradient = ctx.createRadialGradient(center.x, center.y, 0, center.x, center.y, radius)
-    gradient.addColorStop(0, paint.blush)
-    gradient.addColorStop(1, 'transparent')
+    /* 중간 stop 없이 색→투명으로 한 번에 떨어뜨리면 경계가 원반처럼 읽힌다 —
+       가운데부터 서서히 옅어지게 두 단계로 나눈다 */
+    gradient.addColorStop(0, rgba(paint.blush, 0.55))
+    gradient.addColorStop(0.5, rgba(paint.blush, 0.22))
+    gradient.addColorStop(1, rgba(paint.blush, 0))
     ctx.save()
     ctx.globalCompositeOperation = 'soft-light'
-    ctx.globalAlpha = 0.95
+    ctx.globalAlpha = 0.8
     ctx.fillStyle = gradient
     ctx.beginPath()
     ctx.arc(center.x, center.y, radius, 0, Math.PI * 2)
@@ -185,7 +196,7 @@ export async function composeMakeup(src, tone) {
     /* 미지원 — 또렷한 경계로 진행 */
   }
   ctx.globalCompositeOperation = 'multiply'
-  ctx.globalAlpha = 0.45
+  ctx.globalAlpha = 0.34
   ctx.fillStyle = paint.lip
   ctx.beginPath()
   const addLoop = (indexes) => {
@@ -210,7 +221,7 @@ export async function composeMakeup(src, tone) {
     /* 미지원 */
   }
   ctx.globalCompositeOperation = 'soft-light'
-  ctx.globalAlpha = 0.38
+  ctx.globalAlpha = 0.26
   ctx.fillStyle = paint.lip
   ctx.beginPath()
   addLoop(LIP_OUTER)
