@@ -48,7 +48,8 @@ SSE 확인: `curl -N -X POST localhost:8788/api/threads/<id>/survey -H 'content-
 2. **Root Directory: `apps/bff`** (대시보드), Framework: Other
 3. 환경변수: `ANTHROPIC_API_KEY`(없으면 생성 요청이 실패 안내), `CORE_URL=https://ddak-core.vercel.app`,
    `CORE_SERVICE_TOKEN`(core와 동일 값), `BFF_SERVICE_TOKEN`(스튜디오 프록시 인증 — 아래 참고),
-   `NODEJS_HELPERS=0`, (선택) `ALLOWED_ORIGINS`
+   `NODEJS_HELPERS=0`, (선택) `OPENAI_API_KEY`(가상 메이크업 정밀 렌더 — 없으면 그 버튼만 강등되고
+   나머지는 정상), (선택) `ALLOWED_ORIGINS`
 4. Ignored Build Step은 vercel.json의 ignoreCommand로 커밋돼 있음 — 대시보드 불필요
 
 ## 스튜디오 프록시 (FE 진입 경로)
