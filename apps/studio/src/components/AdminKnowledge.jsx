@@ -9,7 +9,8 @@ import {
 
 /*
  * 운영 지식 — 트렌드 키워드 사전 한 벌 (담당자 엑셀 이관본, lib/trendKeywords.js).
- * 시트처럼 바로 편집한다: 행 추가·키워드/설명/브랜드 인라인 입력, 구분·관련은 칩 토글 팝오버.
+ * 시트처럼 바로 편집한다: 행 추가·키워드/설명/상품/입력자 인라인 입력, 구분·관련은 칩 팝오버.
+ * 관련 배열 순서는 추천 연결 우선순위라 화면 번호와 위·아래 이동으로 그대로 관리한다.
  * 편집은 코드 원본 위 오버레이(패치·추가·삭제)로 이 기기(localStorage)에 저장된다 —
  * 전 기기 공통 반영은 JSON 내보내기 → 코드(trendKeywords.js) 반영으로.
  * 구 서브탭(키워드 사전·태그 사전·정답지)은 2026-08 정리 — 키워드 사전은 프로필·키워드
@@ -54,7 +55,7 @@ export default function AdminKnowledge({ api }) {
       const key = `base-${index}`
       return { key, src: 'base', ...entry, ...(overlay.patches[key] || {}) }
     }).filter((row) => !overlay.removed.includes(row.key))
-    return base.concat(overlay.added.map((row) => ({ ...row, src: 'added' })))
+    return [...overlay.added].reverse().map((row) => ({ ...row, src: 'added' })).concat(base)
   }, [overlay])
 
   const trendRows = useMemo(() => {
@@ -63,7 +64,7 @@ export default function AdminKnowledge({ api }) {
       if (trendLevel === 'none' && entry.levels.length > 0) return false
       if (trendLevel !== 'all' && trendLevel !== 'none' && !entry.levels.includes(trendLevel)) return false
       if (!query) return true
-      return [entry.word, entry.desc, entry.brands || '', entry.related.join(' ')].join(' ').toLowerCase().includes(query)
+      return [entry.word, entry.desc, entry.brands || '', entry.author || '', entry.related.join(' ')].join(' ').toLowerCase().includes(query)
     })
   }, [allRows, trendLevel, trendQuery])
 
@@ -88,11 +89,21 @@ export default function AdminKnowledge({ api }) {
     patchRow(row, { [field]: next })
   }
 
+  const moveRelated = (row, index, direction) => {
+    const target = index + direction
+    if (target < 0 || target >= row.related.length) return
+    const next = [...row.related]
+    ;[next[index], next[target]] = [next[target], next[index]]
+    patchRow(row, { related: next })
+  }
+
   const addRow = () => {
-    const row = { key: `add-${Date.now()}`, no: null, author: '운영자', word: '', levels: [], related: [], desc: '', brands: '' }
+    const row = { key: `add-${Date.now()}`, no: null, author: '', word: '', levels: [], related: [], desc: '', brands: '' }
     commitOverlay({ ...overlay, added: [...overlay.added, row] })
     setTrendLevel('all')
     setTrendQuery('')
+    setPop({ key: row.key, field: 'levels' })
+    api.showToast('표 맨 위에 새 항목을 만들었어요. 각 칸을 바로 입력하세요.')
   }
 
   const removeRow = (row) => {
@@ -162,22 +173,46 @@ export default function AdminKnowledge({ api }) {
         aria-label={`${row.word || '새 키워드'} ${field === 'levels' ? '구분' : '관련'} 편집`}
       >
         {row[field].length > 0
-          ? row[field].map((value) => <span key={value} className="sb-admin-trend-level">{value}</span>)
+          ? row[field].map((value, index) => (
+              <span key={value} className="sb-admin-trend-level">
+                {field === 'related' && <b className="sb-admin-trend-rank">{index + 1}</b>}{value}
+              </span>
+            ))
           : <span className="sb-admin-trend-cellbtn__empty">{emptyLabel}</span>}
         <i aria-hidden="true">▾</i>
       </button>
       {pop && pop.key === row.key && pop.field === field && (
         <div className="sb-admin-trend-pop" role="group">
-          {options.map((option) => (
-            <button
-              type="button"
-              key={option}
-              className={row[field].includes(option) ? 'is-on' : ''}
-              onClick={() => toggleChip(row, field, option)}
-            >
-              {option}{row[field].includes(option) && <b aria-hidden="true">✓</b>}
-            </button>
-          ))}
+          {field === 'related' ? (
+            <>
+              <p className="sb-admin-trend-pop__note">위에 있을수록 추천 연결 우선순위가 높습니다.</p>
+              {row.related.map((option, index) => (
+                <div className="sb-admin-trend-priority" key={option}>
+                  <button type="button" className="is-on" onClick={() => toggleChip(row, field, option)}>
+                    <b>{index + 1}</b><span>{option}</span><em>제외</em>
+                  </button>
+                  <span>
+                    <button type="button" disabled={index === 0} onClick={() => moveRelated(row, index, -1)} aria-label={`${option} 우선순위 올리기`}>↑</button>
+                    <button type="button" disabled={index === row.related.length - 1} onClick={() => moveRelated(row, index, 1)} aria-label={`${option} 우선순위 내리기`}>↓</button>
+                  </span>
+                </div>
+              ))}
+              {options.filter((option) => !row.related.includes(option)).map((option) => (
+                <button type="button" key={option} onClick={() => toggleChip(row, field, option)}>
+                  {option}<b aria-hidden="true">＋</b>
+                </button>
+              ))}
+            </>
+          ) : options.map((option) => (
+              <button
+                type="button"
+                key={option}
+                className={row[field].includes(option) ? 'is-on' : ''}
+                onClick={() => toggleChip(row, field, option)}
+              >
+                {option}{row[field].includes(option) && <b aria-hidden="true">✓</b>}
+              </button>
+            ))}
         </div>
       )}
     </div>
@@ -199,6 +234,7 @@ export default function AdminKnowledge({ api }) {
             ))}
           </ul>
         </details>
+        <p className="sb-admin-trend-priority-guide"><b>관련 항목은 순서가 중요해요.</b> 1순위부터 왼쪽에 표시되며, 항목을 열어 ↑ ↓ 버튼으로 순서를 바꿀 수 있습니다.</p>
         <div className="sb-admin-callout">
           <span>i</span>
           {pipeValue === undefined && <p>생성 파이프라인의 현재 트렌드 키워드를 확인하는 중…</p>}
@@ -236,7 +272,7 @@ export default function AdminKnowledge({ api }) {
           <span className="sb-admin-trend-tools__right">
             <input
               type="search"
-              placeholder="키워드·설명·브랜드 검색"
+              placeholder="키워드·상품·설명·입력자 검색"
               value={trendQuery}
               onChange={(event) => setTrendQuery(event.target.value)}
               aria-label="트렌드 키워드 검색"
@@ -244,11 +280,11 @@ export default function AdminKnowledge({ api }) {
             {draftCount > 0 && (
               <button type="button" className="sb-btn sb-btn--ghost sb-btn--small" onClick={exportDraft}>JSON 복사</button>
             )}
-            <button type="button" className="sb-btn sb-btn--primary sb-btn--small" onClick={addRow}>+ 키워드 추가</button>
+            <button type="button" className="sb-btn sb-btn--primary sb-btn--small" onClick={addRow}>+ 항목 추가</button>
           </span>
         </div>
         <div className="sb-table sb-admin-table sb-admin-trend-table"><div className="sb-table__scroll"><table>
-          <thead><tr><th>키워드</th><th>구분</th><th>관련</th><th>설명</th><th>대표 브랜드·제품</th><th>입력자</th><th /></tr></thead>
+          <thead><tr><th>키워드·상품</th><th>유행 구분</th><th>관련 우선순위</th><th>설명</th><th>대표 상품·브랜드</th><th>입력자</th><th /></tr></thead>
           <tbody>
             {trendRows.map((row) => {
               const patched = row.src === 'base' && !!overlay.patches[row.key]
@@ -258,7 +294,7 @@ export default function AdminKnowledge({ api }) {
                     <input
                       className="sb-admin-trend-input sb-admin-trend-input--word"
                       value={row.word}
-                      placeholder="키워드"
+                      placeholder="키워드 또는 상품명"
                       onChange={(event) => patchRow(row, { word: event.target.value })}
                       aria-label="키워드"
                     />
@@ -278,12 +314,20 @@ export default function AdminKnowledge({ api }) {
                     <input
                       className="sb-admin-trend-input"
                       value={row.brands || ''}
-                      placeholder="—"
+                      placeholder="상품명·브랜드"
                       onChange={(event) => patchRow(row, { brands: event.target.value })}
                       aria-label={`${row.word || '새 키워드'} 대표 브랜드`}
                     />
                   </td>
-                  <td className="sb-admin__muted">{row.author}</td>
+                  <td>
+                    <input
+                      className="sb-admin-trend-input sb-admin-trend-input--author"
+                      value={row.author || ''}
+                      placeholder="입력자"
+                      onChange={(event) => patchRow(row, { author: event.target.value })}
+                      aria-label={`${row.word || '새 항목'} 입력자`}
+                    />
+                  </td>
                   <td className="sb-admin-trend-rowops">
                     {patched && <button type="button" className="sb-btn sb-btn--ghost sb-btn--tiny" onClick={() => revertRow(row)}>되돌리기</button>}
                     <button type="button" className="sb-btn sb-btn--danger sb-btn--tiny" onClick={() => removeRow(row)}>삭제</button>

@@ -31,12 +31,12 @@ export default function AdminDashboard({ api, threads, feedback, loading, mode, 
     ? [
         { value: tagQueue, label: '태깅 검토 대기', note: `전체 ${tagging.length}개 작업 단위`, tone: tagQueue ? 'warn' : 'good', tab: 'tagging' },
         { value: feedbackItems.length, label: '평가 제출', note: `낮은 평가 ${lowFeedback}건`, tone: lowFeedback ? 'warn' : 'good', tab: 'threads' },
-        { value: drafts.length, label: '작성 중 시나리오', note: `발행 ${published.length}개`, tab: 'experiment' },
+        { value: drafts.length, label: '작성 중 시나리오', note: `발행 ${published.length}개`, tab: 'studio' },
         { value: TREND_KEYWORDS.length, label: '트렌드 키워드', note: '뷰티 트렌드 사전', tab: 'knowledge' },
       ]
     : [
         { value: realThreads.length, label: '실사용자 여정', note: loading ? '불러오는 중…' : `완료율 ${pct(completed, realThreads.length)}%`, tab: 'threads' },
-        { value: published.length, label: '운영 시나리오', note: `작성 중 ${drafts.length}개`, tab: 'experiment' },
+        { value: published.length, label: '운영 시나리오', note: `작성 중 ${drafts.length}개`, tab: 'studio' },
         { value: abandoned, label: '이탈 쓰레드', note: `이탈률 ${pct(abandoned, realThreads.length)}%`, tone: abandoned ? 'warn' : 'good', tab: 'threads' },
         { value: lowFeedback, label: '확인할 낮은 평가', note: `전체 제출 ${feedbackItems.length}건`, tone: lowFeedback ? 'warn' : 'good', tab: 'threads' },
       ]
@@ -93,13 +93,15 @@ export default function AdminDashboard({ api, threads, feedback, loading, mode, 
                     <em>검토 시작</em>
                   </button>
                 )}
-                <button type="button" onClick={() => api.setAdminTab('experiment')}>
-                  <span className="sb-admin-tasklist__icon">◇</span>
-                  <span><b>변경 전 회귀 실험</b><small>골든 케이스를 현재 설정으로 다시 실행하고 비교하세요.</small></span>
-                  <em>실험 열기</em>
-                </button>
+                {drafts.length > 0 && (
+                  <button type="button" onClick={() => api.setAdminTab('studio')}>
+                    <span className="sb-admin-tasklist__icon">◇</span>
+                    <span><b>작성 중 시나리오 {drafts.length}개 확인</b><small>내용을 검수하고 고객에게 보여줄 버전을 발행하세요.</small></span>
+                    <em>스튜디오 열기</em>
+                  </button>
+                )}
                 {tagQueue === 0 && (
-                  <div className="sb-admin-empty-good"><b>대기 중인 태그 검수가 없습니다.</b><span>다음 반영 전 골든 케이스만 확인하면 됩니다.</span></div>
+                  <div className="sb-admin-empty-good"><b>대기 중인 태그 검수가 없습니다.</b><span>작성 중인 시나리오만 확인하면 됩니다.</span></div>
                 )}
               </>
             ) : (
@@ -163,9 +165,8 @@ export default function AdminDashboard({ api, threads, feedback, loading, mode, 
             {[
               ['1', '운영 지식 정리', '키워드·태그 기준'],
               ['2', '플레이그라운드', '실데이터 없는 단독 실행'],
-              ['3', '골든 케이스 실험', '회귀·자동 채점'],
-              ['4', '실사용자 신호 확인', '쓰레드·피드백'],
-              ['5', '운영 반영', '새 생성부터 적용'],
+              ['3', '실사용자 신호 확인', '쓰레드·피드백'],
+              ['4', '운영 반영', '새 생성부터 적용'],
             ].map(([no, title, note], index) => (
               <React.Fragment key={no}>
                 {index > 0 && <span className="sb-admin-release-flow__arrow">→</span>}

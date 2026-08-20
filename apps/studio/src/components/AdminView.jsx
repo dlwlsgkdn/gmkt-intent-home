@@ -10,8 +10,6 @@ import { timeAgo } from '../lib/timeAgo.js'
 import AdminFeedback from './AdminFeedback.jsx'
 import AdminThreadPreview, { threadPreviewPages } from './AdminThreadPreview.jsx'
 import PipelineStudio from './PipelineStudio.jsx'
-import ExperimentStudio from './ExperimentStudio.jsx'
-import { promoteEvalCase } from '../lib/adminApi.js'
 import AdminDashboard from './AdminDashboard.jsx'
 import AdminKnowledge from './AdminKnowledge.jsx'
 import AdminPromptLibrary from './AdminPromptLibrary.jsx'
@@ -23,7 +21,7 @@ import AdminJourneyOverview from './AdminJourneyOverview.jsx'
 
 /*
  * 운영 콘솔 — 진입은 홈 드로어 도구 행의 버튼 또는 #ops 해시 (구 #admin 호환).
- * 탭(threads|pipeline|experiment)은 해시가 원천 — App.jsx가 #ops/<탭>으로 라우팅해
+ * 탭(threads|pipeline 등)은 해시가 원천 — App.jsx가 #ops/<탭>으로 라우팅해
  * 새로고침·앞뒤로가기가 탭을 유지한다. 전환은 api.setAdminTab.
  * 별도 토큰 게이트 없음 (옛 x-admin-token 입력 검증은 뗐다 — adminApi.js 참고).
  * "삭제"는 보관(archived) 처리 — 데이터는 남고 사용자 목록에서만 숨겨진다.
@@ -48,7 +46,6 @@ const NAV_GROUPS = [
     items: [
       ['pipeline', '⌁', '생성 파이프라인'],
       ['prompts', '⌘', '프롬프트'],
-      ['experiment', '△', '실험·회귀'],
     ],
   },
 ]
@@ -297,9 +294,6 @@ export default function AdminView({ api, tab, studioScenarioId, threadId }) {
 
       {tab === 'tagging' && <TaggingStudio api={api} embedded />}
 
-      {/* 실험 탭 — 골든 케이스 실행·채점 + 전환 판정 계기판 */}
-      {tab === 'experiment' && <ExperimentStudio />}
-
       {tab === 'threads' && (
       <>
       <AdminJourneyOverview
@@ -469,21 +463,6 @@ export default function AdminView({ api, tab, studioScenarioId, threadId }) {
                     </div>
                     <button type="button" className="sb-btn sb-btn--ghost sb-btn--small" onClick={copyMarkdown}>
                       마크다운 복사
-                    </button>
-                    <button
-                      type="button"
-                      className="sb-btn sb-btn--ghost sb-btn--small"
-                      title="입력 스냅샷(의도·프로필·설문·답변)을 실험 탭의 골든 케이스로 굳혀요"
-                      onClick={async () => {
-                        try {
-                          await promoteEvalCase(detail.id)
-                          api.showToast('평가 케이스로 저장했어요 — 실험 탭에서 실행하세요.')
-                        } catch (e) {
-                          api.showToast(`케이스 저장 실패: ${e.message}`)
-                        }
-                      }}
-                    >
-                      평가 케이스로 저장
                     </button>
                     <button
                       type="button"
