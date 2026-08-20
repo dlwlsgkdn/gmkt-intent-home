@@ -994,8 +994,13 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
                     /* sb-live-item-enter — 마운트 1회 페이드인. id가 안정적이라(같은 index
                        재도착 = 같은 엘리먼트) 텍스트가 자라는 재렌더에는 다시 재생되지 않는다 */
                     <div key={it.id} className={'sb-player__item sb-live-item-enter' + (it.stepSub ? ' sb-player__item--stepsub' : '')}>
-                      {/* revealFade — kText가 글자를 위치 고정 span으로 그려 새 글자만 페이드인 */}
-                      {renderItem(it, { mode: 'player', player: playerApi, profile: api.profile, allItems: partialAllItems, revealFade: true })}
+                      {/* 아직 안 채워진 자리 — 확정 렌더와 같이 로딩 카드로 그린다 (레지스트리 밖 타입) */}
+                      {it.type === 'livePending' ? (
+                        <LivePendingSlot message={pendingMessage} />
+                      ) : (
+                        /* revealFade — kText가 글자를 위치 고정 span으로 그려 새 글자만 페이드인 */
+                        renderItem(it, { mode: 'player', player: playerApi, profile: api.profile, allItems: partialAllItems, revealFade: true })
+                      )}
                     </div>
                   ))}
                 </div>

@@ -82,7 +82,13 @@ function ChildShell({ item, index, ctx, children }) {
 
 export function renderItem(item, ctx) {
   const def = LIBRARY[item.type]
-  if (!def) return <div className="text-xs text-red-400">알 수 없는 컴포넌트: {item.type}</div>
+  /* 레지스트리 밖 타입 — 체험 화면(player)에선 아무것도 그리지 않는다. 라이브 생성의
+     자리 표식(livePending)처럼 호출부가 직접 그리는 타입이 섞여 들어와도, 사용자에게
+     빨간 에러 문구가 보이면 안 된다. 편집기(canvas)에서만 진단용으로 남긴다 */
+  if (!def) {
+    if (ctx.mode === 'player') return null
+    return <div className="text-xs text-red-400">알 수 없는 컴포넌트: {item.type}</div>
+  }
 
   /* 컨테이너면 자식들을 먼저 렌더해 ctx.children으로 공급 (ctx.allItems 필요) */
   let renderCtx = { ...ctx, itemId: item.id }
