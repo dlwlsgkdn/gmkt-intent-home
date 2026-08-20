@@ -226,11 +226,6 @@ export default function AdminView({ api, tab, studioScenarioId, threadId }) {
     : null
   const studioFullView = tab === 'studio' && (studioScenario || studioSettingsOpen)
 
-  const changeMode = (nextMode) => {
-    setMode(nextMode)
-    api.setAdminTab('dashboard')
-  }
-
   useEffect(() => {
     if (tab !== 'studio') {
       setSelectedStudioId(null)
@@ -244,10 +239,6 @@ export default function AdminView({ api, tab, studioScenarioId, threadId }) {
         <div className="sb-admin-sidebar__brand">
           <button type="button" onClick={api.exitAdmin} aria-label="DDAK 홈으로">D</button>
           <span><b>DDAK</b><small>운영 센터</small></span>
-        </div>
-        <div className="sb-admin-mode" role="group" aria-label="대시보드 관점">
-          <button type="button" className={mode === 'lab' ? 'is-on' : ''} onClick={() => changeMode('lab')}>품질 관리</button>
-          <button type="button" className={mode === 'ops' ? 'is-on' : ''} onClick={() => changeMode('ops')}>운영 인사이트</button>
         </div>
         <nav className="sb-admin-nav" aria-label="운영 센터 메뉴">
           {NAV_GROUPS.map((group) => (
@@ -294,7 +285,7 @@ export default function AdminView({ api, tab, studioScenarioId, threadId }) {
               onOpenDashboard={() => api.setAdminTab('dashboard')}
             />)}
 
-      {tab === 'dashboard' && <AdminDashboard api={api} threads={threads} feedback={feedback} loading={listLoading} mode={mode} />}
+      {tab === 'dashboard' && <AdminDashboard api={api} threads={threads} feedback={feedback} loading={listLoading} mode={mode} onModeChange={setMode} />}
 
       {/* 파이프라인 탭 — 세로 흐름 다이어그램(엔진·모델 설정 포함) ∥ 플레이그라운드·지식.
           시스템 프롬프트는 별도 카드 없이 다이어그램의 단계 레이어 모달에서 열람·수정한다 */}

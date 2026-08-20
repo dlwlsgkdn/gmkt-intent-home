@@ -7,7 +7,7 @@ const ADMIN_USER = 'ops-playground'
 
 const pct = (value, total) => (total > 0 ? Math.round((value / total) * 100) : 0)
 
-export default function AdminDashboard({ api, threads, feedback, loading, mode }) {
+export default function AdminDashboard({ api, threads, feedback, loading, mode, onModeChange }) {
   const tagging = useMemo(() => loadTaggingReview(), [])
   const tagCounts = useMemo(() => tagging.reduce((out, unit) => {
     const key = unitStatusKey(unit)
@@ -55,6 +55,15 @@ export default function AdminDashboard({ api, threads, feedback, loading, mode }
           <i /> {mode === 'lab' ? '검증 모드' : '운영 데이터'}
         </span>
       </header>
+
+      <div className="sb-admin-dashboard__mode" role="tablist" aria-label="대시보드 보기">
+        <button type="button" role="tab" aria-selected={mode === 'lab'} className={mode === 'lab' ? 'is-on' : ''} onClick={() => onModeChange('lab')}>
+          <span>품질 관리</span><small>출시 전 검수와 준비 상태</small>
+        </button>
+        <button type="button" role="tab" aria-selected={mode === 'ops'} className={mode === 'ops' ? 'is-on' : ''} onClick={() => onModeChange('ops')}>
+          <span>운영 인사이트</span><small>고객 행동과 이상 신호</small>
+        </button>
+      </div>
 
       <div className="sb-admin-kpis">
         {cards.map((card) => (
