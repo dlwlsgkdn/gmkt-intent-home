@@ -240,9 +240,9 @@ export default function AdminView({ api, tab, studioScenarioId, threadId }) {
           <button type="button" onClick={api.exitAdmin} aria-label="DDAK 홈으로">D</button>
           <span><b>DDAK</b><small>운영 센터</small></span>
         </div>
-        <div className="sb-admin-mode" role="group" aria-label="운영 화면 모드">
-          <button type="button" className={mode === 'lab' ? 'is-on' : ''} onClick={() => setMode('lab')}>실험실</button>
-          <button type="button" className={mode === 'ops' ? 'is-on' : ''} onClick={() => setMode('ops')}>실서비스</button>
+        <div className="sb-admin-mode" role="group" aria-label="대시보드 관점">
+          <button type="button" className={mode === 'lab' ? 'is-on' : ''} onClick={() => setMode('lab')}>품질 관리</button>
+          <button type="button" className={mode === 'ops' ? 'is-on' : ''} onClick={() => setMode('ops')}>운영 인사이트</button>
         </div>
         <nav className="sb-admin-nav" aria-label="운영 센터 메뉴">
           {NAV_GROUPS.map((group) => (

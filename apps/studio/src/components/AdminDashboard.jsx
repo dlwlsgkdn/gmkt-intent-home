@@ -47,12 +47,12 @@ export default function AdminDashboard({ api, threads, feedback, loading, mode }
     <div className="sb-admin-dashboard">
       <header className="sb-admin-pagehead">
         <div>
-          <p className="sb-admin-pagehead__eyebrow">{mode === 'lab' ? '출시 전 품질 관리' : '실서비스 운영 현황'}</p>
-          <h1>{mode === 'lab' ? '오늘의 실험실' : '오늘의 서비스'}</h1>
-          <p>{mode === 'lab' ? '검토가 필요한 항목과 다음 실험을 한눈에 확인하세요.' : '사용자 여정의 막힘과 즉시 확인할 품질 신호를 모았습니다.'}</p>
+          <p className="sb-admin-pagehead__eyebrow">{mode === 'lab' ? '출시 전 검증' : '서비스 운영 인사이트'}</p>
+          <h1>{mode === 'lab' ? '품질 관리 현황' : '운영 현황'}</h1>
+          <p>{mode === 'lab' ? '검토가 필요한 항목과 다음 검증 과제를 한눈에 확인하세요.' : '서비스 실행 흐름의 막힘과 우선 확인할 품질 신호를 모았습니다.'}</p>
         </div>
         <span className={`sb-admin-health ${mode === 'lab' ? 'is-lab' : 'is-live'}`}>
-          <i /> {mode === 'lab' ? '출시 전' : '정상 운영 중'}
+          <i /> {mode === 'lab' ? '검증 모드' : '운영 데이터'}
         </span>
       </header>
 
@@ -118,7 +118,7 @@ export default function AdminDashboard({ api, threads, feedback, loading, mode }
       </div>
 
       <section className="sb-admin-card sb-admin-release-flow">
-        <div className="sb-admin-sectionhead"><div><h2>안전한 반영 흐름</h2><p>운영 데이터가 실서비스로 바로 새지 않도록 단계별로 확인합니다.</p></div></div>
+        <div className="sb-admin-sectionhead"><div><h2>안전한 반영 흐름</h2><p>검증되지 않은 변경이 운영 환경에 바로 반영되지 않도록 단계별로 확인합니다.</p></div></div>
         <div className="sb-admin-release-flow__steps">
           {[
             ['1', '운영 지식 정리', '키워드·태그 기준'],
