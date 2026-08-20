@@ -142,6 +142,8 @@ export function livePlanItems(page, opts = {}) {
             beforeLabel: '내 사진',
             afterLabel: stage === 'precise' ? 'AI 메이크업 · 정밀' : 'AI 메이크업',
             afterState: stage,
+            // 합성 결과(data URL)가 있을 때만 — CSS 프리셋 단계에서 저장하면 화장 안 된 원본이 나간다
+            downloadable: !!opts.photoAfter,
             split: '50',
             hint: '',
             disclaimer: 'AI가 올려 본 미리보기예요. 실제 발색은 피부톤 · 조명에 따라 다를 수 있어요.',

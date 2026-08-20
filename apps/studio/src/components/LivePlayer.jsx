@@ -5,6 +5,7 @@ import BottomSheet from './ui/BottomSheet.jsx'
 import { fetchLiveCapabilities, fetchLiveThread, recordLiveEvent, renderLiveLook, sendLiveFeedback, startLiveThread, streamLivePlan, streamLiveSurvey } from '../lib/liveApi.js'
 import { PHOTO_ANSWER, isPhotoValue, livePlanItems, liveSurveyItems } from '../lib/livePage.js'
 import { composeMakeup, toPhotoDataUrl } from '../lib/makeupComposite.js'
+import { loadLookRender, saveLookRender } from '../lib/lookCache.js'
 import { BgBlobs, FloatingBar, ViewerDeviceControl } from './Frame.jsx'
 import ThreadPanel from './ThreadPanel.jsx'
 import ProductDetailPanel from './ProductDetailPanel.jsx'
@@ -77,38 +78,6 @@ function savePhotoStore(threadId, photos) {
     localStorage.setItem(PHOTO_STORE_KEY, JSON.stringify(store))
   } catch {
     /* 용량 초과 등 — 보관 실패는 조용히 넘어간다 */
-  }
-}
-
-/* 정밀 렌더 결과 보관 — 이어보기 때마다 다시 만들면 **유료 호출이 반복되고** 그림도 매번
-   달라진다. 쓰레드+색조가 같으면 지난 결과를 그대로 쓴다. 저장 전에 720px로 줄여
-   (원본은 1254px·2MB대) localStorage 용량을 지킨다 */
-const LOOK_STORE_KEY = 'ddak-live-look-v1'
-const LOOK_STORE_LIMIT = PHOTO_STORE_LIMIT // 사진 보관과 같은 수 — 사진은 남았는데 렌더만 다시 만드는 틈을 없앤다
-
-function readLookStore() {
-  try {
-    return JSON.parse(localStorage.getItem(LOOK_STORE_KEY) || '{}') || {}
-  } catch {
-    return {}
-  }
-}
-
-function saveLookStore(threadId, tone, image) {
-  if (!threadId || !image) return
-  try {
-    const store = readLookStore()
-    store[threadId] = { tone, image }
-    const keys = Object.keys(store).sort() // 스노우플레이크 = 시간순
-    for (const stale of keys.slice(0, Math.max(0, keys.length - LOOK_STORE_LIMIT))) delete store[stale]
-    localStorage.setItem(LOOK_STORE_KEY, JSON.stringify(store))
-  } catch {
-    // 용량 초과 — 옛 렌더를 비우고 이번 것만이라도 남긴다 (그마저 안 되면 포기: 체험은 막지 않는다)
-    try {
-      localStorage.setItem(LOOK_STORE_KEY, JSON.stringify({ [threadId]: { tone, image } }))
-    } catch {
-      /* 포기 */
-    }
   }
 }
 
@@ -605,8 +574,8 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     refineRef.current = key
     let cancelled = false
     ;(async () => {
-      // 지난 결과가 있으면 그대로 — 같은 쓰레드·색조에 유료 호출을 반복하지 않는다
-      const cached = readLookStore()[threadId]
+      // 지난 결과가 있으면 그대로 — 같은 쓰레드·색조에 유료 호출을 반복하지 않는다 (IndexedDB)
+      const cached = await loadLookRender(threadId)
       if (cached && cached.tone === lookTone && cached.image) {
         if (cancelled || cancelledRef.current) return
         preciseRef.current = true
@@ -633,11 +602,8 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         preciseRef.current = true
         setLookAfter(image)
         setLookStage('precise')
-        // 다음 이어보기에서 재호출하지 않도록 축소본을 남긴다 (실패해도 화면은 그대로).
-        // force — 렌더 결과는 이미 data URL이라 지름길을 타면 2MB PNG가 그대로 저장을 시도한다
-        toPhotoDataUrl(image, 720, { force: true }).then((small) => {
-          if (small) saveLookStore(threadId, lookTone, small)
-        })
+        // 다음 이어보기에서 재호출하지 않도록 원본 화질 그대로 보관한다 (IndexedDB — 실패해도 화면은 그대로)
+        saveLookRender(threadId, lookTone, image)
       } catch (e) {
         if (cancelled || cancelledRef.current) return
         console.warn('[look] 정밀 렌더 실패 — 기기 합성을 유지합니다:', e.message)

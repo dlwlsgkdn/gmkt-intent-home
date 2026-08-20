@@ -87,6 +87,18 @@ function AiNotice({ p, ctx }) {
 }
 
 /* 비포/애프터 비교 — 손잡이를 끌면 경계가 움직인다 */
+/** data URL → 다운로드 폴더 저장. 확장자는 실제 미디어 타입에서 딴다 (정밀=png, 기기 합성=jpeg) */
+function downloadDataUrl(dataUrl, baseName) {
+  if (!dataUrl || !String(dataUrl).startsWith('data:')) return
+  const ext = /^data:image\/(\w+)/.exec(dataUrl)?.[1] === 'png' ? 'png' : 'jpg'
+  const a = document.createElement('a')
+  a.href = dataUrl
+  a.download = `${baseName}.${ext}`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+}
+
 function BeforeAfter({ p, ctx }) {
   const [split, setSplit] = React.useState(Math.max(0, Math.min(100, Number(p.split) || 50)))
   const boxRef = React.useRef(null)
@@ -657,6 +669,18 @@ export const PLAN_COMPONENTS = {
         {p.desc ? <p className="sb-ba__desc">{kText(p.desc, ctx, 'desc')}</p> : null}
         <BeforeAfter p={p} ctx={ctx} />
         {p.disclaimer ? <p className="sb-ba__note">{kText(p.disclaimer, ctx, 'disclaimer')}</p> : null}
+        {/* 기기 다운로드 폴더로 저장 — 합성 결과(data URL)가 있을 때만 (라이브 투영이 downloadable을 단다).
+            자동 저장은 브라우저가 허용하지 않으므로 명시적 버튼이고, 되가져오기는 사진 선택 시트의
+            "앨범에서 사진 선택"이 그대로 받는다 */}
+        {p.downloadable && ctx.mode === 'player' ? (
+          <button
+            type="button"
+            className="sb-btn sb-btn--ghost sb-btn--tiny sb-ba__save"
+            onClick={() => downloadDataUrl(p.afterImage, `ddak-makeup-${p.tone || 'look'}`)}
+          >
+            ⬇ 메이크업 사진 저장
+          </button>
+        ) : null}
       </div>
     ),
   },
