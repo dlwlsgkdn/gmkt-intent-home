@@ -19,6 +19,7 @@ import TaggingStudio from './TaggingStudio.jsx'
 import Builder from './Builder.jsx'
 import AdminScenarioStudio from './AdminScenarioStudio.jsx'
 import ExploreEditor from './ExploreEditor.jsx'
+import AdminJourneyOverview from './AdminJourneyOverview.jsx'
 
 /*
  * 운영 콘솔 — 진입은 홈 드로어 도구 행의 버튼 또는 #ops 해시 (구 #admin 호환).
@@ -62,6 +63,7 @@ export default function AdminView({ api, tab, studioScenarioId, threadId }) {
   const [listError, setListError] = useState(null)
   const [statusFilter, setStatusFilter] = useState('all') // 상태 흐름 바의 필터 (칩 재클릭 = 해제)
   const [ownerFilter, setOwnerFilter] = useState('all') // 'all' | 'user'(실사용자) | 'admin'(플레이그라운드)
+  const [threadSearch, setThreadSearch] = useState('')
 
   const [feedback, setFeedback] = useState(null) // AdminFeedbackWire { items, truncated }
   const [feedbackLoading, setFeedbackLoading] = useState(false)
@@ -192,9 +194,16 @@ export default function AdminView({ api, tab, studioScenarioId, threadId }) {
     for (const t of ownerThreads) counts[t.status] = (counts[t.status] || 0) + 1
     return counts
   }, [ownerThreads])
-  const visibleThreads = useMemo(
-    () => (statusFilter === 'all' ? ownerThreads : ownerThreads.filter((t) => t.status === statusFilter)),
-    [ownerThreads, statusFilter],
+  const visibleThreads = useMemo(() => {
+    const byStatus = statusFilter === 'all' ? ownerThreads : ownerThreads.filter((thread) => thread.status === statusFilter)
+    const needle = threadSearch.trim().toLowerCase()
+    if (!needle) return byStatus
+    return byStatus.filter((thread) => [thread.id, thread.title, thread.source?.query, thread.userId]
+      .some((value) => String(value || '').toLowerCase().includes(needle)))
+  }, [ownerThreads, statusFilter, threadSearch])
+  const evaluatedThreadIds = useMemo(
+    () => new Set((feedback?.items || []).filter((entry) => entry.latest).map((entry) => entry.threadId)),
+    [feedback],
   )
   const statusChip = (status) => (
     <button
@@ -297,6 +306,13 @@ export default function AdminView({ api, tab, studioScenarioId, threadId }) {
 
       {tab === 'threads' && (
       <>
+      <AdminJourneyOverview
+        threads={threads}
+        feedback={feedback}
+        loading={listLoading}
+        onOpenThread={openDetail}
+        onFilterStatus={setStatusFilter}
+      />
       {/* 평가 모아보기 — 피드백 제출 대시보드 */}
       <AdminFeedback wire={feedback} loading={feedbackLoading} error={feedbackError} onOpenThread={api.openAdminThread} />
 
@@ -324,6 +340,14 @@ export default function AdminView({ api, tab, studioScenarioId, threadId }) {
               ))}
             </div>
             <span className="sb-admin__muted">admin = 플레이그라운드(ops-playground) 실행 쓰레드</span>
+            <input
+              type="search"
+              className="sb-admin-thread-search"
+              value={threadSearch}
+              onChange={(event) => setThreadSearch(event.target.value)}
+              placeholder="검색어·사용자·ID 검색"
+              aria-label="고객 여정 검색"
+            />
           </div>
         )}
         {threads.length > 0 && (
@@ -342,11 +366,12 @@ export default function AdminView({ api, tab, studioScenarioId, threadId }) {
             <table>
               <thead>
                 <tr>
-                  <th>threadId</th>
-                  <th>제목 / 진입</th>
-                  <th>상태</th>
-                  <th>사용자</th>
-                  <th>갱신</th>
+                  <th>여정 ID</th>
+                  <th>검색 의도 / 진입</th>
+                  <th>현재 단계</th>
+                  <th>구분</th>
+                  <th>평가</th>
+                  <th>최근 활동</th>
                   <th></th>
                 </tr>
               </thead>
@@ -364,6 +389,11 @@ export default function AdminView({ api, tab, studioScenarioId, threadId }) {
                       ) : (
                         <code>{t.userId}</code>
                       )}
+                    </td>
+                    <td>
+                      <span className={evaluatedThreadIds.has(t.id) ? 'sb-admin-eval-state is-done' : 'sb-admin-eval-state'}>
+                        {evaluatedThreadIds.has(t.id) ? '평가 있음' : '미평가'}
+                      </span>
                     </td>
                     <td title={t.updatedAt}>{timeAgo(t.updatedAt, { empty: '—' })}</td>
                     <td className="sb-admin-table__actions">
@@ -388,7 +418,11 @@ export default function AdminView({ api, tab, studioScenarioId, threadId }) {
               <p className="sb-table__empty">쓰레드가 없어요. 홈에서 라이브 생성 체험을 하면 여기에 쌓여요.</p>
             )}
             {threads.length > 0 && visibleThreads.length === 0 && (
-              <p className="sb-table__empty">「{statusLabel(statusFilter)}」 상태의 쓰레드가 없어요.</p>
+              <p className="sb-table__empty">
+                {threadSearch.trim()
+                  ? `“${threadSearch.trim()}”에 맞는 고객 여정이 없어요.`
+                  : `「${statusLabel(statusFilter)}」 상태의 쓰레드가 없어요.`}
+              </p>
             )}
           </div>
         </div>
