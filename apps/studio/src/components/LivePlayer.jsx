@@ -84,7 +84,7 @@ function savePhotoStore(threadId, photos) {
    달라진다. 쓰레드+색조가 같으면 지난 결과를 그대로 쓴다. 저장 전에 720px로 줄여
    (원본은 1254px·2MB대) localStorage 용량을 지킨다 */
 const LOOK_STORE_KEY = 'ddak-live-look-v1'
-const LOOK_STORE_LIMIT = 3
+const LOOK_STORE_LIMIT = PHOTO_STORE_LIMIT // 사진 보관과 같은 수 — 사진은 남았는데 렌더만 다시 만드는 틈을 없앤다
 
 function readLookStore() {
   try {
