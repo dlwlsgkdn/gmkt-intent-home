@@ -98,9 +98,12 @@ function cheekCenter(points, side) {
  * 정밀 렌더 요청 본문은 언제나 data:image/*;base64여야 한다 (@ddak/schema LookRenderBody).
  * 이미 data URL이면 그대로 돌려준다. 실패하면 null.
  */
-export async function toPhotoDataUrl(src, maxEdge = MAX_EDGE) {
+export async function toPhotoDataUrl(src, maxEdge = MAX_EDGE, opts = {}) {
   if (!src || typeof document === 'undefined') return null
-  if (String(src).startsWith('data:')) return src
+  /* 이미 data URL이면 그대로 — 전송 경로용 지름길이다 (고른 사진은 이미 720px 이하).
+     단 opts.force면 **반드시 다시 그린다**: 캐시 저장처럼 "지금 크기가 얼마든 줄여야 하는"
+     경로가 이 지름길을 타면 2MB대 PNG가 통째로 localStorage로 가서 조용히 실패한다 */
+  if (!opts.force && String(src).startsWith('data:')) return src
   let img
   try {
     img = await loadImage(src)

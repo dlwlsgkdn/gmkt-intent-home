@@ -103,7 +103,12 @@ function saveLookStore(threadId, tone, image) {
     for (const stale of keys.slice(0, Math.max(0, keys.length - LOOK_STORE_LIMIT))) delete store[stale]
     localStorage.setItem(LOOK_STORE_KEY, JSON.stringify(store))
   } catch {
-    /* 용량 초과 등 — 보관 실패는 체험을 막지 않는다 */
+    // 용량 초과 — 옛 렌더를 비우고 이번 것만이라도 남긴다 (그마저 안 되면 포기: 체험은 막지 않는다)
+    try {
+      localStorage.setItem(LOOK_STORE_KEY, JSON.stringify({ [threadId]: { tone, image } }))
+    } catch {
+      /* 포기 */
+    }
   }
 }
 
@@ -628,8 +633,11 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         preciseRef.current = true
         setLookAfter(image)
         setLookStage('precise')
-        // 다음 이어보기에서 재호출하지 않도록 축소본을 남긴다 (실패해도 화면은 그대로)
-        toPhotoDataUrl(image, 720).then((small) => saveLookStore(threadId, lookTone, small || image))
+        // 다음 이어보기에서 재호출하지 않도록 축소본을 남긴다 (실패해도 화면은 그대로).
+        // force — 렌더 결과는 이미 data URL이라 지름길을 타면 2MB PNG가 그대로 저장을 시도한다
+        toPhotoDataUrl(image, 720, { force: true }).then((small) => {
+          if (small) saveLookStore(threadId, lookTone, small)
+        })
       } catch (e) {
         if (cancelled || cancelledRef.current) return
         console.warn('[look] 정밀 렌더 실패 — 기기 합성을 유지합니다:', e.message)
