@@ -33,7 +33,7 @@ import PipelineFlow, { KIND_LABEL, SHORT_LABEL, metaLine } from './PipelineFlow.
  * 실행 버튼은 진짜 생성이므로 ✦ (스튜디오 왕복 ⇄ 아님 — CLAUDE.md 표기 규칙).
  */
 
-const INJECTION_LABEL = { system: '시스템(캐시)', user: '가변부', guard: '검증 게이트' }
+const INJECTION_LABEL = { system: '공통 참고', user: '고객별 조건', guard: '안전 점검' }
 
 /** 플레이그라운드 프로필 속성(고정 설문) 저장 키 — 계정 서버 동기화 기계 밖 로컬 실험 조건
  * (태깅 검토 스튜디오와 같은 문법). 실행 본문의 profile로 실려 원장 facts가 된다 */
@@ -116,7 +116,18 @@ const FLOW_INCOMING = {
   record: ['l67'],
 }
 
+/** 첫 화면은 내부 구현 대신 고객 요청이 결과가 되는 여섯 장면으로 설명한다. */
+const FRIENDLY_FLOW = [
+  { id: 'objective', icon: '1', title: '고객 요청 받기', note: '고객이 입력한 한 문장을 출발점으로 삼아요.', badge: '입력' },
+  { id: 'intent', icon: '2', title: '원하는 조건 이해하기', note: '목적·예산·대상과 이미 알고 있는 정보를 정리해요.', badge: 'AI 이해' },
+  { id: 'survey', icon: '3', title: '필요한 질문 만들기', note: '추천에 꼭 필요한 내용만 짧게 물어봐요.', badge: 'AI 작성' },
+  { id: 'plan-skeleton', icon: '4', title: '추천 구성 만들기', note: '결과 페이지의 순서와 안내 문구를 먼저 만들어요.', badge: 'AI 작성' },
+  { id: 'plan-products', icon: '5', title: '상품·콘텐츠 채우기', note: '조건에 맞는 상품과 참고 콘텐츠를 찾아 채워요.', badge: 'AI 검색' },
+  { id: 'verify', icon: '6', title: '오류 확인 후 저장', note: '예산·기피 조건·위험 표현을 확인하고 결과를 남겨요.', badge: '안전 점검' },
+]
+
 export default function PipelineStudio({ api }) {
+  const [pipelineView, setPipelineView] = useState('overview') // overview=비개발자용 흐름, expert=전체 운영 도구
   const [wire, setWire] = useState(null) // AdminPipelineWire
   const [error, setError] = useState(null)
   const [engineSaving, setEngineSaving] = useState(false)
@@ -848,6 +859,11 @@ export default function PipelineStudio({ api }) {
 
   const selectedResult = selected ? flowResults[selected.id] : null
   const modelDirty = model && (model.configured ?? '') !== modelChoice
+  const activeModelLabel = model
+    ? model.options.find((option) => option.id === model.current)?.label || model.current
+    : '확인 중'
+  const readyKnowledgeCount = (wire?.knowledge || []).filter((entry) => !entry.editable || Boolean(entry.value)).length
+  const customPromptCount = (prompts?.prompts || []).filter((entry) => Boolean(entry.configured)).length
 
   /* 지식 ↔ 단계 결선 — 자리표시자는 실효 프롬프트(재정의 우선)에서 판정하므로 프롬프트를 고치면 바로 따라온다 */
   const routing = useMemo(
@@ -909,7 +925,7 @@ export default function PipelineStudio({ api }) {
     if (entry.placeholder) {
       return (
         <div className="sb-know-chips">
-          <span className="sb-know-chips__label">실을 단계</span>
+          <span className="sb-know-chips__label">사용 단계</span>
           {llmStages.map((stage) => stageChip(entry, stage))}
         </div>
       )
@@ -928,8 +944,85 @@ export default function PipelineStudio({ api }) {
 
   return (
     <>
+      <header className="sb-admin-pagehead sb-pipeline-head">
+        <div>
+          <p className="sb-admin-pagehead__eyebrow">고객 요청이 추천 결과가 되는 과정</p>
+          <h1>생성 파이프라인</h1>
+          <p>AI가 고객의 요청을 이해하고, 질문하고, 상품을 추천한 뒤 안전하게 저장하는 순서입니다.</p>
+        </div>
+        <span className={`sb-admin-health ${error ? 'is-lab' : 'is-live'}`}><i /> {!wire ? '정보 불러오는 중' : error ? '일부 연결 확인 필요' : '처리 순서 연결됨'}</span>
+      </header>
+
+      <div className="sb-pipeline-view" role="tablist" aria-label="파이프라인 보기 방식">
+        <button type="button" role="tab" aria-selected={pipelineView === 'overview'} className={pipelineView === 'overview' ? 'is-on' : ''} onClick={() => setPipelineView('overview')}>
+          <span>쉬운 보기</span><small>업무 흐름 중심</small>
+        </button>
+        <button type="button" role="tab" aria-selected={pipelineView === 'expert'} className={pipelineView === 'expert' ? 'is-on' : ''} onClick={() => setPipelineView('expert')}>
+          <span>전문가 보기</span><small>모델·지시서·실행 설정</small>
+        </button>
+      </div>
+
       {error && <p className="sb-admin-gate__error">{error}</p>}
 
+      {pipelineView === 'overview' ? (
+        <div className="sb-pipeline-overview">
+          <section className="sb-admin-card sb-pipeline-story">
+            <div className="sb-admin-sectionhead">
+              <div><h2>한눈에 보는 추천 생성 흐름</h2><p>왼쪽에서 오른쪽으로 읽으면 됩니다. 카드를 누르면 실제 세부 단계를 확인할 수 있어요.</p></div>
+            </div>
+            <ol className="sb-pipeline-story__flow">
+              {FRIENDLY_FLOW.map((step, index) => {
+                const stage = wire?.stages.find((entry) => entry.id === step.id)
+                return (
+                  <React.Fragment key={step.id}>
+                    {index > 0 && <li className="sb-pipeline-story__arrow" aria-hidden="true">→</li>}
+                    <li>
+                      <button type="button" disabled={!stage} onClick={() => stage && setSelectedStage(step.id)}>
+                        <span className="sb-pipeline-story__no">{step.icon}</span>
+                        <span className="sb-pipeline-story__copy"><b>{step.title}</b><small>{step.note}</small></span>
+                        <em>{step.badge}</em>
+                      </button>
+                    </li>
+                  </React.Fragment>
+                )
+              })}
+            </ol>
+            <p className="sb-pipeline-story__result"><b>결과</b><span>고객에게는 필요한 질문과 맞춤 추천 페이지만 보여요. 내부 처리 과정은 운영 센터에서만 확인합니다.</span></p>
+          </section>
+
+          <section className="sb-pipeline-overview__status" aria-label="현재 파이프라인 상태">
+            <div><span>사용 중인 AI</span><b>{activeModelLabel}</b><small>추천 문구와 구성을 작성</small></div>
+            <div><span>연결된 참고자료</span><b>{wire ? `${readyKnowledgeCount}/${wire.knowledge.length}개` : '확인 중'}</b><small>트렌드·상품 기준·금지 규칙</small></div>
+            <div><span>수정된 AI 지시서</span><b>{prompts ? `${customPromptCount}개` : '확인 중'}</b><small>{customPromptCount ? '기본값과 다르게 운영 중' : '기본 기준 사용 중'}</small></div>
+          </section>
+
+          <div className="sb-pipeline-overview__grid">
+            <section className="sb-admin-card sb-pipeline-actions">
+              <div className="sb-admin-sectionhead"><div><h2>무엇을 바꾸고 싶나요?</h2><p>목적에 맞는 작업으로 바로 이동하세요.</p></div></div>
+              <button type="button" onClick={() => setPipelineView('expert')}>
+                <span>자료와 금지 규칙을 바꾸기</span><small>AI가 참고하는 트렌드·상품 기준과 차단 규칙을 관리합니다.</small><em>참고자료 관리 →</em>
+              </button>
+              <button type="button" onClick={() => { setPipelineView('expert'); setPgTab('flow') }}>
+                <span>고객 문장으로 직접 시험하기</span><small>실제 요청을 넣어 설문과 추천 결과를 확인합니다.</small><em>전체 흐름 시험 →</em>
+              </button>
+              <button type="button" onClick={() => setPipelineView('expert')}>
+                <span>AI 모델과 세부 지시 조정하기</span><small>전문가용 모델·단계·프롬프트 설정을 확인합니다.</small><em>전문가 설정 →</em>
+              </button>
+            </section>
+
+            <section className="sb-admin-card sb-pipeline-glossary">
+              <div className="sb-admin-sectionhead"><div><h2>용어를 쉽게 말하면</h2><p>전문가 보기에서 자주 나오는 표현입니다.</p></div></div>
+              <dl>
+                <div><dt>참고자료</dt><dd>AI가 답을 만들 때 참고하는 회사의 기준과 데이터</dd></div>
+                <div><dt>AI 지시서</dt><dd>말투·금지 사항·출력 형식을 정한 업무 설명서</dd></div>
+                <div><dt>AI 모델</dt><dd>문장을 이해하고 결과를 작성하는 AI 엔진</dd></div>
+                <div><dt>안전 점검</dt><dd>예산 위반·금지 상품·위험한 표현을 마지막에 거르는 과정</dd></div>
+              </dl>
+            </section>
+          </div>
+        </div>
+      ) : (
+      <>
       {/* 지식 소스(왼쪽) ∥ 세로 흐름 카드(가운데 히어로) ∥ 플레이그라운드(오른쪽) —
           실행이 가운데 흐름에 비친다. 배치는 grid-template-areas (admin.css .sb-pipe-layout) */}
       <div className="sb-pipe-layout">
@@ -939,7 +1032,7 @@ export default function PipelineStudio({ api }) {
             밝아지고(activeKnowledge), 노드에 손을 얹으면 반대로 이 행이 밝아진다(linkedKnowledge). */}
         <div className="sb-admin-card sb-pipe-knowledge-card">
           <div className="sb-know-head">
-            <p className="sb-panel-label">지식 소스 → 파이프라인</p>
+            <p className="sb-panel-label">AI 참고자료</p>
             <button
               type="button"
               className="sb-btn sb-btn--ghost sb-btn--tiny"
@@ -947,18 +1040,18 @@ export default function PipelineStudio({ api }) {
                 setNewSource(newSource ? null : { label: '', placeholder: '', heading: '', note: '', value: '' })
               }
             >
-              {newSource ? '취소' : '+ 지식 소스'}
+              {newSource ? '취소' : '+ 참고자료'}
             </button>
           </div>
           <p className="sb-admin__muted">
-            팀 데이터 v0 — DB화 전의 수동 입력(설정 KV) 자리예요. <b>실을 단계</b> 칩으로 각 지식이 어느 단계 프롬프트에 실릴지
-            직접 고르고, 오른쪽 흐름도의 유입 점으로 결과를 확인해요. 편집은 새 생성부터 반영돼요 (서버 캐시 최대 30초).
+            AI가 답을 만들 때 참고하는 팀 기준입니다. <b>사용 단계</b>를 누르면 어느 처리 단계에서 참고할지 바꿀 수 있어요.
+            편집한 내용은 새로 만드는 결과부터 반영됩니다.
           </p>
 
           {/* 새 지식 소스 — 주입 자리는 시스템 자리표시자 한 가지다 (원장·게이트 주입은 코드 배선) */}
           {newSource && (
             <div className="sb-know-new">
-              <p className="sb-know-new__head">새 지식 소스</p>
+              <p className="sb-know-new__head">새 참고자료</p>
               <label>
                 <span>이름</span>
                 <input
@@ -968,7 +1061,7 @@ export default function PipelineStudio({ api }) {
                 />
               </label>
               <label>
-                <span>자리표시자</span>
+                <span>연결 이름(영문)</span>
                 <input
                   value={newSource.placeholder}
                   placeholder="예: SEASON_BRIEF"
@@ -977,7 +1070,7 @@ export default function PipelineStudio({ api }) {
                 />
               </label>
               <label>
-                <span>제목 줄</span>
+                <span>AI에게 보일 제목</span>
                 <input
                   value={newSource.heading}
                   placeholder="비우면 이름으로 만들어요 — 모델이 보는 블록 제목"
@@ -985,7 +1078,7 @@ export default function PipelineStudio({ api }) {
                 />
               </label>
               <label>
-                <span>값</span>
+                <span>내용</span>
                 <textarea
                   value={newSource.value}
                   rows={3}
@@ -994,8 +1087,8 @@ export default function PipelineStudio({ api }) {
                 />
               </label>
               <p className="sb-admin__muted">
-                자리표시자는 영문 대문자·숫자·밑줄 2~31자예요 (`{'{{SEASON_BRIEF}}'}` 꼴로 저장돼요). 만든 뒤 <b>실을 단계</b>{' '}
-                칩으로 실을 곳을 고르면 그때부터 주입돼요.
+                연결 이름은 영문 대문자·숫자·밑줄 2~31자로 적어주세요. 만든 뒤 <b>사용 단계</b>를 고르면 해당 단계부터
+                AI가 이 자료를 참고합니다.
               </p>
               <div className="sb-json-dialog__actions">
                 <button type="button" className="sb-btn sb-btn--ghost" disabled={newSourceSaving} onClick={() => setNewSource(null)}>
@@ -1096,12 +1189,13 @@ export default function PipelineStudio({ api }) {
         </div>
 
         <div className="sb-admin-card sb-flow-card">
-          <p className="sb-panel-label">생성 파이프라인 (전략 문서 0~7)</p>
+          <p className="sb-panel-label">세부 처리 단계</p>
 
           {/* 런타임 설정 — 엔진 플래그·생성 모델 (파이프라인 전체에 걸리는 값이라 다이어그램 머리에) */}
-          <div className="sb-flow-config">
+          <details className="sb-flow-config">
+            <summary>AI 엔진·모델 설정 <span>전문가 설정</span></summary>
             <div className="sb-flow-config__row">
-              <span className="sb-flow-config__label">엔진</span>
+              <span className="sb-flow-config__label">처리 방식</span>
               {!wire ? (
                 <span className="sb-admin__muted">불러오는 중…</span>
               ) : (
@@ -1135,7 +1229,7 @@ export default function PipelineStudio({ api }) {
               )}
             </div>
             <div className="sb-flow-config__row">
-              <span className="sb-flow-config__label">모델</span>
+              <span className="sb-flow-config__label">AI 모델</span>
               {!model ? (
                 <span className="sb-admin__muted">불러오는 중…</span>
               ) : (
@@ -1175,7 +1269,7 @@ export default function PipelineStudio({ api }) {
                 </p>
               </details>
             )}
-          </div>
+          </details>
 
           {!wire ? (
             <p className="sb-admin__muted">파이프라인 현황을 불러오는 중…</p>
@@ -1291,28 +1385,28 @@ export default function PipelineStudio({ api }) {
           {/* 플레이그라운드 — 단계 단독 dry-run ∥ 전체 플로우 (실행이 왼쪽 다이어그램에 그대로 비친다) */}
           <div className="sb-admin-card">
             <div className="sb-pipe-play__head">
-              <p className="sb-panel-label">플레이그라운드</p>
+              <p className="sb-panel-label">테스트 실행</p>
               <div className="sb-admin-fb-seg" role="group" aria-label="플레이그라운드 모드">
                 <button
                   type="button"
                   className={'sb-admin-fb-seg__btn' + (pgTab === 'stage' ? ' is-on' : '')}
                   onClick={() => setPgTab('stage')}
                 >
-                  단계 단독
+                  한 단계만 시험
                 </button>
                 <button
                   type="button"
                   className={'sb-admin-fb-seg__btn' + (pgTab === 'flow' ? ' is-on' : '')}
                   onClick={() => setPgTab('flow')}
                 >
-                  전체 플로우
+                  전체 흐름 시험
                 </button>
               </div>
             </div>
             <p className="sb-admin__muted">
               {pgTab === 'stage'
-                ? 'LLM 단계 하나를 그래프·쓰레드 기록 없이 단독 실행해요 — 임시 프롬프트 what-if는 이 모드 전용이에요.'
-                : '실제 그래프(병렬 5a∥5b · 답변 대기 · 검증 게이트)를 통째로 돌고, 실행은 admin 프로필(ops-playground)의 쓰레드로 저장돼 쓰레드·평가 탭에서 평가·케이스 승격에 쓸 수 있어요. 단계별 관측은 가운데 흐름 카드에 실시간으로 쌓여요.'}
+                ? '특정 AI 작성 단계만 빠르게 시험합니다. 저장된 고객 기록에는 남지 않아요.'
+                : '고객 요청부터 설문·추천·안전 점검까지 실제 순서대로 시험하고, 결과를 고객 여정·평가에서 다시 확인할 수 있어요.'}
             </p>
             <div className="sb-pipe-play__intent">
               <input
@@ -1328,7 +1422,7 @@ export default function PipelineStudio({ api }) {
                   disabled={!pgIntent.trim() || running !== null || flowRunning !== null}
                   onClick={() => runStage('survey')}
                 >
-                  {running === 'survey' ? '실행 중…' : '✦ 설문 실행 (3단계)'}
+                  {running === 'survey' ? '실행 중…' : '✦ 질문 만들기 시험'}
                 </button>
               ) : (
                 <button
@@ -1337,7 +1431,7 @@ export default function PipelineStudio({ api }) {
                   disabled={!pgIntent.trim() || running !== null || flowRunning !== null}
                   onClick={runFlowSurvey}
                 >
-                  {flowRunning === 'survey' ? '실행 중…' : '✦ 플로우 시작 (0→3 · 답변 대기까지)'}
+                  {flowRunning === 'survey' ? '실행 중…' : '✦ 전체 흐름 시작'}
                 </button>
               )}
             </div>
@@ -1484,6 +1578,8 @@ export default function PipelineStudio({ api }) {
           </div>
         </div>
       </div>
+      </>
+      )}
 
       {/* 단계 레이어 모달 — 노드 클릭: 설명·최근 실행 + (LLM 단계) 시스템 프롬프트 열람·수정 */}
       {selected && (
@@ -1512,7 +1608,7 @@ export default function PipelineStudio({ api }) {
             <div className="sb-admin-prompt-dialog__body">
               <div className="sb-stage-dialog__chips">
                 <span className="sb-admin-prompt-chip">{KIND_LABEL[selected.kind] || selected.kind}</span>
-                {selected.effort && <span className="sb-admin-prompt-chip">effort {selected.effort}</span>}
+                {selected.effort && <span className="sb-admin-prompt-chip">생성 강도 {selected.effort}</span>}
                 {selected.status === 'planned' && <span className="sb-admin-prompt-chip">예정</span>}
                 {(selected.promptCustom || selectedResult?.custom) && (
                   <span className="sb-admin-prompt-chip sb-admin-prompt-chip--custom">프롬프트 재정의</span>

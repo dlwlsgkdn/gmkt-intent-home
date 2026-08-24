@@ -22,18 +22,18 @@ export const STRUCTURAL_ROUTES = {
 export const INJECTION_GROUPS = [
   {
     id: 'system',
-    label: '시스템 프롬프트에 박힘',
-    note: '자리표시자 자리에 통째로 들어가 프롬프트 캐시에 흡수돼요.',
+    label: 'AI 공통 지시서에 포함',
+    note: '모든 고객에게 공통으로 적용할 기준과 표현을 담습니다.',
   },
   {
     id: 'user',
-    label: '제약 원장 → 요청 가변부',
-    note: '2단계 원장에 모여 요청마다 새로 실려요.',
+    label: '고객별 조건에 포함',
+    note: '고객 요청·프로필·이전 의견과 함께 매번 새로 반영합니다.',
   },
   {
     id: 'guard',
-    label: '검증 게이트',
-    note: '생성 뒤 6단계에서 대조해 걸러내요.',
+    label: '결과 안전 점검',
+    note: '추천을 만든 뒤 금지 항목과 위험한 표현을 걸러냅니다.',
   },
 ]
 

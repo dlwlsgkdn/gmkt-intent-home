@@ -16,19 +16,19 @@ import React, { useMemo } from 'react'
  * (onHoverStage) 반대로 지식 카드의 해당 행이 강조된다.
  */
 
-export const KIND_LABEL = { llm: 'LLM', deterministic: '결정적', 'interrupt-boundary': '대기 지점' }
+export const KIND_LABEL = { llm: 'AI가 작성', deterministic: '규칙으로 처리', 'interrupt-boundary': '고객 답변 대기' }
 
 /** 노드 폭에 맞춘 짧은 표시 라벨 (레이어 모달은 와이어의 전체 라벨) — 지식 행의 단계 칩도 이 라벨을 쓴다 */
 export const SHORT_LABEL = {
-  objective: '목적어 입력',
-  intent: '의도 정규화',
-  ledger: '제약 원장',
-  survey: '변동 설문',
-  candidates: '근거 수집',
-  'plan-skeleton': '계획 뼈대',
-  'plan-products': '상품·콘텐츠',
-  verify: '검증 게이트',
-  record: '쓰레드 기록',
+  objective: '고객 요청 받기',
+  intent: '원하는 것 파악',
+  ledger: '조건 한곳에 모으기',
+  survey: '필요한 질문 만들기',
+  candidates: '상품 후보 찾기',
+  'plan-skeleton': '추천 구성 만들기',
+  'plan-products': '상품·콘텐츠 채우기',
+  verify: '오류·위험 확인',
+  record: '결과 저장하기',
 }
 
 /** dry-run 종류별 흐름 경로 — links: 대시가 흐르는 연결선(gate=답변 대기 점선), path: 함께 켜지는 통과 노드 */
@@ -112,7 +112,7 @@ export default function PipelineFlow({
               : stage.status === 'planned'
                 ? '예정 · 5b 병행'
                 : stage.kind === 'llm'
-                  ? `LLM${stage.effort ? ' · ' + stage.effort : ''}`
+                  ? 'AI가 작성'
                   : KIND_LABEL[stage.kind] || stage.kind
     const cls = ['sb-flow__node']
     if (stage.kind === 'llm') cls.push('sb-flow__node--llm')
@@ -176,9 +176,9 @@ export default function PipelineFlow({
                 ? ' is-live'
                 : '')
             }
-            title="설문 완료 후 답변을 기다리는 interrupt 지점"
+            title="설문을 보여준 뒤 고객의 답변을 기다립니다"
           >
-            <span className="sb-flow__gate-label">⏸ 답변 대기</span>
+            <span className="sb-flow__gate-label">⏸ 고객 답변 기다리기</span>
           </span>
           {/* 5 병렬 — 왼쪽: 뼈대(조기 확정 스트리밍), 오른쪽: 근거 수집(예정) + 상품·콘텐츠(웹 검색 병행) */}
           <div className="sb-flow__par">
@@ -202,15 +202,14 @@ export default function PipelineFlow({
         </div>
       </div>
       <div className="sb-flow-legend">
-        <span><i className="sb-flow-legend__sw sb-flow-legend__sw--llm" /> LLM 생성</span>
-        <span><i className="sb-flow-legend__sw" /> 결정적</span>
-        <span><i className="sb-flow-legend__sw sb-flow-legend__sw--planned" /> 예정</span>
-        <span><i className="sb-flow-legend__sw sb-flow-legend__sw--live" /> 실행 흐름</span>
-        <span><i className="sb-flow-legend__sw sb-flow-legend__sw--feed" /> 지식 유입 (점 = 지식 1개, 빈 점 = 값 없음)</span>
+        <span><i className="sb-flow-legend__sw sb-flow-legend__sw--llm" /> AI가 작성</span>
+        <span><i className="sb-flow-legend__sw" /> 정해진 규칙으로 처리</span>
+        <span><i className="sb-flow-legend__sw sb-flow-legend__sw--planned" /> 준비 중인 기능</span>
+        <span><i className="sb-flow-legend__sw sb-flow-legend__sw--live" /> 지금 처리 중</span>
+        <span><i className="sb-flow-legend__sw sb-flow-legend__sw--feed" /> 참고자료가 연결된 단계</span>
       </div>
       <p className="sb-flow-hint">
-        단계를 누르면 설명·실리는 지식·시스템 프롬프트가 레이어로 열려요. 왼쪽 지식 카드의 행에 손을 얹으면 그 지식이 실리는
-        단계가, 단계에 손을 얹으면 거기 실리는 지식이 서로 밝아져요. 플레이그라운드 실행도 이 흐름 위에 그대로 비쳐요.
+        단계를 누르면 하는 일과 사용하는 참고자료를 볼 수 있어요. AI가 작성하는 단계에서는 세부 지시서도 확인할 수 있습니다.
       </p>
     </>
   )
