@@ -380,6 +380,10 @@
   border-left-color: color-mix(in srgb, var(--sb-f, var(--sb-n-300)) 45%, var(--sb-n-200));
   background: var(--sb-n-50);
 }
+.sb-tagging-field.is-jump-target {
+  border-color: var(--sb-info);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sb-info) 18%, transparent);
+}
 .sb-tagging-field__hd {
   display: flex;
   justify-content: space-between;
@@ -681,6 +685,24 @@
 .sb-tagging-vd--warn {
   background: color-mix(in srgb, var(--sb-warn) 14%, var(--sb-n-0));
   color: var(--sb-warn-ink);
+}
+.sb-tagging-vd--link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+}
+.sb-tagging-vd--link:hover { filter: brightness(.97); }
+.sb-tagging-vd--link span { min-width: 0; }
+.sb-tagging-vd--link b {
+  flex: 0 0 auto;
+  font-size: var(--sb-t-micro);
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 /* 검토 메모 */

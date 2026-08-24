@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   FIELD_DEFS,
   TAGGING_SEED,
@@ -40,6 +40,27 @@ const fieldHasValueIssue = (unit, def) => {
 }
 const fieldNeedsReview = (unit, def) => unit.fields[def.key].status !== 'done' || fieldHasValueIssue(unit, def)
 
+/* 검증 문구를 해당 편집 카드에 연결한다. 전체 개수 오류처럼 특정 필드가 없는 경우에는
+   보조 태그부터 줄일 수 있도록 조건→고민→결과 순서로 안내한다. */
+const validationTargetKey = (unit, message) => {
+  const named = FIELD_DEFS.find((def) => message.includes(`‘${def.label}’`))
+  if (named) return named.key
+
+  const quotedTags = [...message.matchAll(/“([^”]+)”/g)].map((match) => match[1])
+  const conflictField = FIELD_DEFS.find((def) =>
+    unit.fields[def.key].selected.some((tag) => quotedTags.includes(tag))
+  )
+  if (conflictField) return conflictField.key
+
+  if (message.startsWith('전체 태그')) {
+    const emptyRequired = FIELD_DEFS.find((def) => def.required && unit.fields[def.key].selected.length === 0)
+    if (emptyRequired) return emptyRequired.key
+    return ['condition', 'concern', 'result', 'type', 'area', 'subtype', 'category']
+      .find((key) => unit.fields[key].selected.length > 0) || 'category'
+  }
+  return null
+}
+
 const cloneSeedField = (field) => ({ ...field, selected: [...field.selected] })
 
 const freshSeedUnit = (unitId) => {
@@ -70,6 +91,8 @@ export default function TaggingStudio({ api, embedded = false }) {
   const [openWhy, setOpenWhy] = useState({})
   /* 잠금 해제는 편집 세션 상태다. 저장본의 status=done이 기본 잠금 원천이라 새로 열면 다시 안전하게 잠긴다. */
   const [unlockedFields, setUnlockedFields] = useState({})
+  const [jumpTarget, setJumpTarget] = useState(null)
+  const fieldRefs = useRef({})
 
   useEffect(() => {
     saveTaggingReview(units)
@@ -96,6 +119,24 @@ export default function TaggingStudio({ api, embedded = false }) {
   )
   const unreviewedFields = FIELD_DEFS.filter((d) => unit.fields[d.key].status === 'unreviewed')
   const currentReviewFields = FIELD_DEFS.filter((def) => fieldNeedsReview(unit, def))
+
+  useEffect(() => {
+    if (!jumpTarget) return undefined
+    const frame = window.requestAnimationFrame(() => {
+      const target = fieldRefs.current[jumpTarget]
+      if (!target) return
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      target.focus({ preventScroll: true })
+    })
+    const timer = window.setTimeout(() => {
+      setJumpTarget((current) => current === jumpTarget ? null : current)
+    }, 1800)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.clearTimeout(timer)
+    }
+  }, [jumpTarget, onlyNeedsReview, unit.id])
+
   const reviewStats = useMemo(() => {
     let pending = 0
     let locked = 0
@@ -111,6 +152,7 @@ export default function TaggingStudio({ api, embedded = false }) {
   const selectUnit = (id) => {
     setSelectedId(id)
     setOpenWhy({})
+    setJumpTarget(null)
   }
 
   const patchUnit = (updater) => {
@@ -120,6 +162,14 @@ export default function TaggingStudio({ api, embedded = false }) {
   const setFieldUnlocked = (key, unlocked) => {
     const editKey = fieldEditKey(unit.id, key)
     setUnlockedFields((prev) => ({ ...prev, [editKey]: unlocked }))
+  }
+
+  const openFieldFromValidation = (key) => {
+    if (!key || !unit.fields[key]) return
+    const def = FIELD_DEFS.find((candidate) => candidate.key === key)
+    if (onlyNeedsReview && !fieldNeedsReview(unit, def)) setOnlyNeedsReview(false)
+    if (unit.fields[key].status === 'done') setFieldUnlocked(key, true)
+    setJumpTarget(key)
   }
 
   const restoreAiField = (key) => {
@@ -399,11 +449,17 @@ export default function TaggingStudio({ api, embedded = false }) {
             return (
               <section
                 key={def.key}
+                ref={(node) => {
+                  if (node) fieldRefs.current[def.key] = node
+                  else delete fieldRefs.current[def.key]
+                }}
+                tabIndex={-1}
                 className={
                   `sb-tagging-field sb-tagging-field--k-${def.key}` +
                   (field.status === 'unreviewed' ? ' sb-tagging-field--unreviewed' : '') +
                   (field.status === 'fix' ? ' sb-tagging-field--fix' : '') +
-                  (locked ? ' sb-tagging-field--locked' : '')
+                  (locked ? ' sb-tagging-field--locked' : '') +
+                  (jumpTarget === def.key ? ' is-jump-target' : '')
                 }
               >
                 <div className="sb-tagging-field__hd">
@@ -555,13 +611,27 @@ export default function TaggingStudio({ api, embedded = false }) {
           <div className="sb-tagging-panel">
             <p className="sb-tagging-panel__hd">검증 결과</p>
             {errs.length === 0 && warns.length === 0 && <p className="sb-tagging-vd sb-tagging-vd--ok">✓ 규칙 위반 없음</p>}
-            {errs.map((message) => <p key={message} className="sb-tagging-vd sb-tagging-vd--err">✕ {message}</p>)}
-            {warns.map((message) => <p key={message} className="sb-tagging-vd sb-tagging-vd--warn">⚠ {message}</p>)}
-            {unreviewedFields.length > 0 && (
-              <p className="sb-tagging-vd sb-tagging-vd--warn">
-                ⚠ 미검토 항목: {unreviewedFields.map((d) => d.label).join(', ')}
-              </p>
-            )}
+            {errs.map((message) => {
+              const targetKey = validationTargetKey(unit, message)
+              return (
+                <button key={message} type="button" className="sb-tagging-vd sb-tagging-vd--err sb-tagging-vd--link" onClick={() => openFieldFromValidation(targetKey)}>
+                  <span>✕ {message}</span><b>수정하기 →</b>
+                </button>
+              )
+            })}
+            {warns.map((message) => {
+              const targetKey = validationTargetKey(unit, message)
+              return (
+                <button key={message} type="button" className="sb-tagging-vd sb-tagging-vd--warn sb-tagging-vd--link" onClick={() => openFieldFromValidation(targetKey)}>
+                  <span>⚠ {message}</span><b>수정하기 →</b>
+                </button>
+              )
+            })}
+            {unreviewedFields.map((def) => (
+              <button key={def.key} type="button" className="sb-tagging-vd sb-tagging-vd--warn sb-tagging-vd--link" onClick={() => openFieldFromValidation(def.key)}>
+                <span>⚠ 미검토 항목: {def.label}</span><b>확인하기 →</b>
+              </button>
+            ))}
           </div>
 
           <div className="sb-tagging-panel">
