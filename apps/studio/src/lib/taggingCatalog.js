@@ -44,7 +44,7 @@ export const FIELD_DEFS = [
   { key: 'condition', label: '조건', min: 0, max: 1, required: false },
 ]
 
-export const TAG_LIMIT = { min: 3, max: 8 }
+export const TAG_LIMIT = { min: 3, max: 10 }
 
 export function optionsFor(key, category) {
   switch (key) {
