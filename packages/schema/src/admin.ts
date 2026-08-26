@@ -65,6 +65,18 @@ export type PutAdminModelBody = z.infer<typeof PutAdminModelBody>
 export const AdminPromptId = z.enum(['intent', 'survey', 'plan-skeleton', 'plan-products', 'judge', 'judge-survey'])
 export type AdminPromptId = z.infer<typeof AdminPromptId>
 
+export const AdminPromptRevision = z.object({
+  /** 사람이 복구 대상을 고를 때 쓰는 불변 id */
+  id: z.string(),
+  /** 저장 시각(ISO) */
+  at: z.string(),
+  /** null = 이 시점에는 코드 기본 지시서를 사용했다 */
+  text: z.string().nullable(),
+  /** 운영자가 남긴 변경 이유 또는 서버가 만든 짧은 설명 */
+  note: z.string(),
+})
+export type AdminPromptRevision = z.infer<typeof AdminPromptRevision>
+
 export const AdminPromptEntry = z.object({
   id: AdminPromptId,
   label: z.string(),
@@ -74,6 +86,8 @@ export const AdminPromptEntry = z.object({
   defaultText: z.string(),
   /** 설정 저장소의 재정의 원문 — 없으면 null (= 기본값 사용 중) */
   configured: z.string().nullable(),
+  /** 최신순 저장 이력 — 현재 버전과 이전 복구 지점을 함께 싣는다 */
+  history: z.array(AdminPromptRevision),
 })
 export type AdminPromptEntry = z.infer<typeof AdminPromptEntry>
 
@@ -87,6 +101,8 @@ export type AdminPromptsWire = z.infer<typeof AdminPromptsWire>
 export const PutAdminPromptBody = z.object({
   /** 재정의 원문 — null/공백이거나 기본값과 같으면 설정을 지우고 기본값으로 복귀 */
   text: z.string().max(20000).nullable(),
+  /** 이번 변경을 실행 쓰레드와 대조할 때 보여 줄 짧은 메모 */
+  note: z.string().trim().max(200).optional(),
 })
 export type PutAdminPromptBody = z.infer<typeof PutAdminPromptBody>
 
@@ -241,5 +257,7 @@ export const AdminFlowRunBody = z.object({
   /** plan 페이즈 필수 — interrupt 유실 시 시딩 재실행 폴백 재료 */
   survey: SurveyPageWire.optional(),
   answers: z.array(Answer).optional(),
+  /** AI 지시서 화면에서 시작한 시험이면 쓰레드 제목에 남길 변경 메모 */
+  testLabel: z.string().trim().max(200).optional(),
 })
 export type AdminFlowRunBody = z.infer<typeof AdminFlowRunBody>

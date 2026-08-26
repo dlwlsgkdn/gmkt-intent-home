@@ -7,6 +7,7 @@ const SAME_ORIGIN =
     location.hostname === 'localhost' ||
     location.hostname === '127.0.0.1')
 const BASE = (SAME_ORIGIN ? '' : 'https://ddak-scenario-studio.vercel.app') + '/api/bff/admin'
+export const PROMPT_TEST_SESSION_KEY = 'ddak-ops-prompt-test-v1'
 
 export class AdminApiError extends Error {
   constructor(status, message) {
@@ -71,14 +72,14 @@ export function putAdminModel(model) {
   return req('PUT', '/model', { model })
 }
 
-/** LLM 시스템 프롬프트 조회 — { promptVersion, prompts: [{ id, label, note, defaultText, configured }] } */
+/** LLM 시스템 프롬프트 조회 — 현재값과 복구 가능한 저장 이력을 함께 받는다 */
 export function fetchAdminPrompts() {
   return req('GET', '/prompts')
 }
 
-/** LLM 시스템 프롬프트 재정의 — text: 원문 또는 null(기본값 복귀). 기본값과 같은 저장도 복귀로 처리된다 */
-export function putAdminPrompt(id, text) {
-  return req('PUT', `/prompts/${encodeURIComponent(id)}`, { text })
+/** LLM 시스템 프롬프트 재정의 — note는 변경 기록과 시험 쓰레드 제목에 쓰는 운영 메모 */
+export function putAdminPrompt(id, text, note) {
+  return req('PUT', `/prompts/${encodeURIComponent(id)}`, { text, ...(note?.trim() ? { note: note.trim() } : {}) })
 }
 
 /** 파이프라인 현황 — { engine, stages(전략 문서 0~7 카탈로그), knowledge(지식 KV+블록리스트) } */
@@ -167,8 +168,8 @@ export function dryRunStage(body, opts) {
   return ssePost('/pipeline/dry-run', body, opts)
 }
 
-/** 전체 플로우 실행 (플레이그라운드, SSE) — 실제 LangGraph 그래프, 쓰레드·core 기록 없음.
- * body: { phase: 'survey'|'plan', flowId?, intent, profile?, survey?, answers? } → FlowRunResult.
+/** 전체 플로우 실행 (플레이그라운드, SSE) — 실제 LangGraph 그래프이며 core 연결 시 쓰레드로 기록된다.
+ * body: { phase: 'survey'|'plan', flowId?, intent, profile?, survey?, answers?, testLabel? } → FlowRunResult.
  * opts.onEvent가 stage({ id, phase, meta?, prompt?, summary? })·content(스트림 조각)를 받는다 */
 export function flowRunPipeline(body, opts) {
   return ssePost('/pipeline/flow-run', body, opts)

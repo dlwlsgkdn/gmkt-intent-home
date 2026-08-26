@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { fetchAdminPrompts, putAdminPrompt } from '../lib/adminApi.js'
+import { PROMPT_TEST_SESSION_KEY, fetchAdminPrompts, putAdminPrompt } from '../lib/adminApi.js'
 import promptGuide from '../assets/prompt-guide.png'
 
 export default function AdminPromptLibrary({ api }) {
@@ -7,6 +7,7 @@ export default function AdminPromptLibrary({ api }) {
   const [error, setError] = useState(null)
   const [selected, setSelected] = useState(null)
   const [draft, setDraft] = useState('')
+  const [changeNote, setChangeNote] = useState('')
   const [saving, setSaving] = useState(false)
 
   const load = async () => {
@@ -28,23 +29,51 @@ export default function AdminPromptLibrary({ api }) {
   const open = (prompt) => {
     setSelected(prompt)
     setDraft(prompt.configured ?? prompt.defaultText)
+    setChangeNote('')
   }
-  const save = async (value) => {
+  const save = async (value, note, testAfter = false) => {
     if (!selected) return
     setSaving(true)
     try {
-      const next = await putAdminPrompt(selected.id, value)
+      const next = await putAdminPrompt(selected.id, value, note)
       setWire(next)
       const updated = next.prompts.find((prompt) => prompt.id === selected.id)
       setSelected(updated || null)
       setDraft(updated ? updated.configured ?? updated.defaultText : '')
-      api.showToast(value == null ? '기본 프롬프트로 되돌렸어요.' : '프롬프트를 저장했어요. 새 생성부터 반영됩니다.')
+      setChangeNote('')
+      api.showToast(value == null ? '기본 지시서로 되돌렸어요.' : '지시서를 저장했어요. 새 결과부터 반영됩니다.')
+      if (testAfter && updated) {
+        const revision = updated.history?.[0]
+        try {
+          sessionStorage.setItem(
+            PROMPT_TEST_SESSION_KEY,
+            JSON.stringify({
+              promptId: updated.id,
+              label: updated.label,
+              note: revision?.note || note || '지시서 수정',
+              revisionId: revision?.id || null,
+              at: revision?.at || new Date().toISOString(),
+            }),
+          )
+        } catch {
+          /* 세션 저장이 막혀도 시험 화면은 열 수 있다 */
+        }
+        api.setAdminTab('pipeline')
+      }
     } catch (e) {
       api.showToast(e.message || '프롬프트를 저장하지 못했어요.')
     } finally {
       setSaving(false)
     }
   }
+
+  const restore = (revision) => save(revision.text, `“${revision.note}” 버전으로 복구`)
+
+  const formatAt = (at) => {
+    const date = new Date(at)
+    return Number.isNaN(date.getTime()) ? at : date.toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' })
+  }
+  const draftChanged = selected ? draft !== (selected.configured ?? selected.defaultText) : false
 
   const renderGroup = (title, note, rows, icon, example) => rows.length > 0 && (
     <section className="sb-admin-card sb-admin-prompt-group">
@@ -125,9 +154,45 @@ export default function AdminPromptLibrary({ api }) {
               </div>
               <label className="sb-admin-prompt-editor-label" htmlFor="sb-admin-prompt-editor">AI에게 보여줄 지시서</label>
               <textarea id="sb-admin-prompt-editor" className="sb-admin-prompt-dialog__editor" value={draft} onChange={(event) => setDraft(event.target.value)} />
+              <label className="sb-admin-prompt-change" htmlFor="sb-admin-prompt-change">
+                <span><b>이번에 바꾼 내용 (선택)</b><small>비워 두면 새로 추가한 명령을 자동으로 기록해요.</small></span>
+                <input
+                  id="sb-admin-prompt-change"
+                  type="text"
+                  maxLength={200}
+                  value={changeNote}
+                  placeholder="예: 추천 이유를 3문장으로 제한"
+                  onChange={(event) => setChangeNote(event.target.value)}
+                />
+              </label>
+              {(selected.history || []).length > 0 && (
+                <details className="sb-admin-prompt-history">
+                  <summary>변경 기록 · {selected.history.length}개 <span>이전 버전으로 되돌릴 수 있어요</span></summary>
+                  <ol>
+                    {selected.history.map((revision, index) => {
+                      const isCurrent = revision.text === selected.configured
+                      return (
+                        <li key={revision.id}>
+                          <span className="sb-admin-prompt-history__dot" aria-hidden="true" />
+                          <span className="sb-admin-prompt-history__copy">
+                            <b>{revision.note}</b>
+                            <small>{formatAt(revision.at)} · {revision.text === null ? '기본 지시서' : `${revision.text.length.toLocaleString('ko-KR')}자`}</small>
+                          </span>
+                          {isCurrent && index === 0 ? (
+                            <span className="sb-admin-prompt-chip sb-admin-prompt-chip--custom">현재 사용 중</span>
+                          ) : (
+                            <button type="button" className="sb-btn sb-btn--ghost sb-btn--tiny" disabled={saving} onClick={() => restore(revision)}>이 버전 복구</button>
+                          )}
+                        </li>
+                      )
+                    })}
+                  </ol>
+                </details>
+              )}
               <div className="sb-json-dialog__actions">
-                {selected.configured && <button type="button" className="sb-btn sb-btn--ghost" disabled={saving} onClick={() => save(null)}>기본값으로 복귀</button>}
-                <button type="button" className="sb-btn sb-btn--primary" disabled={saving || !draft.trim()} onClick={() => save(draft)}>{saving ? '저장 중…' : '저장하고 새 결과에 적용'}</button>
+                {selected.configured && <button type="button" className="sb-btn sb-btn--ghost" disabled={saving} onClick={() => save(null, '기본 지시서로 복구')}>기본값으로 복귀</button>}
+                <button type="button" className="sb-btn sb-btn--ghost" disabled={saving || !draft.trim() || !draftChanged} onClick={() => save(draft, changeNote)}>{saving ? '저장 중…' : '저장만'}</button>
+                <button type="button" className="sb-btn sb-btn--primary" disabled={saving || !draft.trim() || !draftChanged} onClick={() => save(draft, changeNote, true)}>{saving ? '저장 중…' : '저장하고 바로 시험 →'}</button>
               </div>
             </div>
           </section>

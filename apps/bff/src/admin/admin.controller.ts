@@ -37,6 +37,7 @@ import {
   AdminPipelineWire,
   AdminPromptId,
   AdminPromptsWire,
+  type AdminPromptRevision,
   EvalCasesWire,
   EvalRunsWire,
   PromoteEvalCaseBody,
@@ -98,6 +99,38 @@ const THREAD_ID_PARAM = {
   description: '스노우플레이크 threadId (19자리 십진 문자열)',
   example: '2195943212345678901',
 } as const
+
+const PROMPT_HISTORY_LIMIT = 12
+const promptHistorySettingKey = (id: string) => `llm-prompt-history-${id}`
+
+const summarizePromptChange = (before: string, after: string, next: string | null) => {
+  if (next === null) return '기본 지시서로 복구'
+  const beforeLines = new Set(before.split('\n').map((line) => line.trim()).filter(Boolean))
+  const added = after
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !beforeLines.has(line))
+  if (added.length) {
+    const sample = added[0].length > 80 ? `${added[0].slice(0, 80)}…` : added[0]
+    return `“${sample}” 추가`
+  }
+  return '지시서 문구 수정'
+}
+
+const parsePromptHistory = (value: unknown): AdminPromptRevision[] => {
+  if (!Array.isArray(value)) return []
+  return value
+    .filter(
+      (entry): entry is AdminPromptRevision =>
+        Boolean(entry) &&
+        typeof entry === 'object' &&
+        typeof (entry as AdminPromptRevision).id === 'string' &&
+        typeof (entry as AdminPromptRevision).at === 'string' &&
+        (typeof (entry as AdminPromptRevision).text === 'string' || (entry as AdminPromptRevision).text === null) &&
+        typeof (entry as AdminPromptRevision).note === 'string',
+    )
+    .slice(0, PROMPT_HISTORY_LIMIT)
+}
 
 /*
  * admin API — 스튜디오 운영 콘솔(#ops) 전용.
@@ -228,9 +261,19 @@ export class AdminController {
   async getPrompts(): Promise<AdminPromptsWire> {
     const prompts = await Promise.all(
       PROMPT_DEFS.map(async (def) => {
-        const setting = await this.core.getSetting(promptSettingKey(def.id))
+        const [setting, historySetting] = await Promise.all([
+          this.core.getSetting(promptSettingKey(def.id)),
+          this.core.getSetting(promptHistorySettingKey(def.id)),
+        ])
         const configured = typeof setting?.value === 'string' ? setting.value : null
-        return { id: def.id, label: def.label, note: def.note, defaultText: def.template, configured }
+        return {
+          id: def.id,
+          label: def.label,
+          note: def.note,
+          defaultText: def.template,
+          configured,
+          history: parsePromptHistory(historySetting?.value),
+        }
       }),
     )
     return { promptVersion: PROMPT_VERSION, prompts }
@@ -254,11 +297,37 @@ export class AdminController {
     if (!parsed.success) throw new BadRequestException('카탈로그에 없는 프롬프트입니다')
     const def = PROMPT_DEFS.find((d) => d.id === parsed.data)!
     const text = body.text?.trim() ? body.text : null
+    const currentSetting = await this.core.getSetting(promptSettingKey(def.id))
+    const current = typeof currentSetting?.value === 'string' ? currentSetting.value : null
+    const next = text === def.template ? null : text
+
+    if (current === next) return this.getPrompts()
+
+    const historySetting = await this.core.getSetting(promptHistorySettingKey(def.id))
+    const history = parsePromptHistory(historySetting?.value)
+    const now = new Date().toISOString()
+    const previous: AdminPromptRevision = {
+      id: `${Date.now()}-previous`,
+      at: currentSetting?.updatedAt || now,
+      text: current,
+      note: current === null ? '기본 지시서' : '직전 운영 버전',
+    }
+    const revision: AdminPromptRevision = {
+      id: `${Date.now()}-current`,
+      at: now,
+      text: next,
+      note: body.note || summarizePromptChange(current ?? def.template, next ?? def.template, next),
+    }
+    const merged = [revision, ...(history.length ? history : [previous])]
+      .filter((entry, index, rows) => index === 0 || entry.text !== rows[index - 1].text)
+      .slice(0, PROMPT_HISTORY_LIMIT)
+    await this.core.putSetting(promptHistorySettingKey(def.id), merged)
+
     // 기본값과 동일한 저장은 재정의가 아니다 — 설정을 지워 코드 기본값 추종으로 되돌린다
-    if (text === null || text === def.template) {
+    if (next === null) {
       await this.core.deleteSetting(promptSettingKey(def.id))
     } else {
-      await this.core.putSetting(promptSettingKey(def.id), text)
+      await this.core.putSetting(promptSettingKey(def.id), next)
     }
     this.llm.invalidatePromptCache()
     return this.getPrompts()

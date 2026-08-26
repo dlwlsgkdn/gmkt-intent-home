@@ -333,7 +333,7 @@ export class PipelineFlowRunService {
       try {
         const thread = await this.core.createThread({
           userId: FLOW_USER,
-          title: body.intent,
+          title: (body.testLabel ? `[지시서 시험] ${body.testLabel} · ${body.intent}` : body.intent).slice(0, 200),
           source: { kind: 'search', query: body.intent },
         })
         flowId = thread.id

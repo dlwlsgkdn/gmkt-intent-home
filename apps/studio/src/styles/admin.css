@@ -2414,6 +2414,24 @@
 .sb-pipe-play__head .sb-panel-label {
   margin: 0;
 }
+.sb-prompt-test-banner { margin: -4px -4px 16px; padding: 15px 16px; border: 1px solid var(--sb-ops-violet); border-radius: var(--sb-r-xl); color: var(--sb-ink); background: var(--sb-ops-violet-soft); box-shadow: var(--sb-shadow-sm); }
+.sb-prompt-test-banner__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 5px; }
+.sb-prompt-test-banner__head > span { padding: 3px 8px; border-radius: var(--sb-r-pill); color: var(--sb-n-0); background: var(--sb-ops-violet); font-size: var(--sb-t-micro); font-weight: 500; }
+.sb-prompt-test-banner > b { font-size: var(--sb-t-body); font-weight: 500; }
+.sb-prompt-test-banner > p { margin: 3px 0 11px; color: var(--sb-muted); font-size: var(--sb-t-caption); line-height: 1.5; }
+.sb-prompt-test-banner > ol { list-style: none; display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; }
+.sb-prompt-test-banner li { display: grid; grid-template-columns: 24px minmax(0, 1fr); align-items: center; gap: 8px; color: var(--sb-muted); font-size: var(--sb-t-caption); }
+.sb-prompt-test-banner li i { display: grid; place-items: center; width: 23px; height: 23px; border-radius: 50%; color: var(--sb-muted); background: var(--sb-n-0); font-size: var(--sb-t-micro); font-style: normal; }
+.sb-prompt-test-banner li.is-now { color: var(--sb-ink); }
+.sb-prompt-test-banner li.is-now i { color: var(--sb-n-0); background: var(--sb-ops-coral); }
+.sb-prompt-test-banner li.is-done i { color: var(--sb-n-0); background: var(--sb-success); }
+.sb-prompt-test-banner li b { font-weight: 500; }
+.sb-prompt-test-banner > small { display: block; margin-top: 11px; padding-top: 9px; border-top: 1px solid var(--sb-n-200); color: var(--sb-subtle); font-size: var(--sb-t-micro); line-height: 1.5; }
+.sb-prompt-test-done { display: flex; align-items: center; gap: 10px; margin: 12px 0; padding: 12px; border-radius: var(--sb-r-lg); background: var(--sb-success-soft); }
+.sb-prompt-test-done > span { display: grid; place-items: center; flex: 0 0 auto; width: 28px; height: 28px; border-radius: 50%; color: var(--sb-n-0); background: var(--sb-success); }
+.sb-prompt-test-done > div { display: flex; flex: 1 1 auto; flex-direction: column; gap: 2px; min-width: 150px; }
+.sb-prompt-test-done > div b { color: var(--sb-ink); font-size: var(--sb-t-caption); font-weight: 500; }
+.sb-prompt-test-done > div small { color: var(--sb-muted); font-size: var(--sb-t-micro); }
 
 /* 전체 플로우 실행 로그 — 단계 수명 타임라인 (행 클릭 = 단계 레이어 모달 "이번 실행") */
 .sb-pipe-flowlog {
@@ -3164,6 +3182,20 @@
 .sb-admin-prompt-edit-help > span { display: flex; align-items: flex-start; gap: 8px; font-size: var(--sb-t-caption); line-height: 1.5; }
 .sb-admin-prompt-edit-help i { display: grid; place-items: center; flex: 0 0 auto; width: 19px; height: 19px; border-radius: 50%; color: var(--sb-n-0); background: var(--sb-success); font-size: var(--sb-t-micro); font-style: normal; }
 .sb-admin-prompt-editor-label { color: var(--sb-ink); font-size: var(--sb-t-caption); font-weight: 500; }
+.sb-admin-prompt-change { display: grid; grid-template-columns: minmax(170px, .6fr) minmax(240px, 1.4fr); align-items: center; gap: 12px; padding: 11px 13px; border-radius: var(--sb-r-lg); background: var(--sb-ops-blue-soft); }
+.sb-admin-prompt-change > span { display: flex; flex-direction: column; gap: 2px; }
+.sb-admin-prompt-change b { color: var(--sb-ink); font-size: var(--sb-t-caption); font-weight: 500; }
+.sb-admin-prompt-change small { color: var(--sb-muted); font-size: var(--sb-t-micro); }
+.sb-admin-prompt-change input { min-width: 0; border: 1px solid var(--sb-n-200); border-radius: var(--sb-r-md); padding: 9px 11px; color: var(--sb-ink); background: var(--sb-n-0); font: inherit; font-size: var(--sb-t-caption); }
+.sb-admin-prompt-history { flex: 0 0 auto; border: 1px solid var(--sb-n-200); border-radius: var(--sb-r-lg); background: var(--sb-n-0); }
+.sb-admin-prompt-history summary { padding: 10px 13px; color: var(--sb-ink); font-size: var(--sb-t-caption); font-weight: 500; cursor: pointer; }
+.sb-admin-prompt-history summary span { margin-left: 7px; color: var(--sb-muted); font-size: var(--sb-t-micro); font-weight: 300; }
+.sb-admin-prompt-history ol { list-style: none; max-height: 190px; margin: 0; padding: 0 12px 10px; overflow-y: auto; }
+.sb-admin-prompt-history li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 9px; padding: 9px 2px; border-top: 1px solid var(--sb-n-100); }
+.sb-admin-prompt-history__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--sb-info); }
+.sb-admin-prompt-history__copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sb-admin-prompt-history__copy b { overflow: hidden; color: var(--sb-ink); font-size: var(--sb-t-caption); font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
+.sb-admin-prompt-history__copy small { color: var(--sb-subtle); font-size: var(--sb-t-micro); }
 
 /* ── 초보자용 파이프라인 — 세 단계만 크게 읽히게 ───────────────── */
 .sb-pipeline-story { padding: 0; }
@@ -3211,6 +3243,11 @@
   .sb-admin-prompt-guide .sb-admin-cta { align-self: stretch; }
   .sb-admin-prompt-example { grid-template-columns: 1fr; }
   .sb-admin-prompt-example > i { justify-self: center; transform: rotate(90deg); }
+  .sb-admin-prompt-change { grid-template-columns: 1fr; }
+  .sb-admin-prompt-history li { grid-template-columns: 10px minmax(0, 1fr); }
+  .sb-admin-prompt-history li > .sb-btn, .sb-admin-prompt-history li > .sb-admin-prompt-chip { grid-column: 2; justify-self: start; }
+  .sb-prompt-test-done { align-items: flex-start; flex-wrap: wrap; }
+  .sb-prompt-test-done > div { flex-basis: calc(100% - 40px); }
   .sb-pipeline-story__intro { grid-template-columns: 1fr; padding: 20px; }
   .sb-pipeline-story__intro img { width: 180px; height: 100px; }
   .sb-pipeline-story__intro h2 { font-size: 19px; }

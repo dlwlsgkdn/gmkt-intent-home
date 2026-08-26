@@ -6,6 +6,7 @@ import {
   fetchAdminPipeline,
   fetchAdminPrompts,
   flowRunPipeline,
+  PROMPT_TEST_SESSION_KEY,
   postAdminKnowledgeSource,
   putAdminEngine,
   putAdminKnowledge,
@@ -124,8 +125,18 @@ const FRIENDLY_FLOW = [
   { id: 'verify', icon: '3', title: '한 번 더 확인해요', note: '예산·금지 조건·잘못된 표현을 확인한 뒤 결과를 저장해요.', badge: '안전 확인', sample: '검사를 통과한 최종 결과' },
 ]
 
+const readPromptTest = () => {
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(PROMPT_TEST_SESSION_KEY) || 'null')
+    return parsed && typeof parsed.promptId === 'string' ? parsed : null
+  } catch {
+    return null
+  }
+}
+
 export default function PipelineStudio({ api }) {
-  const [pipelineView, setPipelineView] = useState('overview') // overview=비개발자용 흐름, expert=전체 운영 도구
+  const [promptTest, setPromptTest] = useState(readPromptTest)
+  const [pipelineView, setPipelineView] = useState(() => (promptTest ? 'expert' : 'overview')) // overview=비개발자용 흐름, expert=전체 운영 도구
   const [wire, setWire] = useState(null) // AdminPipelineWire
   const [error, setError] = useState(null)
   const [engineSaving, setEngineSaving] = useState(false)
@@ -154,7 +165,7 @@ export default function PipelineStudio({ api }) {
   const [promptSaving, setPromptSaving] = useState(false)
 
   /* 플레이그라운드 — 설문 실행 → 답변 선택 → 뼈대/상품 실행 */
-  const [pgTab, setPgTab] = useState('stage') // 'stage'(단계 단독 dry-run) | 'flow'(전체 플로우)
+  const [pgTab, setPgTab] = useState(() => (promptTest ? 'flow' : 'stage')) // 'stage'(단계 단독 dry-run) | 'flow'(전체 플로우)
   const [pgIntent, setPgIntent] = useState('여름에 무너지지 않는 쿠션 찾아줘')
   const [pgOverride, setPgOverride] = useState('')
   /* 프로필 속성(고정 설문) — 실험 조건. 실행 본문 profile로 실려 원장 facts가 되고,
@@ -552,7 +563,12 @@ export default function PipelineStudio({ api }) {
     flowSkeletonRef.current = false
     try {
       const result = await flowRunPipeline(
-        { phase: 'survey', intent: pgIntent.trim(), profile: profileWire() },
+        {
+          phase: 'survey',
+          intent: pgIntent.trim(),
+          profile: profileWire(),
+          ...(promptTest ? { testLabel: `${promptTest.label} · ${promptTest.note}` } : {}),
+        },
         { onStatus: setPgStatus, onEvent: handleFlowEvent },
       )
       setFlowRunId(result.flowId)
@@ -615,6 +631,10 @@ export default function PipelineStudio({ api }) {
 
   const planReady = Boolean(svResult?.survey) && answersList.length > 0
   const flowBusy = running !== null || flowRunning !== null
+  const clearPromptTest = () => {
+    try { sessionStorage.removeItem(PROMPT_TEST_SESSION_KEY) } catch { /* 세션 저장이 막힌 환경 */ }
+    setPromptTest(null)
+  }
 
   /* ── 실렌더 미리보기(FlowRunPreview) 재료 — 두 모드 공용: 스트리밍 중엔 부분 페이지,
      끝나면 확정본. 단계 단독 모드의 계획은 뼈대+검색 결과를 스튜디오가 자리 규칙대로
@@ -1383,6 +1403,22 @@ export default function PipelineStudio({ api }) {
         <div className="sb-pipe-side">
           {/* 플레이그라운드 — 단계 단독 dry-run ∥ 전체 플로우 (실행이 왼쪽 다이어그램에 그대로 비친다) */}
           <div className="sb-admin-card">
+            {promptTest && (
+              <section className="sb-prompt-test-banner" aria-label="방금 저장한 지시서 시험">
+                <div className="sb-prompt-test-banner__head">
+                  <span>방금 저장한 지시서 시험</span>
+                  <button type="button" className="sb-icon-btn" aria-label="시험 안내 닫기" onClick={clearPromptTest}>×</button>
+                </div>
+                <b>{promptTest.label}</b>
+                <p>{promptTest.note}</p>
+                <ol>
+                  <li className={flowRunId ? 'is-done' : 'is-now'}><i>1</i><span>고객 검색 문장 입력 후 <b>전체 흐름 시작</b></span></li>
+                  <li className={flowRunPlan ? 'is-done' : flowRunId ? 'is-now' : ''}><i>2</i><span>만들어진 질문에 답을 선택</span></li>
+                  <li className={flowRunPlan ? 'is-done' : ''}><i>3</i><span><b>계획 이어서 실행</b>으로 최종 결과 확인</span></li>
+                </ol>
+                <small>이 시험은 별도 고객 여정 쓰레드로 저장되어, 어떤 지시서 변경으로 만든 결과인지 제목에 남아요.</small>
+              </section>
+            )}
             <div className="sb-pipe-play__head">
               <p className="sb-panel-label">테스트 실행</p>
               <div className="sb-admin-fb-seg" role="group" aria-label="플레이그라운드 모드">
@@ -1516,6 +1552,14 @@ export default function PipelineStudio({ api }) {
             {pgStatus && <p className="sb-admin__muted">{pgStatus}</p>}
             {pgTab === 'flow' && flowNote && <p className="sb-admin__muted">{flowNote}</p>}
             {pgError && <p className="sb-admin-gate__error">{pgError}</p>}
+            {promptTest && flowRunPlan && (
+              <div className="sb-prompt-test-done">
+                <span>✓</span>
+                <div><b>새 지시서가 적용된 최종 결과예요.</b><small>별로라면 AI 지시서의 변경 기록에서 이전 버전을 바로 복구할 수 있어요.</small></div>
+                {flowRecorded && flowRunId && <button type="button" className="sb-btn sb-btn--primary sb-btn--small" onClick={() => { clearPromptTest(); api.openAdminThread(flowRunId) }}>이 실행 로그 열기 →</button>}
+                <button type="button" className="sb-btn sb-btn--ghost sb-btn--small" onClick={() => { clearPromptTest(); api.setAdminTab('prompts') }}>지시서 기록 보기</button>
+              </div>
+            )}
 
             {/* 실렌더 미리보기 — 두 모드 공용: 생성 결과(설문/계획)를 프로덕션(LivePlayer)
                 스트리밍 그대로 그리고, 생성 데이터는 오른쪽 컴포넌트별 말풍선으로 연결한다.
