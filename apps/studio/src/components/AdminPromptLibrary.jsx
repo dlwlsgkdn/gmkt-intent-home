@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { fetchAdminPrompts, putAdminPrompt } from '../lib/adminApi.js'
+import promptGuide from '../assets/prompt-guide.png'
 
 export default function AdminPromptLibrary({ api }) {
   const [wire, setWire] = useState(null)
@@ -45,9 +46,12 @@ export default function AdminPromptLibrary({ api }) {
     }
   }
 
-  const renderGroup = (title, note, rows) => rows.length > 0 && (
+  const renderGroup = (title, note, rows, icon, example) => rows.length > 0 && (
     <section className="sb-admin-card sb-admin-prompt-group">
-      <div className="sb-admin-sectionhead"><div><h2>{title}</h2><p>{note}</p></div></div>
+      <div className="sb-admin-sectionhead sb-admin-prompt-group__head">
+        <span>{icon}</span>
+        <div><h2>{title}</h2><p>{note}</p><small>{example}</small></div>
+      </div>
       <div className="sb-admin-prompt-list">
         {rows.map((prompt) => (
           <button key={prompt.id} type="button" onClick={() => open(prompt)}>
@@ -58,7 +62,7 @@ export default function AdminPromptLibrary({ api }) {
             <span className={`sb-admin-prompt-chip${prompt.configured ? ' sb-admin-prompt-chip--custom' : ''}`}>
               {prompt.configured ? '재정의 사용 중' : '기본값'}
             </span>
-            <em>편집</em>
+            <em>열어서 수정 →</em>
           </button>
         ))}
       </div>
@@ -67,20 +71,37 @@ export default function AdminPromptLibrary({ api }) {
 
   return (
     <div className="sb-admin-prompts-page">
-      <header className="sb-admin-pagehead">
-        <div><p className="sb-admin-pagehead__eyebrow">생성·채점 규칙의 단일 보관함</p><h1>프롬프트 보관함</h1><p>현재 서비스가 쓰는 기본값과 운영 재정의를 비교하고 안전하게 관리합니다.</p></div>
+      <header className="sb-admin-pagehead sb-admin-prompt-head">
+        <div><p className="sb-admin-pagehead__eyebrow">AI에게 일을 설명하는 곳</p><h1>AI 지시서</h1><p>AI가 어떤 말투와 기준으로 답할지 정합니다. 처음이라면 아래 3단계만 따라 하세요.</p></div>
+        <img src={promptGuide} alt="AI 지시서의 중요한 문장을 가리키는 안내 캐릭터" />
         {wire && <span className="sb-admin-health is-live"><i /> {wire.promptVersion}</span>}
       </header>
-      <div className="sb-admin-callout">
-        <span>i</span><p><b>저장하면 새 생성부터 반영됩니다.</b> 기존 쓰레드에는 영향을 주지 않아요. 운영 반영 전 플레이그라운드와 골든 케이스 실험을 권장합니다.</p>
-        <button type="button" className="sb-btn sb-btn--ghost sb-btn--tiny" onClick={() => api.setAdminTab('pipeline')}>플레이그라운드</button>
+
+      <section className="sb-admin-prompt-guide" aria-label="AI 지시서 수정 방법">
+        <div className="sb-admin-prompt-guide__title"><b>처음이라면 이것만 하세요</b><span>약 3분</span></div>
+        <ol>
+          <li><i>1</i><span><b>바꾸고 싶은 항목 선택</b><small>말투, 질문, 추천 기준 중 하나만 고르세요.</small></span></li>
+          <li><i>2</i><span><b>원하는 결과를 한 문장으로 추가</b><small>“답변은 3문장 이하로 써줘”처럼 구체적으로 적으세요.</small></span></li>
+          <li><i>3</i><span><b>저장하고 바로 시험</b><small>플레이그라운드에서 결과를 보고, 이상하면 기본값으로 돌아가세요.</small></span></li>
+        </ol>
+        <button type="button" className="sb-admin-cta" onClick={() => api.setAdminTab('pipeline')}>플레이그라운드에서 시험하기 <span>→</span></button>
+      </section>
+
+      <section className="sb-admin-prompt-example">
+        <div><span>이렇게 쓰면 어려워요</span><p>“추천을 더 좋게 해줘.”</p></div>
+        <i>→</i>
+        <div className="is-good"><span>이렇게 구체적으로 쓰세요</span><p>“피부 타입과 예산을 먼저 묻고, 추천 이유는 3문장 이하로 써줘.”</p></div>
+      </section>
+
+      <div className="sb-admin-callout sb-admin-prompt-safety">
+        <span>!</span><p><b>저장은 새로 만드는 결과부터 적용됩니다.</b> 기존 고객 결과는 바뀌지 않아요. 괄호가 두 겹인 표시(예: {'{{CATALOG}}'})는 지우지 마세요.</p>
       </div>
       {error && <div className="sb-admin-card"><p className="sb-admin-gate__error">{error}</p><button type="button" className="sb-btn sb-btn--ghost sb-btn--small" onClick={load}>다시 시도</button></div>}
       {!wire && !error && <div className="sb-admin-card"><p className="sb-admin__muted">프롬프트를 불러오는 중…</p></div>}
       {wire && <>
-        {renderGroup('생성 프롬프트', '검색 의도부터 설문·계획·상품 구성까지 실제 생성 단계가 사용합니다.', groups.generation)}
-        {renderGroup('평가 프롬프트', '골든 케이스의 결과를 사람 평가와 분리해 자동 채점합니다.', groups.judge)}
-        {renderGroup('그 밖의 프롬프트', '공통 보조 단계에서 사용하는 규칙입니다.', groups.other)}
+        {renderGroup('답변을 만드는 지시서', '질문·추천 문구·상품 구성을 바꿀 때 선택하세요.', groups.generation, '✦', '예: 질문 수 줄이기 · 추천 이유 짧게 쓰기')}
+        {renderGroup('결과를 검사하는 지시서', '좋은 결과인지 자동으로 판단하는 기준입니다.', groups.judge, '✓', '예: 과장 표현 감점 · 조건 누락 확인')}
+        {renderGroup('그 밖의 보조 지시서', '공통 처리에서 사용하는 추가 규칙입니다.', groups.other, '＋', '잘 모르겠다면 건드리지 않아도 됩니다.')}
       </>}
 
       {selected && (
@@ -91,15 +112,22 @@ export default function AdminPromptLibrary({ api }) {
               <button type="button" className="sb-icon-btn" aria-label="닫기" onClick={() => setSelected(null)}>×</button>
             </div>
             <div className="sb-admin-prompt-dialog__body">
+              <div className="sb-admin-prompt-edit-help">
+                <b>수정하는 법</b>
+                <span><i>1</i> 아래 글의 맨 끝에 원하는 규칙 한 문장을 추가하세요.</span>
+                <span><i>2</i> {'{{이런 표시}}'}는 데이터가 들어오는 자리이므로 그대로 두세요.</span>
+                <span><i>3</i> 저장 후 플레이그라운드에서 실제 결과를 확인하세요.</span>
+              </div>
               <div className="sb-admin-prompt-dialog__meta">
                 <code>{selected.id}</code>
                 <span className={`sb-admin-prompt-chip${selected.configured ? ' sb-admin-prompt-chip--custom' : ''}`}>{selected.configured ? '재정의 사용 중' : '기본값'}</span>
                 <span className="sb-admin__muted">{draft.length.toLocaleString('ko-KR')}자</span>
               </div>
-              <textarea className="sb-admin-prompt-dialog__editor" value={draft} onChange={(event) => setDraft(event.target.value)} />
+              <label className="sb-admin-prompt-editor-label" htmlFor="sb-admin-prompt-editor">AI에게 보여줄 지시서</label>
+              <textarea id="sb-admin-prompt-editor" className="sb-admin-prompt-dialog__editor" value={draft} onChange={(event) => setDraft(event.target.value)} />
               <div className="sb-json-dialog__actions">
                 {selected.configured && <button type="button" className="sb-btn sb-btn--ghost" disabled={saving} onClick={() => save(null)}>기본값으로 복귀</button>}
-                <button type="button" className="sb-btn sb-btn--primary" disabled={saving || !draft.trim()} onClick={() => save(draft)}>{saving ? '저장 중…' : '재정의 저장'}</button>
+                <button type="button" className="sb-btn sb-btn--primary" disabled={saving || !draft.trim()} onClick={() => save(draft)}>{saving ? '저장 중…' : '저장하고 새 결과에 적용'}</button>
               </div>
             </div>
           </section>

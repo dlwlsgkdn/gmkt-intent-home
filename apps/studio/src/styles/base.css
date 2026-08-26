@@ -57,6 +57,27 @@
   --sb-pink-ink: #c2255c;
   --sb-pink-soft: rgba(214, 51, 108, 0.09);
 
+  /* 운영 센터 시각 언어 — 캐릭터·도표·강한 행동 유도에만 쓰는 생동감 팔레트 */
+  --sb-ops-mint: #65c88d;
+  --sb-ops-mint-soft: #e8f8ef;
+  --sb-ops-lime: #dff36b;
+  --sb-ops-lime-soft: #f5fad7;
+  --sb-ops-coral: #ff8066;
+  --sb-ops-coral-soft: #fff0ec;
+  --sb-ops-blue: #5186e8;
+  --sb-ops-blue-soft: #edf3ff;
+  --sb-ops-violet: #8b6fe8;
+  --sb-ops-violet-soft: #f2effd;
+  --sb-ops-yellow: #ffd76a;
+  --sb-ops-yellow-soft: #fff8df;
+  --sb-ops-navy: #20344a;
+  --sb-ops-sidebar: #172638;
+  --sb-ops-sidebar-hover: #22374d;
+  --sb-ops-canvas: #f4f7f4;
+  --sb-ops-grid: rgba(95, 116, 101, 0.07);
+  --sb-ops-white-10: rgba(255, 255, 255, 0.1);
+  --sb-ops-white-16: rgba(255, 255, 255, 0.16);
+
   /* 태깅 필드 식별 7색 — 필드(대분류~조건)마다 하나씩, 카드와 최종 태그가 공유 */
   --sb-tag-c1: #d6336c; /* 대분류 — 핑크(브랜드) */
   --sb-tag-c2: #7048e8; /* 세부유형 — 바이올렛 */

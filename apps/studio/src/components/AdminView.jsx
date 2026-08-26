@@ -42,10 +42,10 @@ const NAV_GROUPS = [
     ],
   },
   {
-    label: 'AI 운영',
+    label: 'AI 설정',
     items: [
-      ['pipeline', '⌁', '생성 파이프라인'],
-      ['prompts', '⌘', '프롬프트'],
+      ['pipeline', '⌁', '추천 만드는 과정'],
+      ['prompts', '⌘', 'AI 지시서'],
     ],
   },
 ]

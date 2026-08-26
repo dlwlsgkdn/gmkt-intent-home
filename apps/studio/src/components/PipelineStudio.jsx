@@ -15,6 +15,7 @@ import {
 import { INJECTION_GROUPS, addPlaceholder, knowledgeRouting, removePlaceholder } from '../lib/pipelineKnowledge.js'
 import FlowRunPreview from './FlowRunPreview.jsx'
 import PipelineFlow, { KIND_LABEL, SHORT_LABEL, metaLine } from './PipelineFlow.jsx'
+import pipelineGuide from '../assets/pipeline-guide.png'
 
 /*
  * 파이프라인 스튜디오 (운영 콘솔 "파이프라인" 탭 — DESIGN-PIPELINE-LANGGRAPH.md 페이즈 4).
@@ -118,12 +119,9 @@ const FLOW_INCOMING = {
 
 /** 첫 화면은 내부 구현 대신 고객 요청이 결과가 되는 여섯 장면으로 설명한다. */
 const FRIENDLY_FLOW = [
-  { id: 'objective', icon: '1', title: '고객 요청 받기', note: '고객이 입력한 한 문장을 출발점으로 삼아요.', badge: '입력' },
-  { id: 'intent', icon: '2', title: '원하는 조건 이해하기', note: '목적·예산·대상과 이미 알고 있는 정보를 정리해요.', badge: 'AI 이해' },
-  { id: 'survey', icon: '3', title: '필요한 질문 만들기', note: '추천에 꼭 필요한 내용만 짧게 물어봐요.', badge: 'AI 작성' },
-  { id: 'plan-skeleton', icon: '4', title: '추천 구성 만들기', note: '결과 페이지의 순서와 안내 문구를 먼저 만들어요.', badge: 'AI 작성' },
-  { id: 'plan-products', icon: '5', title: '상품·콘텐츠 채우기', note: '조건에 맞는 상품과 참고 콘텐츠를 찾아 채워요.', badge: 'AI 검색' },
-  { id: 'verify', icon: '6', title: '오류 확인 후 저장', note: '예산·기피 조건·위험 표현을 확인하고 결과를 남겨요.', badge: '안전 점검' },
+  { id: 'objective', icon: '1', title: '고객의 말을 들어요', note: '무엇을 찾는지 읽고, 정보가 부족하면 짧은 질문을 만들어요.', badge: '고객 입력', sample: '“여름 쿠션 찾아줘”' },
+  { id: 'plan-products', icon: '2', title: '맞는 답을 만들어요', note: '고객 답변과 참고자료를 모아 상품과 추천 이유를 작성해요.', badge: 'AI 작업', sample: '조건에 맞는 추천 구성' },
+  { id: 'verify', icon: '3', title: '한 번 더 확인해요', note: '예산·금지 조건·잘못된 표현을 확인한 뒤 결과를 저장해요.', badge: '안전 확인', sample: '검사를 통과한 최종 결과' },
 ]
 
 export default function PipelineStudio({ api }) {
@@ -947,7 +945,7 @@ export default function PipelineStudio({ api }) {
       <header className="sb-admin-pagehead sb-pipeline-head">
         <div>
           <p className="sb-admin-pagehead__eyebrow">고객 요청이 추천 결과가 되는 과정</p>
-          <h1>생성 파이프라인</h1>
+          <h1>추천 만드는 과정</h1>
           <p>AI가 고객의 요청을 이해하고, 질문하고, 상품을 추천한 뒤 안전하게 저장하는 순서입니다.</p>
         </div>
         <span className={`sb-admin-health ${error ? 'is-lab' : 'is-live'}`}><i /> {!wire ? '정보 불러오는 중' : error ? '일부 연결 확인 필요' : '처리 순서 연결됨'}</span>
@@ -967,8 +965,9 @@ export default function PipelineStudio({ api }) {
       {pipelineView === 'overview' ? (
         <div className="sb-pipeline-overview">
           <section className="sb-admin-card sb-pipeline-story">
-            <div className="sb-admin-sectionhead">
-              <div><h2>한눈에 보는 추천 생성 흐름</h2><p>왼쪽에서 오른쪽으로 읽으면 됩니다. 카드를 누르면 실제 세부 단계를 확인할 수 있어요.</p></div>
+            <div className="sb-pipeline-story__intro">
+              <img src={pipelineGuide} alt="입력, AI 처리, 완료의 세 단계를 설명하는 안내 캐릭터" />
+              <div><span>처음 보는 분을 위한 설명</span><h2>고객의 한마디가 추천 결과가 되는 3단계</h2><p>복잡한 내부 과정은 몰라도 됩니다. 아래 세 칸만 왼쪽에서 오른쪽으로 읽으세요.</p></div>
             </div>
             <ol className="sb-pipeline-story__flow">
               {FRIENDLY_FLOW.map((step, index) => {
@@ -979,7 +978,7 @@ export default function PipelineStudio({ api }) {
                     <li>
                       <button type="button" disabled={!stage} onClick={() => stage && setSelectedStage(step.id)}>
                         <span className="sb-pipeline-story__no">{step.icon}</span>
-                        <span className="sb-pipeline-story__copy"><b>{step.title}</b><small>{step.note}</small></span>
+                        <span className="sb-pipeline-story__copy"><b>{step.title}</b><small>{step.note}</small><q>{step.sample}</q></span>
                         <em>{step.badge}</em>
                       </button>
                     </li>
@@ -987,7 +986,7 @@ export default function PipelineStudio({ api }) {
                 )
               })}
             </ol>
-            <p className="sb-pipeline-story__result"><b>결과</b><span>고객에게는 필요한 질문과 맞춤 추천 페이지만 보여요. 내부 처리 과정은 운영 센터에서만 확인합니다.</span></p>
+            <p className="sb-pipeline-story__result"><b>핵심</b><span><strong>고객 말</strong>을 받고 → <strong>AI가 답</strong>을 만들고 → <strong>문제가 없는지 확인</strong>합니다. 카드를 누르면 그 단계만 자세히 볼 수 있어요.</span></p>
           </section>
 
           <section className="sb-pipeline-overview__status" aria-label="현재 파이프라인 상태">
