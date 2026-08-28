@@ -2919,6 +2919,16 @@
 }
 .sb-admin-nav__group > button.is-on i { color: var(--sb-ops-sidebar); background: var(--sb-ops-white-16); }
 .sb-admin-nav__group > button em { color: var(--sb-ops-sidebar); background: var(--sb-ops-coral); }
+.sb-admin-nav__group > button.sb-admin-nav__changes:not(.is-on) {
+  margin-top: 5px;
+  border: 1px solid color-mix(in srgb, var(--sb-ops-lime) 46%, transparent);
+  color: var(--sb-n-0);
+  background: color-mix(in srgb, var(--sb-ops-lime) 10%, transparent);
+  box-shadow: inset 3px 0 0 var(--sb-ops-lime);
+}
+.sb-admin-nav__group > button.sb-admin-nav__changes:not(.is-on):hover { background: color-mix(in srgb, var(--sb-ops-lime) 18%, transparent); }
+.sb-admin-nav__group > button.sb-admin-nav__changes:not(.is-on) i { color: var(--sb-ops-sidebar); background: var(--sb-ops-lime); }
+.sb-admin-nav__group > button.sb-admin-nav__changes em { min-width: 0; color: var(--sb-ops-sidebar); background: var(--sb-ops-lime); }
 .sb-admin-sidebar__foot { border-color: var(--sb-ops-white-10); }
 .sb-admin-app .sb-admin { max-width: 1320px; padding: 32px 40px 72px; }
 .sb-admin-card {

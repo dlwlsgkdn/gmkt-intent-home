@@ -32,7 +32,13 @@ import AdminJourneyOverview from './AdminJourneyOverview.jsx'
 const ADMIN_USER = 'ops-playground'
 
 const NAV_GROUPS = [
-  { label: '한눈에 보기', items: [['dashboard', '◈', '대시보드']] },
+  {
+    label: '한눈에 보기',
+    items: [
+      ['dashboard', '◈', '대시보드'],
+      ['changes', '◷', '내 변경 기록'],
+    ],
+  },
   { label: '콘텐츠 제작', items: [['studio', '▣', '시나리오 스튜디오']] },
   {
     label: '서비스 품질',
@@ -49,7 +55,6 @@ const NAV_GROUPS = [
       ['prompts', '⌘', 'AI 지시서'],
     ],
   },
-  { label: '운영 기록', items: [['changes', '◷', '변경 로그']] },
 ]
 
 export default function AdminView({ api, tab, studioScenarioId, threadId }) {
@@ -244,9 +249,10 @@ export default function AdminView({ api, tab, studioScenarioId, threadId }) {
             <div key={group.label} className="sb-admin-nav__group">
               <p>{group.label}</p>
               {group.items.map(([value, icon, label]) => (
-                <button key={value} type="button" className={tab === value ? 'is-on' : ''} aria-current={tab === value ? 'page' : undefined} onClick={() => api.setAdminTab(value)}>
+                <button key={value} type="button" className={(tab === value ? 'is-on' : '') + (value === 'changes' ? ' sb-admin-nav__changes' : '')} aria-current={tab === value ? 'page' : undefined} onClick={() => api.setAdminTab(value)}>
                   <i>{icon}</i><span>{label}</span>
                   {value === 'threads' && (feedback?.items?.length || 0) > 0 && <em>{feedback.items.length}</em>}
+                  {value === 'changes' && <em>바로보기</em>}
                 </button>
               ))}
             </div>
