@@ -3257,6 +3257,50 @@
 }
 
 /* ── AI 지시서: Claude 자연어 수정안 · 검토 diff ───────────────────── */
+
+/* ── 운영 변경 로그 ──────────────────────────────────────────────── */
+.sb-admin-changes-page { display: flex; flex-direction: column; gap: 18px; }
+.sb-admin-changes-page > .sb-admin-pagehead { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.sb-admin-change-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.sb-admin-change-summary > div { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 2px 12px; padding: 16px 18px; border: 1px solid var(--sb-n-200); border-radius: var(--sb-r-xl); background: var(--sb-n-0); box-shadow: var(--sb-shadow-sm); }
+.sb-admin-change-summary span { color: var(--sb-muted); font-size: var(--sb-t-caption); }
+.sb-admin-change-summary b { grid-row: span 2; color: var(--sb-ink); font-size: 26px; font-weight: 500; line-height: 1; }
+.sb-admin-change-summary small { color: var(--sb-subtle); font-size: var(--sb-t-micro); }
+.sb-admin-change-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sb-admin-change-toolbar .sb-admin-fb-seg { flex-wrap: wrap; }
+.sb-admin-change-list { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.sb-admin-change-list > li { display: grid; grid-template-columns: 38px minmax(190px, .9fr) minmax(240px, 1.25fr) auto; align-items: center; gap: 14px; padding: 15px 16px; border: 1px solid var(--sb-n-200); border-radius: var(--sb-r-xl); background: var(--sb-n-0); box-shadow: var(--sb-shadow-sm); }
+.sb-admin-change-list__icon { display: grid; width: 36px; height: 36px; place-items: center; border-radius: var(--sb-r-lg); background: var(--sb-surface-inset); color: var(--sb-info); font-size: var(--sb-t-title); }
+.sb-admin-change-list__copy { min-width: 0; }
+.sb-admin-change-list__copy > div { display: flex; align-items: center; gap: 7px; }
+.sb-admin-change-list__copy > div > span { color: var(--sb-info); font-size: var(--sb-t-micro); font-weight: 500; }
+.sb-admin-change-list__copy em { padding: 2px 6px; border-radius: var(--sb-r-pill); background: var(--sb-success-soft); color: var(--sb-success); font-size: var(--sb-t-micro); font-style: normal; }
+.sb-admin-change-list__copy h2 { margin: 4px 0 2px; overflow: hidden; color: var(--sb-ink); font-size: var(--sb-t-body); font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.sb-admin-change-list__copy p { margin: 0 0 4px; overflow: hidden; color: var(--sb-ink-2); font-size: var(--sb-t-caption); text-overflow: ellipsis; white-space: nowrap; }
+.sb-admin-change-list__copy small { color: var(--sb-subtle); font-size: var(--sb-t-micro); }
+.sb-admin-change-list__value { min-width: 0; padding-left: 14px; border-left: 1px solid var(--sb-n-100); }
+.sb-admin-change-list__value span { color: var(--sb-subtle); font-size: var(--sb-t-micro); }
+.sb-admin-change-list__value p { margin: 4px 0 0; overflow: hidden; color: var(--sb-muted); font-size: var(--sb-t-caption); text-overflow: ellipsis; white-space: nowrap; }
+.sb-admin-change-list__actions { display: flex; gap: 7px; }
+.sb-admin-change-list > .sb-admin-change-list__empty { display: block; padding: 34px; color: var(--sb-muted); text-align: center; }
+.sb-admin-change-dialog { width: min(860px, calc(100vw - 32px)); }
+.sb-admin-change-dialog__body { display: flex; min-height: 0; flex: 1; flex-direction: column; gap: 12px; padding: 14px 24px; overflow: auto; }
+.sb-admin-change-dialog__body details,
+.sb-admin-change-dialog__body section { border: 1px solid var(--sb-n-200); border-radius: var(--sb-r-lg); background: var(--sb-n-0); }
+.sb-admin-change-dialog__body summary,
+.sb-admin-change-dialog__body section > b { display: block; padding: 11px 13px; color: var(--sb-ink); font-size: var(--sb-t-caption); font-weight: 500; cursor: pointer; }
+.sb-admin-change-dialog__body pre { max-height: 46vh; margin: 0; padding: 13px; overflow: auto; border-top: 1px solid var(--sb-n-100); color: var(--sb-ink-2); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--sb-t-micro); line-height: 1.65; white-space: pre-wrap; }
+@media (max-width: 920px) {
+  .sb-admin-change-summary { grid-template-columns: 1fr; }
+  .sb-admin-change-list > li { grid-template-columns: 38px minmax(0, 1fr) auto; }
+  .sb-admin-change-list__value { display: none; }
+  .sb-admin-change-list__actions { flex-direction: column; }
+}
+@media (max-width: 600px) {
+  .sb-admin-changes-page > .sb-admin-pagehead, .sb-admin-change-toolbar { align-items: stretch; flex-direction: column; }
+  .sb-admin-change-list > li { grid-template-columns: 34px minmax(0, 1fr); }
+  .sb-admin-change-list__actions { grid-column: 2; flex-direction: row; }
+}
 .sb-admin-app .sb-llm-modal { left: 224px; }
 .sb-admin-prompt-dialog { width: min(880px, 96vw); height: min(840px, calc(100vh - 32px)); }
 .sb-admin-prompt-dialog__body { overflow-y: auto; }

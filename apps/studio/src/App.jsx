@@ -35,7 +35,7 @@ function routeFromHash(hash) {
   // 운영 콘솔 쓰레드 상세 — 탭 해시 뒤에 쓰레드 id를 붙인 딥링크
   const opsThread = hash.match(/^#ops\/threads\/(\d{19})$/)
   if (opsThread) return { name: 'admin', tab: 'threads', threadId: opsThread[1] }
-  const ops = hash.match(/^#ops(?:\/(dashboard|threads|tagging|knowledge|pipeline|prompts|experiment))?$/)
+  const ops = hash.match(/^#ops(?:\/(dashboard|threads|tagging|knowledge|pipeline|prompts|changes|experiment))?$/)
   if (ops) return { name: 'admin', tab: ops[1] || 'dashboard' }
   if (hash === '#admin') return { name: 'admin', tab: 'dashboard' } // 구 주소 호환
   if (hash === '#tagging') return { name: 'tagging' }

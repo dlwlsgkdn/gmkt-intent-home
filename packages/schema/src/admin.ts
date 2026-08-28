@@ -106,6 +106,34 @@ export const PutAdminPromptBody = z.object({
 })
 export type PutAdminPromptBody = z.infer<typeof PutAdminPromptBody>
 
+/* ── BFF admin — 운영 변경 로그 ─────────────────────────────────────────
+ * 설정을 바꾼 사실을 한 타임라인에 모은다. 값은 현재 텍스트 설정들의 복구·대조에
+ * 충분한 문자열 스냅샷이며 null은 코드 기본값/값 없음 상태다. */
+
+export const AdminChangeArea = z.enum(['prompt', 'model', 'engine', 'knowledge'])
+export type AdminChangeArea = z.infer<typeof AdminChangeArea>
+
+export const AdminChangeEntry = z.object({
+  id: z.string(),
+  at: z.string(),
+  area: AdminChangeArea,
+  action: z.enum(['update', 'create', 'delete', 'restore']),
+  targetId: z.string(),
+  targetLabel: z.string(),
+  summary: z.string(),
+  before: z.string().nullable(),
+  after: z.string().nullable(),
+  /** 현재 API에서 안전하게 복구할 수 있는 변경인지. 우선 프롬프트 버전만 true다. */
+  restorable: z.boolean(),
+})
+export type AdminChangeEntry = z.infer<typeof AdminChangeEntry>
+
+export const AdminChangesWire = z.object({
+  items: z.array(AdminChangeEntry),
+  truncated: z.boolean(),
+})
+export type AdminChangesWire = z.infer<typeof AdminChangesWire>
+
 /** 운영자의 자연어 요청을 현재 시스템 프롬프트에 반영한 "미저장 수정안" 요청.
  * 저장 API와 분리해 AI 결과가 검토 없이 운영에 반영되지 않게 한다. */
 export const AssistAdminPromptBody = z.object({

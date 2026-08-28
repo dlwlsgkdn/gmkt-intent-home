@@ -29,6 +29,8 @@ import {
 } from '@nestjs/swagger'
 import {
   AdminDryRunBody,
+  AdminChangesWire,
+  type AdminChangeEntry,
   AdminEngineMetricsWire,
   AdminFlowRunBody,
   AdminFeedbackEntry,
@@ -105,6 +107,8 @@ const THREAD_ID_PARAM = {
 
 const PROMPT_HISTORY_LIMIT = 12
 const promptHistorySettingKey = (id: string) => `llm-prompt-history-${id}`
+const ADMIN_CHANGE_LOG_KEY = 'admin-change-log'
+const ADMIN_CHANGE_LOG_LIMIT = 100
 
 const summarizePromptChange = (before: string, after: string, next: string | null) => {
   if (next === null) return '기본 지시서로 복구'
@@ -135,6 +139,28 @@ const parsePromptHistory = (value: unknown): AdminPromptRevision[] => {
     .slice(0, PROMPT_HISTORY_LIMIT)
 }
 
+const parseAdminChanges = (value: unknown): AdminChangeEntry[] => {
+  if (!Array.isArray(value)) return []
+  return value
+    .filter((entry): entry is AdminChangeEntry => {
+      if (!entry || typeof entry !== 'object') return false
+      const row = entry as AdminChangeEntry
+      return (
+        typeof row.id === 'string' &&
+        typeof row.at === 'string' &&
+        ['prompt', 'model', 'engine', 'knowledge'].includes(row.area) &&
+        ['update', 'create', 'delete', 'restore'].includes(row.action) &&
+        typeof row.targetId === 'string' &&
+        typeof row.targetLabel === 'string' &&
+        typeof row.summary === 'string' &&
+        (typeof row.before === 'string' || row.before === null) &&
+        (typeof row.after === 'string' || row.after === null) &&
+        typeof row.restorable === 'boolean'
+      )
+    })
+    .slice(0, ADMIN_CHANGE_LOG_LIMIT)
+}
+
 /*
  * admin API — 스튜디오 운영 콘솔(#ops) 전용.
  * 가드는 ServiceTokenGuard(스튜디오 프록시 경유 강제)뿐 — 옛 x-admin-token(사람이 아는
@@ -157,6 +183,25 @@ export class AdminController {
     private readonly dryRunService: PipelineDryRunService,
     private readonly flowRunService: PipelineFlowRunService,
   ) {}
+
+  /** 설정 변경 뒤 같은 core KV에 최신순으로 쌓는다. 설정 반영 자체를 로그 장애로 되돌리진 않는다. */
+  private async appendChange(entry: Omit<AdminChangeEntry, 'id' | 'at'> & Partial<Pick<AdminChangeEntry, 'id' | 'at'>>) {
+    try {
+      const setting = await this.core.getSetting(ADMIN_CHANGE_LOG_KEY)
+      const history = parseAdminChanges(setting?.value)
+      const row: AdminChangeEntry = {
+        ...entry,
+        id: entry.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        at: entry.at || new Date().toISOString(),
+      }
+      await this.core.putSetting(
+        ADMIN_CHANGE_LOG_KEY,
+        [row, ...history.filter((item) => item.id !== row.id)].slice(0, ADMIN_CHANGE_LOG_LIMIT),
+      )
+    } catch (error) {
+      this.logger.error(`운영 변경 로그 저장 실패: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
 
   @Get('threads')
   @ApiOperation({ summary: '전체 쓰레드 목록 — archived 포함, 생성 최신순 (id 키셋 커서)' })
@@ -241,6 +286,8 @@ export class AdminController {
   @ApiBody({ schema: toOpenApi(PutAdminModelBody) })
   @ApiOkResponse({ schema: toOpenApi(AdminModelWire) })
   async putModel(@Body(new ZodValidationPipe(PutAdminModelBody)) body: PutAdminModelBody): Promise<AdminModelWire> {
+    const beforeWire = await this.getModel()
+    if (beforeWire.configured === body.model) return beforeWire
     if (body.model === null) {
       await this.core.deleteSetting(LLM_MODEL_SETTING_KEY)
     } else {
@@ -250,7 +297,48 @@ export class AdminController {
       await this.core.putSetting(LLM_MODEL_SETTING_KEY, body.model)
     }
     this.llm.invalidateModelCache()
+    await this.appendChange({
+      area: 'model',
+      action: body.model === null ? 'restore' : 'update',
+      targetId: LLM_MODEL_SETTING_KEY,
+      targetLabel: '생성 모델',
+      summary: body.model === null ? `기본 모델(${DEFAULT_MODEL})로 복구` : `${body.model}로 변경`,
+      before: beforeWire.configured,
+      after: body.model,
+      restorable: false,
+    })
     return this.getModel()
+  }
+
+  @Get('changes')
+  @ApiOperation({ summary: '운영 변경 로그 — AI 지시서 기존 버전과 설정 변경을 최신순으로' })
+  @ApiOkResponse({ schema: toOpenApi(AdminChangesWire) })
+  async getChanges(): Promise<AdminChangesWire> {
+    const [setting, prompts] = await Promise.all([
+      this.core.getSetting(ADMIN_CHANGE_LOG_KEY),
+      this.getPrompts(),
+    ])
+    const logged = parseAdminChanges(setting?.value)
+    const promptRows: AdminChangeEntry[] = prompts.prompts.flatMap((prompt) =>
+      prompt.history.map((revision) => ({
+        id: revision.id,
+        at: revision.at,
+        area: 'prompt' as const,
+        action: /복구|복귀/.test(revision.note) ? 'restore' as const : 'update' as const,
+        targetId: prompt.id,
+        targetLabel: prompt.label,
+        summary: revision.note,
+        before: null,
+        after: revision.text,
+        restorable: true,
+      })),
+    )
+    const byId = new Map<string, AdminChangeEntry>()
+    for (const row of [...logged, ...promptRows]) if (!byId.has(row.id)) byId.set(row.id, row)
+    const items = [...byId.values()]
+      .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
+      .slice(0, ADMIN_CHANGE_LOG_LIMIT)
+    return { items, truncated: byId.size > ADMIN_CHANGE_LOG_LIMIT }
   }
 
   @Get('prompts')
@@ -358,6 +446,18 @@ export class AdminController {
       await this.core.putSetting(promptSettingKey(def.id), next)
     }
     this.llm.invalidatePromptCache()
+    await this.appendChange({
+      id: revision.id,
+      at: revision.at,
+      area: 'prompt',
+      action: /복구|복귀/.test(revision.note) ? 'restore' : 'update',
+      targetId: def.id,
+      targetLabel: def.label,
+      summary: revision.note,
+      before: current,
+      after: next,
+      restorable: true,
+    })
     return this.getPrompts()
   }
 
@@ -467,11 +567,29 @@ export class AdminController {
   ): Promise<AdminPipelineWire> {
     const key = await this.knowledgeValueKey(id)
     if (!key) throw new BadRequestException('편집할 수 없는 지식 소스입니다')
+    const beforeSetting = await this.core.getSetting(key)
+    const before = typeof beforeSetting?.value === 'string' ? beforeSetting.value : null
     const value = body.value?.trim() ? body.value : null
+    if (before === value) return this.getPipeline()
     if (value === null) await this.core.deleteSetting(key)
     else await this.core.putSetting(key, value)
     this.knowledge.invalidate()
     this.llm.invalidatePromptCache() // 시스템 자리표시자 지식이 바뀌면 렌더된 프롬프트도 갱신돼야 한다
+    const label = id === GUARD_BLOCKLIST_SETTING_KEY
+      ? '상품 블록리스트'
+      : KNOWLEDGE_SOURCES.find((source) => source.id === id)?.label
+        || (await this.customSources()).find((source) => source.id === id)?.label
+        || id
+    await this.appendChange({
+      area: 'knowledge',
+      action: value === null ? 'delete' : 'update',
+      targetId: id,
+      targetLabel: label,
+      summary: value === null ? '내용을 비움' : `${value.length.toLocaleString('ko-KR')}자로 수정`,
+      before,
+      after: value,
+      restorable: false,
+    })
     return this.getPipeline()
   }
 
@@ -531,6 +649,16 @@ export class AdminController {
     if (value) await this.core.putSetting(customKnowledgeSettingKey(id), value)
     this.knowledge.invalidate()
     this.llm.invalidatePromptCache()
+    await this.appendChange({
+      area: 'knowledge',
+      action: 'create',
+      targetId: id,
+      targetLabel: label,
+      summary: `새 지식 소스 ${placeholder} 추가`,
+      before: null,
+      after: value,
+      restorable: false,
+    })
     return this.getPipeline()
   }
 
@@ -547,6 +675,8 @@ export class AdminController {
     const sources = await this.customSources()
     const target = sources.find((s) => s.id === id)
     if (!target) throw new BadRequestException('삭제할 수 있는 추가 지식이 아니에요')
+    const valueSetting = await this.core.getSetting(customKnowledgeSettingKey(id))
+    const before = typeof valueSetting?.value === 'string' ? valueSetting.value : null
     await this.core.putSetting(CUSTOM_KNOWLEDGE_SETTING_KEY, serializeCustomSources(sources.filter((s) => s.id !== id)))
     await this.core.deleteSetting(customKnowledgeSettingKey(id))
     // 재정의 프롬프트에 남은 토큰 청소 — 안 지우면 {{TOKEN}} 원문이 그대로 모델에 나간다
@@ -560,6 +690,16 @@ export class AdminController {
     }
     this.knowledge.invalidate()
     this.llm.invalidatePromptCache()
+    await this.appendChange({
+      area: 'knowledge',
+      action: 'delete',
+      targetId: id,
+      targetLabel: target.label,
+      summary: `지식 소스 ${target.placeholder} 삭제`,
+      before,
+      after: null,
+      restorable: false,
+    })
     return this.getPipeline()
   }
 
@@ -575,9 +715,21 @@ export class AdminController {
   async putEngine(
     @Body(new ZodValidationPipe(PutAdminEngineBody)) body: PutAdminEngineBody,
   ): Promise<AdminPipelineWire> {
+    const beforeWire = await this.getPipeline()
+    if (beforeWire.engine.configured === body.engine) return beforeWire
     if (body.engine === null) await this.core.deleteSetting(ENGINE_SETTING_KEY)
     else await this.core.putSetting(ENGINE_SETTING_KEY, body.engine)
     this.engineFlag.invalidate()
+    await this.appendChange({
+      area: 'engine',
+      action: body.engine === null ? 'restore' : 'update',
+      targetId: ENGINE_SETTING_KEY,
+      targetLabel: '생성 엔진',
+      summary: body.engine === null ? '기본 엔진(legacy)으로 복구' : `${body.engine}로 변경`,
+      before: beforeWire.engine.configured,
+      after: body.engine,
+      restorable: false,
+    })
     return this.getPipeline()
   }
 

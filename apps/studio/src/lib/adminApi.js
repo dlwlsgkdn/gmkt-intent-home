@@ -87,6 +87,11 @@ export function putAdminPrompt(id, text, note) {
   return req('PUT', `/prompts/${encodeURIComponent(id)}`, { text, ...(note?.trim() ? { note: note.trim() } : {}) })
 }
 
+/** 운영 설정 변경 로그 — AI 지시서의 기존 버전도 합쳐 최신순으로 받는다 */
+export function fetchAdminChanges() {
+  return req('GET', '/changes')
+}
+
 /** 파이프라인 현황 — { engine, stages(전략 문서 0~7 카탈로그), knowledge(지식 KV+블록리스트) } */
 export function fetchAdminPipeline() {
   return req('GET', '/pipeline')

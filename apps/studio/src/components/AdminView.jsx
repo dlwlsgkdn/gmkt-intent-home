@@ -13,6 +13,7 @@ import PipelineStudio from './PipelineStudio.jsx'
 import AdminDashboard from './AdminDashboard.jsx'
 import AdminKnowledge from './AdminKnowledge.jsx'
 import AdminPromptLibrary from './AdminPromptLibrary.jsx'
+import AdminChangeLog from './AdminChangeLog.jsx'
 import TaggingStudio from './TaggingStudio.jsx'
 import Builder from './Builder.jsx'
 import AdminScenarioStudio from './AdminScenarioStudio.jsx'
@@ -48,6 +49,7 @@ const NAV_GROUPS = [
       ['prompts', '⌘', 'AI 지시서'],
     ],
   },
+  { label: '운영 기록', items: [['changes', '◷', '변경 로그']] },
 ]
 
 export default function AdminView({ api, tab, studioScenarioId, threadId }) {
@@ -289,6 +291,16 @@ export default function AdminView({ api, tab, studioScenarioId, threadId }) {
       {tab === 'pipeline' && <PipelineStudio api={api} />}
 
       {tab === 'prompts' && <AdminPromptLibrary api={api} />}
+
+      {tab === 'changes' && (
+        <AdminChangeLog
+          api={api}
+          onOpenScenario={(id) => {
+            setSelectedStudioId(id)
+            api.setAdminTab('studio')
+          }}
+        />
+      )}
 
       {tab === 'knowledge' && <AdminKnowledge api={api} />}
 
