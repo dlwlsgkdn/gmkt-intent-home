@@ -191,6 +191,16 @@ const server = http.createServer(async (req, res) => {
       llmCalls.push({ type: 'judge', system, user })
       return streamAnthropic(res, JUDGE_JSON, { delayMs: 2, chunkSize: 40 })
     }
+    if (system.includes('시스템 프롬프트 편집자')) {
+      llmCalls.push({ type: 'prompt-assist', system, user })
+      const input = JSON.parse(user)
+      const output = JSON.stringify({
+        proposedText: `${input.currentText}\n\n추가 운영 규칙: ${input.instruction}`,
+        summary: input.instruction.slice(0, 200),
+        warnings: [],
+      })
+      return streamAnthropic(res, output, { delayMs: 2, chunkSize: 40 })
+    }
     if (system.includes('productIds')) {
       llmCalls.push({ type: 'products', system, user })
       return streamAnthropic(res, PRODUCTS_JSON, { delayMs: 10, chunkSize: 24 }) // 뼈대보다 늦게 끝나게
@@ -252,6 +262,12 @@ const server = http.createServer(async (req, res) => {
     const key = decodeURIComponent(m[1])
     settings.set(key, body.value)
     return send(200, { key, value: body.value, updatedAt: new Date().toISOString() })
+  }
+  if ((m = url.match(/^\/internal\/settings\/([^/]+)$/)) && req.method === 'DELETE') {
+    settings.delete(decodeURIComponent(m[1]))
+    res.writeHead(204)
+    res.end()
+    return
   }
   if (url.startsWith('/internal/feedback-steps') && req.method === 'GET') {
     const items = []

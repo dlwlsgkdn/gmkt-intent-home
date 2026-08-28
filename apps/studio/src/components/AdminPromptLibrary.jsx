@@ -1,6 +1,49 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { PROMPT_TEST_SESSION_KEY, fetchAdminPrompts, putAdminPrompt } from '../lib/adminApi.js'
+import { PROMPT_TEST_SESSION_KEY, assistAdminPrompt, fetchAdminPrompts, putAdminPrompt } from '../lib/adminApi.js'
 import promptGuide from '../assets/prompt-guide.png'
+
+const lineDiff = (before, after) => {
+  const a = before.split('\n')
+  const b = after.split('\n')
+  // 시스템 프롬프트는 보통 수십 줄이다. 비정상적으로 큰 입력은 안전한 앞/뒤 비교로 강등한다.
+  if (a.length * b.length > 50000) {
+    let head = 0
+    while (head < a.length && head < b.length && a[head] === b[head]) head += 1
+    let tail = 0
+    while (tail < a.length - head && tail < b.length - head && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail += 1
+    return [
+      ...(head ? [{ type: 'same', text: `앞의 동일한 ${head}줄` }] : []),
+      ...a.slice(head, a.length - tail).map((text) => ({ type: 'remove', text })),
+      ...b.slice(head, b.length - tail).map((text) => ({ type: 'add', text })),
+      ...(tail ? [{ type: 'same', text: `뒤의 동일한 ${tail}줄` }] : []),
+    ]
+  }
+  const table = Array.from({ length: a.length + 1 }, () => new Uint16Array(b.length + 1))
+  for (let i = a.length - 1; i >= 0; i -= 1) {
+    for (let j = b.length - 1; j >= 0; j -= 1) {
+      table[i][j] = a[i] === b[j] ? table[i + 1][j + 1] + 1 : Math.max(table[i + 1][j], table[i][j + 1])
+    }
+  }
+  const rows = []
+  let i = 0
+  let j = 0
+  while (i < a.length || j < b.length) {
+    if (i < a.length && j < b.length && a[i] === b[j]) {
+      rows.push({ type: 'same', text: a[i] }); i += 1; j += 1
+    } else if (j < b.length && (i === a.length || table[i][j + 1] >= table[i + 1][j])) {
+      rows.push({ type: 'add', text: b[j] }); j += 1
+    } else {
+      rows.push({ type: 'remove', text: a[i] }); i += 1
+    }
+  }
+  const changed = new Set(rows.flatMap((row, index) => (row.type === 'same' ? [] : [index - 1, index, index + 1])))
+  const compact = []
+  rows.forEach((row, index) => {
+    if (row.type !== 'same' || changed.has(index)) compact.push(row)
+    else if (compact.at(-1)?.type !== 'skip') compact.push({ type: 'skip', text: '…' })
+  })
+  return compact
+}
 
 export default function AdminPromptLibrary({ api }) {
   const [wire, setWire] = useState(null)
@@ -9,6 +52,11 @@ export default function AdminPromptLibrary({ api }) {
   const [draft, setDraft] = useState('')
   const [changeNote, setChangeNote] = useState('')
   const [saving, setSaving] = useState(false)
+  const [aiInstruction, setAiInstruction] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiProposal, setAiProposal] = useState(null)
+  const [aiMessages, setAiMessages] = useState([])
+  const [aiError, setAiError] = useState(null)
 
   const load = async () => {
     setError(null)
@@ -30,6 +78,10 @@ export default function AdminPromptLibrary({ api }) {
     setSelected(prompt)
     setDraft(prompt.configured ?? prompt.defaultText)
     setChangeNote('')
+    setAiInstruction('')
+    setAiProposal(null)
+    setAiMessages([])
+    setAiError(null)
   }
   const save = async (value, note, testAfter = false) => {
     if (!selected) return
@@ -68,6 +120,34 @@ export default function AdminPromptLibrary({ api }) {
   }
 
   const restore = (revision) => save(revision.text, `“${revision.note}” 버전으로 복구`)
+
+  const askClaude = async () => {
+    const instruction = aiInstruction.trim()
+    if (!selected || !instruction || aiLoading) return
+    const beforeText = aiProposal?.proposedText ?? draft
+    setAiLoading(true)
+    setAiError(null)
+    setAiMessages((prev) => [...prev, { role: 'user', text: instruction }])
+    try {
+      const result = await assistAdminPrompt(selected.id, instruction, beforeText)
+      setAiProposal({ ...result, beforeText })
+      setAiMessages((prev) => [...prev, { role: 'assistant', text: result.summary }])
+      setAiInstruction('')
+    } catch (e) {
+      const message = e.message || 'Claude가 수정안을 만들지 못했어요.'
+      setAiError(message)
+      setAiMessages((prev) => [...prev, { role: 'assistant', text: message, error: true }])
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
+  const applyProposal = () => {
+    if (!aiProposal) return
+    setDraft(aiProposal.proposedText)
+    setChangeNote(aiProposal.summary)
+    api.showToast('Claude 수정안을 편집기에 반영했어요. 아직 저장되지는 않았습니다.')
+  }
 
   const formatAt = (at) => {
     const date = new Date(at)
@@ -142,11 +222,60 @@ export default function AdminPromptLibrary({ api }) {
             </div>
             <div className="sb-admin-prompt-dialog__body">
               <div className="sb-admin-prompt-edit-help">
-                <b>수정하는 법</b>
-                <span><i>1</i> 아래 글의 맨 끝에 원하는 규칙 한 문장을 추가하세요.</span>
-                <span><i>2</i> {'{{이런 표시}}'}는 데이터가 들어오는 자리이므로 그대로 두세요.</span>
-                <span><i>3</i> 저장 후 플레이그라운드에서 실제 결과를 확인하세요.</span>
+                <b>Claude에게 사람 말로 요청하세요</b>
+                <span><i>1</i> 바꾸고 싶은 내용을 아래 입력칸에 자유롭게 적으세요.</span>
+                <span><i>2</i> Claude가 만든 수정 전·후 차이를 확인하고 반영하세요.</span>
+                <span><i>3</i> 저장 후 바로 시험하면 실행이 쓰레드 기록으로 남습니다.</span>
               </div>
+              <section className="sb-admin-prompt-assist" aria-label="Claude 지시서 수정 도우미">
+                <div className="sb-admin-prompt-assist__head">
+                  <span>AI 작성</span>
+                  <div><b>Claude 지시서 도우미</b><small>수정안만 만들며 승인 전에는 저장하지 않아요.</small></div>
+                </div>
+                {aiMessages.length > 0 && (
+                  <div className="sb-admin-prompt-chat" aria-live="polite">
+                    {aiMessages.map((message, index) => (
+                      <p key={`${message.role}-${index}`} className={`is-${message.role}${message.error ? ' is-error' : ''}`}>
+                        <b>{message.role === 'user' ? '나' : 'Claude'}</b><span>{message.text}</span>
+                      </p>
+                    ))}
+                    {aiLoading && <p className="is-assistant"><b>Claude</b><span>현재 지시서를 읽고 수정안을 만드는 중…</span></p>}
+                  </div>
+                )}
+                <div className="sb-admin-prompt-ask">
+                  <textarea
+                    value={aiInstruction}
+                    maxLength={2000}
+                    rows={2}
+                    placeholder="예: 올리브영 상품을 먼저 추천하고, 추천 이유는 3문장 이하로 줄여줘"
+                    onChange={(event) => setAiInstruction(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); askClaude() }
+                    }}
+                  />
+                  <button type="button" className="sb-btn sb-btn--ai sb-btn--small" disabled={aiLoading || aiInstruction.trim().length < 2} onClick={askClaude}>
+                    {aiLoading ? '작성 중…' : '수정안 만들기'}
+                  </button>
+                </div>
+                {aiError && <p className="sb-admin-prompt-assist__error">{aiError}</p>}
+                {aiProposal && (
+                  <div className="sb-admin-prompt-proposal">
+                    <div className="sb-admin-prompt-proposal__head">
+                      <div><b>{aiProposal.summary}</b><small>초록은 추가 · 빨강은 삭제</small></div>
+                      <div>
+                        <button type="button" className="sb-btn sb-btn--ghost sb-btn--tiny" onClick={applyProposal}>편집기에 반영</button>
+                        <button type="button" className="sb-btn sb-btn--primary sb-btn--tiny" disabled={saving} onClick={() => save(aiProposal.proposedText, aiProposal.summary, true)}>저장하고 바로 시험 →</button>
+                      </div>
+                    </div>
+                    {aiProposal.warnings?.length > 0 && <ul>{aiProposal.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
+                    <pre className="sb-admin-prompt-diff">
+                      {lineDiff(aiProposal.beforeText, aiProposal.proposedText).map((row, index) => (
+                        <span key={index} className={`is-${row.type}`}><i>{row.type === 'add' ? '+' : row.type === 'remove' ? '−' : ' '}</i>{row.text || ' '}</span>
+                      ))}
+                    </pre>
+                  </div>
+                )}
+              </section>
               <div className="sb-admin-prompt-dialog__meta">
                 <code>{selected.id}</code>
                 <span className={`sb-admin-prompt-chip${selected.configured ? ' sb-admin-prompt-chip--custom' : ''}`}>{selected.configured ? '재정의 사용 중' : '기본값'}</span>

@@ -317,6 +317,36 @@ try {
   ok(pipe?.stages?.length === 9, `단계 카탈로그 9개 (${pipe?.stages?.length})`)
   ok(pipe?.stages?.some((s) => s.no === '5a') && pipe?.stages?.some((s) => s.no === '5b'), '병렬 5a/5b 표기')
   ok(pipe?.knowledge?.some((k) => k.id === 'guard-blocklist' && k.value), '블록리스트 KV가 지식 목록에 노출')
+  const promptWire = await fetch(BFF + '/api/admin/prompts').then((r) => r.json())
+  const productPrompt = promptWire?.prompts?.find((p) => p.id === 'plan-products')
+  const assistRes = await fetch(BFF + '/api/admin/prompts/plan-products/assist', {
+    method: 'POST',
+    headers: plain,
+    body: JSON.stringify({
+      instruction: '추천 이유를 세 문장 이하로 제한해줘',
+      currentText: productPrompt.defaultText,
+    }),
+  })
+  const assisted = await assistRes.json()
+  ok(assistRes.status === 201, `Claude 지시서 수정안 응답 (${assistRes.status})`)
+  ok(assisted?.proposedText?.includes('세 문장 이하'), '자연어 요청이 수정안에 반영')
+  ok(assisted?.proposedText?.includes('{{CATALOG}}'), '수정안이 필수 자리표시자 보존')
+  const savedPrompts = await fetch(BFF + '/api/admin/prompts/plan-products', {
+    method: 'PUT',
+    headers: plain,
+    body: JSON.stringify({ text: assisted.proposedText, note: assisted.summary }),
+  }).then((r) => r.json())
+  const savedProductPrompt = savedPrompts?.prompts?.find((p) => p.id === 'plan-products')
+  ok(savedProductPrompt?.configured === assisted.proposedText, '승인한 수정안만 운영 설정에 저장')
+  ok(savedProductPrompt?.history?.[0]?.note === assisted.summary, '수정 요약이 버전 기록에 남음')
+  const restoredPrompts = await fetch(BFF + '/api/admin/prompts/plan-products', {
+    method: 'PUT',
+    headers: plain,
+    body: JSON.stringify({ text: null, note: '기본 지시서로 복구' }),
+  }).then((r) => r.json())
+  const restoredProductPrompt = restoredPrompts?.prompts?.find((p) => p.id === 'plan-products')
+  ok(restoredProductPrompt?.configured === null, '이전 기본 지시서로 복구')
+  ok((restoredProductPrompt?.history?.length ?? 0) >= 2, '저장·복구가 버전 기록으로 누적')
   const dr = await sse('/api/admin/pipeline/dry-run', { stageId: 'survey', intent: '가을 파운데이션 추천' }, plain)
   const drResult = last(dr, 'result')?.data
   ok(drResult?.survey?.questions?.length === 3, `dry-run 설문 3문항 (${drResult?.survey?.questions?.length})`)

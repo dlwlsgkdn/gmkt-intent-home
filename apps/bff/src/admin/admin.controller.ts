@@ -13,6 +13,7 @@ import {
   Put,
   Query,
   Res,
+  ServiceUnavailableException,
   UseGuards,
 } from '@nestjs/common'
 import {
@@ -37,6 +38,8 @@ import {
   AdminPipelineWire,
   AdminPromptId,
   AdminPromptsWire,
+  AssistAdminPromptBody,
+  AssistAdminPromptResult,
   type AdminPromptRevision,
   EvalCasesWire,
   EvalRunsWire,
@@ -277,6 +280,31 @@ export class AdminController {
       }),
     )
     return { promptVersion: PROMPT_VERSION, prompts }
+  }
+
+  @Post('prompts/:id/assist')
+  @ApiOperation({
+    summary: '운영자 자연어 요청으로 시스템 프롬프트 미저장 수정안 생성',
+    description:
+      '현재 편집 중인 원문과 자연어 변경 요청을 Claude에 보내 수정안·요약·주의점을 받는다. ' +
+      '이 호출은 설정을 저장하지 않으며, 기존 {{PLACEHOLDER}} 집합이 달라진 결과는 서버가 거부한다.',
+  })
+  @ApiParam({ name: 'id', enum: AdminPromptId.options, description: '프롬프트 id (PROMPT_DEFS 카탈로그)' })
+  @ApiBody({ schema: toOpenApi(AssistAdminPromptBody) })
+  @ApiOkResponse({ schema: toOpenApi(AssistAdminPromptResult) })
+  async assistPrompt(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(AssistAdminPromptBody)) body: AssistAdminPromptBody,
+  ): Promise<AssistAdminPromptResult> {
+    const parsed = AdminPromptId.safeParse(id)
+    if (!parsed.success) throw new BadRequestException('카탈로그에 없는 프롬프트입니다')
+    const def = PROMPT_DEFS.find((candidate) => candidate.id === parsed.data)!
+    try {
+      return await this.llm.assistPromptRevision(body, `${def.label}: ${def.note}`)
+    } catch (error) {
+      if (error instanceof LlmGenerationError) throw new ServiceUnavailableException(error.message)
+      throw error
+    }
   }
 
   @Put('prompts/:id')

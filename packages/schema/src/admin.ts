@@ -106,6 +106,24 @@ export const PutAdminPromptBody = z.object({
 })
 export type PutAdminPromptBody = z.infer<typeof PutAdminPromptBody>
 
+/** 운영자의 자연어 요청을 현재 시스템 프롬프트에 반영한 "미저장 수정안" 요청.
+ * 저장 API와 분리해 AI 결과가 검토 없이 운영에 반영되지 않게 한다. */
+export const AssistAdminPromptBody = z.object({
+  instruction: z.string().trim().min(2).max(2000),
+  currentText: z.string().min(1).max(20000),
+})
+export type AssistAdminPromptBody = z.infer<typeof AssistAdminPromptBody>
+
+export const AssistAdminPromptResult = z.object({
+  /** 자리표시자를 보존한 전체 시스템 프롬프트 원문 */
+  proposedText: z.string().min(1).max(20000),
+  /** 변경 기록의 기본 메모로 재사용할 짧은 설명 */
+  summary: z.string().trim().min(1).max(200),
+  /** 의미 충돌·넓은 영향 등 운영자가 적용 전에 볼 주의점 */
+  warnings: z.array(z.string().trim().min(1).max(300)).max(5),
+})
+export type AssistAdminPromptResult = z.infer<typeof AssistAdminPromptResult>
+
 /* ── core internal — 피드백 스텝 나열 (평가 모아보기의 원천) ──────────────
  * core는 payload를 해석하지 않는다는 원칙 그대로: action 스텝 중 payload.type='feedback'
  * 필터만 걸어 쓰레드 메타와 함께 원본을 돌려준다. 해석(zod 파싱·최신 판정·집계)은 BFF 몫. */

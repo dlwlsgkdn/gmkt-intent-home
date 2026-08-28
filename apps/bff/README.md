@@ -14,6 +14,7 @@ POST /api/threads/:id/events     → 담기/완료 기록 (complete면 status=do
 GET  /api/threads/:id            → 이어보기 (survey/answers/plan 복원)
 GET  /api/threads                → 쓰레드 목록 (x-device-id 기준)
 GET  /healthz                     → 상태 (llm: configured|not_configured)
+POST /api/admin/prompts/:id/assist → 운영자 자연어 요청으로 미저장 프롬프트 수정안 생성
 ```
 
 - 사용자 식별: `x-device-id` 헤더 (익명 디바이스 id, 없으면 anonymous)
@@ -30,6 +31,8 @@ GET  /healthz                     → 상태 (llm: configured|not_configured)
   밖의 id는 드롭. 실서비스 전환 시 상품 검색 API가 이 자리를 대체
 - 프롬프트: 시스템(역할·규칙·카탈로그)은 안정 prefix로 1h 프롬프트 캐싱, 가변부(의도·프로필·답변)는
   사용자 메시지. 구조화 출력(zodOutputFormat)이라 JSON 파싱 실패가 없다
+- AI 지시서 도우미도 같은 `ANTHROPIC_API_KEY`를 사용한다. 수정안은 자리표시자 보존 검사를 통과해도
+  자동 저장하지 않으며, 운영자가 diff를 승인한 뒤 기존 버전 기록 API로 따로 저장한다
 
 ## 로컬 실행
 

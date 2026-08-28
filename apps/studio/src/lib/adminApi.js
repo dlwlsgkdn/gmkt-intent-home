@@ -77,6 +77,11 @@ export function fetchAdminPrompts() {
   return req('GET', '/prompts')
 }
 
+/** 자연어 변경 요청 → 저장되지 않은 Claude 수정안. 실제 반영은 putAdminPrompt를 다시 호출해야 한다. */
+export function assistAdminPrompt(id, instruction, currentText) {
+  return req('POST', `/prompts/${encodeURIComponent(id)}/assist`, { instruction, currentText })
+}
+
 /** LLM 시스템 프롬프트 재정의 — note는 변경 기록과 시험 쓰레드 제목에 쓰는 운영 메모 */
 export function putAdminPrompt(id, text, note) {
   return req('PUT', `/prompts/${encodeURIComponent(id)}`, { text, ...(note?.trim() ? { note: note.trim() } : {}) })

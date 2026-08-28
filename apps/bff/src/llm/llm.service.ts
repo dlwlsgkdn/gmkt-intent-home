@@ -2,7 +2,15 @@ import { Injectable, Logger } from '@nestjs/common'
 import Anthropic from '@anthropic-ai/sdk'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import type { z } from 'zod'
-import type { AdminModelOption, Answer, LlmMeta, Profile, SurveyPageWire } from '@ddak/schema'
+import {
+  AssistAdminPromptResult,
+  type AdminModelOption,
+  type Answer,
+  type AssistAdminPromptBody,
+  type LlmMeta,
+  type Profile,
+  type SurveyPageWire,
+} from '@ddak/schema'
 import {
   IntentGen,
   LlmGenerationError,
@@ -148,6 +156,38 @@ export class LlmService implements LlmPort {
       effort: 'low' as const,
       user: buildIntentRequest(intent),
     })
+  }
+
+  /** 운영자의 자연어 요청 → 검토 가능한 시스템 프롬프트 수정안.
+   * 저장과 완전히 분리되어 있고, 현재 템플릿의 {{PLACEHOLDER}} 집합은 서버가 재검증한다. */
+  async assistPromptRevision(input: AssistAdminPromptBody, promptContext?: string): Promise<AssistAdminPromptResult> {
+    const system = [
+      '너는 운영 중인 AI 서비스의 시스템 프롬프트 편집자다.',
+      '입력 JSON의 instruction만 반영해 currentText를 필요한 만큼만 수정한다.',
+      'proposedText에는 설명이나 코드 펜스 없이 수정된 시스템 프롬프트 전체 원문을 넣는다.',
+      'currentText의 {{PLACEHOLDER}} 토큰은 철자, 개수, 중괄호를 포함해 모두 그대로 보존한다.',
+      '기존 출력 계약, 사실 필드, 안전 규칙은 instruction이 명시적으로 요구하지 않는 한 바꾸지 않는다.',
+      'instruction이 기존 규칙과 충돌하거나 영향 범위가 넓으면 warnings에 짧게 알린다.',
+      'summary는 운영 변경 기록에 쓸 수 있도록 한국어 한 문장으로 작성한다.',
+    ].join('\n')
+    const result = await this.generate('지시서 수정안 생성', AssistAdminPromptResult, {
+      system: { text: system, custom: false },
+      effort: 'low',
+      user: JSON.stringify({ ...input, promptContext }),
+    })
+
+    const placeholders = (text: string) => [...text.matchAll(/\{\{[^{}\r\n]+\}\}/g)].map((match) => match[0]).sort()
+    const before = placeholders(input.currentText)
+    const after = placeholders(result.content.proposedText)
+    if (before.length !== after.length || before.some((token, index) => token !== after[index])) {
+      this.logger.warn('지시서 수정안 자리표시자 검증 실패')
+      throw new LlmGenerationError(
+        'llm_failed',
+        'AI 수정안이 필수 데이터 자리를 보존하지 못했어요. 요청을 조금 더 구체적으로 바꿔 다시 시도해 주세요.',
+        true,
+      )
+    }
+    return result.content
   }
 
   async generateSurvey(
