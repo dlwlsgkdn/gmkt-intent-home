@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { PROMPT_TEST_SESSION_KEY, assistAdminPrompt, fetchAdminPrompts, putAdminPrompt } from '../lib/adminApi.js'
+import { assistAdminPrompt, fetchAdminPrompts, putAdminPrompt } from '../lib/adminApi.js'
 import promptGuide from '../assets/prompt-guide.png'
+import AdminPromptTrial from './AdminPromptTrial.jsx'
 
 const lineDiff = (before, after) => {
   const a = before.split('\n')
@@ -46,6 +47,8 @@ const lineDiff = (before, after) => {
 }
 
 export default function AdminPromptLibrary({ api }) {
+  const [view, setView] = useState('library')
+  const [trialSeed, setTrialSeed] = useState(null)
   const [wire, setWire] = useState(null)
   const [error, setError] = useState(null)
   const [selected, setSelected] = useState(null)
@@ -83,7 +86,7 @@ export default function AdminPromptLibrary({ api }) {
     setAiMessages([])
     setAiError(null)
   }
-  const save = async (value, note, testAfter = false) => {
+  const save = async (value, note) => {
     if (!selected) return
     setSaving(true)
     try {
@@ -94,24 +97,6 @@ export default function AdminPromptLibrary({ api }) {
       setDraft(updated ? updated.configured ?? updated.defaultText : '')
       setChangeNote('')
       api.showToast(value == null ? '기본 지시서로 되돌렸어요.' : '지시서를 저장했어요. 새 결과부터 반영됩니다.')
-      if (testAfter && updated) {
-        const revision = updated.history?.[0]
-        try {
-          sessionStorage.setItem(
-            PROMPT_TEST_SESSION_KEY,
-            JSON.stringify({
-              promptId: updated.id,
-              label: updated.label,
-              note: revision?.note || note || '지시서 수정',
-              revisionId: revision?.id || null,
-              at: revision?.at || new Date().toISOString(),
-            }),
-          )
-        } catch {
-          /* 세션 저장이 막혀도 시험 화면은 열 수 있다 */
-        }
-        api.setAdminTab('pipeline')
-      }
     } catch (e) {
       api.showToast(e.message || '프롬프트를 저장하지 못했어요.')
     } finally {
@@ -149,11 +134,18 @@ export default function AdminPromptLibrary({ api }) {
     api.showToast('Claude 수정안을 편집기에 반영했어요. 아직 저장되지는 않았습니다.')
   }
 
+  const openTrial = (promptId, text, summary) => {
+    setTrialSeed({ promptId, text, summary })
+    setSelected(null)
+    setView('trial')
+  }
+
   const formatAt = (at) => {
     const date = new Date(at)
     return Number.isNaN(date.getTime()) ? at : date.toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' })
   }
   const draftChanged = selected ? draft !== (selected.configured ?? selected.defaultText) : false
+  const trialSupported = selected ? ['survey', 'plan-skeleton', 'plan-products'].includes(selected.id) : false
 
   const renderGroup = (title, note, rows, icon, example) => rows.length > 0 && (
     <section className="sb-admin-card sb-admin-prompt-group">
@@ -186,14 +178,27 @@ export default function AdminPromptLibrary({ api }) {
         {wire && <span className="sb-admin-health is-live"><i /> {wire.promptVersion}</span>}
       </header>
 
+      <div className="sb-admin-prompt-tabs" role="tablist" aria-label="AI 지시서 작업 방식">
+        <button type="button" role="tab" aria-selected={view === 'library'} className={view === 'library' ? 'is-on' : ''} onClick={() => setView('library')}>
+          <span>지시서 관리</span><small>현재값·변경 기록</small>
+        </button>
+        <button type="button" role="tab" aria-selected={view === 'trial'} className={view === 'trial' ? 'is-on' : ''} onClick={() => { setTrialSeed(null); setView('trial') }}>
+          <span>시험하고 적용</span><small>저장 없이 결과 확인</small>
+        </button>
+      </div>
+
+      {view === 'trial' ? (
+        <AdminPromptTrial wire={wire} seed={trialSeed} onApplied={setWire} api={api} />
+      ) : <>
+
       <section className="sb-admin-prompt-guide" aria-label="AI 지시서 수정 방법">
         <div className="sb-admin-prompt-guide__title"><b>처음이라면 이것만 하세요</b><span>약 3분</span></div>
         <ol>
           <li><i>1</i><span><b>바꾸고 싶은 항목 선택</b><small>말투, 질문, 추천 기준 중 하나만 고르세요.</small></span></li>
           <li><i>2</i><span><b>원하는 결과를 한 문장으로 추가</b><small>“답변은 3문장 이하로 써줘”처럼 구체적으로 적으세요.</small></span></li>
-          <li><i>3</i><span><b>저장하고 바로 시험</b><small>플레이그라운드에서 결과를 보고, 이상하면 기본값으로 돌아가세요.</small></span></li>
+          <li><i>3</i><span><b>저장 없이 시험하고 적용</b><small>결과를 먼저 확인하고, 마음에 들 때만 전체에 적용하세요.</small></span></li>
         </ol>
-        <button type="button" className="sb-admin-cta" onClick={() => api.setAdminTab('pipeline')}>플레이그라운드에서 시험하기 <span>→</span></button>
+        <button type="button" className="sb-admin-cta" onClick={() => { setTrialSeed(null); setView('trial') }}>여기서 저장 없이 시험하기 <span>→</span></button>
       </section>
 
       <section className="sb-admin-prompt-example">
@@ -225,7 +230,7 @@ export default function AdminPromptLibrary({ api }) {
                 <b>Claude에게 사람 말로 요청하세요</b>
                 <span><i>1</i> 바꾸고 싶은 내용을 아래 입력칸에 자유롭게 적으세요.</span>
                 <span><i>2</i> Claude가 만든 수정 전·후 차이를 확인하고 반영하세요.</span>
-                <span><i>3</i> 저장 후 바로 시험하면 실행이 쓰레드 기록으로 남습니다.</span>
+                <span><i>3</i> 저장 없이 시험한 뒤 마음에 들 때만 전체에 적용하세요.</span>
               </div>
               <section className="sb-admin-prompt-assist" aria-label="Claude 지시서 수정 도우미">
                 <div className="sb-admin-prompt-assist__head">
@@ -264,7 +269,7 @@ export default function AdminPromptLibrary({ api }) {
                       <div><b>{aiProposal.summary}</b><small>초록은 추가 · 빨강은 삭제</small></div>
                       <div>
                         <button type="button" className="sb-btn sb-btn--ghost sb-btn--tiny" onClick={applyProposal}>편집기에 반영</button>
-                        <button type="button" className="sb-btn sb-btn--primary sb-btn--tiny" disabled={saving} onClick={() => save(aiProposal.proposedText, aiProposal.summary, true)}>저장하고 바로 시험 →</button>
+                        {trialSupported && <button type="button" className="sb-btn sb-btn--primary sb-btn--tiny" disabled={saving} onClick={() => openTrial(selected.id, aiProposal.proposedText, aiProposal.summary)}>시험하고 적용 →</button>}
                       </div>
                     </div>
                     {aiProposal.warnings?.length > 0 && <ul>{aiProposal.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
@@ -321,12 +326,13 @@ export default function AdminPromptLibrary({ api }) {
               <div className="sb-json-dialog__actions">
                 {selected.configured && <button type="button" className="sb-btn sb-btn--ghost" disabled={saving} onClick={() => save(null, '기본 지시서로 복구')}>기본값으로 복귀</button>}
                 <button type="button" className="sb-btn sb-btn--ghost" disabled={saving || !draft.trim() || !draftChanged} onClick={() => save(draft, changeNote)}>{saving ? '저장 중…' : '저장만'}</button>
-                <button type="button" className="sb-btn sb-btn--primary" disabled={saving || !draft.trim() || !draftChanged} onClick={() => save(draft, changeNote, true)}>{saving ? '저장 중…' : '저장하고 바로 시험 →'}</button>
+                {trialSupported && <button type="button" className="sb-btn sb-btn--primary" disabled={saving || !draft.trim() || !draftChanged} onClick={() => openTrial(selected.id, draft, changeNote || '직접 수정한 시험안')}>저장 없이 시험 →</button>}
               </div>
             </div>
           </section>
         </div>
       )}
+      </>}
     </div>
   )
 }
