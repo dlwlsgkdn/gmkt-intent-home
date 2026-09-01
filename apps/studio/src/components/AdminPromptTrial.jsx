@@ -277,11 +277,11 @@ export default function AdminPromptTrial({ wire, seed, onApplied, api }) {
           {result && (
             <div className="sb-prompt-trial__compare">
               <section>
-                <header><span>현재 운영</span><b>지금 고객이 받는 결과</b></header>
+                <header><span>기존 버전</span><b>현재 지시서로 만든 결과</b></header>
                 <TrialOutput selectedId={selectedId} output={result.baseline} />
               </section>
               <section className="is-trial">
-                <header><span>시험안</span><b>바꾸면 받게 될 결과</b></header>
+                <header><span>수정 버전</span><b>수정한 지시서로 만든 결과</b></header>
                 <TrialOutput selectedId={selectedId} output={result.trial} />
               </section>
             </div>
