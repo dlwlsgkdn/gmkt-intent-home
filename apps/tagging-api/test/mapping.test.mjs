@@ -153,8 +153,28 @@ test('toDocPatch — 태그를 바꾼 패치는 review_status를 unreviewed로 �
 })
 
 test('toDocPatch — 태그를 그대로 두고 메모만 바꾼 패치는 review_status를 건드리지 않는다', () => {
-  const emptyPatch = { fields: {}, note: '메모만 수정' }
-  const set = toDocPatch(emptyPatch, DOC)
+  /* DOC의 현재 값과 동일한 선택·대표를 7필드에 채워 보낸다 (화면은 항상 전 필드를 재전송) */
+  const unchangedPatch = {
+    fields: {
+      category: { selected: ['클렌징'], rep: '클렌징', status: 'done', origin: 'ai' },
+      subtype: { selected: ['클렌징폼'], rep: '클렌징폼', status: 'done', origin: 'ai' },
+      area: { selected: ['얼굴전체'], rep: '얼굴전체', status: 'done', origin: 'ai' },
+      type: { selected: ['모든피부'], rep: '모든피부', status: 'done', origin: 'ai' },
+      concern: { selected: ['수분부족', '모공부각'], rep: '수분부족', status: 'done', origin: 'ai' },
+      result: { selected: ['보송'], rep: null, status: 'done', origin: 'ai' },
+      condition: { selected: ['데일리'], rep: null, status: 'done', origin: 'ai' },
+    },
+    note: '메모만 수정',
+  }
+  const set = toDocPatch(unchangedPatch, DOC)
+  assert.equal('review_status' in set, false)
+  assert.equal('reviewed_at' in set, false)
+})
+
+test('toDocPatch — 문서가 이미 미검토면 태그를 바꿔도 review_status를 리셋하지 않는다', () => {
+  const unreviewed = { ...DOC, review_status: null }
+  const set = toDocPatch(PATCH, unreviewed)
+  /* 태그가 바뀌었지만 doc.review_status가 null이므로 리셋 조건이 없다 */
   assert.equal('review_status' in set, false)
   assert.equal('reviewed_at' in set, false)
 })
