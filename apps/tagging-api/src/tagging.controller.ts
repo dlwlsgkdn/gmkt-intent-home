@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch } from '@nestjs/common'
+import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common'
 import { TaggingService } from './tagging.service'
 
 @Controller()
@@ -18,5 +18,10 @@ export class TaggingController {
   @Patch('units/:productId')
   save(@Param('productId') productId: string, @Body() body: unknown) {
     return this.tagging.saveUnit(productId, body)
+  }
+
+  @Post('units/:productId/review')
+  review(@Param('productId') productId: string, @Body() body: { decision?: unknown }) {
+    return this.tagging.setDecision(productId, body?.decision ?? null)
   }
 }

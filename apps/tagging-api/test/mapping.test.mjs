@@ -178,3 +178,13 @@ test('toDocPatch — 문서가 이미 미검토면 태그를 바꿔도 review_st
   assert.equal('review_status' in set, false)
   assert.equal('reviewed_at' in set, false)
 })
+
+test('decisionToReview — 화면 결정을 Flask와 공유하는 review_status로 되돌린다', () => {
+  const { decisionToReview } = mapping
+  assert.equal(decisionToReview('approved').review_status, 'reviewed')
+  assert.match(decisionToReview('approved').reviewed_at, /^\d{4}-\d{2}-\d{2}T/)
+  assert.equal(decisionToReview('rejected').review_status, 'needs_fix')
+  /* 반려·해제는 검토 시각을 남기지 않는다 (store.py set_review_status와 같은 규칙) */
+  assert.equal(decisionToReview('rejected').reviewed_at, null)
+  assert.equal(decisionToReview(null).review_status, 'unreviewed')
+})

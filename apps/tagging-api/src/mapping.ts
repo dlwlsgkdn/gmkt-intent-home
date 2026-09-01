@@ -90,6 +90,13 @@ export function toUnit(doc: any) {
 /* Python store.py의 _now()와 같은 형식이어야 한다 — 두 도구가 같은 필드를 쓴다. */
 export const nowIso = () => `${new Date().toISOString().slice(0, 19)}+00:00`
 
+/* Flask 대시보드와 공유하는 필드다. store.py set_review_status와 같은 규칙으로 쓴다. */
+export function decisionToReview(decision: unknown) {
+  if (decision === 'approved') return { review_status: 'reviewed', reviewed_at: nowIso() }
+  if (decision === 'rejected') return { review_status: 'needs_fix', reviewed_at: null }
+  return { review_status: 'unreviewed', reviewed_at: null }
+}
+
 const cleanList = (value: unknown): string[] =>
   Array.isArray(value)
     ? value.filter((v): v is string => typeof v === 'string' && !!v.trim()).map((v) => v.trim())
