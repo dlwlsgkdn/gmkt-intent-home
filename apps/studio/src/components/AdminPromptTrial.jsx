@@ -22,35 +22,95 @@ const autoAnswers = (survey) =>
     .map((question) => ({ questionId: question.id, choices: question.options?.slice(0, 1) || [] }))
     .filter((answer) => answer.choices.length > 0)
 
-function SurveyResult({ survey, answers = [] }) {
+const sameValue = (left, right) => JSON.stringify(left ?? null) === JSON.stringify(right ?? null)
+
+const comparableQuestion = (question) => question ? {
+  question: question.question || '',
+  options: question.options || [],
+} : null
+
+const comparableSection = (section) => section ? {
+  kind: section.kind || '',
+  title: section.title || '',
+  body: section.body || section.desc || section.reason || '',
+  points: section.points || section.steps || [],
+  products: [...(section.webProducts || []), ...(section.products || [])].map((product) => ({
+    id: product.id || '',
+    brand: product.brand || '',
+    name: product.name || '',
+    price: product.price ?? null,
+  })),
+  items: (section.items || []).map((item) => ({ title: item.title || '', source: item.source || '', url: item.url || '' })),
+  productIds: section.productIds || [],
+} : null
+
+const planSections = (selectedId, output) =>
+  selectedId === 'plan-skeleton' ? output?.skeleton?.sections || [] : output?.sections || []
+
+function changedBlockCount(selectedId, baseline, trial) {
+  if (selectedId === 'survey') {
+    const before = baseline?.survey
+    const after = trial?.survey
+    const questionCount = Math.max(before?.questions?.length || 0, after?.questions?.length || 0)
+    let count = sameValue(before?.intro || '', after?.intro || '') ? 0 : 1
+    for (let index = 0; index < questionCount; index += 1) {
+      if (!sameValue(comparableQuestion(before?.questions?.[index]), comparableQuestion(after?.questions?.[index]))) count += 1
+    }
+    return count
+  }
+  const beforeSections = planSections(selectedId, baseline)
+  const afterSections = planSections(selectedId, trial)
+  let count = 0
+  if (selectedId === 'plan-skeleton' && !sameValue(
+    { headline: baseline?.skeleton?.headline || '', summary: baseline?.skeleton?.summary || '' },
+    { headline: trial?.skeleton?.headline || '', summary: trial?.skeleton?.summary || '' },
+  )) count += 1
+  const sectionCount = Math.max(beforeSections.length, afterSections.length)
+  for (let index = 0; index < sectionCount; index += 1) {
+    if (!sameValue(comparableSection(beforeSections[index]), comparableSection(afterSections[index]))) count += 1
+  }
+  return count
+}
+
+function DiffBadge({ side }) {
+  return <small className={`sb-prompt-trial__diff-badge is-${side}`}>{side === 'before' ? '변경 전' : '변경 후'}</small>
+}
+
+function SurveyResult({ survey, answers = [], compareSurvey = null, diffSide = null }) {
   const answerMap = new Map(answers.map((answer) => [answer.questionId, answer.choices]))
+  const introChanged = diffSide && !sameValue(survey?.intro || '', compareSurvey?.intro || '')
   return (
     <div className="sb-prompt-trial__survey">
-      {survey?.intro && <p>{survey.intro}</p>}
+      {survey?.intro && <p className={introChanged ? `is-diff is-${diffSide}` : ''}>{introChanged && <DiffBadge side={diffSide} />}{survey.intro}</p>}
       <ol>
-        {(survey?.questions || []).map((question, index) => (
-          <li key={question.id}>
-            <span>{index + 1}</span>
-            <div>
-              <b>{question.question}</b>
+        {(survey?.questions || []).map((question, index) => {
+          const changed = diffSide && !sameValue(comparableQuestion(question), comparableQuestion(compareSurvey?.questions?.[index]))
+          return (
+            <li key={question.id} className={changed ? `is-diff is-${diffSide}` : ''}>
+              <span>{index + 1}</span>
               <div>
-                {(question.options || []).map((option) => (
-                  <em key={option} className={answerMap.get(question.id)?.includes(option) ? 'is-picked' : ''}>{option}</em>
-                ))}
+                {changed && <DiffBadge side={diffSide} />}
+                <b>{question.question}</b>
+                <div>
+                  {(question.options || []).map((option) => (
+                    <em key={option} className={answerMap.get(question.id)?.includes(option) ? 'is-picked' : ''}>{option}</em>
+                  ))}
+                </div>
               </div>
-            </div>
-          </li>
-        ))}
+            </li>
+          )
+        })}
       </ol>
     </div>
   )
 }
 
-function PlanSection({ section }) {
+function PlanSection({ section, compareSection = null, diffSide = null }) {
   const products = [...(section.webProducts || []), ...(section.products || [])]
+  const changed = diffSide && !sameValue(comparableSection(section), comparableSection(compareSection))
   return (
-    <article className="sb-prompt-trial__section">
-      <span>{SECTION_LABEL[section.kind] || section.kind}</span>
+    <article className={`sb-prompt-trial__section${changed ? ` is-diff is-${diffSide}` : ''}`}>
+      <div className="sb-prompt-trial__section-meta"><span>{SECTION_LABEL[section.kind] || section.kind}</span>{changed && <DiffBadge side={diffSide} />}</div>
       <h4>{section.title || '제목 없음'}</h4>
       {(section.body || section.desc || section.reason) && <p>{section.body || section.desc || section.reason}</p>}
       {(section.points || section.steps || []).length > 0 && (
@@ -78,16 +138,21 @@ function PlanSection({ section }) {
   )
 }
 
-function TrialOutput({ selectedId, output }) {
+function TrialOutput({ selectedId, output, compareOutput, diffSide }) {
   if (!output) return null
-  if (selectedId === 'survey') return <SurveyResult survey={output.survey} />
-  const sections = selectedId === 'plan-skeleton' ? output.skeleton?.sections || [] : output.sections || []
+  if (selectedId === 'survey') return <SurveyResult survey={output.survey} compareSurvey={compareOutput?.survey} diffSide={diffSide} />
+  const sections = planSections(selectedId, output)
+  const compareSections = planSections(selectedId, compareOutput)
+  const headingChanged = selectedId === 'plan-skeleton' && !sameValue(
+    { headline: output.skeleton?.headline || '', summary: output.skeleton?.summary || '' },
+    { headline: compareOutput?.skeleton?.headline || '', summary: compareOutput?.skeleton?.summary || '' },
+  )
   return (
     <div className="sb-prompt-trial__plan">
       {selectedId === 'plan-skeleton' && (
-        <header><h3>{output.skeleton?.headline}</h3><p>{output.skeleton?.summary}</p></header>
+        <header className={headingChanged ? `is-diff is-${diffSide}` : ''}>{headingChanged && <DiffBadge side={diffSide} />}<h3>{output.skeleton?.headline}</h3><p>{output.skeleton?.summary}</p></header>
       )}
-      {sections.map((section, index) => <PlanSection key={`${section.kind}-${section.title}-${index}`} section={section} />)}
+      {sections.map((section, index) => <PlanSection key={`${section.kind}-${section.title}-${index}`} section={section} compareSection={compareSections[index]} diffSide={diffSide} />)}
       {sections.length === 0 && <p className="sb-admin__muted">검증을 통과해 표시할 결과가 없어요. 지시를 조금 바꿔 다시 시험해보세요.</p>}
     </div>
   )
@@ -111,6 +176,10 @@ export default function AdminPromptTrial({ wire, seed, onApplied, api }) {
   const selected = useMemo(() => prompts.find((prompt) => prompt.id === selectedId) || null, [prompts, selectedId])
   const selectedMeta = TESTABLE_PROMPTS.find((item) => item.id === selectedId)
   const currentText = selected ? selected.configured ?? selected.defaultText : ''
+  const diffCount = useMemo(
+    () => result ? changedBlockCount(selectedId, result.baseline, result.trial) : 0,
+    [result, selectedId],
+  )
 
   useEffect(() => {
     if (!seed?.promptId || !seed.text || !prompts.some((prompt) => prompt.id === seed.promptId)) return
@@ -275,14 +344,20 @@ export default function AdminPromptTrial({ wire, seed, onApplied, api }) {
             <details className="sb-prompt-trial__input"><summary>시험에 사용한 설문과 임시 답변</summary><SurveyResult survey={result.survey} answers={result.answers} /></details>
           )}
           {result && (
+            <div className="sb-prompt-trial__diff-summary">
+              <b>{diffCount > 0 ? `달라진 항목 ${diffCount}개` : '달라진 항목 없음'}</b>
+              <span><i className="is-before" />변경 전</span><span><i className="is-after" />변경 후</span>
+            </div>
+          )}
+          {result && (
             <div className="sb-prompt-trial__compare">
               <section>
                 <header><span>기존 버전</span><b>현재 지시서로 만든 결과</b></header>
-                <TrialOutput selectedId={selectedId} output={result.baseline} />
+                <TrialOutput selectedId={selectedId} output={result.baseline} compareOutput={result.trial} diffSide="before" />
               </section>
               <section className="is-trial">
                 <header><span>수정 버전</span><b>수정한 지시서로 만든 결과</b></header>
-                <TrialOutput selectedId={selectedId} output={result.trial} />
+                <TrialOutput selectedId={selectedId} output={result.trial} compareOutput={result.baseline} diffSide="after" />
               </section>
             </div>
           )}
