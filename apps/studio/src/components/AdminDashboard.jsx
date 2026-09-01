@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { loadTaggingReview, unitStatusKey } from '../lib/taggingCatalog.js'
 import { statusLabel } from '../lib/adminReport.jsx'
 import { TREND_KEYWORDS } from '../lib/trendKeywords.js'
@@ -8,12 +8,28 @@ const ADMIN_USER = 'ops-playground'
 const pct = (value, total) => (total > 0 ? Math.round((value / total) * 100) : 0)
 
 export default function AdminDashboard({ api, threads, feedback, loading, mode, onModeChange }) {
-  const tagging = useMemo(() => loadTaggingReview(), [])
-  const tagCounts = useMemo(() => tagging.reduce((out, unit) => {
-    const key = unitStatusKey(unit)
-    out[key] = (out[key] || 0) + 1
-    return out
-  }, {}), [tagging])
+  const [tagSummary, setTagSummary] = useState({ counts: {}, total: 0 })
+  useEffect(() => {
+    let alive = true
+    fetch('/api/tagging/summary')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!alive) return
+        if (data) return setTagSummary(data)
+        /* 사내망 밖: 예시 데이터로 타일을 채운다 */
+        const local = loadTaggingReview()
+        const counts = local.reduce((out, unit) => {
+          const key = unitStatusKey(unit)
+          out[key] = (out[key] || 0) + 1
+          return out
+        }, {})
+        setTagSummary({ counts, total: local.length })
+      })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [])
+  const tagCounts = tagSummary.counts
+  const tagTotal = tagSummary.total
 
   const realThreads = threads.filter((thread) => thread.userId !== ADMIN_USER)
   const completed = realThreads.filter((thread) => thread.status === 'done').length
@@ -29,11 +45,11 @@ export default function AdminDashboard({ api, threads, feedback, loading, mode, 
   const approvedTags = tagCounts.approved || 0
   const activeThreads = realThreads.filter((thread) => !['done', 'abandoned', 'archived'].includes(thread.status)).length
   const completionRate = pct(completed, realThreads.length)
-  const reviewRate = pct(approvedTags, tagging.length)
+  const reviewRate = pct(approvedTags, tagTotal)
 
   const cards = mode === 'lab'
     ? [
-        { value: tagQueue, label: '태깅 검토 대기', note: `전체 ${tagging.length}개 작업 단위`, tone: tagQueue ? 'warn' : 'good', tab: 'tagging', icon: '✓', progress: reviewRate },
+        { value: tagQueue, label: '태깅 검토 대기', note: `전체 ${tagTotal}개 작업 단위`, tone: tagQueue ? 'warn' : 'good', tab: 'tagging', icon: '✓', progress: reviewRate },
         { value: feedbackItems.length, label: '평가 제출', note: `낮은 평가 ${lowFeedback}건`, tone: lowFeedback ? 'warn' : 'good', tab: 'threads', icon: '★', progress: pct(feedbackItems.length - lowFeedback, feedbackItems.length) },
         { value: drafts.length, label: '작성 중 시나리오', note: `발행 ${published.length}개`, tab: 'studio', icon: '◆', progress: pct(published.length, api.scenarios.length) },
         { value: TREND_KEYWORDS.length, label: '트렌드 키워드', note: '뷰티 트렌드 사전', tab: 'knowledge', icon: '↗', progress: 100 },
@@ -49,7 +65,7 @@ export default function AdminDashboard({ api, threads, feedback, loading, mode, 
   const heroCount = mode === 'lab' ? tagQueue + drafts.length + lowFeedback : abandoned + lowFeedback
   const flowRows = mode === 'lab'
     ? [
-        { label: '태그 검토 완료', value: approvedTags, total: tagging.length, tone: 'mint' },
+        { label: '태그 검토 완료', value: approvedTags, total: tagTotal, tone: 'mint' },
         { label: '시나리오 발행', value: published.length, total: api.scenarios.length, tone: 'blue' },
         { label: '안정 평가', value: Math.max(0, feedbackItems.length - lowFeedback), total: feedbackItems.length, tone: 'violet' },
       ]

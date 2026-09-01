@@ -764,3 +764,14 @@
   color: var(--sb-muted);
   font-size: var(--sb-t-body);
 }
+
+/* 719건에서 한 건을 찾는 입구 — 상태 필터 알약만으로는 못 찾는다 */
+.sb-tagging__search {
+  min-width: 200px;
+  padding: 6px 10px;
+  border: 1px solid var(--sb-n-200);
+  border-radius: var(--sb-r-sm);
+  background: var(--sb-surface);
+  color: var(--sb-ink);
+  font-size: var(--sb-t-small);
+}

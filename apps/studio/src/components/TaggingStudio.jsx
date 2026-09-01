@@ -101,6 +101,7 @@ export default function TaggingStudio({ api, embedded = false }) {
   const [source, setSource] = useState('loading') // 'loading' | 'remote' | 'local'
   const [selectedId, setSelectedId] = useState(null)
   const [listFilter, setListFilter] = useState('needs-review')
+  const [query, setQuery] = useState('')
   const [onlyNeedsReview, setOnlyNeedsReview] = useState(true)
   const [openWhy, setOpenWhy] = useState({})
   /* 잠금 해제는 편집 세션 상태다. 저장본의 status=done이 기본 잠금 원천이라 새로 열면 다시 안전하게 잠긴다. */
@@ -173,7 +174,9 @@ export default function TaggingStudio({ api, embedded = false }) {
     return out
   }, [statusById])
 
+  const needle = query.trim().toLowerCase()
   const listed = units.filter((u) => {
+    if (needle && !`${u.brand} ${u.name}`.toLowerCase().includes(needle)) return false
     if (listFilter === 'all') return true
     if (listFilter === 'needs-review') return needsReviewUnit(u)
     return statusById.get(u.id) === listFilter
@@ -439,6 +442,13 @@ export default function TaggingStudio({ api, embedded = false }) {
             사내망 태깅 서버에 닿지 못해 <b>예시 데이터</b>를 보고 있어요. 실제 검토는 사내망에서 열어주세요.
           </p>
         )}
+        <input
+          className="sb-tagging__search"
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="브랜드·상품명 검색"
+        />
         <div className="sb-tagging__filters">
           <button
             type="button"
@@ -536,6 +546,19 @@ export default function TaggingStudio({ api, embedded = false }) {
               </dd>
               <dt>상품 ID</dt>
               <dd><code>{unit.id}</code></dd>
+              {source === 'remote' && (
+                <>
+                  <dt>AI 확신도</dt>
+                  <dd>
+                    <span className={`sb-tagging-conf sb-tagging-conf--${confLevel(unit.confidence)}`} title="AI 확신도">
+                      <i style={{ width: `${unit.confidence}%` }} />
+                      <b>{unit.confidence}%</b>
+                    </span>
+                  </dd>
+                  <dt>AI 판단 근거</dt>
+                  <dd>{unit.rationale}</dd>
+                </>
+              )}
             </dl>
           </div>
         </aside>
@@ -596,13 +619,15 @@ export default function TaggingStudio({ api, embedded = false }) {
                     </span>
                   </div>
                   <div className="sb-tagging-field__meta">
-                    <span
-                      className={`sb-tagging-conf sb-tagging-conf--${confLevel(field.confidence)}`}
-                      title="AI 확신도"
-                    >
-                      <i style={{ width: `${field.confidence}%` }} />
-                      <b>{field.confidence}%</b>
-                    </span>
+                    {source !== 'remote' && (
+                      <span
+                        className={`sb-tagging-conf sb-tagging-conf--${confLevel(field.confidence)}`}
+                        title="AI 확신도"
+                      >
+                        <i style={{ width: `${field.confidence}%` }} />
+                        <b>{field.confidence}%</b>
+                      </span>
+                    )}
                     <span className={`sb-tagging-chip sb-tagging-chip--${status.cls}`}>{status.label}</span>
                     <span className={'sb-tagging-origin' + (field.origin === 'human' ? ' sb-tagging-origin--human' : '')}>
                       {field.origin === 'ai' ? 'AI' : '담당자'}
@@ -656,13 +681,15 @@ export default function TaggingStudio({ api, embedded = false }) {
                   })}
                 </div>
                 <div className="sb-tagging-field__ft">
-                  <button
-                    type="button"
-                    className="sb-tagging-why"
-                    onClick={() => setOpenWhy((prev) => ({ ...prev, [def.key]: !prev[def.key] }))}
-                  >
-                    {openWhy[def.key] ? '근거 접기 ▴' : '선택 근거 ▾'}
-                  </button>
+                  {source !== 'remote' && (
+                    <button
+                      type="button"
+                      className="sb-tagging-why"
+                      onClick={() => setOpenWhy((prev) => ({ ...prev, [def.key]: !prev[def.key] }))}
+                    >
+                      {openWhy[def.key] ? '근거 접기 ▴' : '선택 근거 ▾'}
+                    </button>
+                  )}
                   {field.status !== 'done' && (
                     <button type="button" className="sb-tagging-mini sb-tagging-mini--ok" onClick={() => markDone(def.key)}>
                       {field.status === 'fix' ? '수정 완료로 표시' : '확인 완료로 표시'}
@@ -682,7 +709,7 @@ export default function TaggingStudio({ api, embedded = false }) {
                     </button>
                   )}
                 </div>
-                {openWhy[def.key] && <p className="sb-tagging-rationale">{field.rationale}</p>}
+                {source !== 'remote' && openWhy[def.key] && <p className="sb-tagging-rationale">{field.rationale}</p>}
               </section>
             )
           })}
