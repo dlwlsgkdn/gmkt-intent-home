@@ -72,6 +72,92 @@ function changedBlockCount(selectedId, baseline, trial) {
   return count
 }
 
+const unique = (items) => [...new Set(items.filter(Boolean))]
+
+const productNames = (output) => unique(
+  planSections('plan-products', output)
+    .filter((section) => section.kind === 'products')
+    .flatMap((section) => [...(section.webProducts || []), ...(section.products || [])])
+    .map((product) => product.name || product.id),
+)
+
+const contentNames = (output) => unique(
+  planSections('plan-products', output)
+    .filter((section) => section.kind === 'contents')
+    .flatMap((section) => section.items || [])
+    .map((item) => item.title),
+)
+
+const shortList = (items) => {
+  const shown = items.slice(0, 2).join(', ')
+  return items.length > 2 ? `${shown} 외 ${items.length - 2}개` : shown
+}
+
+function DiffOverview({ selectedId, baseline, trial, diffCount, proposal }) {
+  let metrics = []
+  let changes = []
+  let benefit = proposal?.summary || '요청한 기준이 수정 버전에 반영됐는지 결과를 확인해 주세요.'
+  const checks = [...(proposal?.warnings || [])]
+
+  if (selectedId === 'survey') {
+    const beforeCount = baseline?.survey?.questions?.length || 0
+    const afterCount = trial?.survey?.questions?.length || 0
+    metrics = [{ label: '설문 질문', before: beforeCount, after: afterCount, unit: '개' }]
+    changes = [diffCount ? `질문과 선택지 ${diffCount}곳이 달라졌어요.` : '질문과 선택지가 똑같아요.']
+  } else if (selectedId === 'plan-skeleton') {
+    const beforeCount = planSections(selectedId, baseline).length
+    const afterCount = planSections(selectedId, trial).length
+    metrics = [{ label: '계획 구성', before: beforeCount, after: afterCount, unit: '단계' }]
+    changes = [diffCount ? `제목·요약·단계 ${diffCount}곳이 달라졌어요.` : '계획 구성이 똑같아요.']
+  } else {
+    const beforeProducts = productNames(baseline)
+    const afterProducts = productNames(trial)
+    const beforeContents = contentNames(baseline)
+    const afterContents = contentNames(trial)
+    const addedProducts = afterProducts.filter((name) => !beforeProducts.includes(name))
+    const removedProducts = beforeProducts.filter((name) => !afterProducts.includes(name))
+    const addedContents = afterContents.filter((name) => !beforeContents.includes(name))
+    const removedContents = beforeContents.filter((name) => !afterContents.includes(name))
+    metrics = [
+      { label: '추천 상품', before: beforeProducts.length, after: afterProducts.length, unit: '개' },
+      { label: '참고 콘텐츠', before: beforeContents.length, after: afterContents.length, unit: '개' },
+    ]
+    if (addedProducts.length) changes.push(`새로 추천: ${shortList(addedProducts)}`)
+    if (removedProducts.length) changes.push(`빠진 추천: ${shortList(removedProducts)}`)
+    if (addedContents.length) changes.push(`새 콘텐츠: ${shortList(addedContents)}`)
+    if (removedContents.length) changes.push(`빠진 콘텐츠: ${shortList(removedContents)}`)
+    if (!changes.length) changes.push(diffCount ? '상품 이름은 같고 추천 이유나 설명이 달라졌어요.' : '상품과 콘텐츠가 똑같아요.')
+
+    if (afterContents.length === 0) {
+      const contentDrops = (trial?.dropLog || []).filter((drop) => String(drop.message || '').includes('콘텐츠'))
+      checks.unshift(contentDrops.length
+        ? `참고 콘텐츠 후보 ${contentDrops.length}개가 링크·안전 검사를 통과하지 못해 빠졌어요.`
+        : '확인 가능한 게시글·영상을 찾지 못해 참고 콘텐츠가 만들어지지 않았어요. 현재 콘텐츠는 선택 항목(0~1개)이에요.')
+    }
+  }
+
+  if (!checks.length) checks.push('수정 버전이 검색 의도와 실제 상품 정보에 맞는지 마지막으로 확인해 주세요.')
+
+  return (
+    <section className="sb-prompt-trial__overview" aria-label="기존 버전과 수정 버전 차이 요약">
+      <header>
+        <div><span>한눈에 보는 변화</span><b>{diffCount > 0 ? `${diffCount}곳이 달라졌어요` : '달라진 곳이 없어요'}</b></div>
+        <div className="sb-prompt-trial__overview-legend"><span><i className="is-before" />변경 전</span><span><i className="is-after" />변경 후</span></div>
+      </header>
+      <div className="sb-prompt-trial__metrics">
+        {metrics.map((metric) => (
+          <div key={metric.label}><span>{metric.label}</span><em>{metric.before}{metric.unit}</em><i>→</i><b>{metric.after}{metric.unit}</b></div>
+        ))}
+      </div>
+      <div className="sb-prompt-trial__insights">
+        <article className="is-change"><i>↔</i><div><b>무엇이 달라졌나요?</b>{changes.map((text) => <p key={text}>{text}</p>)}</div></article>
+        <article className="is-better"><i>+</i><div><b>무엇이 좋아질 수 있나요?</b><p>{benefit}</p></div></article>
+        <article className="is-check"><i>!</i><div><b>무엇을 확인해야 하나요?</b>{checks.slice(0, 2).map((text) => <p key={text}>{text}</p>)}</div></article>
+      </div>
+    </section>
+  )
+}
+
 function DiffBadge({ side }) {
   return <small className={`sb-prompt-trial__diff-badge is-${side}`}>{side === 'before' ? '변경 전' : '변경 후'}</small>
 }
@@ -350,12 +436,7 @@ export default function AdminPromptTrial({ wire, seed, onApplied, api }) {
           {result?.survey && (
             <details className="sb-prompt-trial__input"><summary>시험에 사용한 설문과 임시 답변</summary><SurveyResult survey={result.survey} answers={result.answers} /></details>
           )}
-          {result && (
-            <div className="sb-prompt-trial__diff-summary">
-              <b>{diffCount > 0 ? `달라진 항목 ${diffCount}개` : '달라진 항목 없음'}</b>
-              <span><i className="is-before" />변경 전</span><span><i className="is-after" />변경 후</span>
-            </div>
-          )}
+          {result && <DiffOverview selectedId={selectedId} baseline={result.baseline} trial={result.trial} diffCount={diffCount} proposal={proposal} />}
           {result && (
             <div className="sb-prompt-trial__compare">
               <section>
