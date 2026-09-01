@@ -46,7 +46,35 @@ export const FIELD_DEFS = [
 
 export const TAG_LIMIT = { min: 3, max: 10 }
 
+/* 사전의 원천은 서버가 실어 보내는 taxonomy(=Python 저장소의 taxonomy.json)다.
+   위 상수들은 서버가 없을 때(배포본·사내망 밖) 쓰는 폴백으로 남는다. */
+let TAXONOMY = null
+export function applyTaxonomy(taxonomy) {
+  TAXONOMY = taxonomy && Array.isArray(taxonomy.categories) ? taxonomy : null
+}
+
+/* 그룹 스코프: 대분류 → 그룹(category_groups) → 그 그룹에 속한 값만(sub_types_groups 등) */
+const scoped = (key, groupKey, category) => {
+  const all = TAXONOMY[key] || []
+  const group = TAXONOMY.category_groups?.[category]
+  const groups = TAXONOMY[groupKey]
+  if (!group || !groups) return all
+  return all.filter((value) => !groups[value] || groups[value].includes(group))
+}
+
 export function optionsFor(key, category) {
+  if (TAXONOMY) {
+    switch (key) {
+      case 'category': return TAXONOMY.categories || []
+      case 'subtype': return category ? scoped('sub_types', 'sub_types_groups', category) : []
+      case 'area': return scoped('body_parts', 'body_parts_groups', category)
+      case 'type': return scoped('skin_types', 'skin_types_groups', category)
+      case 'concern': return scoped('concerns', 'concerns_groups', category)
+      case 'result': return scoped('results', 'results_groups', category)
+      case 'condition': return TAXONOMY.conditions || []
+      default: return []
+    }
+  }
   switch (key) {
     case 'category': return CATEGORIES
     case 'subtype': return category ? SUBTYPES[category] || [] : []
@@ -445,5 +473,27 @@ export function taggingExportPayload(units) {
       })),
       finalTags: FIELD_DEFS.flatMap((d) => u.fields[d.key].selected),
     })),
+  }
+}
+
+/* ── 원격(사내망 tagging-api) ──
+   실패하면 null을 돌려준다 — 호출부가 목업 시드로 폴백해 화면이 깨지지 않게 한다. */
+const TAGGING_API = '/api/tagging'
+let remote = false
+export const isRemote = () => remote
+
+export async function fetchTaggingBootstrap() {
+  try {
+    const res = await fetch(`${TAGGING_API}/bootstrap`)
+    if (!res.ok) throw new Error(`bootstrap ${res.status}`)
+    const data = await res.json()
+    if (!Array.isArray(data.units)) throw new Error('units 없음')
+    applyTaxonomy(data.taxonomy)
+    remote = true
+    return data
+  } catch (err) {
+    console.warn('[tagging] 원격 로드 실패 — 목업으로 표시합니다:', err.message)
+    remote = false
+    return null
   }
 }

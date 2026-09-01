@@ -748,3 +748,19 @@
 @media (max-width: 640px) {
   .sb-tagging { padding: 32px 16px 80px; }
 }
+
+/* 원격 로드 실패·로딩 안내 — 실데이터가 아님을 화면에서 분명히 한다 */
+.sb-tagging__fallback {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  border-radius: var(--sb-r-sm);
+  background: var(--sb-n-50);
+  color: var(--sb-warn-ink);
+  font-size: var(--sb-t-small);
+}
+.sb-tagging__loading {
+  padding: 48px 0;
+  text-align: center;
+  color: var(--sb-muted);
+  font-size: var(--sb-t-body);
+}

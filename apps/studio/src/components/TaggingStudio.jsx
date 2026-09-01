@@ -4,6 +4,8 @@ import {
   TAGGING_SEED,
   TAG_LIMIT,
   UNIT_STATUS,
+  fetchTaggingBootstrap,
+  isRemote,
   loadTaggingReview,
   optionsFor,
   productEmoji,
@@ -22,6 +24,16 @@ import {
  * 우측 태그 게이지·최종 태그·규칙 검증·승인/반려. 결과는 이 브라우저에만 저장되고,
  * 카탈로그(코드) 반영·기기 이동은 JSON 내보내기로 한다. 진입은 홈 드로어의 도구 행.
  */
+
+/* 로딩 중·빈 목록에서 파생값 계산이 터지지 않게 하는 자리표시자.
+   화면 자체는 아래 로딩 가드에서 갈린다 — 이 값이 그려지는 일은 없다. */
+const EMPTY_UNIT = {
+  id: null, brand: '', name: '', option: '', price: null, imageUrl: null, catalogTags: [],
+  copy: '', review: '', confidence: 0, confidenceLevel: null, rationale: '', decision: null,
+  note: '', tagRequest: {},
+  fields: Object.fromEntries(FIELD_DEFS.map((d) => [d.key, { selected: [], rep: null, status: 'unreviewed', origin: 'ai' }])),
+  aiFields: Object.fromEntries(FIELD_DEFS.map((d) => [d.key, { selected: [], rep: null, status: 'unreviewed', origin: 'ai' }])),
+}
 
 const formatPrice = (price) => `${Number(price).toLocaleString('ko-KR')}원`
 
@@ -84,8 +96,9 @@ function UnitThumb({ unit, className }) {
 }
 
 export default function TaggingStudio({ api, embedded = false }) {
-  const [units, setUnits] = useState(loadTaggingReview)
-  const [selectedId, setSelectedId] = useState(() => units.find(needsReviewUnit)?.id ?? units[0]?.id ?? null)
+  const [units, setUnits] = useState([])
+  const [source, setSource] = useState('loading') // 'loading' | 'remote' | 'local'
+  const [selectedId, setSelectedId] = useState(null)
   const [listFilter, setListFilter] = useState('needs-review')
   const [onlyNeedsReview, setOnlyNeedsReview] = useState(true)
   const [openWhy, setOpenWhy] = useState({})
@@ -95,8 +108,29 @@ export default function TaggingStudio({ api, embedded = false }) {
   const fieldRefs = useRef({})
 
   useEffect(() => {
-    saveTaggingReview(units)
-  }, [units])
+    let alive = true
+    fetchTaggingBootstrap().then((boot) => {
+      if (!alive) return
+      if (boot) {
+        setUnits(boot.units)
+        setSource('remote')
+      } else {
+        setUnits(loadTaggingReview())
+        setSource('local')
+      }
+    })
+    return () => { alive = false }
+  }, [])
+
+  /* 목업 모드에서만 로컬에 남긴다. 원격 모드의 저장은 Task 5의 단건 PATCH가 맡는다. */
+  useEffect(() => {
+    if (source === 'local') saveTaggingReview(units)
+  }, [units, source])
+
+  useEffect(() => {
+    if (selectedId || !units.length) return
+    setSelectedId(units.find(needsReviewUnit)?.id ?? units[0].id)
+  }, [units, selectedId])
 
   const statusById = useMemo(() => new Map(units.map((u) => [u.id, unitStatusKey(u)])), [units])
   const counts = useMemo(() => {
@@ -111,7 +145,7 @@ export default function TaggingStudio({ api, embedded = false }) {
     return statusById.get(u.id) === listFilter
   })
   /* 현재 항목이 검수 완료되어 큐에서 빠지면 다음 검수 항목을 즉시 보여준다. */
-  const unit = listed.find((u) => u.id === selectedId) || listed[0] || units.find((u) => u.id === selectedId) || units[0]
+  const unit = listed.find((u) => u.id === selectedId) || listed[0] || units.find((u) => u.id === selectedId) || units[0] || EMPTY_UNIT
   const { errs, warns } = useMemo(() => validateUnit(unit), [unit])
   const total = totalTags(unit)
   const finalTags = FIELD_DEFS.flatMap((d) =>
@@ -306,6 +340,14 @@ export default function TaggingStudio({ api, embedded = false }) {
     api.showToast('카탈로그 원본으로 되돌렸어요.')
   }
 
+  if (source === 'loading') {
+    return (
+      <section className={'sb-tagging' + (embedded ? ' sb-tagging--embedded' : '')}>
+        <p className="sb-tagging__loading">태깅 데이터를 불러오는 중…</p>
+      </section>
+    )
+  }
+
   return (
     <section className={'sb-tagging' + (embedded ? ' sb-tagging--embedded' : '')}>
       <div className="sb-tagging__head">
@@ -316,6 +358,11 @@ export default function TaggingStudio({ api, embedded = false }) {
             언제든 AI 원본으로 되돌릴 수 있어요.
           </p>
         </div>
+        {source === 'local' && (
+          <p className="sb-tagging__fallback">
+            사내망 태깅 서버에 닿지 못해 <b>예시 데이터</b>를 보고 있어요. 실제 검토는 사내망에서 열어주세요.
+          </p>
+        )}
         <div className="sb-tagging__filters">
           <button
             type="button"

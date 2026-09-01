@@ -7,6 +7,12 @@ export default defineConfig({
   server: {
     // 개발 중 /api는 Vercel 배포(서버 함수 + Neon DB)로 프록시
     proxy: {
+      // /api/tagging → 로컬 tagging-api (사내망 Mongo). 운영에선 같은 오리진이라 프록시가 없다
+      '/api/tagging': {
+        target: process.env.VITE_TAGGING_PROXY || 'http://localhost:8790',
+        changeOrigin: true,
+        secure: false,
+      },
       // /api/bff → 로컬 bff (배포에선 루트 middleware.js가 같은 경로를 토큰 주입해 rewrite).
       // '/api'보다 먼저 선언할 것 — 프록시 매칭이 선언 순서라 뒤에 두면 /api가 삼킨다
       '/api/bff': {
