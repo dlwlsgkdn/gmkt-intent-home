@@ -134,18 +134,25 @@ export default function TaggingStudio({ api, embedded = false }) {
      방금 보낸 승인/반려를 review_status='unreviewed'로 되돌리지 않는다. */
   const dirtyRef = useRef(new Map())
   const flushTimer = useRef(null)
+  /* 실패한 항목이 있어도 나머지 항목은 끝까지 시도한다 — 하나가 막혔다고 뒤에 줄 선
+     편집들을 조용히 버리면(재큐잉·재시도·토스트 전부 없이) 침묵 유실이 된다.
+     실패한 항목은 dirtyRef에 되돌리지 않는다: 서버가 계속 죽어 있으면 그 뒤 편집마다
+     같은 실패가 반복 재전송되어 토스트가 계속 울리는 소음이 생기고, 이미 뜬 토스트로
+     사용자가 인지했으니 재시도는 사용자가 그 항목을 다시 건드릴 때(그러면 patchUnit이
+     최신 전체 상태를 다시 큐잉한다)로 미룬다. */
   const flushPending = async () => {
     window.clearTimeout(flushTimer.current)
     const pending = [...dirtyRef.current.values()]
     dirtyRef.current.clear()
+    let allOk = true
     for (const item of pending) {
       const ok = await saveTaggingUnit(item)
       if (!ok) {
+        allOk = false
         api.showToast(`「${item.name}」 저장에 실패했어요. 연결을 확인해주세요.`)
-        return false
       }
     }
-    return true
+    return allOk
   }
   const queueSave = (nextUnit) => {
     if (source !== 'remote' || !nextUnit?.id) return
@@ -351,13 +358,22 @@ export default function TaggingStudio({ api, embedded = false }) {
     patchUnit((u) => ({ ...u, tagRequest: { ...u.tagRequest, [key]: !u.tagRequest[key] } }))
   }
 
+  /* 승인/반려 실패 시 화면 배지만 조용히 되돌린다(queueSave를 또 타지 않도록 patchUnit이
+     아니라 setUnits로 직접 — 저장이 막힌 상태에서 같은 필드를 다시 큐잉해 재실패 토스트를
+     겹쳐 띄우지 않기 위해서다). */
+  const revertDecision = (id, decision) => {
+    setUnits((prev) => prev.map((u) => (u.id === id ? { ...u, decision } : u)))
+  }
+
   const approve = async () => {
     if (errs.length) return api.showToast('규칙 위반이 있어 승인할 수 없어요.')
     if (unreviewedFields.length) return api.showToast('미검토 항목이 남아 있어요. 확인 후 승인해주세요.')
+    const previousDecision = unit.decision
     patchUnit((u) => ({ ...u, decision: 'approved' }))
     if (source === 'remote') {
-      if (!(await flushPending())) return
+      if (!(await flushPending())) return revertDecision(unit.id, previousDecision)
       if (!(await saveTaggingDecision(unit.id, 'approved'))) {
+        revertDecision(unit.id, previousDecision)
         return api.showToast('승인을 저장하지 못했어요. 연결을 확인해주세요.')
       }
     }
@@ -365,10 +381,12 @@ export default function TaggingStudio({ api, embedded = false }) {
   }
 
   const reject = async () => {
+    const previousDecision = unit.decision
     patchUnit((u) => ({ ...u, decision: 'rejected' }))
     if (source === 'remote') {
-      if (!(await flushPending())) return
+      if (!(await flushPending())) return revertDecision(unit.id, previousDecision)
       if (!(await saveTaggingDecision(unit.id, 'rejected'))) {
+        revertDecision(unit.id, previousDecision)
         return api.showToast('반려를 저장하지 못했어요. 연결을 확인해주세요.')
       }
     }
