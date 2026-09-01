@@ -78,10 +78,9 @@ function PlanSection({ section }) {
   )
 }
 
-function TrialResult({ selectedId, result }) {
-  if (!result) return null
-  if (selectedId === 'survey') return <SurveyResult survey={result.output.survey} />
-  const output = result.output
+function TrialOutput({ selectedId, output }) {
+  if (!output) return null
+  if (selectedId === 'survey') return <SurveyResult survey={output.survey} />
   const sections = selectedId === 'plan-skeleton' ? output.skeleton?.sections || [] : output.sections || []
   return (
     <div className="sb-prompt-trial__plan">
@@ -157,27 +156,32 @@ export default function AdminPromptTrial({ wire, seed, onApplied, api }) {
     setStatus('시험 준비 중…')
     try {
       if (selected.id === 'survey') {
-        const output = await dryRunStage(
-          { stageId: 'survey', intent: intent.trim(), promptOverride: proposal.proposedText },
-          { onStatus: setStatus },
-        )
-        setResult({ output })
+        setStatus('현재 결과와 시험안 결과를 함께 만들고 있어요…')
+        const [baseline, trial] = await Promise.all([
+          dryRunStage({ stageId: 'survey', intent: intent.trim() }),
+          dryRunStage(
+            { stageId: 'survey', intent: intent.trim(), promptOverride: proposal.proposedText },
+            { onStatus: setStatus },
+          ),
+        ])
+        setResult({ baseline, trial })
       } else {
         setStatus('같은 고객 문장으로 설문과 임시 답변을 준비하고 있어요…')
         const surveyOutput = await dryRunStage({ stageId: 'survey', intent: intent.trim() })
         const answers = autoAnswers(surveyOutput.survey)
         if (!answers.length) throw new Error('계획 시험에 사용할 설문 답변을 만들지 못했어요.')
-        const output = await dryRunStage(
-          {
-            stageId: selected.id,
-            intent: intent.trim(),
-            survey: surveyOutput.survey,
-            answers,
-            promptOverride: proposal.proposedText,
-          },
-          { onStatus: setStatus },
-        )
-        setResult({ survey: surveyOutput.survey, answers, output })
+        const input = {
+          stageId: selected.id,
+          intent: intent.trim(),
+          survey: surveyOutput.survey,
+          answers,
+        }
+        setStatus('같은 조건으로 현재 결과와 시험안 결과를 비교하고 있어요…')
+        const [baseline, trial] = await Promise.all([
+          dryRunStage(input),
+          dryRunStage({ ...input, promptOverride: proposal.proposedText }, { onStatus: setStatus }),
+        ])
+        setResult({ survey: surveyOutput.survey, answers, baseline, trial })
       }
       setStatus(null)
     } catch (e) {
@@ -253,23 +257,35 @@ export default function AdminPromptTrial({ wire, seed, onApplied, api }) {
           </section>
 
           <section className="sb-admin-card sb-prompt-trial__step">
-            <header><i>3</i><div><h2>고객 문장으로 시험해볼게요</h2><p>이 실행은 저장되지 않고 고객 기록에도 남지 않습니다.</p></div></header>
+            <header><i>3</i><div><h2>같은 조건으로 비교할게요</h2><p>현재 결과와 시험안 결과를 한 번에 만들며 고객 기록에는 남지 않습니다.</p></div></header>
             <label>시험할 고객 요청<input value={intent} maxLength={500} onChange={(event) => setIntent(event.target.value)} /></label>
             <button type="button" className="sb-btn sb-btn--ai" disabled={!proposal || !intent.trim() || running} onClick={runTrial}>
               {running ? status || '시험 중…' : '⇄ 저장 없이 시험 실행'}
             </button>
+            <small className="sb-prompt-trial__auto">비교를 위해 같은 AI 단계를 두 번 실행합니다. 생성 결과는 실행할 때마다 조금 달라질 수 있어요.</small>
             {selectedId !== 'survey' && <small className="sb-prompt-trial__auto">계획 시험은 같은 문장으로 설문을 준비하고 첫 번째 선택지를 임시 답변으로 사용해요.</small>}
           </section>
           {error && <p className="sb-admin-gate__error">{error}</p>}
         </div>
 
         <section className={`sb-admin-card sb-prompt-trial__result${result ? ' has-result' : ''}`}>
-          <header><div><span>시험 결과</span><h2>{result ? `${selectedMeta?.label} 결과를 확인하세요` : '아직 실제 설정은 바뀌지 않았어요'}</h2></div>{result && <em>저장 안 됨</em>}</header>
-          {!result && <div className="sb-prompt-trial__empty"><i>✓</i><p>왼쪽에서 시험안을 만든 뒤 실행하면<br />결과가 여기에 나타납니다.</p></div>}
+          <header><div><span>비교 결과</span><h2>{result ? `${selectedMeta?.label} 결과를 나란히 확인하세요` : '아직 실제 설정은 바뀌지 않았어요'}</h2></div>{result && <em>두 결과 모두 저장 안 됨</em>}</header>
+          {!result && <div className="sb-prompt-trial__empty"><i>✓</i><p>시험안을 실행하면 현재 운영 결과와<br />바꾼 결과가 나란히 나타납니다.</p></div>}
           {result?.survey && (
             <details className="sb-prompt-trial__input"><summary>시험에 사용한 설문과 임시 답변</summary><SurveyResult survey={result.survey} answers={result.answers} /></details>
           )}
-          <TrialResult selectedId={selectedId} result={result} />
+          {result && (
+            <div className="sb-prompt-trial__compare">
+              <section>
+                <header><span>현재 운영</span><b>지금 고객이 받는 결과</b></header>
+                <TrialOutput selectedId={selectedId} output={result.baseline} />
+              </section>
+              <section className="is-trial">
+                <header><span>시험안</span><b>바꾸면 받게 될 결과</b></header>
+                <TrialOutput selectedId={selectedId} output={result.trial} />
+              </section>
+            </div>
+          )}
           {result && (
             <footer>
               <p>{applied ? <><b>적용 완료</b> 새로 만드는 전체 결과부터 사용됩니다.</> : <>결과가 마음에 들 때만 적용하세요.</>}</p>
