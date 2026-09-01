@@ -3325,6 +3325,7 @@
 .sb-prompt-trial__choices button { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; gap: 3px; border: 1px solid var(--sb-n-200); border-radius: var(--sb-r-lg); padding: 11px; color: var(--sb-ink); background: var(--sb-n-0); font: inherit; text-align: left; cursor: pointer; }
 .sb-prompt-trial__choices button:hover { border-color: var(--sb-info); background: var(--sb-info-soft); }
 .sb-prompt-trial__choices button.is-on { border-color: var(--sb-info); background: var(--sb-info-soft); box-shadow: inset 0 0 0 1px var(--sb-info); }
+.sb-prompt-trial__choices button:disabled { opacity: .6; cursor: not-allowed; }
 .sb-prompt-trial__choices b { font-size: var(--sb-t-caption); font-weight: 500; }
 .sb-prompt-trial__choices small { min-height: 32px; color: var(--sb-muted); font-size: var(--sb-t-micro); line-height: 1.45; }
 .sb-prompt-trial__choices em { color: var(--sb-info); font-size: var(--sb-t-micro); font-style: normal; }

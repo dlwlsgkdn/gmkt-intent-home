@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { assistAdminPrompt, dryRunStage, putAdminPrompt } from '../lib/adminApi.js'
 
 const TESTABLE_PROMPTS = [
@@ -172,6 +172,7 @@ export default function AdminPromptTrial({ wire, seed, onApplied, api }) {
   const [applying, setApplying] = useState(false)
   const [error, setError] = useState(null)
   const [applied, setApplied] = useState(false)
+  const promptWorkRef = useRef({})
 
   const selected = useMemo(() => prompts.find((prompt) => prompt.id === selectedId) || null, [prompts, selectedId])
   const selectedMeta = TESTABLE_PROMPTS.find((item) => item.id === selectedId)
@@ -192,12 +193,17 @@ export default function AdminPromptTrial({ wire, seed, onApplied, api }) {
   }, [seed])
 
   const choosePrompt = (id) => {
+    if (id === selectedId || making || running || applying) return
+    promptWorkRef.current[selectedId] = { instruction, proposal, intent, result, applied, error }
+    const saved = promptWorkRef.current[id]
     setSelectedId(id)
-    setInstruction('')
-    setProposal(null)
-    setResult(null)
-    setApplied(false)
-    setError(null)
+    setInstruction(saved?.instruction ?? '')
+    setProposal(saved?.proposal ?? null)
+    setIntent(saved?.intent ?? sampleIntent)
+    setResult(saved?.result ?? null)
+    setApplied(saved?.applied ?? false)
+    setError(saved?.error ?? null)
+    setStatus(null)
   }
 
   const makeProposal = async () => {
@@ -295,7 +301,7 @@ export default function AdminPromptTrial({ wire, seed, onApplied, api }) {
               {TESTABLE_PROMPTS.filter((item) => prompts.some((prompt) => prompt.id === item.id)).map((item) => {
                 const prompt = prompts.find((entry) => entry.id === item.id)
                 return (
-                  <button key={item.id} type="button" className={selectedId === item.id ? 'is-on' : ''} onClick={() => choosePrompt(item.id)}>
+                  <button key={item.id} type="button" className={selectedId === item.id ? 'is-on' : ''} disabled={making || running || applying} onClick={() => choosePrompt(item.id)}>
                     <b>{item.label}</b><small>{item.note}</small><em>{prompt?.configured ? '현재 수정본 사용 중' : '현재 기본값 사용 중'}</em>
                   </button>
                 )
@@ -327,7 +333,8 @@ export default function AdminPromptTrial({ wire, seed, onApplied, api }) {
 
           <section className="sb-admin-card sb-prompt-trial__step">
             <header><i>3</i><div><h2>같은 조건으로 비교할게요</h2><p>현재 결과와 시험안 결과를 한 번에 만들며 고객 기록에는 남지 않습니다.</p></div></header>
-            <label>시험할 고객 요청<input value={intent} maxLength={500} onChange={(event) => setIntent(event.target.value)} /></label>
+            <label>최초 검색어 입력<input value={intent} maxLength={500} placeholder="예: 소개팅 메이크업 해줘" onChange={(event) => setIntent(event.target.value)} /></label>
+            <small className="sb-prompt-trial__auto">실제 고객이 서비스에 처음 입력할 문장을 적어주세요.</small>
             <button type="button" className="sb-btn sb-btn--ai" disabled={!proposal || !intent.trim() || running} onClick={runTrial}>
               {running ? status || '시험 중…' : '⇄ 저장 없이 시험 실행'}
             </button>
