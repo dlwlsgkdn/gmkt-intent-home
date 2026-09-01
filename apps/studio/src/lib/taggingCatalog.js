@@ -498,3 +498,35 @@ export async function fetchTaggingBootstrap() {
     return null
   }
 }
+
+/* 편집 저장. 서버가 화이트리스트를 들고 있으므로 화면은 필요한 것만 실어 보낸다. */
+export async function saveTaggingUnit(unit) {
+  const body = {
+    fields: Object.fromEntries(FIELD_DEFS.map((d) => {
+      const f = unit.fields[d.key]
+      return [d.key, { selected: f.selected, rep: f.rep, status: f.status, origin: f.origin }]
+    })),
+    tagRequest: unit.tagRequest || {},
+    note: unit.note || '',
+  }
+  return postTagging(`/units/${encodeURIComponent(unit.id)}`, 'PATCH', body)
+}
+
+export async function saveTaggingDecision(id, decision) {
+  return postTagging(`/units/${encodeURIComponent(id)}/review`, 'POST', { decision })
+}
+
+async function postTagging(path, method, body) {
+  try {
+    const res = await fetch(`${TAGGING_API}${path}`, {
+      method,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) throw new Error(`${method} ${path} ${res.status}`)
+    return true
+  } catch (err) {
+    console.warn('[tagging] 저장 실패:', err.message)
+    return false
+  }
+}

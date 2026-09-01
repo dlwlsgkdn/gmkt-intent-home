@@ -5,12 +5,13 @@ import {
   TAG_LIMIT,
   UNIT_STATUS,
   fetchTaggingBootstrap,
-  isRemote,
   loadTaggingReview,
   optionsFor,
   productEmoji,
   resetTaggingReview,
+  saveTaggingDecision,
   saveTaggingReview,
+  saveTaggingUnit,
   taggingExportPayload,
   totalTags,
   unitStatusKey,
@@ -127,6 +128,32 @@ export default function TaggingStudio({ api, embedded = false }) {
     if (source === 'local') saveTaggingReview(units)
   }, [units, source])
 
+  /* 원격 모드의 저장은 바뀐 단위 한 건만 보낸다. 네트워크 너머라 침묵이 곧 유실이므로
+     실패는 토스트로 알린다(로컬 저장 시절엔 조용해도 무방했다).
+     승인/반려는 먼저 이 큐를 비운 뒤 결정을 보내야 한다 — 그래야 뒤늦게 도착한 편집 PATCH가
+     방금 보낸 승인/반려를 review_status='unreviewed'로 되돌리지 않는다. */
+  const dirtyRef = useRef(new Map())
+  const flushTimer = useRef(null)
+  const flushPending = async () => {
+    window.clearTimeout(flushTimer.current)
+    const pending = [...dirtyRef.current.values()]
+    dirtyRef.current.clear()
+    for (const item of pending) {
+      const ok = await saveTaggingUnit(item)
+      if (!ok) {
+        api.showToast(`「${item.name}」 저장에 실패했어요. 연결을 확인해주세요.`)
+        return false
+      }
+    }
+    return true
+  }
+  const queueSave = (nextUnit) => {
+    if (source !== 'remote' || !nextUnit?.id) return
+    dirtyRef.current.set(nextUnit.id, nextUnit)
+    window.clearTimeout(flushTimer.current)
+    flushTimer.current = window.setTimeout(() => { flushPending() }, 600)
+  }
+
   useEffect(() => {
     if (selectedId || !units.length) return
     setSelectedId(units.find(needsReviewUnit)?.id ?? units[0].id)
@@ -190,7 +217,12 @@ export default function TaggingStudio({ api, embedded = false }) {
   }
 
   const patchUnit = (updater) => {
-    setUnits((prev) => prev.map((u) => (u.id === unit.id ? updater(u) : u)))
+    setUnits((prev) => prev.map((u) => {
+      if (u.id !== unit.id) return u
+      const next = updater(u)
+      queueSave(next)
+      return next
+    }))
   }
 
   const setFieldUnlocked = (key, unlocked) => {
@@ -207,16 +239,17 @@ export default function TaggingStudio({ api, embedded = false }) {
   }
 
   const restoreAiField = (key) => {
-    const seed = TAGGING_SEED.find((candidate) => candidate.id === unit.id)
-    if (!seed) return
+    /* 원격 모드에는 TAGGING_SEED가 없다 — 서버가 준 AI 원본 스냅샷(unit.aiFields)을 쓴다. */
+    const origin = source === 'remote' ? unit.aiFields : TAGGING_SEED.find((candidate) => candidate.id === unit.id)?.fields
+    if (!origin) return
     /* 대분류를 되돌릴 때 종속 사전도 함께 복원해 서로 허용되지 않는 조합이 남지 않게 한다. */
     const keys = key === 'category' ? ['category', 'subtype', 'type'] : [key]
     patchUnit((current) => {
       const fields = { ...current.fields }
       const tagRequest = { ...current.tagRequest }
       for (const restoreKey of keys) {
-        fields[restoreKey] = cloneSeedField(seed.fields[restoreKey])
-        tagRequest[restoreKey] = !!seed.tagRequest?.[restoreKey]
+        fields[restoreKey] = { ...origin[restoreKey], selected: [...origin[restoreKey].selected] }
+        tagRequest[restoreKey] = false
       }
       return { ...current, fields, tagRequest, decision: null }
     })
@@ -228,11 +261,24 @@ export default function TaggingStudio({ api, embedded = false }) {
     api.showToast(key === 'category' ? '대분류와 연결 항목을 AI 원본으로 되돌렸어요.' : 'AI가 분류한 원본 값으로 되돌렸어요.')
   }
 
+  /* 원격 모드에는 시드가 없다 — 서버가 준 AI 원본 스냅샷으로 되돌리고 그 값을 다시 저장한다. */
   const restoreCurrentUnit = () => {
     if (!window.confirm(`「${unit.name}」의 담당자 수정·검토 메모를 지우고 AI 원본으로 되돌릴까요?`)) return
-    const fresh = freshSeedUnit(unit.id)
-    if (!fresh) return
-    setUnits((prev) => prev.map((candidate) => candidate.id === unit.id ? fresh : candidate))
+    if (source === 'remote') {
+      const restored = {
+        ...unit,
+        fields: Object.fromEntries(FIELD_DEFS.map((d) => [d.key, { ...unit.aiFields[d.key], selected: [...unit.aiFields[d.key].selected] }])),
+        tagRequest: {},
+        note: '',
+        decision: null,
+      }
+      setUnits((prev) => prev.map((c) => (c.id === unit.id ? restored : c)))
+      queueSave(restored)
+    } else {
+      const fresh = freshSeedUnit(unit.id)
+      if (!fresh) return
+      setUnits((prev) => prev.map((candidate) => candidate.id === unit.id ? fresh : candidate))
+    }
     setUnlockedFields((prev) => Object.fromEntries(
       Object.entries(prev).filter(([key]) => !key.startsWith(`${unit.id}:`)),
     ))
@@ -305,15 +351,27 @@ export default function TaggingStudio({ api, embedded = false }) {
     patchUnit((u) => ({ ...u, tagRequest: { ...u.tagRequest, [key]: !u.tagRequest[key] } }))
   }
 
-  const approve = () => {
+  const approve = async () => {
     if (errs.length) return api.showToast('규칙 위반이 있어 승인할 수 없어요.')
     if (unreviewedFields.length) return api.showToast('미검토 항목이 남아 있어요. 확인 후 승인해주세요.')
     patchUnit((u) => ({ ...u, decision: 'approved' }))
+    if (source === 'remote') {
+      if (!(await flushPending())) return
+      if (!(await saveTaggingDecision(unit.id, 'approved'))) {
+        return api.showToast('승인을 저장하지 못했어요. 연결을 확인해주세요.')
+      }
+    }
     api.showToast('승인 처리되었습니다.')
   }
 
-  const reject = () => {
+  const reject = async () => {
     patchUnit((u) => ({ ...u, decision: 'rejected' }))
+    if (source === 'remote') {
+      if (!(await flushPending())) return
+      if (!(await saveTaggingDecision(unit.id, 'rejected'))) {
+        return api.showToast('반려를 저장하지 못했어요. 연결을 확인해주세요.')
+      }
+    }
     api.showToast('반려 처리되었습니다.')
   }
 
@@ -397,9 +455,11 @@ export default function TaggingStudio({ api, embedded = false }) {
           <button type="button" className="sb-btn sb-btn--ghost sb-btn--small" onClick={exportJson}>
             JSON 내보내기
           </button>
-          <button type="button" className="sb-btn sb-btn--ghost sb-btn--small" onClick={resetAll}>
-            원본으로 초기화
-          </button>
+          {source !== 'remote' && (
+            <button type="button" className="sb-btn sb-btn--ghost sb-btn--small" onClick={resetAll}>
+              원본으로 초기화
+            </button>
+          )}
           {!embedded && <button type="button" className="sb-btn sb-btn--ghost sb-btn--small" onClick={api.closeTaggingStudio}>
             홈으로
           </button>}
