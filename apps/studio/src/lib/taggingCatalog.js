@@ -494,6 +494,7 @@ export async function fetchTaggingBootstrap() {
   } catch (err) {
     console.warn('[tagging] 원격 로드 실패 — 목업으로 표시합니다:', err.message)
     remote = false
+    applyTaxonomy(null)
     return null
   }
 }
