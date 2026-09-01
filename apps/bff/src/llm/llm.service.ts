@@ -170,24 +170,34 @@ export class LlmService implements LlmPort {
       'instruction이 기존 규칙과 충돌하거나 영향 범위가 넓으면 warnings에 짧게 알린다.',
       'summary는 운영 변경 기록에 쓸 수 있도록 한국어 한 문장으로 작성한다.',
     ].join('\n')
-    const result = await this.generate('지시서 수정안 생성', AssistAdminPromptResult, {
-      system: { text: system, custom: false },
-      effort: 'low',
-      user: JSON.stringify({ ...input, promptContext }),
-    })
-
     const placeholders = (text: string) => [...text.matchAll(/\{\{[^{}\r\n]+\}\}/g)].map((match) => match[0]).sort()
     const before = placeholders(input.currentText)
-    const after = placeholders(result.content.proposedText)
-    if (before.length !== after.length || before.some((token, index) => token !== after[index])) {
-      this.logger.warn('지시서 수정안 자리표시자 검증 실패')
-      throw new LlmGenerationError(
-        'llm_failed',
-        'AI 수정안이 필수 데이터 자리를 보존하지 못했어요. 요청을 조금 더 구체적으로 바꿔 다시 시도해 주세요.',
-        true,
-      )
+
+    const generateProposal = async () => {
+      const result = await this.generate('지시서 수정안 생성', AssistAdminPromptResult, {
+        system: { text: system, custom: false },
+        effort: 'low',
+        user: JSON.stringify({ ...input, promptContext }),
+      })
+      const after = placeholders(result.content.proposedText)
+      if (before.length !== after.length || before.some((token, index) => token !== after[index])) {
+        this.logger.warn('지시서 수정안 자리표시자 검증 실패')
+        throw new LlmGenerationError(
+          'llm_failed',
+          'AI 수정안이 필수 데이터 자리를 보존하지 못했어요. 요청을 조금 더 구체적으로 바꿔 다시 시도해 주세요.',
+          true,
+        )
+      }
+      return result.content
     }
-    return result.content
+
+    try {
+      return await generateProposal()
+    } catch (error) {
+      if (!(error instanceof LlmGenerationError) || !error.retryable) throw error
+      this.logger.warn(`지시서 수정안 첫 시도 실패 — 자동 재시도: ${error.code}`)
+      return generateProposal()
+    }
   }
 
   async generateSurvey(
