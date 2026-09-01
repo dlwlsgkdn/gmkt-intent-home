@@ -333,10 +333,10 @@ export default function AdminPromptTrial({ wire, seed, onApplied, api }) {
 
           <section className="sb-admin-card sb-prompt-trial__step">
             <header><i>3</i><div><h2>같은 조건으로 비교할게요</h2><p>현재 결과와 시험안 결과를 한 번에 만들며 고객 기록에는 남지 않습니다.</p></div></header>
-            <label>최초 검색어 입력<input value={intent} maxLength={500} placeholder="예: 소개팅 메이크업 해줘" onChange={(event) => setIntent(event.target.value)} /></label>
-            <small className="sb-prompt-trial__auto">실제 고객이 서비스에 처음 입력할 문장을 적어주세요.</small>
+            <label>처음 입력한 문장 다시 입력<input value={intent} maxLength={500} placeholder="예: 소개팅 메이크업 해줘" onChange={(event) => setIntent(event.target.value)} /></label>
+            <small className="sb-prompt-trial__auto">실제 서비스 검색창에 입력했던 자연어 문장을 그대로 적어주세요.</small>
             <button type="button" className="sb-btn sb-btn--ai" disabled={!proposal || !intent.trim() || running} onClick={runTrial}>
-              {running ? status || '시험 중…' : '⇄ 저장 없이 시험 실행'}
+              {running ? status || '시험 중…' : '⇄ 이 문장으로 비교 실행'}
             </button>
             <small className="sb-prompt-trial__auto">비교를 위해 같은 AI 단계를 두 번 실행합니다. 생성 결과는 실행할 때마다 조금 달라질 수 있어요.</small>
             {selectedId !== 'survey' && <small className="sb-prompt-trial__auto">계획 시험은 같은 문장으로 설문을 준비하고 첫 번째 선택지를 임시 답변으로 사용해요.</small>}
