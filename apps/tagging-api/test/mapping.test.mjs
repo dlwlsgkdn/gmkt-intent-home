@@ -187,4 +187,5 @@ test('decisionToReview — 화면 결정을 Flask와 공유하는 review_status�
   /* 반려·해제는 검토 시각을 남기지 않는다 (store.py set_review_status와 같은 규칙) */
   assert.equal(decisionToReview('rejected').reviewed_at, null)
   assert.equal(decisionToReview(null).review_status, 'unreviewed')
+  assert.equal(decisionToReview(null).reviewed_at, null)
 })
