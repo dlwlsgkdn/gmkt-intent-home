@@ -39,6 +39,8 @@ import {
   AdminModelWire,
   AdminPipelineWire,
   AdminPromptId,
+  AdminPromptTrialDecisionBody,
+  AdminPromptTrialRecord,
   AdminPromptsWire,
   AssistAdminPromptBody,
   AssistAdminPromptResult,
@@ -54,6 +56,7 @@ import {
   PutAdminPromptBody,
   RunEvalCaseBody,
   ScoreEvalRunBody,
+  SaveAdminPromptTrialBody,
   Thread,
   ThreadListPage,
   ThreadStageFeedback,
@@ -109,6 +112,7 @@ const PROMPT_HISTORY_LIMIT = 12
 const promptHistorySettingKey = (id: string) => `llm-prompt-history-${id}`
 const ADMIN_CHANGE_LOG_KEY = 'admin-change-log'
 const ADMIN_CHANGE_LOG_LIMIT = 100
+const PROMPT_TRIAL_USER = 'ops-playground'
 
 const summarizePromptChange = (before: string, after: string, next: string | null) => {
   if (next === null) return '기본 지시서로 복구'
@@ -232,6 +236,68 @@ export class AdminController {
   @ApiOkResponse({ schema: toOpenApi(Thread) })
   archiveThread(@Param('id', ParseThreadIdPipe) id: string) {
     return this.core.updateThread(id, { status: 'archived' })
+  }
+
+  @Post('prompt-trials')
+  @ApiOperation({ summary: '지시서 A/B 시험·전체 평가를 나중에 결정할 수 있는 admin 쓰레드로 저장' })
+  @ApiBody({ schema: toOpenApi(SaveAdminPromptTrialBody) })
+  @ApiOkResponse({ schema: toOpenApi(ThreadWithSteps) })
+  async savePromptTrial(
+    @Body(new ZodValidationPipe(SaveAdminPromptTrialBody)) body: SaveAdminPromptTrialBody,
+  ): Promise<ThreadWithSteps> {
+    const at = new Date().toISOString()
+    const thread = await this.core.createThread({
+      userId: PROMPT_TRIAL_USER,
+      title: `[지시서 시험] ${body.promptLabel} · ${body.intent}`.slice(0, 200),
+      source: { kind: 'search', query: body.intent },
+      status: 'done',
+    })
+    await this.core.upsertStep(thread.id, SEQ.actionBase, {
+      stage: 'action',
+      payload: { type: 'prompt-trial', data: { ...body, savedAt: at }, at },
+    })
+    return this.core.getThread(thread.id)
+  }
+
+  @Post('threads/:id/prompt-trial/decision')
+  @ApiOperation({ summary: '저장한 지시서 시험을 적용하거나 적용하지 않기로 기록' })
+  @ApiParam(THREAD_ID_PARAM)
+  @ApiBody({ schema: toOpenApi(AdminPromptTrialDecisionBody) })
+  @ApiOkResponse({ schema: toOpenApi(ThreadWithSteps) })
+  async decidePromptTrial(
+    @Param('id', ParseThreadIdPipe) id: string,
+    @Body(new ZodValidationPipe(AdminPromptTrialDecisionBody)) body: AdminPromptTrialDecisionBody,
+  ): Promise<ThreadWithSteps> {
+    const thread = await this.core.getThread(id)
+    const trialStep = [...thread.steps].reverse().find((step) => step.stage === 'action' && step.payload?.type === 'prompt-trial')
+    const parsed = AdminPromptTrialRecord.safeParse(trialStep?.payload?.data)
+    if (!parsed.success) throw new BadRequestException('이 쓰레드에는 적용할 지시서 시험안이 없습니다')
+    const trial = parsed.data
+
+    if (body.decision === 'applied') {
+      const def = PROMPT_DEFS.find((candidate) => candidate.id === trial.promptId)!
+      const setting = await this.core.getSetting(promptSettingKey(trial.promptId))
+      const currentText = typeof setting?.value === 'string' ? setting.value : def.template
+      if (currentText !== trial.baseText) {
+        throw new BadRequestException('시험 저장 후 현재 지시서가 바뀌었어요. 덮어쓰지 않도록 새로 시험해 주세요.')
+      }
+      await this.putPrompt(trial.promptId, {
+        text: trial.proposedText,
+        note: `저장한 시험 적용 · ${trial.summary}`,
+      })
+    }
+
+    const at = new Date().toISOString()
+    const nextSeq = Math.max(SEQ.actionBase, ...thread.steps.map((step) => step.seq)) + 1
+    await this.core.upsertStep(id, nextSeq, {
+      stage: 'action',
+      payload: {
+        type: 'prompt-trial-decision',
+        data: { decision: body.decision, promptId: trial.promptId, summary: trial.summary },
+        at,
+      },
+    })
+    return this.core.getThread(id)
   }
 
   @Get('feedback')

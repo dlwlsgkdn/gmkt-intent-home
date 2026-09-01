@@ -152,6 +152,35 @@ export const AssistAdminPromptResult = z.object({
 })
 export type AssistAdminPromptResult = z.infer<typeof AssistAdminPromptResult>
 
+/** 저장 없이 비교한 지시서 시험을 나중에 검토·적용할 수 있도록 쓰레드에 남기는 스냅샷. */
+export const AdminPromptTrialRecord = z.object({
+  promptId: AdminPromptId,
+  promptLabel: z.string().trim().min(1).max(100),
+  instruction: z.string().trim().min(2).max(2000),
+  summary: z.string().trim().min(1).max(200),
+  warnings: z.array(z.string().trim().min(1).max(300)).max(5),
+  /** 시험 당시 운영 중이던 원문 — 나중 적용 시 그 사이 다른 변경이 있었는지 비교하는 기준선 */
+  baseText: z.string().min(1).max(20000),
+  proposedText: z.string().min(1).max(20000),
+  intent: z.string().trim().min(1).max(500),
+  baseline: z.unknown(),
+  trial: z.unknown(),
+  evaluation: z.object({
+    score: FeedbackScore.nullable(),
+    comment: z.string().max(2000),
+  }),
+  savedAt: z.string(),
+})
+export type AdminPromptTrialRecord = z.infer<typeof AdminPromptTrialRecord>
+
+export const SaveAdminPromptTrialBody = AdminPromptTrialRecord.omit({ savedAt: true })
+export type SaveAdminPromptTrialBody = z.infer<typeof SaveAdminPromptTrialBody>
+
+export const AdminPromptTrialDecisionBody = z.object({
+  decision: z.enum(['applied', 'rejected']),
+})
+export type AdminPromptTrialDecisionBody = z.infer<typeof AdminPromptTrialDecisionBody>
+
 /* ── core internal — 피드백 스텝 나열 (평가 모아보기의 원천) ──────────────
  * core는 payload를 해석하지 않는다는 원칙 그대로: action 스텝 중 payload.type='feedback'
  * 필터만 걸어 쓰레드 메타와 함께 원본을 돌려준다. 해석(zod 파싱·최신 판정·집계)은 BFF 몫. */

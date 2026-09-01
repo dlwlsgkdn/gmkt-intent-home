@@ -1,5 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { assistAdminPrompt, dryRunStage, putAdminPrompt } from '../lib/adminApi.js'
+import {
+  assistAdminPrompt,
+  decideAdminPromptTrial,
+  dryRunStage,
+  fetchAdminPrompts,
+  putAdminPrompt,
+  saveAdminPromptTrial,
+} from '../lib/adminApi.js'
 
 const TESTABLE_PROMPTS = [
   { id: 'survey', label: '설문 질문', note: '질문 수·선택지·말투를 시험해요.' },
@@ -265,6 +272,10 @@ export default function AdminPromptTrial({ wire, seed, onApplied, api }) {
   const [applying, setApplying] = useState(false)
   const [error, setError] = useState(null)
   const [applied, setApplied] = useState(false)
+  const [overallScore, setOverallScore] = useState(null)
+  const [overallComment, setOverallComment] = useState('')
+  const [savedThread, setSavedThread] = useState(null)
+  const [savingThread, setSavingThread] = useState(false)
   const promptWorkRef = useRef({})
 
   const selected = useMemo(() => prompts.find((prompt) => prompt.id === selectedId) || null, [prompts, selectedId])
@@ -282,12 +293,25 @@ export default function AdminPromptTrial({ wire, seed, onApplied, api }) {
     setInstruction(seed.summary || '')
     setResult(null)
     setApplied(false)
+    setOverallScore(null)
+    setOverallComment('')
+    setSavedThread(null)
     setError(null)
   }, [seed])
 
   const choosePrompt = (id) => {
     if (id === selectedId || making || running || applying) return
-    promptWorkRef.current[selectedId] = { instruction, proposal, intent, result, applied, error }
+    promptWorkRef.current[selectedId] = {
+      instruction,
+      proposal,
+      intent,
+      result,
+      applied,
+      error,
+      overallScore,
+      overallComment,
+      savedThread,
+    }
     const saved = promptWorkRef.current[id]
     setSelectedId(id)
     setInstruction(saved?.instruction ?? '')
@@ -295,6 +319,9 @@ export default function AdminPromptTrial({ wire, seed, onApplied, api }) {
     setIntent(saved?.intent ?? sampleIntent)
     setResult(saved?.result ?? null)
     setApplied(saved?.applied ?? false)
+    setOverallScore(saved?.overallScore ?? null)
+    setOverallComment(saved?.overallComment ?? '')
+    setSavedThread(saved?.savedThread ?? null)
     setError(saved?.error ?? null)
     setStatus(null)
   }
@@ -305,6 +332,9 @@ export default function AdminPromptTrial({ wire, seed, onApplied, api }) {
     setError(null)
     setResult(null)
     setApplied(false)
+    setOverallScore(null)
+    setOverallComment('')
+    setSavedThread(null)
     try {
       const next = await assistAdminPrompt(selected.id, instruction.trim(), proposal?.proposedText || currentText)
       setProposal(next)
@@ -321,6 +351,9 @@ export default function AdminPromptTrial({ wire, seed, onApplied, api }) {
     setError(null)
     setResult(null)
     setApplied(false)
+    setOverallScore(null)
+    setOverallComment('')
+    setSavedThread(null)
     setStatus('시험 준비 중…')
     try {
       if (selected.id === 'survey') {
@@ -365,7 +398,14 @@ export default function AdminPromptTrial({ wire, seed, onApplied, api }) {
     setApplying(true)
     setError(null)
     try {
-      const next = await putAdminPrompt(selected.id, proposal.proposedText, proposal.summary || instruction.trim())
+      let next
+      if (savedThread) {
+        const updated = await decideAdminPromptTrial(savedThread.id, 'applied')
+        setSavedThread(updated)
+        next = await fetchAdminPrompts()
+      } else {
+        next = await putAdminPrompt(selected.id, proposal.proposedText, proposal.summary || instruction.trim())
+      }
       onApplied(next)
       setApplied(true)
       api.showToast('시험한 지시서를 적용했어요. 새로 만드는 결과부터 사용됩니다.')
@@ -373,6 +413,33 @@ export default function AdminPromptTrial({ wire, seed, onApplied, api }) {
       setError(e.message || '지시서를 적용하지 못했어요.')
     } finally {
       setApplying(false)
+    }
+  }
+
+  const saveTrialThread = async () => {
+    if (!selected || !proposal || !result || overallScore == null || savingThread || savedThread) return
+    setSavingThread(true)
+    setError(null)
+    try {
+      const thread = await saveAdminPromptTrial({
+        promptId: selected.id,
+        promptLabel: selectedMeta?.label || selected.id,
+        instruction: instruction.trim(),
+        summary: proposal.summary || instruction.trim().slice(0, 200),
+        warnings: proposal.warnings || [],
+        baseText: currentText,
+        proposedText: proposal.proposedText,
+        intent: intent.trim(),
+        baseline: result.baseline,
+        trial: result.trial,
+        evaluation: { score: overallScore, comment: overallComment.trim() },
+      })
+      setSavedThread(thread)
+      api.showToast('전체 평가와 시험 결과를 쓰레드로 저장했어요.')
+    } catch (e) {
+      setError(e.message || '시험 쓰레드를 저장하지 못했어요.')
+    } finally {
+      setSavingThread(false)
     }
   }
 
@@ -455,6 +522,23 @@ export default function AdminPromptTrial({ wire, seed, onApplied, api }) {
                 <TrialOutput selectedId={selectedId} output={result.trial} compareOutput={result.baseline} diffSide="after" />
               </section>
             </div>
+          )}
+          {result && (
+            <section className="sb-prompt-trial__overall">
+              <header><div><span>전체 평가</span><h3>이 수정 버전, 전체적으로 어떤가요?</h3><p>평가와 메모를 남겨 쓰레드로 저장하면 나중에 다시 열어 적용 여부를 결정할 수 있어요.</p></div>{savedThread && <em>쓰레드 저장 완료</em>}</header>
+              <div className="sb-prompt-trial__overall-body">
+                <div className="sb-prompt-trial__stars" role="group" aria-label="수정 버전 전체 점수">
+                  {[1, 2, 3, 4, 5].map((score) => <button key={score} type="button" className={overallScore >= score ? 'is-on' : ''} disabled={Boolean(savedThread)} aria-label={`${score}점`} onClick={() => setOverallScore(score)}>★</button>)}
+                  <b>{overallScore == null ? '점수를 골라주세요' : `${overallScore}점`}</b>
+                </div>
+                <textarea value={overallComment} maxLength={2000} disabled={Boolean(savedThread)} placeholder="예: 상품 중복은 줄었지만 참고 콘텐츠가 없어서 한 번 더 시험 필요" onChange={(event) => setOverallComment(event.target.value)} />
+                {savedThread ? (
+                  <button type="button" className="sb-btn sb-btn--ghost" onClick={() => api.openAdminThread(savedThread.id)}>저장된 시험 쓰레드 열기</button>
+                ) : (
+                  <button type="button" className="sb-btn sb-btn--primary" disabled={overallScore == null || savingThread} onClick={saveTrialThread}>{savingThread ? '저장 중…' : '평가와 시험 결과를 쓰레드로 저장'}</button>
+                )}
+              </div>
+            </section>
           )}
           {result && (
             <footer>

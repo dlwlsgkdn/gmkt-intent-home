@@ -87,6 +87,16 @@ export function putAdminPrompt(id, text, note) {
   return req('PUT', `/prompts/${encodeURIComponent(id)}`, { text, ...(note?.trim() ? { note: note.trim() } : {}) })
 }
 
+/** 지시서 A/B 결과와 전체 평가를 admin 쓰레드로 저장 — 실제 지시서는 아직 적용하지 않는다. */
+export function saveAdminPromptTrial(body) {
+  return req('POST', '/prompt-trials', body)
+}
+
+/** 저장한 시험 쓰레드에서 최종 결정 — applied만 운영 지시서를 갱신하고 rejected는 기록만 남긴다. */
+export function decideAdminPromptTrial(threadId, decision) {
+  return req('POST', `/threads/${encodeURIComponent(threadId)}/prompt-trial/decision`, { decision })
+}
+
 /** 운영 설정 변경 로그 — AI 지시서의 기존 버전도 합쳐 최신순으로 받는다 */
 export function fetchAdminChanges() {
   return req('GET', '/changes')

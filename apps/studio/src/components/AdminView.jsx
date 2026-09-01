@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   archiveAdminThread,
+  decideAdminPromptTrial,
   fetchAdminFeedback,
   fetchAdminThread,
   fetchAdminThreads,
@@ -78,6 +79,7 @@ export default function AdminView({ api, tab, studioScenarioId, threadId }) {
   const [detailLoading, setDetailLoading] = useState(false)
   const [confirmArchive, setConfirmArchive] = useState(null) // thread row
   const [archiving, setArchiving] = useState(false)
+  const [trialDeciding, setTrialDeciding] = useState(false)
 
   const handleError = useCallback((e, fallback) => {
     api.showToast(e.message || fallback)
@@ -179,6 +181,29 @@ export default function AdminView({ api, tab, studioScenarioId, threadId }) {
   }
 
   const markdown = useMemo(() => (detail ? threadMarkdown(detail) : ''), [detail])
+  const detailPromptTrial = useMemo(() => {
+    const step = detail && [...detail.steps].reverse().find((row) => row.stage === 'action' && row.payload?.type === 'prompt-trial')
+    return step?.payload?.data || null
+  }, [detail])
+  const detailPromptDecision = useMemo(() => {
+    const step = detail && [...detail.steps].reverse().find((row) => row.stage === 'action' && row.payload?.type === 'prompt-trial-decision')
+    return step?.payload?.data?.decision || null
+  }, [detail])
+
+  const decideTrial = async (decision) => {
+    if (!detail || !detailPromptTrial || trialDeciding) return
+    setTrialDeciding(true)
+    try {
+      const updated = await decideAdminPromptTrial(detail.id, decision)
+      setDetail(updated)
+      await loadList()
+      api.showToast(decision === 'applied' ? '저장한 시험안을 전체 신규 생성에 적용했어요.' : '이 시험안은 적용하지 않기로 기록했어요.')
+    } catch (e) {
+      handleError(e, '시험안 결정을 저장하지 못했어요.')
+    } finally {
+      setTrialDeciding(false)
+    }
+  }
 
   /* 소유 필터 — admin(플레이그라운드) 쓰레드와 실사용자 쓰레드를 가른다.
      상태 흐름 바의 개수도 이 축을 따른다 (플레이그라운드 실행이 여정 지표를 섞지 않게) */
@@ -503,6 +528,24 @@ export default function AdminView({ api, tab, studioScenarioId, threadId }) {
                 <button type="button" className="sb-icon-btn" aria-label="닫기" onClick={() => api.closeAdminThread()}>×</button>
               </div>
             </div>
+            {detail && detailView === 'doc' && detailPromptTrial && (
+              <section className="sb-admin-trial-thread">
+                <div>
+                  <span>저장된 지시서 시험</span>
+                  <h3>{detailPromptTrial.promptLabel} · 전체 평가 {detailPromptTrial.evaluation?.score ?? '—'}점</h3>
+                  <p>{detailPromptTrial.summary}</p>
+                  {detailPromptTrial.evaluation?.comment && <blockquote>“{detailPromptTrial.evaluation.comment}”</blockquote>}
+                </div>
+                {detailPromptDecision ? (
+                  <em className={`is-${detailPromptDecision}`}>{detailPromptDecision === 'applied' ? '적용 완료' : '적용 안 함'}</em>
+                ) : (
+                  <div className="sb-admin-trial-thread__actions">
+                    <button type="button" className="sb-btn sb-btn--ghost sb-btn--small" disabled={trialDeciding} onClick={() => decideTrial('rejected')}>적용하지 않기</button>
+                    <button type="button" className="sb-btn sb-btn--primary sb-btn--small" disabled={trialDeciding} onClick={() => decideTrial('applied')}>{trialDeciding ? '처리 중…' : '이 시험안 적용'}</button>
+                  </div>
+                )}
+              </section>
+            )}
             {detail && detailView === 'doc' && <div className="sb-admin-doc">{renderMarkdown(markdown)}</div>}
             {detail && detailView !== 'doc' && <AdminThreadPreview thread={detail} stage={detailView} />}
           </section>

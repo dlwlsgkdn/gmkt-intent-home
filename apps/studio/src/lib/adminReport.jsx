@@ -79,6 +79,19 @@ function stepSummary(step, surveyPage) {
   } else if (step.stage === 'action') {
     if (p.type === 'feedback' && p.data && typeof p.data === 'object') {
       lines.push(...feedbackSummary(p.data))
+    } else if (p.type === 'prompt-trial' && p.data && typeof p.data === 'object') {
+      const trial = p.data
+      const score = trial.evaluation?.score
+      lines.push('- 행동: **prompt-trial** · 저장된 지시서 A/B 시험')
+      lines.push(`- 지시서: **${trial.promptLabel || trial.promptId || '?'}**`)
+      lines.push(`- 수정 명령: ${trial.instruction || '—'}`)
+      lines.push(`- 최초 검색 문장: ${trial.intent || '—'}`)
+      lines.push(`- 수정 요약: ${trial.summary || '—'}`)
+      lines.push(`- 전체 평가: ${score == null ? '미평가' : `${'★'.repeat(score)} ${score}점`}${trial.evaluation?.comment ? ` — "${trial.evaluation.comment}"` : ''}`)
+      lines.push('- 적용 상태: **결정 대기**')
+    } else if (p.type === 'prompt-trial-decision' && p.data && typeof p.data === 'object') {
+      lines.push(`- 행동: **prompt-trial-decision** · ${p.data.decision === 'applied' ? '시험안 적용 완료' : '시험안 적용 안 함'}`)
+      if (p.data.summary) lines.push(`- 시험 요약: ${p.data.summary}`)
     } else {
       lines.push(`- 행동: **${p.type || '?'}**${p.data ? ` · ${JSON.stringify(p.data)}` : ''}`)
     }
