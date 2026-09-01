@@ -11,21 +11,27 @@ export default function AdminDashboard({ api, threads, feedback, loading, mode, 
   const [tagSummary, setTagSummary] = useState({ counts: {}, total: 0 })
   useEffect(() => {
     let alive = true
+    /* 사내망 밖(응답 실패)·fetch 자체 실패(reject) 둘 다 여기로 모인다 — 예시 데이터로 타일을 채운다 */
+    const fallbackSummary = () => {
+      const local = loadTaggingReview()
+      const counts = local.reduce((out, unit) => {
+        const key = unitStatusKey(unit)
+        out[key] = (out[key] || 0) + 1
+        return out
+      }, {})
+      return { counts, total: local.length }
+    }
     fetch('/api/tagging/summary')
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!alive) return
-        if (data) return setTagSummary(data)
-        /* 사내망 밖: 예시 데이터로 타일을 채운다 */
-        const local = loadTaggingReview()
-        const counts = local.reduce((out, unit) => {
-          const key = unitStatusKey(unit)
-          out[key] = (out[key] || 0) + 1
-          return out
-        }, {})
-        setTagSummary({ counts, total: local.length })
+        /* data.counts가 없으면(빈 응답·인증 페이지 등) 모양이 안 맞는 것 — 폴백으로 보낸다 */
+        setTagSummary(data && data.counts ? data : fallbackSummary())
       })
-      .catch(() => {})
+      .catch(() => {
+        if (!alive) return
+        setTagSummary(fallbackSummary())
+      })
     return () => { alive = false }
   }, [])
   const tagCounts = tagSummary.counts

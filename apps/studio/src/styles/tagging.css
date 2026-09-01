@@ -765,7 +765,7 @@
   font-size: var(--sb-t-body);
 }
 
-/* 719건에서 한 건을 찾는 입구 — 상태 필터 알약만으로는 못 찾는다 */
+/* 수백 건에서 한 건을 찾는 입구 — 상태 필터 알약만으로는 못 찾는다 */
 .sb-tagging__search {
   min-width: 200px;
   padding: 6px 10px;

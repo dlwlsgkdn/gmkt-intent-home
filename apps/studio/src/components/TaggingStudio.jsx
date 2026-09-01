@@ -36,7 +36,7 @@ const EMPTY_UNIT = {
   aiFields: Object.fromEntries(FIELD_DEFS.map((d) => [d.key, { selected: [], rep: null, status: 'unreviewed', origin: 'ai' }])),
 }
 
-const formatPrice = (price) => `${Number(price).toLocaleString('ko-KR')}원`
+const formatPrice = (price) => (typeof price === 'number' ? `${price.toLocaleString('ko-KR')}원` : '가격 정보 없음')
 
 const confLevel = (confidence) => (confidence >= 75 ? 'ok' : confidence >= 60 ? 'warn' : 'bad')
 const needsReviewUnit = (unit) => ['unreviewed', 'fix'].includes(unitStatusKey(unit))
