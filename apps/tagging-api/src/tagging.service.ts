@@ -1,7 +1,7 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common'
+import { Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common'
 import { MongoService } from './mongo.service'
 import { TaxonomyService } from './taxonomy.service'
-import { toUnit } from './mapping'
+import { toDocPatch, toUnit } from './mapping'
 
 @Injectable()
 export class TaggingService {
@@ -33,5 +33,14 @@ export class TaggingService {
       else counts.unreviewed += 1
     }
     return { counts, total: docs.length }
+  }
+
+  async saveUnit(productId: string, patch: unknown) {
+    const collection = this.collection()
+    const doc = await collection.findOne({ product_id: productId })
+    if (!doc) throw new NotFoundException(`상품 ${productId}을(를) 찾을 수 없습니다`)
+    const set = toDocPatch(patch, doc)
+    await collection.updateOne({ product_id: productId }, { $set: set })
+    return toUnit({ ...doc, ...set })
   }
 }

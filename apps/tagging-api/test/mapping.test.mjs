@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import mapping from '../dist/mapping.js'
 
-const { toUnit } = mapping
+const { toUnit, toDocPatch } = mapping
 
 /* 실제 문서에서 추린 모양 — 필드 이름·중첩 구조를 바꾸지 말 것 */
 const DOC = {
@@ -88,4 +88,73 @@ test('toUnit — aiFields는 사람이 손대기 전 값이다', () => {
   assert.deepEqual(unit.aiFields.concern.selected, ['수분부족', '모공부각'])
   /* 스냅샷이 없으면 현재 값이 곧 AI 원본이다 */
   assert.deepEqual(toUnit(DOC).aiFields.concern.selected, ['수분부족', '모공부각'])
+})
+
+const PATCH = {
+  fields: {
+    category: { selected: ['클렌징'], rep: '클렌징', status: 'done', origin: 'human' },
+    subtype: { selected: ['클렌징폼'], rep: '클렌징폼', status: 'done', origin: 'ai' },
+    area: { selected: ['얼굴전체'], rep: '얼굴전체', status: 'done', origin: 'ai' },
+    type: { selected: ['건성', '민감성'], rep: '민감성', status: 'done', origin: 'human' },
+    concern: { selected: ['트러블'], rep: '트러블', status: 'done', origin: 'human' },
+    result: { selected: ['진정됨'], rep: '진정됨', status: 'done', origin: 'ai' },
+    condition: { selected: [], rep: null, status: 'done', origin: 'ai' },
+  },
+  tagRequest: { concern: true },
+  note: '민감성 후기 근거로 추가',
+}
+
+test('toDocPatch — 화면 필드를 문서 필드로 되돌린다', () => {
+  const set = toDocPatch(PATCH, DOC)
+  assert.equal(set.inferred_category, '클렌징')
+  assert.deepEqual(set.skin_types, ['건성', '민감성'])
+  assert.equal(set.skin_types_primary, '민감성')
+  assert.deepEqual(set.conditions, [])
+  assert.equal(set.conditions_primary, null)
+})
+
+test('toDocPatch — 화이트리스트 밖은 절대 나가지 않는다', () => {
+  const set = toDocPatch({ ...PATCH, status: 'new', name: '조작', embedding_text: 'x' }, DOC)
+  assert.equal('status' in set, false)
+  assert.equal('name' in set, false)
+  assert.equal('embedding_text' in set, false)
+})
+
+test('toDocPatch — 첫 저장에서 AI 원본을 스냅샷한다', () => {
+  const set = toDocPatch(PATCH, DOC)
+  assert.deepEqual(set.review_meta.aiOriginal.concern.selected, ['수분부족', '모공부각'])
+  /* 이미 스냅샷이 있으면 덮지 않는다 — 두 번째 저장이 사람이 고친 값을 원본으로 굳히면
+     '되돌리기'가 영원히 망가진다 */
+  const already = { ...DOC, review_meta: { aiOriginal: { concern: { selected: ['각질'], rep: '각질' } } } }
+  assert.deepEqual(toDocPatch(PATCH, already).review_meta.aiOriginal.concern.selected, ['각질'])
+})
+
+test('toDocPatch — 화면 전용 상태는 review_meta 한 곳에만 담는다', () => {
+  const set = toDocPatch(PATCH, DOC)
+  assert.equal(set.review_meta.note, '민감성 후기 근거로 추가')
+  assert.equal(set.review_meta.fieldOrigin.type, 'human')
+  assert.equal(set.review_meta.fieldStatus.category, 'done')
+  assert.deepEqual(set.review_meta.tagRequest, { concern: true })
+})
+
+test('toDocPatch — 대표(★)가 선택 목록 밖이면 비운다', () => {
+  const bad = { ...PATCH, fields: { ...PATCH.fields, type: { selected: ['건성'], rep: '지성', status: 'done', origin: 'human' } } }
+  assert.equal(toDocPatch(bad, DOC).skin_types_primary, '건성')
+})
+
+test('toDocPatch — updated_at은 store.py의 _now()와 같은 형식이다', () => {
+  assert.match(toDocPatch(PATCH, DOC).updated_at, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+00:00$/)
+})
+
+test('toDocPatch — 태그를 바꾼 패치는 review_status를 unreviewed로 리셋한다 (reviewed 문서)', () => {
+  const set = toDocPatch(PATCH, DOC)
+  assert.equal(set.review_status, 'unreviewed')
+  assert.equal(set.reviewed_at, null)
+})
+
+test('toDocPatch — 태그를 그대로 두고 메모만 바꾼 패치는 review_status를 건드리지 않는다', () => {
+  const emptyPatch = { fields: {}, note: '메모만 수정' }
+  const set = toDocPatch(emptyPatch, DOC)
+  assert.equal('review_status' in set, false)
+  assert.equal('reviewed_at' in set, false)
 })
