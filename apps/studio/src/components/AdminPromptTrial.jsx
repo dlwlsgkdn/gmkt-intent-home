@@ -93,10 +93,13 @@ const shortList = (items) => {
   return items.length > 2 ? `${shown} 외 ${items.length - 2}개` : shown
 }
 
-function DiffOverview({ selectedId, baseline, trial, diffCount, proposal }) {
+function DiffOverview({ selectedId, baseline, trial, diffCount, proposal, instruction }) {
   let metrics = []
   let changes = []
-  let benefit = proposal?.summary || '요청한 기준이 수정 버전에 반영됐는지 결과를 확인해 주세요.'
+  const command = instruction?.trim() || '입력한 수정 요청이 없습니다.'
+  const benefit = proposal?.summary
+    ? `${proposal.summary} 결과가 요청한 기준에 더 가까워질 수 있어요.`
+    : '요청한 기준에 더 가까운 결과가 나올 수 있어요.'
   const checks = [...(proposal?.warnings || [])]
 
   if (selectedId === 'survey') {
@@ -136,7 +139,7 @@ function DiffOverview({ selectedId, baseline, trial, diffCount, proposal }) {
     }
   }
 
-  if (!checks.length) checks.push('수정 버전이 검색 의도와 실제 상품 정보에 맞는지 마지막으로 확인해 주세요.')
+  checks.push('AI 결과는 실행할 때마다 조금 달라요. 한 번 더 시험해 같은 방향으로 바뀌는지 확인해 주세요.')
 
   return (
     <section className="sb-prompt-trial__overview" aria-label="기존 버전과 수정 버전 차이 요약">
@@ -150,9 +153,13 @@ function DiffOverview({ selectedId, baseline, trial, diffCount, proposal }) {
         ))}
       </div>
       <div className="sb-prompt-trial__insights">
-        <article className="is-change"><i>↔</i><div><b>무엇이 달라졌나요?</b>{changes.map((text) => <p key={text}>{text}</p>)}</div></article>
-        <article className="is-better"><i>+</i><div><b>무엇이 좋아질 수 있나요?</b><p>{benefit}</p></div></article>
-        <article className="is-check"><i>!</i><div><b>무엇을 확인해야 하나요?</b>{checks.slice(0, 2).map((text) => <p key={text}>{text}</p>)}</div></article>
+        <article className="is-command"><i>1</i><div><b>왜 바뀌었나요?</b><small>내가 입력한 명령</small><p>“{command}”</p></div></article>
+        <span className="sb-prompt-trial__insight-arrow">→</span>
+        <article className="is-change"><i>2</i><div><b>무엇이 바뀌었나요?</b>{changes.map((text) => <p key={text}>{text}</p>)}</div></article>
+        <span className="sb-prompt-trial__insight-arrow">→</span>
+        <article className="is-better"><i>3</i><div><b>무엇이 좋아지나요?</b><p>{benefit}</p></div></article>
+        <span className="sb-prompt-trial__insight-arrow">→</span>
+        <article className="is-check"><i>4</i><div><b>한계는 무엇인가요?</b>{checks.slice(0, 3).map((text) => <p key={text}>{text}</p>)}</div></article>
       </div>
     </section>
   )
@@ -436,7 +443,7 @@ export default function AdminPromptTrial({ wire, seed, onApplied, api }) {
           {result?.survey && (
             <details className="sb-prompt-trial__input"><summary>시험에 사용한 설문과 임시 답변</summary><SurveyResult survey={result.survey} answers={result.answers} /></details>
           )}
-          {result && <DiffOverview selectedId={selectedId} baseline={result.baseline} trial={result.trial} diffCount={diffCount} proposal={proposal} />}
+          {result && <DiffOverview selectedId={selectedId} baseline={result.baseline} trial={result.trial} diffCount={diffCount} proposal={proposal} instruction={instruction} />}
           {result && (
             <div className="sb-prompt-trial__compare">
               <section>
