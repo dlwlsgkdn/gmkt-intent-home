@@ -137,6 +137,19 @@ test('toDocPatch — 화면 전용 상태는 review_meta 한 곳에만 담는다
   assert.deepEqual(set.review_meta.tagRequest, { concern: true })
 })
 
+test('toDocPatch — tagRequest는 FIELD_KEYS 밖 키를 버리고 값을 boolean으로 강제한다', () => {
+  const patch = { ...PATCH, tagRequest: { concern: 1, evil: true, category: 0 } }
+  const set = toDocPatch(patch, DOC)
+  assert.deepEqual(set.review_meta.tagRequest, { concern: true, category: false })
+  assert.equal('evil' in set.review_meta.tagRequest, false)
+})
+
+test('toDocPatch — note는 상한(2000자)에서 자른다', () => {
+  const patch = { ...PATCH, note: 'a'.repeat(2500) }
+  const set = toDocPatch(patch, DOC)
+  assert.equal(set.review_meta.note.length, 2000)
+})
+
 test('toDocPatch — 대표(★)가 선택 목록 밖이면 비운다', () => {
   const bad = { ...PATCH, fields: { ...PATCH.fields, type: { selected: ['건성'], rep: '지성', status: 'done', origin: 'human' } } }
   assert.equal(toDocPatch(bad, DOC).skin_types_primary, '건성')

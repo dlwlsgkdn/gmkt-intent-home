@@ -55,7 +55,7 @@ export default function AdminDashboard({ api, threads, feedback, loading, mode, 
 
   const cards = mode === 'lab'
     ? [
-        { value: tagQueue, label: '태깅 검토 대기', note: `전체 ${tagTotal}개 작업 단위`, tone: tagQueue ? 'warn' : 'good', tab: 'tagging', icon: '✓', progress: reviewRate },
+        { value: tagQueue, label: '태깅 미검토', note: `전체 ${tagTotal}개 작업 단위`, tone: tagQueue ? 'warn' : 'good', tab: 'tagging', icon: '✓', progress: reviewRate },
         { value: feedbackItems.length, label: '평가 제출', note: `낮은 평가 ${lowFeedback}건`, tone: lowFeedback ? 'warn' : 'good', tab: 'threads', icon: '★', progress: pct(feedbackItems.length - lowFeedback, feedbackItems.length) },
         { value: drafts.length, label: '작성 중 시나리오', note: `발행 ${published.length}개`, tab: 'studio', icon: '◆', progress: pct(published.length, api.scenarios.length) },
         { value: TREND_KEYWORDS.length, label: '트렌드 키워드', note: '뷰티 트렌드 사전', tab: 'knowledge', icon: '↗', progress: 100 },

@@ -22,8 +22,9 @@ import {
  * 상품 태깅 검토 스튜디오 — 라이브 생성의 상품 매칭(그라운딩) 근거인 카탈로그 태그를
  * 사람이 점검하는 화면. AI 1차 분류(필드별 태그·확신도·근거)를 3컬럼으로 검토한다:
  * 좌측 작업 단위 목록+상품 정보, 가운데 필드별 태깅 편집(대표 태그 ★·근거·미검토 확인),
- * 우측 태그 게이지·최종 태그·규칙 검증·승인/반려. 결과는 이 브라우저에만 저장되고,
- * 카탈로그(코드) 반영·기기 이동은 JSON 내보내기로 한다. 진입은 홈 드로어의 도구 행.
+ * 우측 태그 게이지·최종 태그·규칙 검증·승인/반려. 결과는 사내망 API가 Mongo에서 읽고
+ * 되쓴다 — 닿지 못하면(배포 환경 등) 예시 데이터로 폴백하고, 그 폴백 한정으로 이 브라우저에만
+ * 저장되며 카탈로그(코드) 반영·기기 이동은 JSON 내보내기로 한다. 진입은 홈 드로어의 도구 행.
  */
 
 /* 로딩 중·빈 목록에서 파생값 계산이 터지지 않게 하는 자리표시자.
@@ -254,6 +255,9 @@ export default function TaggingStudio({ api, embedded = false }) {
     if (!origin) return
     /* 대분류를 되돌릴 때 종속 사전도 함께 복원해 서로 허용되지 않는 조합이 남지 않게 한다. */
     const keys = key === 'category' ? ['category', 'subtype', 'type'] : [key]
+    const hadDecision = unit.decision
+    const unitId = unit.id
+    const unitName = unit.name
     patchUnit((current) => {
       const fields = { ...current.fields }
       const tagRequest = { ...current.tagRequest }
@@ -268,12 +272,23 @@ export default function TaggingStudio({ api, embedded = false }) {
       for (const restoreKey of keys) delete next[fieldEditKey(unit.id, restoreKey)]
       return next
     })
+    /* 태그를 되돌린 것만으로는 서버에 결정 변경이 실리지 않는다(리뷰 상태는 태그가
+       실제로 바뀐 편집 PATCH에서만 내려간다) — 이미 승인/반려된 문서였다면 결정
+       해제도 별도로 보내 화면과 Mongo/Flask가 갈라지지 않게 한다. */
+    if (source === 'remote' && hadDecision) {
+      saveTaggingDecision(unitId, null).then((ok) => {
+        if (!ok) api.showToast(`「${unitName}」의 승인/반려 상태를 되돌리지 못했어요. 연결을 확인해주세요.`)
+      })
+    }
     api.showToast(key === 'category' ? '대분류와 연결 항목을 AI 원본으로 되돌렸어요.' : 'AI가 분류한 원본 값으로 되돌렸어요.')
   }
 
   /* 원격 모드에는 시드가 없다 — 서버가 준 AI 원본 스냅샷으로 되돌리고 그 값을 다시 저장한다. */
   const restoreCurrentUnit = () => {
     if (!window.confirm(`「${unit.name}」의 담당자 수정·검토 메모를 지우고 AI 원본으로 되돌릴까요?`)) return
+    const hadDecision = unit.decision
+    const unitId = unit.id
+    const unitName = unit.name
     if (source === 'remote') {
       const restored = {
         ...unit,
@@ -284,6 +299,13 @@ export default function TaggingStudio({ api, embedded = false }) {
       }
       setUnits((prev) => prev.map((c) => (c.id === unit.id ? restored : c)))
       queueSave(restored)
+      /* 태그를 되돌린 것만으로는 서버에 결정 변경이 실리지 않는다 — 이미 승인/반려된
+         문서였다면 결정 해제도 별도로 보내 화면과 Mongo/Flask가 갈라지지 않게 한다. */
+      if (hadDecision) {
+        saveTaggingDecision(unitId, null).then((ok) => {
+          if (!ok) api.showToast(`「${unitName}」의 승인/반려 상태를 되돌리지 못했어요. 연결을 확인해주세요.`)
+        })
+      }
     } else {
       const fresh = freshSeedUnit(unit.id)
       if (!fresh) return

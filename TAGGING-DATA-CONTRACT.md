@@ -19,12 +19,13 @@
 | 가격 | `price` (숫자) | "가격 정보 없음" | 89% |
 | 옵션 표시 | `options[]` (길이만 쓴다) | "단일 옵션" | 56% |
 | 상품 ID | `product_id` | — (키) | 100% |
-| 원본 링크 | `url` | 링크 없음 | 89% |
 | 카탈로그 원본 태그 | `sub_type` + `formulation` + `ingredient_tags[]`, 중복 제거 후 앞 5개 | 칩 없음(이모지 폴백도 실패) | 96% / 88% |
 | 상세페이지 주요 문구 | `product_info['제품 주요 사양']`, 없으면 `usage_method` | 빈 칸 — 검토 근거가 사라진다 | 86% |
 | 리뷰 요약 | `review_ai_summary.features[]`를 `제목 — 설명` 줄로, 끝에 `review_stats.count`·`avg_rating` | 빈 칸 | 77% |
 | AI 확신도 | `confidence` (`high`\|`medium`\|`low` → 90\|70\|45%) | 0% | 100% |
 | AI 판단 근거 | `rationale` (문장 하나) | 빈 칸 | 100% |
+
+`url`은 API가 실어 보내지만 화면은 아직 렌더하지 않는다.
 
 **확신도·근거는 상품당 하나뿐이다.** 그래서 화면은 상품 정보 패널에 한 번만 표시하고 필드별로
 반복하지 않는다. 필드별 확신도를 보여주려면 수집 쪽 프롬프트가 필드별 값을 내야 하고, 이미 분석된
@@ -40,7 +41,7 @@
 | 타입 | `skin_types[]` | `skin_types_primary` | 1~2 필수 | `skin_types` (11) | 96% / ★86% |
 | 고민 | `concerns[]` | `concerns_primary` | 0~2 | `concerns` (20) | 81% / ★75% |
 | 결과 | `results[]` | `results_primary` | 1~2 필수 | `results` (17) | 99% / ★94% |
-| 조건 | `conditions[]` | `conditions_primary` | 0~1 | `conditions` (7) | 55% / ★49% |
+| 조건 | `conditions[]` | `conditions_primary` | 0~2 | `conditions` (7) | 55% / ★49% |
 
 규칙:
 

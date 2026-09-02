@@ -4,7 +4,7 @@
 
 **Goal:** DDAK 운영 콘솔의 상품 태깅 화면이 Mongo에 쌓인 올리브영 상품 719건을 그리고, 태그 수정·승인·반려를 Mongo에 되쓴다.
 
-**Architecture:** Mongo가 사내망(`172.30.218.x`)이라 Vercel 서버리스에는 접근을 둘 수 없다. Mongo에 닿는 곳에서만 도는 NestJS 서비스 `apps/tagging-api`를 새로 만들어 읽기·쓰기를 맡기고, 스튜디오 FE는 same-origin `/api/tagging/*`만 부른다(개발은 vite 프록시, 운영은 이 서비스가 스튜디오 빌드까지 정적 서빙). 문서↔화면 변환과 되쓰기 화이트리스트는 API의 순수 함수 한 곳(`mapping.ts`)이 소유한다.
+**Architecture:** Mongo가 사내망(사설 IP 대역)이라 Vercel 서버리스에는 접근을 둘 수 없다. Mongo에 닿는 곳에서만 도는 NestJS 서비스 `apps/tagging-api`를 새로 만들어 읽기·쓰기를 맡기고, 스튜디오 FE는 same-origin `/api/tagging/*`만 부른다(개발은 vite 프록시, 운영은 이 서비스가 스튜디오 빌드까지 정적 서빙). 문서↔화면 변환과 되쓰기 화이트리스트는 API의 순수 함수 한 곳(`mapping.ts`)이 소유한다.
 
 **Tech Stack:** NestJS 11 (apps/bff와 동일 구성), mongodb 6, dotenv, React 18 + Vite 5 (apps/studio), 테스트는 Node 내장 `node --test` (모노레포에 테스트 러너가 없어 의존성을 늘리지 않는다)
 

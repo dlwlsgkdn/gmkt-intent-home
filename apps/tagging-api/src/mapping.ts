@@ -103,6 +103,20 @@ const cleanList = (value: unknown): string[] =>
         .filter((v, i, all) => all.indexOf(v) === i)
     : []
 
+/* tagRequest는 FIELD_KEYS 밖 키를 허용하지 않고 값은 boolean으로 강제한다 — FE
+   loadTaggingReview가 로컬 저장분을 걸러 읽는 것과 같은 수준. 화이트리스트 안이라
+   파이프라인 필드를 덮을 위험은 없지만, 임의 키·값이 문서에 그대로 쌓이는 것은 막는다. */
+const sanitizeTagRequest = (value: Record<string, unknown>): Record<string, boolean> => {
+  const out: Record<string, boolean> = {}
+  for (const key of FIELD_KEYS) {
+    if (key in value) out[key] = !!value[key]
+  }
+  return out
+}
+
+const NOTE_MAX_LEN = 2000
+const sanitizeNote = (value: string): string => value.slice(0, NOTE_MAX_LEN)
+
 /*
  * 화면 → 문서. 여기 적힌 필드만 $set 된다 — 수집 파이프라인이 채운 값을 검토 화면이
  * 덮는 사고를 구조로 막는다(그래서 화이트리스트가 이 함수 밖에 없다).
@@ -152,8 +166,8 @@ export function toDocPatch(patch: any, doc: any): Record<string, unknown> {
     ...(doc?.review_meta || {}),
     fieldStatus: { ...(doc?.review_meta?.fieldStatus || {}), ...fieldStatus },
     fieldOrigin: { ...(doc?.review_meta?.fieldOrigin || {}), ...fieldOrigin },
-    tagRequest: patch?.tagRequest && typeof patch.tagRequest === 'object' ? patch.tagRequest : (doc?.review_meta?.tagRequest || {}),
-    note: typeof patch?.note === 'string' ? patch.note : (doc?.review_meta?.note || ''),
+    tagRequest: patch?.tagRequest && typeof patch.tagRequest === 'object' ? sanitizeTagRequest(patch.tagRequest) : (doc?.review_meta?.tagRequest || {}),
+    note: typeof patch?.note === 'string' ? sanitizeNote(patch.note) : (doc?.review_meta?.note || ''),
     aiOriginal,
   }
   set.updated_at = nowIso()

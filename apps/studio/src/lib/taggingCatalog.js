@@ -7,8 +7,9 @@
  * 점검하는 곳: 애매한 필드(미검토)만 확인하고, 규칙 위반(수정 필요)을 고친 뒤
  * 작업 단위를 승인/반려한다.
  *
- * 검토 상태는 이 브라우저 localStorage에만 저장한다 — 계정 서버 동기화 기계 밖의
- * 검토 유틸이라서다. 기기 간 이동·카탈로그 반영은 JSON 내보내기가 담당한다.
+ * 검토 상태는 사내망 tagging-api가 Mongo에서 읽고 되쓴다 — 계정 서버 동기화 기계 밖의
+ * 별도 경로다. API에 닿지 못하면(배포 환경 등) 예시 데이터로 폴백하고, 그 폴백 한정으로
+ * 이 브라우저 localStorage에 저장하며 기기 간 이동·카탈로그 반영은 JSON 내보내기가 담당한다.
  * (AI 확신도·근거는 데모용 목데이터 — 카탈로그 원본은 코드라 자동 반영되지 않는다)
  */
 
@@ -41,7 +42,7 @@ export const FIELD_DEFS = [
   { key: 'type', label: '타입', min: 1, max: 2, required: true },
   { key: 'concern', label: '고민', min: 0, max: 2, required: false },
   { key: 'result', label: '결과', min: 1, max: 2, required: true },
-  { key: 'condition', label: '조건', min: 0, max: 1, required: false },
+  { key: 'condition', label: '조건', min: 0, max: 2, required: false },
 ]
 
 export const TAG_LIMIT = { min: 3, max: 10 }
@@ -479,8 +480,6 @@ export function taggingExportPayload(units) {
 /* ── 원격(사내망 tagging-api) ──
    실패하면 null을 돌려준다 — 호출부가 목업 시드로 폴백해 화면이 깨지지 않게 한다. */
 const TAGGING_API = '/api/tagging'
-let remote = false
-export const isRemote = () => remote
 
 export async function fetchTaggingBootstrap() {
   try {
@@ -489,11 +488,9 @@ export async function fetchTaggingBootstrap() {
     const data = await res.json()
     if (!Array.isArray(data.units)) throw new Error('units 없음')
     applyTaxonomy(data.taxonomy)
-    remote = true
     return data
   } catch (err) {
     console.warn('[tagging] 원격 로드 실패 — 목업으로 표시합니다:', err.message)
-    remote = false
     applyTaxonomy(null)
     return null
   }

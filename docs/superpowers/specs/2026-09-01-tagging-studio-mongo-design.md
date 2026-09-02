@@ -36,7 +36,7 @@ unreviewed 1 / 없음 263.
 
 ## 제약
 
-**Mongo는 사내망이다** (`172.30.218.233~235`, replicaSet `DevMongoDBRS`). 여기서 두 가지가
+**Mongo는 사내망이다** (사내망 사설 IP 대역(RFC1918)의 replica set). 여기서 두 가지가
 따라 나온다.
 
 1. Vercel 서버리스(`api/`, `apps/core`, `apps/bff`)에 Mongo 접근을 두면 안 된다 — 배포되는
