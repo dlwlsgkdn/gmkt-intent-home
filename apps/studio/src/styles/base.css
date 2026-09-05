@@ -124,6 +124,7 @@
   --dk-info-soft: #e3ecff;  /* 키워드 칩 면 */
   --dk-mark: #fde8ef;       /* 중요 배지 면 (핑크) */
   --dk-mark-ink: #e0457b;   /* 중요 배지 글자 */
+  --dk-red: #ef2b2a;        /* Red-500 — 달력 일요일 */
   --dk-underline: rgba(255, 255, 255, 0.45); /* 계획 타이틀 밑줄 바 — 보라 밴드 위 흰 바 */
   --dk-tip: #333333;        /* 안내 말풍선 */
   --dk-caution: #c08a2e;    /* 주의 성분 ⚠ */

@@ -317,12 +317,12 @@
 .sb-drawer__empty span { font-size: var(--sb-t-small); }
 
 /* ── 쇼핑 쓰레드 히스토리 패널 — 여는 버튼 위치에 따라 좌/우/중앙에서 등장.
-   내부 룩은 원본 clean-home의 history-sidebar(#history-panel) CSS를 그대로 재사용하고,
-   이 래퍼는 위치·등장 애니메이션·그림자만 담당한다 ── */
+   이 래퍼는 위치·등장 애니메이션·그림자만 담당하고, 안쪽 룩은 아래 .sb-thread* (Figma Shopping Threads) 가 맡는다 ── */
 .sb-thread-panel {
   position: fixed;
   z-index: 250;
   overflow: hidden;
+  background: var(--dk-sunken);
 }
 .sb-thread-panel--right {
   top: 0;
@@ -462,41 +462,224 @@
 .sb-json-option--ai strong { color: var(--sb-ai); }
 .sb-json-option--ai:hover { border-color: var(--sb-ai); background: var(--sb-ai-soft); }
 
-/* 쓰레드 패널 카드의 라이브 배지 — 시나리오 쓰레드의 #칩 라벨 자리를 대신한다 */
-.sb-thread-live-badge {
-  font-size: var(--sb-t-micro);
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  color: var(--sb-ai);
+/* ── 쇼핑 쓰레드 패널 안쪽 — Figma [PP1K] Shopping Threads(내 프로필 · 쇼핑쓰레드 탭) 룩 (2026-09):
+   머리(제목 Gumi 18 + 개수 배지 · + / ✕) · bg/subtle 바닥 위 카드 리스트(패딩 12 · 간격 12) · 카드 흰 면 radius/lg 16
+   패딩 16 간격 12 (제목 + ⋯ · 태그 칩 21px · 담은 상품 48px 동그라미 겹침 + "+n" · CTA). CTA 는 설문 중이면
+   Primary 「이어서 답하기」, 계획을 봤으면 Secondary 「계획 보기」(1.5px border/default · 40px · radius/md 8) ── */
+.sb-thread { display: flex; flex-direction: column; height: 100%; }
+.sb-thread__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex: 0 0 auto;
+  min-height: 56px;
+  padding: 0 8px 0 16px;
+  border-bottom: 1px solid var(--dk-line-soft);
+  background: var(--dk-surface);
 }
-
-/* 평가를 남긴 쓰레드 배지 + 패널 상단 "평가한 쓰레드" 모아보기 필터 */
-.sb-thread-fb-badge {
-  flex-shrink: 0;
-  padding: 2px 8px;
+.sb-thread__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--dk-ink);
+}
+.sb-thread__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
   border-radius: var(--sb-r-pill);
-  background: var(--sb-info-soft);
-  color: var(--sb-info);
+  background: var(--dk-brand);
+  color: #fff;
   font-size: var(--sb-t-micro);
   font-weight: 500;
-  white-space: nowrap;
 }
+.sb-thread__actions { display: flex; align-items: center; gap: 2px; }
+.sb-thread__icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--dk-ink-2);
+  cursor: pointer;
+  transition: background var(--sb-dur) var(--sb-ease);
+}
+.sb-thread__icon-btn:hover { background: var(--dk-brand-soft); color: var(--dk-ink); }
+.sb-thread__icon-btn svg { width: 20px; height: 20px; }
+.sb-thread__body { flex: 1; min-height: 0; overflow-y: auto; padding: 12px; }
+.sb-thread__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 4px 10px;
+  font-size: var(--sb-t-caption);
+  color: var(--dk-muted);
+}
+.sb-thread__meta-actions { display: flex; align-items: center; gap: 8px; }
+.sb-thread__clear { border: 0; background: none; font-size: var(--sb-t-caption); color: var(--dk-muted); cursor: pointer; }
+.sb-thread__clear:hover { color: var(--dk-ink-2); text-decoration: underline; }
+/* 평가한 쓰레드 모아보기 필터 — 평가 계층 색(info) 유지 */
 .sb-thread-fb-filter {
   padding: 3px 9px;
-  border: 1px solid var(--sb-line);
+  border: 1px solid var(--dk-line);
   border-radius: var(--sb-r-pill);
-  background: var(--sb-surface);
-  color: var(--sb-muted);
+  background: var(--dk-surface);
+  color: var(--dk-muted);
   font-size: var(--sb-t-micro);
   font-weight: 400;
+  cursor: pointer;
   transition: all var(--sb-dur) var(--sb-ease);
 }
 .sb-thread-fb-filter:hover { border-color: var(--sb-info); color: var(--sb-info); }
-.sb-thread-fb-filter.is-on {
-  border-color: var(--sb-info);
-  background: var(--sb-info-soft);
-  color: var(--sb-info);
+.sb-thread-fb-filter.is-on { border-color: var(--sb-info); background: var(--sb-info-soft); color: var(--sb-info); }
+.sb-thread__list { display: flex; flex-direction: column; gap: 12px; }
+.sb-thread-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--dk-surface);
+  box-shadow: 0 1px 2px rgba(31, 41, 51, 0.04);
 }
+.sb-thread-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.sb-thread-card__title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.3;
+  color: var(--dk-ink);
+  word-break: keep-all;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.sb-thread-card__more {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: -2px -4px 0 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--dk-muted);
+  cursor: pointer;
+  transition: background var(--sb-dur) var(--sb-ease), color var(--sb-dur) var(--sb-ease);
+}
+.sb-thread-card__more:hover,
+.sb-thread-card.is-expanded .sb-thread-card__more { background: var(--dk-brand-soft); color: var(--dk-brand-deep); }
+.sb-thread-card__more svg { width: 18px; height: 18px; }
+.sb-thread-card__tags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.sb-thread-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 21px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: var(--dk-brand-soft);
+  color: var(--dk-brand-deep);
+  font-size: var(--sb-t-caption);
+  font-weight: 400;
+  white-space: nowrap;
+}
+.sb-thread-tag--ai { color: var(--sb-ai); }
+.sb-thread-tag--fb { background: var(--sb-info-soft); color: var(--sb-info); }
+.sb-thread-card__time { margin-left: auto; font-size: var(--sb-t-micro); color: var(--dk-subtle); white-space: nowrap; }
+.sb-thread-card__cart { display: flex; align-items: center; gap: 8px; min-height: 48px; }
+.sb-thread-card__thumbs { display: flex; }
+.sb-thread-card__thumb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border: 2px solid var(--dk-surface);
+  border-radius: 50%;
+  background: var(--dk-brand-soft);
+  color: var(--dk-brand-deep);
+  font-size: 15px;
+  font-weight: 400;
+  box-shadow: 0 1px 3px rgba(31, 41, 51, 0.08);
+}
+.sb-thread-card__thumb + .sb-thread-card__thumb { margin-left: -8px; }
+.sb-thread-card__more-count { font-size: var(--sb-t-small); color: var(--dk-muted); }
+.sb-thread-card__cart-label { margin-left: auto; font-size: var(--sb-t-caption); color: var(--dk-muted); }
+.sb-thread-card__empty { font-size: var(--sb-t-caption); color: var(--dk-subtle); }
+.sb-thread-card__detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--dk-line-soft);
+}
+.sb-thread-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; background: var(--dk-sunken); }
+.sb-thread-item__thumb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--dk-surface);
+  color: var(--dk-muted);
+}
+.sb-thread-item__thumb svg { width: 16px; height: 16px; }
+.sb-thread-item__name { flex: 1; min-width: 0; font-size: var(--sb-t-small); color: var(--dk-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-thread-card__manage { display: flex; justify-content: flex-end; gap: 12px; }
+.sb-thread-card__link { border: 0; background: none; font-size: var(--sb-t-caption); color: var(--dk-muted); cursor: pointer; }
+.sb-thread-card__link:hover { color: var(--dk-ink-2); text-decoration: underline; }
+.sb-thread-card__link--danger:hover { color: var(--sb-danger); }
+.sb-thread-card__cta {
+  width: 100%;
+  min-height: 40px;
+  padding: 10px 16px;
+  border: 1.5px solid var(--dk-line);
+  border-radius: 8px;
+  background: var(--dk-surface);
+  font-size: var(--sb-t-body);
+  font-weight: 500;
+  letter-spacing: -0.3px;
+  color: var(--dk-ink-2);
+  cursor: pointer;
+  transition: background var(--sb-dur) var(--sb-ease), border-color var(--sb-dur) var(--sb-ease), color var(--sb-dur) var(--sb-ease);
+}
+.sb-thread-card__cta:hover { border-color: var(--dk-brand-2); color: var(--dk-brand-deep); }
+.sb-thread-card__cta.is-primary { border-color: var(--dk-brand-2); background: var(--dk-brand-2); color: #fff; }
+.sb-thread-card__cta.is-primary:hover { border-color: var(--dk-brand-deep); background: var(--dk-brand-deep); color: #fff; }
+/* 빈 상태 — Figma "아직 쇼핑 쓰레드가 없어요" */
+.sb-thread-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 64px 20px; text-align: center; }
+.sb-thread-empty__title { margin: 0; font-size: 16px; font-weight: 400; color: var(--dk-ink); }
+.sb-thread-empty__hint { margin: 0; font-size: var(--sb-t-caption); line-height: 17px; color: var(--dk-muted); word-break: keep-all; }
+.sb-thread-empty__btn {
+  height: 40px;
+  margin-top: 12px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--dk-brand-2);
+  color: #fff;
+  font-size: var(--sb-t-body);
+  font-weight: 500;
+  cursor: pointer;
+}
+.sb-thread-empty__btn:hover { background: var(--dk-brand-deep); }
 
 /* ── 홈 칩 — Figma "[PP1K] EEVEE 공유용" Search 랜딩 ChipSection (2026-09) ──
    44px 알약 · 12/16 패딩 · 14/20 · 테두리 없음. 키워드 칩은 blue 톤(badge/blue 위 연파랑 면),

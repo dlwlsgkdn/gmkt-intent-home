@@ -1841,7 +1841,10 @@
 .clean-tag-row .suggestion-tag,
 .sb-sheet .sb-sheet__title,
 .sb-sheet .sb-sheet__menu button,
-.sb-sheet .sb-cal__head strong {
+.sb-sheet .sb-cal__confirm,
+.sb-thread__title,
+.sb-thread-card__title,
+.sb-thread-empty__title {
   font-family: var(--dk-font-display) !important;
   font-weight: 400;
 }
@@ -2004,3 +2007,26 @@
 .sb-profile-chip.is-off .sb-profile-chip__toggle { background: rgba(255, 255, 255, 0.22); color: #fff; }
 :is(.sb-canvas-item__content, .sb-player__item) .sb-content-card__ph,
 :is(.sb-canvas-item__content, .sb-player__item) .sb-content-card__ph * { font-family: var(--dk-font-display) !important; }
+
+/* ── 화면 꽉 채우기 (질문 컴포넌트 fillScreen, 기본 켜짐 — 2026-09) ──
+   Figma 설문 화면 한 장: Body 가 남은 높이를 채우고 「다음」은 BottomBar 로 화면 맨 아래에 붙는다.
+   플레이어 섹션을 세로 flex 로 세워 질문 카드가 남은 높이를 먹고, 카드 안에서 버튼만 margin-top:auto 로
+   바닥에 내려간다. 하단 내비(이전 질문·홈으로)는 화면 헤더가 있을 때 JSX 가 숨긴다(헤더의 뒤로·홈이 같은 일) */
+.sb-player.sb-player--fill {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  padding-bottom: 24px;
+}
+.sb-player--fill .sb-phone--player { flex: 1; display: flex; flex-direction: column; padding-bottom: 0; }
+.sb-player--fill .sb-player__stack { flex: 1; }
+.sb-player--fill .sb-player__item:has(.sb-survey-card--fill),
+.sb-player--fill .sb-styled:has(.sb-survey-card--fill) { flex: 1; display: flex; flex-direction: column; }
+.sb-survey-card--fill { flex: 1; }
+.sb-survey-card--fill .sb-survey-card__next,
+.sb-survey-card--fill .sb-survey-card__skip { margin-top: auto; }
+.sb-survey-card--fill .sb-survey-card__skip + .sb-survey-card__next { margin-top: 0; }
+/* 플로팅 버튼은 바닥에 붙은 「다음」 위로 올라간다 — 버튼 오른쪽 끝을 가리지 않게 */
+body:has(.sb-player--fill) .sb-fabbar { bottom: calc(100px + env(safe-area-inset-bottom)); }
+/* 시트·모달이 떠 있는 동안 플로팅 버튼은 숨긴다 — 덮개 위로 흐릿하게 비쳐 시트 안 요소처럼 읽히던 것 */
+body:has(.sb-sheet) .sb-fabbar { opacity: 0; pointer-events: none; }

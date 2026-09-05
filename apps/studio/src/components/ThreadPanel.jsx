@@ -16,16 +16,48 @@ function feedbackLabel(fb) {
   return [part('설문', fb.survey), part('계획', fb.plan)].filter(Boolean).join(' · ')
 }
 
-/* 쇼핑 쓰레드 히스토리 패널 — 원본 clean-home의 history-sidebar 룩 재사용.
-   여는 버튼 위치(origin)에 맞는 방향(좌/우/중앙)에서 등장한다. */
+/* 카드 CTA — Figma ThreadCard 의 Button 두 변형: 설문을 쓰는 중이면 Primary 「이어서 답하기」,
+   계획까지 봤거나 끝난 쓰레드면 Secondary(테두리) 「계획 보기」 */
+function ctaFor(t) {
+  if (t.status === 'completed' || t.stage === 'plan') return { label: '계획 보기', primary: false }
+  return { label: '이어서 답하기', primary: true }
+}
+
+const PlusIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+    <path d="M12 5v14M5 12h14" />
+  </svg>
+)
+const CloseIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+    <path d="M6 6l12 12M18 6L6 18" />
+  </svg>
+)
+const MoreIcon = () => (
+  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <circle cx="5" cy="12" r="1.8" />
+    <circle cx="12" cy="12" r="1.8" />
+    <circle cx="19" cy="12" r="1.8" />
+  </svg>
+)
+const BagIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M6 8h12l1 12H5L6 8z" />
+    <path d="M9 10V7a3 3 0 0 1 6 0v3" />
+  </svg>
+)
+
+/* 쇼핑 쓰레드 히스토리 패널 — Figma [PP1K] Shopping Threads(내 프로필 · 쇼핑쓰레드 탭) 룩 (2026-09):
+   머리(제목 + 개수 · 새 쓰레드 · 닫기) 아래 bg/subtle 바닥에 카드가 12px 간격으로 쌓인다. 카드 = 제목 + ⋯ · 태그 칩
+   (칩/AI 배지 · 단계 · 평가) · 담은 상품 동그라미 겹침 + "+n" · CTA(이어서 답하기 / 계획 보기). ⋯ 를 누르면 담은 상품
+   목록과 관리(링크 복사 · 삭제)가 펼쳐진다. 여는 버튼 위치(origin)에 맞는 방향(좌/우/중앙)에서 등장한다. */
 export default function ThreadPanel({ api, open, origin = 'right', onClose }) {
-  /* 아코디언: 패널을 열 때마다 가장 최근 쓰레드를 펼친다 */
+  /* ⋯ 로 펼친 카드 — Figma 카드는 접힌 모습이 기본이라 열 때마다 전부 접는다 */
   const [expandedId, setExpandedId] = useState(null)
   /* 평가한 쓰레드만 모아보기 — 라이브 체험에서 피드백을 저장한 쓰레드(t.feedback) 필터 */
   const [fbOnly, setFbOnly] = useState(false)
   useEffect(() => {
-    if (open) setExpandedId(api.threads[0] ? api.threads[0].id : null)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (open) setExpandedId(null)
   }, [open])
   if (!open) return null
 
@@ -65,9 +97,6 @@ export default function ThreadPanel({ api, open, origin = 'right', onClose }) {
     api.showToast('홈 검색창 아래 칩을 눌러 새 쓰레드를 시작해보세요.')
   }
 
-  /* 닫기 화살표는 패널이 사라질 방향을 가리킨다 */
-  const closeArrow = origin === 'left' ? 'M15 19l-7-7 7-7' : origin === 'center' ? 'M6 9l6 6 6-6' : 'M9 5l7 7-7 7'
-
   return (
     <>
       <div className="sb-drawer-backdrop" onClick={onClose} />
@@ -75,173 +104,142 @@ export default function ThreadPanel({ api, open, origin = 'right', onClose }) {
         className={`sb-thread-panel sb-thread-panel--${origin}`}
         role="dialog"
         aria-modal="true"
-        aria-label="쇼핑 쓰레드 히스토리"
+        aria-label="쇼핑 쓰레드"
       >
-        <div id="history-panel" className="history-sidebar history-sidebar-open h-full">
-          <div className="flex h-full flex-col">
-            {/* 원본 사이드바 탭 헤더 */}
-            <div className="sidebar-tabs flex items-center border-b border-slate-200/80">
-              <div className="sidebar-cart-control flex flex-1 items-center gap-2 px-3 py-3">
-                <div id="cartTabBtn" className="sidebar-tab sidebar-tab-active flex-1 py-3 text-sm font-medium flex items-center justify-center gap-1.5 rounded-2xl border border-slate-200 bg-white">
-                  <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-                  <span className="sidebar-tab-label">쇼핑 쓰레드</span>
-                  {api.threads.length > 0 && (
-                    <span id="cartBadge" className="sidebar-tab-badge sidebar-tab-cart-badge bg-gmarket-blue text-white text-[10px] rounded-full min-w-[16px] h-4 px-1 font-bold">
-                      {api.threads.length}
-                    </span>
-                  )}
-                </div>
-                <button type="button" className="new-thread-btn" aria-label="새 쇼핑 쓰레드 만들기" title="새 쓰레드" onClick={newThread}>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M12 5v14M5 12h14" /></svg>
-                </button>
-                <button type="button" id="collapseHistorySidebar" className="inline-flex shrink-0 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-slate-500 transition-colors" aria-label="쓰레드 패널 닫기" title="닫기" onClick={onClose}>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d={closeArrow} /></svg>
-                </button>
-              </div>
+        <div className="sb-thread">
+          <div className="sb-thread__head">
+            <h2 className="sb-thread__title">
+              쇼핑 쓰레드
+              {api.threads.length > 0 && <span className="sb-thread__count">{api.threads.length}</span>}
+            </h2>
+            <div className="sb-thread__actions">
+              <button type="button" className="sb-thread__icon-btn" aria-label="새 쇼핑 쓰레드 만들기" title="새 쓰레드" onClick={newThread}>
+                <PlusIcon />
+              </button>
+              <button type="button" className="sb-thread__icon-btn" aria-label="쓰레드 패널 닫기" title="닫기" onClick={onClose}>
+                <CloseIcon />
+              </button>
             </div>
+          </div>
 
-            {/* 스크롤 콘텐츠 */}
-            <div className="flex-1 overflow-y-auto px-3 py-4">
-              {api.threads.length === 0 ? (
-                <div className="history-empty rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm leading-relaxed text-slate-400 font-normal text-center">
-                  아직 쇼핑 쓰레드가 없어요.<br />
-                  <span className="text-xs mt-1 block">홈에서 <span className="text-gmarket-blue font-semibold">칩</span>을 눌러 시나리오를 체험하면<br />여기에 쓰레드가 쌓여요.</span>
-                </div>
-              ) : (
-                <>
-                  <div className="flex items-center justify-between mb-2.5 px-1">
-                    <span className="text-[11px] text-slate-400 font-normal">
-                      {fbOnly ? `평가한 쓰레드 ${threads.length}개` : `최근 쓰레드 ${api.threads.length}개`}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      {fbCount > 0 && (
-                        <button
-                          type="button"
-                          className={'sb-thread-fb-filter' + (fbOnly ? ' is-on' : '')}
-                          title="라이브 체험에서 피드백을 저장한 쓰레드만 모아봐요"
-                          onClick={() => setFbOnly((v) => !v)}
-                        >
-                          💬 평가한 쓰레드
-                        </button>
-                      )}
+          <div className="sb-thread__body">
+            {api.threads.length === 0 ? (
+              <div className="sb-thread-empty">
+                <p className="sb-thread-empty__title">아직 쇼핑 쓰레드가 없어요</p>
+                <p className="sb-thread-empty__hint">홈에서 칩을 눌러 시나리오를 체험하면 여기에 쓰레드가 쌓여요.</p>
+                <button type="button" className="sb-thread-empty__btn" onClick={newThread}>쇼핑 쓰레드 만들기</button>
+              </div>
+            ) : (
+              <>
+                <div className="sb-thread__meta">
+                  <span>{fbOnly ? `평가한 쓰레드 ${threads.length}개` : `최근 쓰레드 ${api.threads.length}개`}</span>
+                  <div className="sb-thread__meta-actions">
+                    {fbCount > 0 && (
                       <button
                         type="button"
-                        className="history-clear-btn text-[11px] text-slate-400 font-normal transition-colors hover:text-slate-600"
-                        onClick={() => {
-                          if (window.confirm('쓰레드 히스토리를 모두 지울까요?')) api.clearThreads()
-                        }}
+                        className={'sb-thread-fb-filter' + (fbOnly ? ' is-on' : '')}
+                        title="라이브 체험에서 피드백을 저장한 쓰레드만 모아봐요"
+                        onClick={() => setFbOnly((v) => !v)}
                       >
-                        전체 지우기
+                        💬 평가한 쓰레드
                       </button>
-                    </div>
+                    )}
+                    <button
+                      type="button"
+                      className="sb-thread__clear"
+                      onClick={() => {
+                        if (window.confirm('쓰레드 히스토리를 모두 지울까요?')) api.clearThreads()
+                      }}
+                    >
+                      전체 지우기
+                    </button>
                   </div>
+                </div>
 
+                <div className="sb-thread__list">
                   {threads.map((t) => {
                     const isExpanded = expandedId === t.id
                     const cart = t.cart || []
+                    const cta = ctaFor(t)
                     return (
-                      <div key={t.id} className={'purpose-cart-group border border-slate-200 bg-white ' + (isExpanded ? 'purpose-cart-group-expanded' : 'purpose-cart-group-collapsed')}>
-                        <div
-                          className="purpose-cart-header purpose-cart-accordion-header px-4 pt-4 pb-3 border-b border-slate-100/80"
-                          role="button"
-                          tabIndex={0}
-                          aria-expanded={isExpanded}
-                          onClick={() => setExpandedId((v) => (v === t.id ? null : t.id))}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault()
-                              setExpandedId((v) => (v === t.id ? null : t.id))
-                            }
-                          }}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="flex items-center gap-2 min-w-0">
-                              {t.live ? (
-                                <span className="sb-thread-live-badge">✦ AI 실시간 생성</span>
-                              ) : (
-                                <span className="text-[11px] font-bold text-gmarket-blue uppercase tracking-[0.16em]">#{t.chip}</span>
-                              )}
-                              {t.feedback && (
-                                <span className="sb-thread-fb-badge" title={`남긴 평가 — ${feedbackLabel(t.feedback)}`}>
-                                  💬 {feedbackLabel(t.feedback)}
-                                </span>
-                              )}
+                      <article key={t.id} className={'sb-thread-card' + (isExpanded ? ' is-expanded' : '')}>
+                        <div className="sb-thread-card__head">
+                          <h3 className="sb-thread-card__title">{t.title}</h3>
+                          <button
+                            type="button"
+                            className="sb-thread-card__more"
+                            aria-label={isExpanded ? '접기' : '담은 상품과 관리 메뉴 펼치기'}
+                            aria-expanded={isExpanded}
+                            onClick={() => setExpandedId((v) => (v === t.id ? null : t.id))}
+                          >
+                            <MoreIcon />
+                          </button>
+                        </div>
+                        <div className="sb-thread-card__tags">
+                          {t.live ? (
+                            <span className="sb-thread-tag sb-thread-tag--ai">✦ AI 실시간 생성</span>
+                          ) : (
+                            <span className="sb-thread-tag">#{t.chip}</span>
+                          )}
+                          <span className="sb-thread-tag">{phaseLabel(t)}</span>
+                          {t.feedback && (
+                            <span className="sb-thread-tag sb-thread-tag--fb" title={`남긴 평가 — ${feedbackLabel(t.feedback)}`}>
+                              💬 {feedbackLabel(t.feedback)}
                             </span>
-                            <div className="flex items-center gap-2">
-                              <span className="purpose-cart-count text-[10px] text-slate-400 font-bold">{timeAgo(t.updatedAt || t.startedAt)}</span>
-                              <span className={'purpose-cart-chevron' + (isExpanded ? ' is-expanded' : '')} aria-hidden="true">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.4" d="M6 9l6 6 6-6" /></svg>
-                              </span>
+                          )}
+                          <span className="sb-thread-card__time">{timeAgo(t.updatedAt || t.startedAt)}</span>
+                        </div>
+                        {/* 담은 상품 — Figma 는 48px 썸네일 겹침 + "+n". 체험 기록엔 상품 이름만 남으므로 첫 글자 동그라미로 그린다 */}
+                        <div className="sb-thread-card__cart">
+                          {cart.length === 0 ? (
+                            <span className="sb-thread-card__empty">아직 담은 상품이 없어요</span>
+                          ) : (
+                            <>
+                              <div className="sb-thread-card__thumbs" aria-hidden="true">
+                                {cart.slice(0, 3).map((name, i) => (
+                                  <span key={i} className="sb-thread-card__thumb" title={name}>{String(name).trim().charAt(0)}</span>
+                                ))}
+                              </div>
+                              {cart.length > 3 && <span className="sb-thread-card__more-count">+{cart.length - 3}</span>}
+                              <span className="sb-thread-card__cart-label">담은 상품 {cart.length}개</span>
+                            </>
+                          )}
+                        </div>
+                        {isExpanded && (
+                          <div className="sb-thread-card__detail">
+                            {cart.map((name, i) => (
+                              <div key={i} className="sb-thread-item">
+                                <span className="sb-thread-item__thumb" aria-hidden="true"><BagIcon /></span>
+                                <span className="sb-thread-item__name">{name}</span>
+                              </div>
+                            ))}
+                            <div className="sb-thread-card__manage">
+                              {t.live && (
+                                <button type="button" className="sb-thread-card__link" onClick={() => copyLink(t)}>링크 복사</button>
+                              )}
+                              <button
+                                type="button"
+                                className="sb-thread-card__link sb-thread-card__link--danger"
+                                onClick={() => api.removeThread(t.id)}
+                              >
+                                삭제
+                              </button>
                             </div>
                           </div>
-                          <p className="purpose-cart-summary-preview text-[11px] text-slate-500 font-normal mt-2 leading-relaxed">{t.title}</p>
-                          <p className="text-[10px] text-slate-400 font-normal mt-2">마지막 페이즈: <span className="text-slate-700">{phaseLabel(t)}</span></p>
-                        </div>
-
-                        {isExpanded && (
-                          <>
-                            <div className="purpose-cart-items px-4 py-3 space-y-2">
-                              {cart.length === 0 && (
-                                <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-dashed border-slate-200 opacity-60">
-                                  <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
-                                    <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-[11px] text-slate-300 font-bold">아직 담은 상품이 없어요</p>
-                                  </div>
-                                </div>
-                              )}
-                              {cart.map((name, i) => (
-                                <div key={i} className="cart-item flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-100">
-                                  <div className="w-10 h-10 rounded-lg bg-white border border-slate-100 flex items-center justify-center flex-shrink-0">
-                                    <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider truncate">담은 상품</p>
-                                    <p className="text-xs font-bold text-slate-800 truncate leading-tight">{name}</p>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                            <div className="purpose-cart-footer px-4 pb-4 pt-2 border-t border-slate-100">
-                              <div className="flex justify-between items-center mb-3">
-                                <span className="text-xs text-slate-400 font-bold">담은 상품</span>
-                                <span className="text-sm font-bold text-slate-800">{cart.length}개</span>
-                              </div>
-                              {t.live && (
-                                <button
-                                  type="button"
-                                  className="w-full mb-2 py-2 text-slate-500 text-xs rounded-xl border border-slate-200 transition-all hover:bg-slate-50 active:scale-95"
-                                  onClick={() => copyLink(t)}
-                                >
-                                  링크 복사
-                                </button>
-                              )}
-                              <div className="grid grid-cols-2 gap-2">
-                                <button
-                                  type="button"
-                                  className="w-full py-2.5 bg-slate-100 text-slate-700 text-sm rounded-xl font-bold transition-all hover:bg-slate-200 active:scale-95"
-                                  onClick={() => api.removeThread(t.id)}
-                                >
-                                  삭제
-                                </button>
-                                <button
-                                  type="button"
-                                  className="w-full py-2.5 bg-gmarket-blue text-white text-sm rounded-xl font-bold transition-all hover:bg-blue-600 active:scale-95"
-                                  onClick={() => resume(t)}
-                                >
-                                  쓰레드 이동
-                                </button>
-                              </div>
-                            </div>
-                          </>
                         )}
-                      </div>
+                        <button
+                          type="button"
+                          className={'sb-thread-card__cta' + (cta.primary ? ' is-primary' : '')}
+                          onClick={() => resume(t)}
+                        >
+                          {cta.label}
+                        </button>
+                      </article>
                     )
                   })}
-                </>
-              )}
-            </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </aside>

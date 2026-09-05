@@ -468,7 +468,9 @@
 }
 .sb-survey-option__input::placeholder { color: var(--dk-subtle); font-weight: 300; }
 
-/* 사진 업로드 질문 — 점선 드롭존 */
+/* 사진 업로드 드롭존 — Figma [PP1K] UploadSection: 1px 점선(6,4) action/primary · radius/lg 16 · 패딩 40 ·
+   gap 16 · 80px 연보라 원 + 32px 카메라(2px 선) · 안내 15px Gumi + 보조 12/17 secondary.
+   고른 뒤(is-filled)는 점선이 border/default 로 가라앉고 200×200 radius 40 사진 + "사진이 선택되었어요" (PreviewSection) */
 .sb-photo-drop {
   display: flex;
   flex-direction: column;
@@ -476,59 +478,85 @@
   justify-content: center;
   gap: 16px;
   width: 100%;
-  min-height: 200px;
-  padding: 24px;
-  border: 1.5px dashed var(--dk-line);
+  padding: 40px 16px;
+  border: 1px dashed var(--dk-brand-2);
   border-radius: 16px;
   background: var(--dk-surface);
   cursor: pointer;
+  text-align: center;
+  transition: border-color var(--sb-dur) var(--sb-ease);
 }
 .sb-photo-drop__icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 88px;
-  height: 88px;
+  width: 80px;
+  height: 80px;
   border-radius: 50%;
   background: var(--dk-brand-soft);
   font-size: var(--sb-t-caption);
   font-weight: 300;
   color: var(--dk-brand);
 }
-.sb-photo-drop__label { font-size: 15px; font-weight: 400; color: var(--dk-ink); }
-.sb-photo-drop.is-filled { min-height: 0; padding: 18px; }
+.sb-photo-drop__icon svg { width: 32px; height: 32px; }
+.sb-photo-drop__text { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.sb-photo-drop__label { font-size: 15px; font-weight: 400; line-height: 1.2; color: var(--dk-ink); }
+.sb-photo-drop__hint {
+  font-size: var(--sb-t-caption);
+  font-weight: 400;
+  line-height: 17px;
+  letter-spacing: -0.2px;
+  color: var(--dk-muted);
+  word-break: keep-all;
+}
+.sb-photo-drop.is-filled { border-color: var(--dk-line); }
 .sb-photo-drop__preview {
   display: block;
+  width: 200px;
+  height: 200px;
   max-width: 100%;
-  max-height: 220px;
-  border-radius: 16px;
-  object-fit: contain;
+  border-radius: 40px;
+  object-fit: cover;
 }
 
-/* 날짜 입력 질문 — 탭하면 기기 기본 날짜 선택이 열린다 */
+/* 날짜 입력 필드 — Figma DateInputRow: 48px · radius/md 8 · 1px 테두리(비면 border/default, 고르면 bg/main 보라) ·
+   패딩 14 · gap 12 · 왼쪽 20px 달력 아이콘 · 값 15px Gumi (비면 tertiary 회색 안내) */
 .sb-date-field {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   width: 100%;
   min-height: 48px;
-  padding: 12px 16px;
+  padding: 13px 14px;
   border: 1px solid var(--dk-line);
   border-radius: 8px;
   background: var(--dk-surface);
   cursor: pointer;
+  text-align: left;
+  transition: border-color var(--sb-dur) var(--sb-ease);
 }
+.sb-date-field__icon { flex: 0 0 auto; width: 20px; height: 20px; color: var(--dk-subtle); }
+.sb-date-field__icon svg { display: block; width: 100%; height: 100%; }
 .sb-date-field__value {
   flex: 1;
   min-width: 0;
-  font-size: var(--sb-t-body);
-  font-weight: 300;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.2;
   color: var(--dk-subtle);
 }
-.sb-date-field.is-filled .sb-date-field__value { font-weight: 400; color: var(--dk-ink); }
-.sb-date-field__chevron { flex: 0 0 auto; font-size: var(--sb-t-title); color: var(--dk-muted); }
-.sb-date-field { text-align: left; }
+.sb-date-field.is-filled { border-color: var(--dk-brand); }
+.sb-date-field.is-filled .sb-date-field__icon { color: var(--dk-brand); }
+.sb-date-field.is-filled .sb-date-field__value { color: var(--dk-ink); }
+/* 필드 아래 펼친 달력 (calendarMode inline) — 시트와 같은 달력을 카드 안에 그대로 */
+.sb-cal--inline {
+  margin-top: 12px;
+  padding: 12px 8px 8px;
+  border: 1px solid var(--dk-line-soft);
+  border-radius: 8px;
+  background: var(--dk-surface);
+}
 
 /* 질문 문구와 선택지 사이 간격 — 크기·색은 viewer.css의 질문 라벨 규칙이 잡는다 */
 .clean-home-page .clean-question-list label { margin-bottom: 10px !important; }
@@ -584,7 +612,8 @@
 }
 .sb-survey-card__skip:hover { color: var(--dk-ink-2); text-decoration: underline; }
 
-/* ── 바텀 시트 (사진 가져오기 · 샘플 얼굴 · 날짜 선택) ── */
+/* ── 바텀 시트 / 가운데 모달 (사진 가져오기 · 샘플 얼굴 · 날짜 선택 · 키워드 설명) — Figma [PP1K] Sheet ──
+   패널 상단 radius 24 · 패딩 8/16/34 · 그립 36×4(패딩 4/12) · 제목 Gumi 18/23 가운데 · ✕ 없음(배경 탭·Esc 로 닫힘) */
 .sb-sheet {
   position: fixed;
   inset: 0;
@@ -597,10 +626,10 @@
 }
 .sb-sheet__panel {
   width: min(430px, 100%);
-  max-height: 78vh;
+  max-height: 84vh;
   overflow-y: auto;
-  padding: 10px 20px 26px;
-  border-radius: var(--sb-r-2xl) var(--sb-r-2xl) 0 0;
+  padding: 8px 16px 34px;
+  border-radius: 24px 24px 0 0;
   background: var(--dk-surface);
   box-shadow: var(--sb-shadow-lg);
   animation: sb-sheet-up var(--sb-dur-slow) var(--sb-ease);
@@ -610,70 +639,120 @@
   display: block;
   width: 36px;
   height: 4px;
-  margin: 0 auto 12px;
+  margin: 4px auto 12px;
   border-radius: var(--sb-r-pill);
   background: var(--dk-line);
 }
 .sb-sheet__head {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--dk-line);
+  padding: 4px 0 12px;
 }
-.sb-sheet__title { flex: 1; min-width: 0; margin: 0; font-size: var(--sb-t-body); font-weight: 400; color: var(--dk-ink); }
+.sb-sheet__title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 23px;
+  color: var(--dk-ink);
+  text-align: center;
+}
+.sb-sheet__subtitle {
+  margin: -6px 0 12px;
+  font-size: var(--sb-t-caption);
+  font-weight: 400;
+  line-height: 17px;
+  letter-spacing: -0.2px;
+  color: var(--dk-muted);
+  text-align: center;
+  word-break: keep-all;
+}
 .sb-sheet__close {
   flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
   border: 0;
   background: none;
   font-size: var(--sb-t-body);
   color: var(--dk-ink-2);
   cursor: pointer;
 }
-/* 시트 메뉴 — Figma 사진 선택 옵션: 회색 둥근 행(아이콘+라벨 16px)이 8px 간격으로 쌓인다 */
-.sb-sheet__menu { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; }
+/* 가운데 모달 — Figma ModelSelectPanel: 카드 radius 24 · 패딩 20 · 제목 16/21 왼쪽 + ✕ · 부제 12/17 */
+.sb-sheet--center { align-items: center; padding: 24px; }
+.sb-sheet--center .sb-sheet__panel {
+  width: min(320px, 100%);
+  max-height: 86vh;
+  padding: 20px;
+  border-radius: 24px;
+  animation: sb-sheet-pop var(--sb-dur-slow) var(--sb-ease);
+}
+@keyframes sb-sheet-pop { from { transform: scale(0.96); opacity: 0.6 } to { transform: none; opacity: 1 } }
+.sb-sheet--center .sb-sheet__head { justify-content: space-between; padding: 0 0 6px; }
+.sb-sheet--center .sb-sheet__title { font-size: 16px; line-height: 21px; text-align: left; }
+.sb-sheet--center .sb-sheet__subtitle { margin: 0 0 16px; text-align: left; }
+/* 시트 메뉴 — Figma OptionRow: 52px · radius/md 8 · 패딩 16 · gap 12 · bg/subtle 면 · 20px 선화 아이콘 + 15px Gumi 라벨,
+   행 간격 8 */
+.sb-sheet__menu { display: flex; flex-direction: column; gap: 8px; }
 .sb-sheet__menu button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
   padding: 16px;
   border: 0;
-  border-radius: var(--sb-r-md);
-  background: var(--dk-thumb);
-  font-size: 16px;
+  border-radius: 8px;
+  background: var(--dk-sunken);
+  font-size: 15px;
   font-weight: 400;
   color: var(--dk-ink);
   text-align: left;
   cursor: pointer;
   transition: background var(--sb-dur) var(--sb-ease);
 }
+.sb-sheet__menu button svg { flex: 0 0 auto; width: 20px; height: 20px; color: var(--dk-ink); }
 .sb-sheet__menu button:hover { background: var(--dk-brand-soft); color: var(--dk-ink); }
+/* 샘플 얼굴 — Figma ModelGrid: 2열 · gap 12 · 카드 radius 8 · 고른 카드만 2px 보라 테두리 */
 .sb-sheet__faces {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  padding-top: 16px;
+  gap: 12px;
 }
 .sb-sheet__face {
   padding: 0;
-  border: 1px solid var(--dk-line);
-  border-radius: var(--sb-r-xs);
+  border: 2px solid transparent;
+  border-radius: 8px;
   background: var(--dk-thumb);
   overflow: hidden;
   cursor: pointer;
+  transition: border-color var(--sb-dur) var(--sb-ease);
 }
 .sb-sheet__face img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; }
-.sb-sheet__face:hover { border-color: var(--dk-brand); }
+.sb-sheet__face:hover { border-color: var(--dk-brand-2); }
+.sb-sheet__face.is-selected { border-color: var(--dk-brand); }
 
-/* ── 달력 (날짜 선택 시트) ── */
-.sb-cal { padding-top: 14px; }
-.sb-cal__head {
+/* ── 달력 (날짜 선택 시트) — Figma CalendarSection: 패딩 0 8 · 요일 행 12px(일요일 Red-500) + 밑줄 1px border/subtle ·
+   주 행 36px, 행 간격 8 · 날짜 13px 500 · 고른 날 32px 보라 원 + 흰 글자 · 「확인」 48px radius 8 bg/main ── */
+.sb-cal { padding: 0 8px; }
+.sb-cal__nav {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 4px 2px 14px;
+  justify-content: center;
+  gap: 4px;
+  margin: -4px 0 8px;
 }
-.sb-cal__head strong { font-size: 18px; font-weight: 400; color: var(--dk-ink); }
-.sb-cal__head button {
-  width: 30px;
-  height: 30px;
+.sb-cal__nav strong {
+  min-width: 96px;
+  font-size: var(--sb-t-small);
+  font-weight: 500;
+  color: var(--dk-ink-2);
+  text-align: center;
+}
+.sb-cal__nav button {
+  width: 28px;
+  height: 28px;
   border: 0;
   background: none;
   font-size: var(--sb-t-title);
@@ -683,27 +762,70 @@
 .sb-cal__grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 2px 0;
+  gap: 8px 0;
   place-items: center;
 }
-.sb-cal__grid--week { margin-bottom: 6px; }
-.sb-cal__wd { font-size: var(--sb-t-caption); font-weight: 300; color: var(--dk-muted); }
-.sb-cal__wd.is-sun { color: var(--sb-danger); }
+.sb-cal__grid--week {
+  gap: 0;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--dk-line-soft);
+}
+.sb-cal__wd {
+  font-size: var(--sb-t-caption);
+  font-weight: 400;
+  line-height: 17px;
+  letter-spacing: -0.2px;
+  color: var(--dk-muted);
+}
+.sb-cal__wd.is-sun { color: var(--dk-red); }
 .sb-cal__day {
-  width: 36px;
+  position: relative;
+  isolation: isolate;
+  width: 100%;
   height: 36px;
   border: 0;
-  border-radius: 50%;
   background: none;
   font-size: var(--sb-t-small);
-  font-weight: 300;
+  font-weight: 500;
   color: var(--dk-ink);
   cursor: pointer;
 }
-.sb-cal__day.is-sun { color: var(--sb-danger); }
-.sb-cal__day:hover { background: var(--dk-brand-soft); }
+.sb-cal__day::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  left: 50%;
+  top: 50%;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: transparent;
+  transition: background var(--sb-dur) var(--sb-ease);
+}
+.sb-cal__day.is-sun { color: var(--dk-red); }
+.sb-cal__day:hover::before { background: var(--dk-brand-soft); }
 .sb-cal__day.is-selected,
-.sb-cal__day.is-selected.is-sun { background: var(--dk-brand); color: #fff; font-weight: 400; }
+.sb-cal__day.is-selected.is-sun { color: #fff; }
+.sb-cal__day.is-selected::before,
+.sb-cal__day.is-selected:hover::before { background: var(--dk-brand); }
+.sb-cal__confirm {
+  display: block;
+  width: 100%;
+  height: 48px;
+  margin-top: 12px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--dk-brand);
+  font-size: 15px;
+  font-weight: 400;
+  color: #fff;
+  cursor: pointer;
+  transition: background var(--sb-dur) var(--sb-ease);
+}
+.sb-cal__confirm:hover:not(:disabled) { background: var(--dk-brand-deep); }
+.sb-cal__confirm:disabled { background: var(--dk-line); color: var(--dk-disabled); cursor: not-allowed; }
 
 /* 키워드 설명 시트 본문 — 시트 껍데기는 사진·날짜와 공유(.sb-sheet*) */
 .sb-keyword-sheet { padding-top: 14px; }
@@ -742,5 +864,3 @@
 /* 설문 인트로 제목 — 원본 .clean-info-header h2 span 이 320을 !important 로 박아 kText 조각이
    얇아지므로 같은 힘으로 되돌린다 (Figma [PP1K] Header Title 22/30 · text/heading) */
 .sb-survey-intro h2 span { font-weight: 400 !important; }
-/* 드롭존 카메라 아이콘 (Figma [PP1K] 사진 업로드) */
-.sb-photo-drop__icon svg { width: 36px; height: 36px; }

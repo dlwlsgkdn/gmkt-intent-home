@@ -710,6 +710,9 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const topItems = allItems.filter((it) => !it.parentId)
   const stepQuestions = topItems.filter((it) => isQuestionType(it.type))
   const qIndex = stepQuestions.length ? Math.min(qStep, stepQuestions.length - 1) : 0
+  /* 화면 꽉 채우기 — Player 와 같은 규칙. 라이브 투영 아이템은 fillScreen 을 싣지 않으므로(기본 켜짐) 언제나 켜진다 */
+  const fillActive = stageKey === 'survey' && stepQuestions.length > 0 && stepQuestions[qIndex].props?.fillScreen !== false
+  const navHidden = fillActive && topItems.some((it) => it.type === 'screenHeader')
   const items = stageKey === 'survey' ? pageQuestions(topItems, qStep) : topItems
 
   /* 생성 중 부분 페이지 투영 — 최종과 같은 livePage 투영을 그대로 쓴다 (아이템 id가 인덱스
@@ -963,7 +966,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         ))}
       </nav>
 
-      <section className="sb-player sb-player--live min-h-screen relative z-10">
+      <section className={'sb-player sb-player--live min-h-screen relative z-10' + (fillActive ? ' sb-player--fill' : '')}>
         <div className={'sb-live-annotate' + (fbMode && fbAvailable ? ' is-on' : '')}>
         <div className="sb-phone sb-phone--player" ref={phoneRef} style={{ width: viewer.w }}>
           {error ? (
@@ -1043,6 +1046,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
                   )
                 })}
               </div>
+              {!navHidden && (
               <div className="clean-survey-nav sb-player__nav">
                 {stageKey === 'survey' && qIndex > 0 ? (
                   <button
@@ -1077,6 +1081,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
                   </button>
                 )}
               </div>
+              )}
             </>
           )}
 

@@ -87,6 +87,11 @@ export default function Player({ api, scenario, resume }) {
     const current = stepQuestions[step]
     return items.filter((it) => !isQuestionType(it.type) || it.id === current.id)
   }, [items, stepQuestions, step, stage.key])
+  /* 화면 꽉 채우기(질문 fillScreen, 기본 켜짐) — 보이는 질문이 남은 높이를 다 먹고 「다음」이 화면 맨 아래에
+     붙는다(Figma BottomBar). 화면 헤더가 있으면 하단 내비(이전 질문·홈으로)는 헤더의 뒤로·홈이 같은 일을
+     하므로 숨긴다 — 바닥에 붙은 버튼 밑에 또 버튼 줄이 깔리지 않게 */
+  const fillActive = stage.key === 'survey' && stepQuestions.length > 0 && stepQuestions[step].props?.fillScreen !== false
+  const navHidden = fillActive && visibleItems.some((it) => it.type === 'screenHeader')
 
   /* 쓰레드 기록 — 설문 진입(마운트) 시 생성되고, 단계 이동/담기/완료 때마다 갱신.
      이어보기(resume)면 새로 만들지 않고 같은 id로 이어서 기록한다 */
@@ -230,7 +235,7 @@ export default function Player({ api, scenario, resume }) {
         ))}
       </nav>
 
-      <section className="sb-player min-h-screen relative z-10">
+      <section className={'sb-player min-h-screen relative z-10' + (fillActive ? ' sb-player--fill' : '')}>
         <div className="sb-phone sb-phone--player" style={{ width: viewer.w }}>
         <div className="sb-player__stack">
           {visibleItems.length === 0 && (
@@ -247,6 +252,7 @@ export default function Player({ api, scenario, resume }) {
         </div>
 
         {/* 하단 내비 — 설문에서는 질문 단위로 넘어가고, 마지막 질문에서만 다음 단계로 */}
+        {!navHidden && (
         <div className="clean-survey-nav sb-player__nav">
           {stage.key === 'survey' && step > 0 ? (
             <button
@@ -277,6 +283,7 @@ export default function Player({ api, scenario, resume }) {
             </button>
           )}
         </div>
+        )}
 
         {cart.length > 0 && (
           <p className="sb-player__cart">🧺 담은 상품 {cart.length}개</p>

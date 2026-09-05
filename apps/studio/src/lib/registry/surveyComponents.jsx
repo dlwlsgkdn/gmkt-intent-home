@@ -169,7 +169,47 @@ function downscalePhoto(dataUrl, done) {
     아니라 "사진 제출됨" 표식이다 (원본은 기기에만 남는다). 그대로 img에 넣으면 깨진 이미지가 된다 */
 const isPhotoImage = (value) => /^(data:image\/|https?:\/\/|\.{0,2}\/)/.test(String(value || ''))
 
-/* 사진 업로드 질문의 동선: 드롭존 → 선택 옵션 시트 → (카메라·앨범 = 파일 선택 / 샘플 얼굴 = 그리드) */
+/* 설문 아이콘 — Figma [PP1K] 카메라(2px 선)·앨범·샘플 얼굴·달력. 전부 currentColor 선화라 색은 CSS 가 정한다 */
+const CameraIcon = ({ strokeWidth = 2 }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.6l1.2-1.8h5.4L15.9 6h1.6A2.5 2.5 0 0 1 20 8.5v8A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z" />
+    <circle cx="12" cy="12.5" r="3.4" />
+  </svg>
+)
+const AlbumIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+    <circle cx="9" cy="10" r="1.6" />
+    <path d="M20.5 15.5l-4.6-4.6a1.5 1.5 0 0 0-2.1 0L6 18.5" />
+  </svg>
+)
+const FaceIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="8.5" />
+    <circle cx="12" cy="10" r="3" />
+    <path d="M6.5 18.2a6.5 6.5 0 0 1 11 0" />
+  </svg>
+)
+const CalendarIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
+    <path d="M3.5 9.5h17M8 3v4M16 3v4" />
+  </svg>
+)
+
+/* 사진 질문 문구 기본값 — Figma UploadSection·PreviewSection·ModelSelectPanel 원문.
+   라이브 투영 아이템은 이 키들을 싣지 않으므로(defaults 병합 없음) undefined 는 기본 문구, '' 는 숨김이다 */
+const PHOTO_TEXT = {
+  hint: '분석을 위해 눈, 코, 입이 가려지지 않은 정면이 좋아요',
+  pickedTitle: '사진이 선택되었어요',
+  pickedHint: '다른 사진을 선택하려면 사진 영역을 탭하세요',
+  samplesTitle: '모델 얼굴 선택',
+  samplesHint: '내 피부 타입에 가까운 가상 모델을 골라주세요',
+}
+
+/* 사진 업로드 질문의 동선 (Figma [PP1K] 사진 업로드 플로우): 드롭존 → 선택 옵션 바텀시트(카메라 바로 촬영 ·
+   앨범에서 사진 선택 · 샘플 얼굴 선택) → 카메라·앨범 = 파일 선택 / 샘플 얼굴 = 가운데 "모델 얼굴 선택" 모달(2×2).
+   고르면 드롭존이 미리보기(200×200 둥근 사진 + "사진이 선택되었어요")로 바뀌고 점선은 회색으로 가라앉는다 */
 function PhotoPicker({ p, ctx, picked }) {
   const [sheet, setSheet] = React.useState(null) // null | 'options' | 'samples'
   const fileRef = React.useRef(null)
@@ -178,6 +218,9 @@ function PhotoPicker({ p, ctx, picked }) {
   const samples = (p.samples ? String(p.samples).split('\n') : DEFAULT_SAMPLE_FACES)
     .map((u) => resolveSampleFace(u.trim()))
     .filter(Boolean)
+  // 문구: 지정값 → 기본 문구 → '' 이면 숨김
+  const raw = (key) => (p[key] === undefined ? PHOTO_TEXT[key] : p[key])
+  const text = (key) => (raw(key) ? kText(raw(key), ctx, key) : null)
 
   const choose = (url) => {
     if (isPlayer) ctx.player.setAnswer(ctx.itemId, url)
@@ -200,27 +243,33 @@ function PhotoPicker({ p, ctx, picked }) {
         onClick={() => { if (isPlayer) setSheet('options') }}
       >
         {picked && isPhotoImage(picked) ? (
-          <img className="sb-photo-drop__preview" src={picked} alt={p.placeholder} draggable={false} />
+          <>
+            <img className="sb-photo-drop__preview" src={picked} alt={raw('pickedTitle') || '선택한 사진'} draggable={false} />
+            {(raw('pickedTitle') || raw('pickedHint')) && (
+              <span className="sb-photo-drop__text">
+                {raw('pickedTitle') ? <span className="sb-photo-drop__label">{text('pickedTitle')}</span> : null}
+                {raw('pickedHint') ? <span className="sb-photo-drop__hint">{text('pickedHint')}</span> : null}
+              </span>
+            )}
+          </>
         ) : picked ? (
           /* 사진 원본 없이 제출 표식만 남은 경우 (이어보기·관리 페이지) — 답한 상태로만 보여준다 */
           <>
             <span className="sb-photo-drop__icon" aria-hidden="true">✓</span>
-            <span className="sb-photo-drop__label">{picked}</span>
+            <span className="sb-photo-drop__text">
+              <span className="sb-photo-drop__label">{picked}</span>
+            </span>
           </>
         ) : (
           <>
-            {/* Figma [PP1K] 드롭존: 연보라 원 안 카메라 아이콘 — 문구를 따로 넣은 경우만 글자로 */}
+            {/* Figma 드롭존: 80px 연보라 원 안 32px 카메라 — 문구를 따로 넣은 경우만 글자로 */}
             <span className="sb-photo-drop__icon">
-              {p.iconLabel && p.iconLabel !== '사진 아이콘' ? (
-                kText(p.iconLabel, ctx, 'iconLabel')
-              ) : (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.6l1.2-1.8h5.4L15.9 6h1.6A2.5 2.5 0 0 1 20 8.5v8A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z" />
-                  <circle cx="12" cy="12.5" r="3.4" />
-                </svg>
-              )}
+              {p.iconLabel && p.iconLabel !== '사진 아이콘' ? kText(p.iconLabel, ctx, 'iconLabel') : <CameraIcon />}
             </span>
-            <span className="sb-photo-drop__label">{kText(p.placeholder, ctx, 'placeholder')}</span>
+            <span className="sb-photo-drop__text">
+              <span className="sb-photo-drop__label">{kText(p.placeholder, ctx, 'placeholder')}</span>
+              {raw('hint') ? <span className="sb-photo-drop__hint">{text('hint')}</span> : null}
+            </span>
           </>
         )}
       </button>
@@ -229,19 +278,25 @@ function PhotoPicker({ p, ctx, picked }) {
       <input ref={captureRef} type="file" accept="image/*" capture="user" hidden onChange={readFile} />
 
       {sheet === 'options' && (
-        <BottomSheet title="사진 가져오기" onClose={() => setSheet(null)}>
+        <BottomSheet onClose={() => setSheet(null)}>
           <div className="sb-sheet__menu">
-            <button type="button" onClick={() => captureRef.current?.click()}>카메라 촬영</button>
-            <button type="button" onClick={() => fileRef.current?.click()}>앨범에서 사진 선택</button>
-            <button type="button" onClick={() => setSheet('samples')}>샘플 얼굴 선택</button>
+            <button type="button" onClick={() => captureRef.current?.click()}><CameraIcon strokeWidth={1.8} /> 카메라 바로 촬영</button>
+            <button type="button" onClick={() => fileRef.current?.click()}><AlbumIcon /> 앨범에서 사진 선택</button>
+            <button type="button" onClick={() => setSheet('samples')}><FaceIcon /> 샘플 얼굴 선택</button>
           </div>
         </BottomSheet>
       )}
       {sheet === 'samples' && (
-        <BottomSheet title="샘플 얼굴을 선택해주세요" onClose={() => setSheet(null)}>
+        <BottomSheet variant="center" title={text('samplesTitle')} subtitle={text('samplesHint')} onClose={() => setSheet(null)}>
           <div className="sb-sheet__faces">
             {samples.map((url, i) => (
-              <button type="button" key={i} className="sb-sheet__face" onClick={() => choose(url)}>
+              <button
+                type="button"
+                key={i}
+                className={'sb-sheet__face' + (picked === url ? ' is-selected' : '')}
+                aria-pressed={picked === url}
+                onClick={() => choose(url)}
+              >
                 <img src={url} alt={`샘플 얼굴 ${i + 1}`} draggable={false} />
               </button>
             ))}
@@ -255,78 +310,114 @@ function PhotoPicker({ p, ctx, picked }) {
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
 const pad2 = (n) => String(n).padStart(2, '0')
 const toISO = (y, m, d) => `${y}-${pad2(m + 1)}-${pad2(d)}`
-/* "2026-08-19" → "2026년 8월 19일" (필드에 보여줄 문구) */
+/* "2026-08-19" → "2026년 8월 19일 (수)" — 필드에 보여줄 문구 (Figma DateInputRow 는 요일까지 쓴다) */
 function dateLabel(value) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''))
-  return m ? `${Number(m[1])}년 ${Number(m[2])}월 ${Number(m[3])}일` : ''
+  if (!m) return ''
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+  return `${Number(m[1])}년 ${Number(m[2])}월 ${Number(m[3])}일 (${WEEKDAYS[d.getDay()]})`
 }
 
-/* 날짜 질문의 동선: 필드 → 달력 바텀 시트 → 날짜 탭 = 선택 후 닫힘 */
+/* 달력 본체 — 월 이동 줄 + 요일 행(일요일 빨강, 밑줄) + 날짜 그리드. 시트 안에서도, 필드 아래 펼친 채(inline)로도 쓴다 */
+function CalendarGrid({ view, shift, selected, onPick }) {
+  const first = new Date(view.y, view.m, 1).getDay()
+  const days = new Date(view.y, view.m + 1, 0).getDate()
+  return (
+    <>
+      <div className="sb-cal__nav">
+        <button type="button" aria-label="이전 달" onClick={() => shift(-1)}>‹</button>
+        <strong>{view.y}년 {view.m + 1}월</strong>
+        <button type="button" aria-label="다음 달" onClick={() => shift(1)}>›</button>
+      </div>
+      <div className="sb-cal__grid sb-cal__grid--week">
+        {WEEKDAYS.map((w, i) => (
+          <span key={w} className={'sb-cal__wd' + (i === 0 ? ' is-sun' : '')}>{w}</span>
+        ))}
+      </div>
+      <div className="sb-cal__grid">
+        {Array.from({ length: first }, (_, i) => <span key={`b${i}`} />)}
+        {Array.from({ length: days }, (_, i) => {
+          const day = i + 1
+          const iso = toISO(view.y, view.m, day)
+          return (
+            <button
+              key={day}
+              type="button"
+              className={
+                'sb-cal__day' +
+                (iso === selected ? ' is-selected' : '') +
+                ((first + i) % 7 === 0 ? ' is-sun' : '')
+              }
+              aria-pressed={iso === selected}
+              onClick={() => onPick(iso)}
+            >
+              {day}
+            </button>
+          )
+        })}
+      </div>
+    </>
+  )
+}
+
+/* 날짜 질문의 동선 (Figma [PP1K] 날짜 입력): 필드(달력 아이콘 + 안내) → 달력 바텀 시트(제목 · 요일 · 그리드 · 「확인」)
+   → 날짜 탭 = 임시 선택(보라 원), 「확인」이 답으로 굳히고 닫는다. calendarMode 'inline' 이면 시트 대신 필드 아래에
+   달력을 펼쳐 둔다 — 캔버스에서도 보이는 달력 컴포넌트가 필요할 때 */
 function DatePicker({ p, ctx, value }) {
   const [open, setOpen] = React.useState(false)
+  const [draft, setDraft] = React.useState('') // 시트 안에서 고른 날 — 「확인」을 눌러야 답이 된다 (Figma ConfirmButton)
   const parsed = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''))
   const today = new Date()
   const [view, setView] = React.useState(() =>
     parsed ? { y: Number(parsed[1]), m: Number(parsed[2]) - 1 } : { y: today.getFullYear(), m: today.getMonth() }
   )
   const isPlayer = ctx.mode === 'player'
-  const first = new Date(view.y, view.m, 1).getDay()
-  const days = new Date(view.y, view.m + 1, 0).getDate()
+  const inline = p.calendarMode === 'inline'
   const shift = (delta) => {
     const next = new Date(view.y, view.m + delta, 1)
     setView({ y: next.getFullYear(), m: next.getMonth() })
+  }
+  const openSheet = () => {
+    if (!isPlayer || inline) return
+    setDraft(value || '')
+    if (parsed) setView({ y: Number(parsed[1]), m: Number(parsed[2]) - 1 })
+    setOpen(true)
+  }
+  const confirm = () => {
+    if (draft && isPlayer) ctx.player.setAnswer(ctx.itemId, draft)
+    setOpen(false)
   }
   return (
     <div className="sb-survey-date">
       <button
         type="button"
         className={'sb-date-field' + (value ? ' is-filled' : '')}
-        onClick={() => { if (isPlayer) setOpen(true) }}
+        onClick={openSheet}
       >
+        <span className="sb-date-field__icon" aria-hidden="true"><CalendarIcon /></span>
         <span className="sb-date-field__value">
           {dateLabel(value) || kText(p.placeholder, ctx, 'placeholder')}
         </span>
-        <span className="sb-date-field__chevron" aria-hidden="true">›</span>
       </button>
+
+      {inline && (
+        <div className="sb-cal sb-cal--inline">
+          <CalendarGrid
+            view={view}
+            shift={shift}
+            selected={value}
+            onPick={(iso) => { if (isPlayer) ctx.player.setAnswer(ctx.itemId, iso) }}
+          />
+        </div>
+      )}
 
       {open && (
         <BottomSheet title={p.sheetTitle || '날짜 선택'} onClose={() => setOpen(false)}>
           <div className="sb-cal">
-            <div className="sb-cal__head">
-              <button type="button" aria-label="이전 달" onClick={() => shift(-1)}>‹</button>
-              <strong>{view.y}년 {view.m + 1}월</strong>
-              <button type="button" aria-label="다음 달" onClick={() => shift(1)}>›</button>
-            </div>
-            <div className="sb-cal__grid sb-cal__grid--week">
-              {WEEKDAYS.map((w, i) => (
-                <span key={w} className={'sb-cal__wd' + (i === 0 ? ' is-sun' : '')}>{w}</span>
-              ))}
-            </div>
-            <div className="sb-cal__grid">
-              {Array.from({ length: first }, (_, i) => <span key={`b${i}`} />)}
-              {Array.from({ length: days }, (_, i) => {
-                const day = i + 1
-                const iso = toISO(view.y, view.m, day)
-                const selected = iso === value
-                return (
-                  <button
-                    key={day}
-                    type="button"
-                    className={
-                      'sb-cal__day' +
-                      (selected ? ' is-selected' : '') +
-                      ((first + i) % 7 === 0 ? ' is-sun' : '')
-                    }
-                    onClick={() => {
-                      if (isPlayer) ctx.player.setAnswer(ctx.itemId, iso)
-                      setOpen(false)
-                    }}
-                  >
-                    {day}
-                  </button>
-                )
-              })}
-            </div>
+            <CalendarGrid view={view} shift={shift} selected={draft} onPick={setDraft} />
+            <button type="button" className="sb-cal__confirm" disabled={!draft} onClick={confirm}>
+              {kText(p.confirmLabel || '확인', ctx, 'confirmLabel')}
+            </button>
           </div>
         </BottomSheet>
       )}
@@ -337,8 +428,11 @@ function DatePicker({ p, ctx, value }) {
 /* 설문 질문 한 화면의 공통 껍데기 — 진행 표시 + 질문 문구 + 항목 + 다음 버튼.
    Figma "설문" 섹션의 화면 한 장이 곧 이 컴포넌트 하나다. 질문형 3종(선택지·사진·날짜)이
    같은 껍데기를 쓰고 안쪽 입력부만 children으로 갈린다. */
-const NAV_DEFAULTS = { nextLabel: '다음', submitLabel: '맞춤 계획 확인하기' }
+const NAV_DEFAULTS = { nextLabel: '다음', submitLabel: '맞춤 계획 확인하기', fillScreen: true }
 const NAV_FIELDS = [
+  /* 화면 꽉 채우기 — 질문 카드가 남은 높이를 다 먹고 「다음」이 화면 맨 아래에 붙는다 (Figma 설문 화면의
+     Body fill + BottomBar). 기본 켜짐: 옛 저장분처럼 값이 없으면 켜진 것으로 본다 (false 만 꺼짐) */
+  { key: 'fillScreen', label: '화면 꽉 채우기 (「다음」을 화면 맨 아래에)', kind: 'toggle', defaultValue: true },
   { key: 'nextLabel', label: '다음 버튼 문구', kind: 'text' },
   { key: 'submitLabel', label: '마지막 질문일 때 버튼 문구', kind: 'text' },
 ]
@@ -350,8 +444,10 @@ function QuestionShell({ p, ctx, children, answered = true, foot = null }) {
   const label = (isLast ? p.submitLabel : p.nextLabel) || NAV_DEFAULTS[fieldKey]
   // 캔버스는 목업이라 항상 활성처럼 보이고, 실제 체험에서만 답을 골라야 넘어간다
   const blocked = ctx.mode === 'player' && !answered
+  // 화면 꽉 채우기는 실행 화면에서만 — 캔버스는 문서 흐름 스택이라 뷰포트 높이가 의미 없다
+  const fill = ctx.mode === 'player' && p.fillScreen !== false
   return (
-    <div className="sb-survey-card">
+    <div className={'sb-survey-card' + (fill ? ' sb-survey-card--fill' : '')}>
       <div className="sb-survey-progress" aria-label="설문 진행">
         <span className="sb-survey-progress__count">{index + 1} / {total}</span>
         <span className="sb-survey-progress__track">
@@ -485,6 +581,7 @@ export const SURVEY_COMPONENTS = {
     defaults: {
       question: '1. 얼굴 사진을 올려주세요',
       placeholder: '정면 얼굴 사진을 선택해주세요',
+      ...PHOTO_TEXT, // 드롭존 보조 문구 · 선택 뒤 제목/보조 · 샘플 모달 제목/부제 (Figma 원문)
       iconLabel: '', // 비우면 카메라 아이콘 (Figma 드롭존)
       samples: '', // 비우면 Figma에서 내보낸 기본 샘플 얼굴 4종
       photoUrl: '',
@@ -493,8 +590,13 @@ export const SURVEY_COMPONENTS = {
     fields: [
       { key: 'question', label: '질문 문구', kind: 'textarea' },
       { key: 'placeholder', label: '드롭존 안내 문구', kind: 'text' },
+      { key: 'hint', label: '드롭존 보조 문구 (비우면 숨김)', kind: 'text' },
       { key: 'iconLabel', label: '아이콘 자리 문구 (비우면 카메라 아이콘)', kind: 'text' },
+      { key: 'pickedTitle', label: '사진 선택 뒤 문구', kind: 'text' },
+      { key: 'pickedHint', label: '사진 선택 뒤 보조 문구 (비우면 숨김)', kind: 'text' },
       { key: 'samples', label: '샘플 얼굴 이미지 URL (비우면 기본 4종)', kind: 'stringList', list: true },
+      { key: 'samplesTitle', label: '샘플 얼굴 모달 제목', kind: 'text' },
+      { key: 'samplesHint', label: '샘플 얼굴 모달 부제 (비우면 숨김)', kind: 'text' },
       { key: 'photoUrl', label: '선택 완료 미리보기 이미지 URL', kind: 'url' },
       ...NAV_FIELDS,
     ],
@@ -514,18 +616,31 @@ export const SURVEY_COMPONENTS = {
     label: '날짜 입력 질문',
     stage: 'survey',
     icon: '📅',
-    hint: '날짜를 골라 받는 질문 (탭하면 날짜 선택)',
+    hint: '날짜를 골라 받는 질문 — 달력 시트(Figma) 또는 필드 아래 펼친 달력',
     defaults: {
       question: '1. 소개팅이 언제예요?',
-      placeholder: '날짜를 골라주세요',
-      sheetTitle: '날짜 선택',
+      placeholder: '날짜를 선택해 주세요',
+      sheetTitle: '소개팅 날짜 선택',
+      confirmLabel: '확인',
+      calendarMode: 'sheet',
       skipLabel: '',
       ...NAV_DEFAULTS,
     },
     fields: [
       { key: 'question', label: '질문 문구', kind: 'textarea' },
       { key: 'placeholder', label: '비어 있을 때 문구', kind: 'text' },
-      { key: 'sheetTitle', label: '날짜 선택 시트 제목', kind: 'text' },
+      {
+        key: 'calendarMode',
+        label: '달력 표시',
+        kind: 'select',
+        defaultValue: 'sheet',
+        options: [
+          { value: 'sheet', label: '탭하면 바텀 시트로 (Figma)' },
+          { value: 'inline', label: '필드 아래 펼쳐 두기' },
+        ],
+      },
+      { key: 'sheetTitle', label: '달력 시트 제목', kind: 'text' },
+      { key: 'confirmLabel', label: '달력 확인 버튼 문구', kind: 'text' },
       { key: 'skipLabel', label: '건너뛰기 문구 (비우면 숨김)', kind: 'text' },
       ...NAV_FIELDS,
     ],
