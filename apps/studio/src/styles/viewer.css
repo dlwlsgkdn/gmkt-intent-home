@@ -1758,3 +1758,62 @@
   margin-top: -18px;
   padding-top: 8px;
 }
+
+/* ── 디스플레이 서체 적용 — Figma [PP1K]가 "Gumi Romance TTF"(낭만있구미체)를 쓴 자리 (2026-09) ──
+   base.css @font-face + --dk-font-display. 원본 .clean-home-page * 가 font-family 를 !important 로 모든
+   요소에 직접 박으므로 같은 힘(!important)으로, kText 조각(span)까지 `X *` 로 덮는다. 단일 굵기(400)
+   서체라 500 이던 버튼 라벨도 400 으로 맞춰 가짜 볼드를 막는다. Pretendard 자리(설명·선택지 부제·
+   진행 라벨·요약 칩·몰 이름·단계 번호)는 그대로 시스템 스택으로 남긴다 */
+:is(.sb-canvas-item__content, .sb-player__item) :is(
+  .beauty-greeting,
+  .clean-info-header h2,
+  .clean-question-list label,
+  .sb-screen-header__title,
+  .sb-survey-option--list .sb-survey-option__main,
+  .sb-survey-option__input,
+  .sb-survey-card__next,
+  .sb-photo-drop__label,
+  .sb-date-field__value,
+  .sb-plan-head__query,
+  .sb-plan-head__title,
+  .sb-plan-step__title,
+  .sb-plan-step__sub,
+  .sb-product-card2__name,
+  .sb-product-card2__price b,
+  .sb-cart-btn,
+  .sb-content-card__title,
+  .sb-fbcard__q,
+  .sb-checklist__title
+),
+.clean-search input.clean-search__field--ellipsis,
+.clean-search textarea.clean-search__field--multiline,
+.clean-tag-row .suggestion-tag,
+.sb-sheet .sb-sheet__title,
+.sb-sheet .sb-sheet__menu button,
+.sb-sheet .sb-cal__head strong {
+  font-family: var(--dk-font-display) !important;
+  font-weight: 400;
+}
+:is(.sb-canvas-item__content, .sb-player__item) :is(
+  .beauty-greeting,
+  .clean-info-header h2,
+  .clean-question-list label,
+  .sb-screen-header__title,
+  .sb-survey-option--list .sb-survey-option__main,
+  .sb-survey-card__next,
+  .sb-photo-drop__label,
+  .sb-date-field__value,
+  .sb-plan-head__query,
+  .sb-plan-head__title,
+  .sb-plan-step__title,
+  .sb-plan-step__sub,
+  .sb-product-card2__name,
+  .sb-cart-btn,
+  .sb-content-card__title,
+  .sb-fbcard__q,
+  .sb-checklist__title
+) *,
+.clean-tag-row .suggestion-tag *,
+.sb-sheet .sb-sheet__menu button * {
+  font-family: var(--dk-font-display) !important;
+}

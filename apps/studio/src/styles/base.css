@@ -1,3 +1,14 @@
+/* 낭만있구미체 (Gumi Romance) — 구미시 무료 서체, public/fonts/GumiRomance.woff2 (OTF→woff2, 405KB, 단일 굵기 400).
+   라이선스: public/fonts/GumiRomance-LICENSE.txt. 본문 웹폰트 금지 규칙의 유일한 예외 — Figma [PP1K] 목업 컴포넌트의
+   디스플레이 서체로, --dk-font-display 를 통해서만 쓴다 (스튜디오 크롬·원본 프로토타입 영역에는 싣지 않는다) */
+@font-face {
+  font-family: 'Gumi Romance';
+  src: url('/fonts/GumiRomance.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* ─────────────────────────────────────────────
    DDAK Scenario Studio 전용 스타일
    원본 gmarket-advanced-clean-home.css 위에 얹힘
@@ -120,6 +131,10 @@
   --dk-gmarket-soft: #eaf1fb;
   --dk-oliveyoung: #2e7d32;
   --dk-oliveyoung-soft: #e8f5e9;
+  /* 디스플레이 서체 — Figma [PP1K]가 제목·라벨·선택지·버튼에 쓰는 "Gumi Romance TTF"(낭만있구미체).
+     아래 @font-face 로 same-origin 로드. 본문 스택(--sb-font-sans)은 여전히 시스템 폴백이고,
+     이 토큰은 목업 컴포넌트의 Figma 디스플레이 자리(viewer.css 끝 규칙)에만 실린다 */
+  --dk-font-display: 'Gumi Romance', var(--sb-font-sans);
 
   /* 평가 스튜디오가 쓰던 이름 — 전역 토큰의 별칭으로만 남긴다.
      (예전엔 .sb-qa 안에서만 정의돼 다이얼로그처럼 바깥에 뜨는 UI에서 값이 비었다) */
