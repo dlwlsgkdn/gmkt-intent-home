@@ -45,7 +45,7 @@ export default function StarterPanel({ entries, onRemove, onClose }) {
                   <div className="sb-starter-row__info">
                     <p className="sb-starter-row__title">{entry.title}</p>
                     <p className="sb-starter-row__meta">
-                      <span style={{ color: entry.color || '#5f7465' }}>#{entry.chip}</span>
+                      <span style={{ color: entry.color || '#7950f2' }}>#{entry.chip}</span>
                       {' · '}{entry.sourceAccountName} 프로필에서
                       {entry.at ? ` ${dateLabel(entry.at)}` : ' 지정'}
                     </p>

@@ -1,6 +1,6 @@
 import React from 'react'
 import { splitList, splitTextList } from '../store.js'
-import { Img, kText, parseTableRows, youtubeThumbnail } from './support.jsx'
+import { Img, kText, parseTableRows, stepPosition, youtubeThumbnail } from './support.jsx'
 
 /* 상품 카드 썸네일 — 이미지가 있으면 실제 썸네일, 없거나 로드 실패면 이모지 목업 블록.
    외부몰 이미지는 핫링크 차단으로 깨질 수 있어 무관한 스톡 이미지(FALLBACK_IMG) 대신
@@ -293,9 +293,12 @@ export const PLAN_COMPONENTS = {
       const bullets = splitTextList(p.points)
       // 구 badge가 'STEP 2' 같은 단계 표기였던 데이터는 배지로 그대로 노출하지 않는다
       const badge = /^\s*step\b/i.test(String(p.badge || '')) ? '' : p.badge
+      // 단계 번호 원(Figma StepBadge) — 페이지 안 순서로 스스로 센다 (질문 n/전체와 같은 규칙)
+      const stepNo = stepPosition(ctx)
       return (
         <div className="sb-plan-step">
           <div className="sb-plan-step__head">
+            {stepNo ? <span className="sb-plan-step__num" aria-hidden="true">{stepNo}</span> : null}
             <h3 className="sb-plan-step__title">{kText(p.title, ctx, 'title')}</h3>
             {badge ? <span className="sb-plan-step__badge">{kText(badge, ctx, 'badge')}</span> : null}
           </div>

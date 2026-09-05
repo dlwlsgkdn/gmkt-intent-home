@@ -138,7 +138,7 @@ export default function HomeView({ api }) {
 
   /* 발행 칩 목록 — 탐색 아이템의 "발행 칩 목록" 컴포넌트 자리에 렌더된다 */
   const chips = published.map((s) => {
-    const c = s.color || '#5f7465'
+    const c = s.color || '#7950f2'
     return (
       <button
         key={s.id}
@@ -146,7 +146,7 @@ export default function HomeView({ api }) {
         data-chip-id={s.id}
         className={'suggestion-tag sb-chip-scenario' + (draggingChipId === s.id ? ' sb-chip-scenario--dragging' : '')}
         title={s.title + ' (드래그로 순서 변경)'}
-        style={{ color: c, borderColor: hexToRgba(c, 0.45), background: hexToRgba(c, 0.08) }}
+        style={{ color: c, background: hexToRgba(c, 0.08) }}
         onPointerDown={(e) => onChipPointerDown(e, s.id)}
       >
         {/* ✦ 는 라이브 생성 표기 전용이라 시나리오 칩에서는 뗐다 (기호 충돌 방지) */}
@@ -301,7 +301,7 @@ export default function HomeView({ api }) {
                     </span>
                     {api.isStarterSource(s) && <span className="sb-status sb-status--default" title="이 시나리오로 기본 시나리오를 만들었어요.">기본 원천</span>}
                     <p className="sb-scenario-row__title">{s.title}</p>
-                    <p className="sb-scenario-row__chip" style={{ color: s.color || '#5f7465' }}>#{s.chip}</p>
+                    <p className="sb-scenario-row__chip" style={{ color: s.color || '#7950f2' }}>#{s.chip}</p>
                   </div>
                   <div className="sb-scenario-row__actions">
                     <button type="button" onClick={() => api.playScenario(s.id)}>시험</button>

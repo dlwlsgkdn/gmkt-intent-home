@@ -26,6 +26,14 @@ export function questionPosition(ctx) {
   return { index: index < 0 ? 0 : index, total: all.length || 1 }
 }
 
+/* 계획 항목이 페이지에서 몇 번째 단계인지 (1부터). 페이지 안의 최상위 planStep만 세고,
+   allItems 가 없는 문맥(단독 미리보기)이면 0 → 번호 원을 그리지 않는다 (Figma StepBadge) */
+export function stepPosition(ctx) {
+  const all = (ctx.allItems || []).filter((it) => it.type === 'planStep' && !it.hidden && !it.parentId)
+  const index = all.findIndex((it) => it.id === ctx.itemId)
+  return index < 0 ? 0 : index + 1
+}
+
 /* 유튜브 URL이면 별도 썸네일 입력 없이 공개 썸네일을 사용한다. */
 export function youtubeThumbnail(rawUrl) {
   const raw = String(rawUrl || '').trim()

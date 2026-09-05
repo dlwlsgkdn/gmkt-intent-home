@@ -209,7 +209,17 @@ function PhotoPicker({ p, ctx, picked }) {
           </>
         ) : (
           <>
-            <span className="sb-photo-drop__icon">{kText(p.iconLabel, ctx, 'iconLabel')}</span>
+            {/* Figma [PP1K] 드롭존: 연보라 원 안 카메라 아이콘 — 문구를 따로 넣은 경우만 글자로 */}
+            <span className="sb-photo-drop__icon">
+              {p.iconLabel && p.iconLabel !== '사진 아이콘' ? (
+                kText(p.iconLabel, ctx, 'iconLabel')
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.6l1.2-1.8h5.4L15.9 6h1.6A2.5 2.5 0 0 1 20 8.5v8A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z" />
+                  <circle cx="12" cy="12.5" r="3.4" />
+                </svg>
+              )}
+            </span>
             <span className="sb-photo-drop__label">{kText(p.placeholder, ctx, 'placeholder')}</span>
           </>
         )}
@@ -475,7 +485,7 @@ export const SURVEY_COMPONENTS = {
     defaults: {
       question: '1. 얼굴 사진을 올려주세요',
       placeholder: '정면 얼굴 사진을 선택해주세요',
-      iconLabel: '사진 아이콘',
+      iconLabel: '', // 비우면 카메라 아이콘 (Figma 드롭존)
       samples: '', // 비우면 Figma에서 내보낸 기본 샘플 얼굴 4종
       photoUrl: '',
       ...NAV_DEFAULTS,
@@ -483,7 +493,7 @@ export const SURVEY_COMPONENTS = {
     fields: [
       { key: 'question', label: '질문 문구', kind: 'textarea' },
       { key: 'placeholder', label: '드롭존 안내 문구', kind: 'text' },
-      { key: 'iconLabel', label: '아이콘 자리 문구', kind: 'text' },
+      { key: 'iconLabel', label: '아이콘 자리 문구 (비우면 카메라 아이콘)', kind: 'text' },
       { key: 'samples', label: '샘플 얼굴 이미지 URL (비우면 기본 4종)', kind: 'stringList', list: true },
       { key: 'photoUrl', label: '선택 완료 미리보기 이미지 URL', kind: 'url' },
       ...NAV_FIELDS,

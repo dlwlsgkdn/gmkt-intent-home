@@ -136,11 +136,18 @@
 /* 뷰포트(vw) 기준이던 타이포를 컨테이너 폭 기준으로 스케일 */
 .sb-canvas-item__content .clean-info-header h2,
 .sb-player__item .clean-info-header h2 {
-  font-size: 26px;
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 30px;
+  color: var(--dk-heading);
 }
 .sb-canvas-item__content .clean-info-header p,
 .sb-player__item .clean-info-header p {
-  font-size: 14px;
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 18px;
+  color: var(--dk-muted);
 }
 .sb-canvas-item__content .sb-plan-title,
 .sb-player__item .sb-plan-title {
@@ -153,7 +160,7 @@
 .sb-player__item .clean-question-list label {
   font-size: var(--sb-t-body) !important;
   font-weight: 400 !important;
-  color: var(--dk-muted) !important;
+  color: var(--dk-ink-2) !important;
   line-height: 1.45;
 }
 
@@ -874,35 +881,52 @@
    비포애프터·도움 여부·체크리스트·담기 요약. 위쪽 옛 규칙(.sb-media-card 계열)은
    그대로 두고, 여기서 새 마크업의 값을 정한다 — 같은 특이도면 나중이 이긴다. */
 
-/* 계획 타이틀 — "질의"에 대한 + 형광 강조 + AI 안내 툴팁 */
-.sb-plan-head { padding: 2px 0 4px; }
+/* 계획 타이틀 — Figma [PP1K] AIIntro: 보라 밴드(action/primary-hover) 위 흰 인용 제목 20/32 가운데.
+   "질의"가 주인공(인용)이고 제목은 그 아래 보조 줄이다. 캔버스에서는 둥근 카드, 플레이어에서는
+   프레임 폭으로 꽉 차게 그린다(아래 .sb-player__item 규칙) */
+.sb-plan-head {
+  padding: 24px 16px;
+  border-radius: var(--sb-r-md);
+  background: var(--dk-brand-deep);
+  color: #fff;
+  text-align: center;
+}
 .sb-plan-head__query {
-  margin: 0 0 4px;
-  font-size: var(--sb-t-title);
-  font-weight: 300;
-  color: var(--dk-ink);
-  line-height: 1.5;
+  margin: 0;
+  font-size: 20px;
+  font-weight: 400;
+  color: #fff;
+  line-height: 32px;
   word-break: keep-all;
 }
 .sb-plan-head__title {
   position: relative;
   display: flex;
   align-items: flex-start;
+  justify-content: center;
   gap: 6px;
-  margin: 0;
-  font-size: 24px;
-  font-weight: 400;
-  color: var(--dk-ink-2);
-  line-height: 1.35;
+  margin: 8px 0 0;
+  font-size: var(--sb-t-body);
+  font-weight: 300;
+  color: rgba(255, 255, 255, 0.82);
+  line-height: 1.5;
   word-break: keep-all;
 }
-/* 제목 아래 형광펜 바 — Figma 120×4, 제목 길이가 아니라 고정 폭이다 */
+/* 질의가 비면 제목이 주인공 자리로 올라간다 */
+.sb-plan-head__title:first-child {
+  margin-top: 0;
+  font-size: 20px;
+  font-weight: 400;
+  color: #fff;
+  line-height: 32px;
+}
+/* 제목 아래 짧은 바 — 밴드 위라 흰 반투명, 가운데 */
 .sb-plan-head__mark {
   display: block;
-  width: 120px;
+  width: 32px;
   max-width: 100%;
-  height: 4px;
-  margin-top: 6px;
+  height: 3px;
+  margin: 14px auto 0;
   border-radius: 2px;
   background: var(--dk-underline);
 }
@@ -913,14 +937,14 @@
   justify-content: center;
   width: 18px;
   height: 18px;
-  margin-top: 7px;
-  border: 1.4px solid var(--dk-ink-2);
+  margin-top: 1px;
+  border: 1.4px solid rgba(255, 255, 255, 0.75);
   border-radius: 50%;
   background: none;
   font-size: var(--sb-t-micro);
   font-weight: 400;
   line-height: 1;
-  color: var(--dk-ink-2);
+  color: #fff;
   cursor: pointer;
 }
 .sb-ai-notice__tip,
@@ -961,74 +985,92 @@
   flex-direction: column;
   gap: 2px;
   max-width: 100%;
-  padding: 8px 12px;
-  border-radius: var(--sb-r-md);
-  background: var(--dk-thumb);
+  padding: 10px 12px;
+  border-radius: 4px;
+  background: var(--dk-surface);
 }
-.sb-summary__label { font-size: 10px; font-weight: 300; color: var(--dk-muted); }
+.sb-summary__label { font-size: var(--sb-t-micro); font-weight: 300; color: var(--dk-ink); }
 .sb-summary__value {
-  font-size: var(--sb-t-small);
-  font-weight: 400;
-  color: var(--dk-ink);
+  font-size: var(--sb-t-caption);
+  font-weight: 500;
+  letter-spacing: -0.2px;
+  color: var(--dk-brand-deep);
   word-break: keep-all;
 }
 
 /* 계획 항목 — 제목 + 중요 배지 + 한 줄 요약 + 불릿 */
-.sb-plan-step { padding: 2px 0; }
+.sb-plan-step { padding: 4px 0 0; }
 .sb-plan-step__head {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
 }
+/* 단계 번호 원 — Figma StepBadge 24px · action/primary · 흰 숫자 12px */
+.sb-plan-step__num {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--dk-brand-2);
+  font-size: var(--sb-t-caption);
+  font-weight: 500;
+  line-height: 1;
+  color: #fff;
+}
 .sb-plan-step__title {
   margin: 0;
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 400;
   color: var(--dk-ink);
-  line-height: 1.25;
+  line-height: 1.2;
   word-break: keep-all;
 }
+/* 중요 배지 — Figma AchievementBadge 18px · radius/sm · 핑크 */
 .sb-plan-step__badge {
   display: inline-flex;
   align-items: center;
-  padding: 4px 9px;
-  border-radius: var(--sb-r-pill);
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 4px;
   background: var(--dk-mark);
-  font-size: 10px;
-  font-weight: 400;
-  color: var(--dk-ink-2);
+  font-size: var(--sb-t-micro);
+  font-weight: 500;
+  color: var(--dk-mark-ink);
   white-space: nowrap;
 }
 .sb-plan-step__sub {
-  margin: 8px 0 0;
-  font-size: 15px;
-  font-weight: 300;
-  color: var(--dk-ink-2);
-  line-height: 1.5;
+  margin: 12px 0 0;
+  font-size: var(--sb-t-body);
+  font-weight: 400;
+  color: var(--dk-brand-deep);
+  line-height: 20px;
   word-break: keep-all;
 }
 .sb-plan-step__bullets {
-  margin: 10px 0 0;
+  margin: 12px 0 0;
   padding: 0;
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
 }
 .sb-plan-step__bullets li {
   display: flex;
   gap: 8px;
-  font-size: var(--sb-t-small);
+  font-size: var(--sb-t-body);
   font-weight: 300;
   color: var(--dk-ink);
-  line-height: 1.55;
+  line-height: 1.5;
   word-break: keep-all;
 }
-.sb-plan-step__dot { flex: 0 0 auto; color: var(--dk-ink-2); }
+.sb-plan-step__dot { flex: 0 0 auto; color: var(--dk-muted); }
 .sb-plan-step__body {
-  margin: 10px 0 0;
-  font-size: var(--sb-t-small);
+  margin: 12px 0 0;
+  font-size: var(--sb-t-body);
   font-weight: 300;
   color: var(--dk-ink);
   line-height: 1.7;
@@ -1040,12 +1082,12 @@
 .sb-product-card2 {
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 8px;
   padding: 0;
   overflow: visible;
-  border: 1px solid var(--dk-line);
-  border-radius: var(--sb-r-2xl);
-  background: var(--dk-surface);
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
   box-shadow: none;
   text-align: left;
 }
@@ -1056,7 +1098,7 @@
   aspect-ratio: 1; /* 가로:세로 1:1 고정 */
   min-height: 0;   /* flex 자식의 min-height:auto가 내용물 높이로 비율을 깨는 것을 막는다 */
   overflow: hidden;
-  border-radius: var(--sb-r-2xl) var(--sb-r-2xl) 0 0;
+  border-radius: 8px;
   background: var(--dk-thumb);
 }
 /* 내용물을 absolute로 빼면 박스 높이 계산에서 빠져 aspect-ratio가 그대로 산다 */
@@ -1073,16 +1115,16 @@
 .sb-product-card2__body {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 14px 18px 18px;
+  gap: 4px;
+  padding: 0 2px 2px;
 }
-.sb-product-card2__brand { margin: 0; font-size: var(--sb-t-micro); font-weight: 300; color: var(--dk-muted); }
+.sb-product-card2__brand { margin: 0; font-size: 10px; font-weight: 300; color: var(--dk-subtle); }
 .sb-product-card2__name {
   margin: 0;
   font-size: var(--sb-t-body);
   font-weight: 400;
   color: var(--dk-ink);
-  line-height: 1.35;
+  line-height: 20px;
   word-break: keep-all;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -1091,23 +1133,24 @@
 }
 .sb-product-card2__pricebox { display: flex; flex-direction: column; gap: 1px; margin-top: 2px; }
 .sb-product-card2__price { display: flex; align-items: baseline; gap: 4px; }
-.sb-product-card2__price b { font-size: 18px; font-weight: 500; color: var(--dk-ink-2); }
-.sb-product-card2__price em { font-style: normal; font-size: var(--sb-t-micro); font-weight: 300; color: var(--dk-muted); }
+.sb-product-card2__price b { font-size: 20px; font-weight: 500; color: var(--dk-ink); }
+.sb-product-card2__price em { font-style: normal; font-size: var(--sb-t-caption); font-weight: 300; color: var(--dk-ink-2); }
 
 /* 추천도 배지 + 설명 말풍선 (Figma 상품카드/MatchTooltip) */
-.sb-match { position: absolute; top: 12px; left: 12px; z-index: 5; }
+.sb-match { position: absolute; top: 8px; left: 8px; z-index: 5; }
+/* 추천도 배지 — Figma "MATCH 95%" 보라 알약 */
 .sb-match__badge {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 6px 9px;
-  border: 1px solid var(--dk-line);
-  border-radius: var(--sb-r-md);
-  background: rgba(255, 255, 255, 0.95);
+  gap: 4px;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: var(--sb-r-pill);
+  background: var(--dk-brand-2);
   cursor: pointer;
 }
-.sb-match__label { font-size: 9px; font-weight: 500; letter-spacing: 0.02em; color: var(--dk-muted); }
-.sb-match__score { font-size: var(--sb-t-micro); font-weight: 500; color: var(--dk-ink-2); }
+.sb-match__label { font-size: var(--sb-t-micro); font-weight: 500; letter-spacing: 0.02em; color: rgba(255, 255, 255, 0.85); }
+.sb-match__score { font-size: var(--sb-t-caption); font-weight: 500; color: #fff; }
 .sb-match__tip {
   top: calc(100% + 9px);
   left: 0;
@@ -1147,19 +1190,20 @@
 /* 담기 버튼 — 기본 / 담음 / 담기불가 */
 .sb-cart-btn {
   width: 100%;
-  margin-top: 8px;
-  padding: 12px;
+  min-height: 33px;
+  margin-top: 4px;
+  padding: 8px 12px;
   border: 0;
-  border-radius: 11px;
-  background: var(--dk-ink);
-  font-size: var(--sb-t-micro);
+  border-radius: 6px;
+  background: var(--dk-brand-2);
+  font-size: var(--sb-t-small);
   font-weight: 500;
   color: #fff;
   cursor: pointer;
   transition: background var(--sb-dur) var(--sb-ease);
 }
-.sb-cart-btn:hover:not(:disabled):not(.is-added) { background: var(--dk-ink-2); }
-.sb-cart-btn.is-added { background: var(--dk-sunken); color: var(--dk-muted); cursor: default; }
+.sb-cart-btn:hover:not(:disabled):not(.is-added) { background: var(--dk-brand-deep); }
+.sb-cart-btn.is-added { background: var(--dk-brand-added); color: #fff; cursor: default; }
 .sb-cart-btn.is-blocked { background: var(--dk-sunken); color: var(--dk-muted); cursor: not-allowed; }
 
 /* 참고 콘텐츠 카드 (영상·게시글) — 썸네일 + 출처 · 매체 ↗ + 제목 */
@@ -1167,9 +1211,10 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid var(--dk-line);
-  border-radius: var(--sb-r-md);
-  background: var(--dk-surface);
+  border: 0;
+  border-radius: 8px;
+  background: var(--dk-sunken);
+  box-shadow: 0 1px 4px rgba(40, 30, 90, 0.06); /* Figma shadow/sm */
   text-align: left;
 }
 .sb-content-card[role='link'] { cursor: pointer; }
@@ -1190,11 +1235,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 52px;
-  height: 52px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
-  background: rgba(31, 41, 51, 0.55);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--dk-ink);
 }
 .sb-content-card__play svg { width: 20px; height: 20px; margin-left: 2px; }
 .sb-content-card__duration {
@@ -1208,25 +1253,25 @@
   font-weight: 400;
   color: #fff;
 }
-.sb-content-card__meta { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px 12px; }
+.sb-content-card__meta { display: flex; flex-direction: column; gap: 4px; padding: 12px; }
 .sb-content-card__source {
   display: flex;
   align-items: center;
   gap: 4px;
   margin: 0;
-  font-size: 9px;
+  font-size: var(--sb-t-caption);
   font-weight: 400;
-  color: var(--dk-ink-2);
+  color: var(--dk-muted);
 }
 .sb-content-card__source span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sb-content-card__source i { font-style: normal; color: var(--dk-muted); }
 .sb-content-card__source b { margin-left: auto; font-size: 10px; font-weight: 400; color: var(--dk-muted); }
 .sb-content-card__title {
   margin: 0;
-  font-size: var(--sb-t-caption);
-  font-weight: 300;
+  font-size: 15px;
+  font-weight: 400;
   color: var(--dk-ink);
-  line-height: 1.4;
+  line-height: 1.35;
   word-break: keep-all;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -1497,32 +1542,34 @@
 .sb-ba__layer--synth[data-tone='plum'] { --sb-ba-tint: #92498c; }
 
 /* 도움 여부 카드 */
+/* 도움 여부 — Figma FeedbackSection: 질문 가운데 + 알약 버튼 두 개 */
 .sb-fbcard {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 14px 14px 14px 20px;
-  border: 1px solid var(--dk-line);
-  border-radius: var(--sb-r-2xl);
-  background: rgba(255, 255, 255, 0.9);
+  gap: 16px;
+  padding: 24px 20px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--dk-sunken);
 }
-.sb-fbcard__q { flex: 1; min-width: 0; margin: 0; font-size: 15px; font-weight: 400; color: var(--dk-ink); word-break: keep-all; }
-.sb-fbcard__btns { display: flex; flex: 0 0 auto; gap: 8px; }
+.sb-fbcard__q { min-width: 0; margin: 0; font-size: 16px; font-weight: 400; color: var(--dk-ink); text-align: center; word-break: keep-all; }
+.sb-fbcard__btns { display: flex; flex: 0 0 auto; gap: 12px; }
 .sb-fbcard__btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 49px;
-  height: 37px;
-  border: 1px solid var(--dk-line);
-  border-radius: var(--sb-r-md);
+  width: 64px;
+  height: 44px;
+  border: 1.5px solid var(--dk-line);
+  border-radius: var(--sb-r-pill);
   background: #fff;
   color: var(--dk-ink-2);
   cursor: pointer;
   transition: background var(--sb-dur) var(--sb-ease), color var(--sb-dur) var(--sb-ease);
 }
 .sb-fbcard__btn svg { width: 17px; height: 17px; }
-.sb-fbcard__btn.is-on { border-color: var(--dk-ink); background: var(--dk-ink); color: #fff; }
+.sb-fbcard__btn.is-on { border-color: var(--dk-brand); background: var(--dk-brand-soft); color: var(--dk-brand); }
 
 /* 체크리스트 카드 */
 .sb-checklist {
@@ -1597,7 +1644,7 @@
    캐러셀·그리드 안의 카드는 슬롯 폭(item.w)이 크기를 정하므로 직계 자식일 때만 건다 */
 .sb-player__item > .sb-product-card2,
 .sb-canvas-item__content > .sb-product-card2 {
-  width: 200px;
+  width: 170px; /* Figma [PP1K] ProductCard 170 고정 */
   max-width: 60%;
 }
 
@@ -1609,7 +1656,7 @@
   width: 100%;
   min-height: 54px;
   padding: 0 2px;
-  border-bottom: 1px solid var(--dk-line);
+  border-bottom: 1px solid var(--dk-line-soft);
 }
 .sb-screen-header__title {
   flex: 1;
@@ -1679,3 +1726,35 @@
 .sb-screen-header__icon:disabled { opacity: 0.35; cursor: not-allowed; }
 /* 이모지 액션은 svg가 아니라 글자라 크기를 따로 잡는다 */
 .sb-screen-header__icon { font-size: var(--sb-t-body); line-height: 1; }
+
+/* ── 계획 페이지 밴드 — Figma "[PP1K] EEVEE 공유용" AIIntro (2026-09) ──
+   플레이어(.sb-player 좌우 패딩 24)에서는 타이틀 밴드를 프레임 폭으로 꽉 채우고, 바로 다음
+   아이템이 설문 요약이면 스택 간격(18)을 삼켜 한 밴드로 이어 붙인다(Figma SurveyAccordion).
+   요약이 다른 자리에 있으면 둥근 보라 카드로 홀로 선다. 캔버스는 둥근 카드만 */
+.sb-player__item .sb-plan-head { margin: 0 -24px; border-radius: 0; }
+.sb-canvas-item__content .clean-survey-lock.sb-summary,
+.sb-player__item .clean-survey-lock.sb-summary {
+  padding: 16px;
+  border: 0;
+  border-radius: var(--sb-r-md);
+  background: var(--dk-brand-deep);
+}
+.sb-player__item:has(.sb-plan-head) + .sb-player__item .clean-survey-lock.sb-summary {
+  margin: -18px -24px 0;
+  padding: 0 16px 24px;
+  border-radius: 0;
+}
+.sb-summary .clean-survey-lock__head { margin-bottom: 10px; }
+.sb-summary .clean-survey-lock__title { font-size: var(--sb-t-micro); font-weight: 300; color: rgba(255, 255, 255, 0.72); }
+.sb-summary .sb-pinned-panel__empty { color: rgba(255, 255, 255, 0.72); }
+/* 요약이 타이틀 앞에 올 때(템플릿·라이브 선렌더 순서)도 한 밴드로 — 요약을 프레임 폭으로 펴고
+   타이틀이 스택 간격을 삼켜 이어 붙는다 */
+.sb-player__item:has(+ .sb-player__item .sb-plan-head) .clean-survey-lock.sb-summary {
+  margin: 0 -24px;
+  padding: 20px 16px 16px;
+  border-radius: 0;
+}
+.sb-player__item:has(.clean-survey-lock.sb-summary) + .sb-player__item .sb-plan-head {
+  margin-top: -18px;
+  padding-top: 8px;
+}
