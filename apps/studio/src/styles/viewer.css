@@ -1,12 +1,13 @@
 /* ── 실행 화면 모바일 프레임 (탐색/설문/계획 공통) ── */
 .sb-phone {
+  --sb-phone-pad: 16px; /* 프레임 좌우 패딩 — 전폭 밴드(계획 타이틀·설문 요약)의 블리드 폭이 이 값을 따른다 */
   max-width: 100%;
   margin: 0 auto;
   min-height: 100vh;
   position: relative;
   container-type: inline-size;
   border-inline: 1px dashed rgba(52, 70, 90, 0.16);
-  padding: 0 16px 32px;
+  padding: 0 var(--sb-phone-pad) 32px;
   box-sizing: border-box;
 }
 .sb-phone--player { min-height: 0; padding-top: 0; }
@@ -745,6 +746,8 @@
 /* 좁은 화면: 레일을 페이지 아래 일반 흐름으로 (말풍선 static 전환은 evaluation.css 미디어 규칙) */
 @media (max-width: 1100px) {
   .sb-live-annotate { flex-direction: column; align-items: stretch; gap: 14px; }
+  /* column 모드에선 justify-content:center 가 세로축이라 폭 고정 프레임이 왼쪽에 붙는다 — auto 마진으로 가운데 */
+  .sb-live-annotate .sb-phone { margin: 0 auto; }
   .sb-live-annotate__rail {
     display: flex;
     flex-direction: column;
@@ -1746,7 +1749,7 @@
    플레이어(.sb-player 좌우 패딩 24)에서는 타이틀 밴드를 프레임 폭으로 꽉 채우고, 바로 다음
    아이템이 설문 요약이면 스택 간격(18)을 삼켜 한 밴드로 이어 붙인다(Figma SurveyAccordion).
    요약이 다른 자리에 있으면 둥근 보라 카드로 홀로 선다. 캔버스는 둥근 카드만 */
-.sb-player__item .sb-plan-head { margin: 0 -24px; border-radius: 0; }
+.sb-player__item .sb-plan-head { margin: 0 calc(-1 * var(--sb-phone-pad)); border-radius: 0; }
 .sb-canvas-item__content .clean-survey-lock.sb-summary,
 .sb-player__item .clean-survey-lock.sb-summary {
   padding: 16px;
@@ -1755,7 +1758,7 @@
   background: var(--dk-brand-deep);
 }
 .sb-player__item:has(.sb-plan-head) + .sb-player__item .clean-survey-lock.sb-summary {
-  margin: -18px -24px 0;
+  margin: -18px calc(-1 * var(--sb-phone-pad)) 0;
   padding: 0 16px 24px;
   border-radius: 0;
 }
@@ -1763,7 +1766,7 @@
 /* 요약이 타이틀 앞에 올 때(템플릿·라이브 선렌더 순서)도 한 밴드로 — 요약을 프레임 폭으로 펴고
    타이틀이 스택 간격을 삼켜 이어 붙는다 */
 .sb-player__item:has(+ .sb-player__item .sb-plan-head) .clean-survey-lock.sb-summary {
-  margin: 0 -24px;
+  margin: 0 calc(-1 * var(--sb-phone-pad));
   padding: 20px 16px 16px;
   border-radius: 0;
 }
