@@ -572,17 +572,14 @@ export const SURVEY_COMPONENTS = {
       const excluded = isPlayer ? ctx.player.excludedProfile || [] : []
       // 플레이어에서는 숨긴 항목을 아예 안 보여주고, 캔버스에서는 흐리게 보여준다
       const visible = isPlayer ? items.filter((it) => !hidden.includes(it.label)) : items
-      // 원본 saved-profile-section 마크업/클래스 그대로
+      // 계획의 설문 요약(보라 밴드 + 흰 라벨/값 칩)과 같은 톤 — viewer.css .sb-profile-panel
       return (
-        <div className="saved-profile-section" style={{ display: 'block' }}>
-          <div className="saved-profile-section__head">
-            <span className="saved-profile-section__icon">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
-            </span>
-            <span className="saved-profile-section__title">{profile.name}님에 대해 이미 알고 있어요</span>
-            <span className="saved-profile-section__hint">{isPlayer ? kText(p.hint, ctx) : '배지를 눌러 이 시나리오 노출을 켜고 끄세요'}</span>
+        <div className="sb-profile-panel">
+          <div className="sb-profile-panel__head">
+            <span className="sb-profile-panel__title">{profile.name}님에 대해 이미 알고 있어요</span>
+            <span className="sb-profile-panel__hint">{isPlayer ? kText(p.hint, ctx) : '배지를 눌러 이 시나리오 노출을 켜고 끄세요'}</span>
           </div>
-          <div className="saved-profile-section__chips">
+          <div className="sb-profile-panel__chips">
             {visible.length === 0 && (
               <span className="sb-pinned-panel__empty">프로필 항목이 없어요. 탐색 페이지 편집기에서 추가하세요.</span>
             )}
@@ -592,7 +589,7 @@ export const SURVEY_COMPONENTS = {
                 <button
                   key={it.label}
                   type="button"
-                  className={'saved-profile-chip' + (off ? ' saved-profile-chip--excluded' : '')}
+                  className={'sb-profile-chip' + (off ? ' is-off' : '')}
                   title={isPlayer ? (off ? '다시 포함하기' : '이번 설문에서 빼기') : (off ? '이 시나리오에 노출하기' : '이 시나리오에서 숨기기')}
                   onClick={() => {
                     if (isPlayer) {
@@ -605,9 +602,9 @@ export const SURVEY_COMPONENTS = {
                     }
                   }}
                 >
-                  <span className="saved-profile-chip__label">{it.label}</span>
-                  <span className="saved-profile-chip__value">{it.value}</span>
-                  <span className="saved-profile-chip__toggle" aria-hidden="true">
+                  <span className="sb-profile-chip__label">{it.label}</span>
+                  <span className="sb-profile-chip__value">{it.value}</span>
+                  <span className="sb-profile-chip__toggle" aria-hidden="true">
                     {off
                       ? <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
                       : <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5" /></svg>}

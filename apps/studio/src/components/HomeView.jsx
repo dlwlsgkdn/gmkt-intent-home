@@ -5,6 +5,10 @@ import ThreadPanel from './ThreadPanel.jsx'
 import StarterPanel from './StarterPanel.jsx'
 import { TEMPLATES } from '../lib/templates.js'
 import { classifyImportPayload, createScenariosExport, hexToRgba, DEVICE_PRESETS } from '../lib/store.js'
+
+/* 홈 첫 화면을 이루는 탐색 컴포넌트 — 이 타입들이 스택 앞머리에 연속으로 있으면 히어로 블록으로 묶여
+   화면 세로 중앙에 놓인다 (Figma Search 랜딩: 제목 · 검색창 · 추천 칩) */
+const HOME_HERO_TYPES = new Set(['greeting', 'searchBox', 'scenarioChips', 'tagRow'])
 import { scenariosFromImport } from '../lib/scenarioOps.js'
 import { downloadJson, readFileText } from '../lib/jsonFile.js'
 import { renderItem } from '../lib/registry.jsx'
@@ -158,6 +162,15 @@ export default function HomeView({ api }) {
   /* 탐색 아이템 — 숨김·컨테이너 자식 제외한 최상위만, 배열 순서대로 스택 */
   const allExploreItems = api.explore.items || []
   const exploreItems = allExploreItems.filter((it) => !it.hidden && !it.parentId)
+  /* 첫 화면(히어로) — Figma Search 1-1처럼 인사말·검색창·칩을 화면 세로 중앙에 두고, 그 뒤 스토리 카드는
+     아래로 흘린다. 스택 앞머리의 히어로 타입 연속 구간만 묶는다(순서는 빌더 탐색 탭이 정한다) */
+  const heroEnd = (() => {
+    let n = 0
+    while (n < exploreItems.length && HOME_HERO_TYPES.has(exploreItems[n].type)) n += 1
+    return n
+  })()
+  const heroItems = exploreItems.slice(0, heroEnd)
+  const restItems = exploreItems.slice(heroEnd)
 
   /* 검색 진입 분기 — 칩 = 시나리오 체험, 자유 검색 = AI 라이브 생성 (BFF).
      검색어가 발행 시나리오와 매칭되면 어느 쪽으로 체험할지 시트로 명시적으로 고르게 한다
@@ -214,7 +227,16 @@ export default function HomeView({ api }) {
         {exploreItems.length > 0 ? (
           /* 탐색 페이지 = 캔버스 아이템 스택 (빌더 탐색 탭에서 자유 배치·편집) */
           <div className="sb-player__stack sb-home-stack">
-            {exploreItems.map((it) => (
+            {heroItems.length > 0 ? (
+              <div className="sb-home-hero">
+                {heroItems.map((it) => (
+                  <div key={it.id} className="sb-player__item">
+                    {renderItem(it, { mode: 'player', player: homePlayer, profile: api.profile, chips, allItems: allExploreItems })}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {restItems.map((it) => (
               <div key={it.id} className="sb-player__item">
                 {renderItem(it, { mode: 'player', player: homePlayer, profile: api.profile, chips, allItems: allExploreItems })}
               </div>

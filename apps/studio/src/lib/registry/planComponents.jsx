@@ -1,6 +1,6 @@
 import React from 'react'
 import { splitList, splitTextList } from '../store.js'
-import { Img, kText, parseTableRows, stepPosition, youtubeThumbnail } from './support.jsx'
+import { Img, isTikTokUrl, kText, parseTableRows, stepPosition, tiktokThumbnail, youtubeThumbnail } from './support.jsx'
 
 /* 상품 카드 썸네일 — 이미지가 있으면 실제 썸네일, 없거나 로드 실패면 이모지 목업 블록.
    외부몰 이미지는 핫링크 차단으로 깨질 수 있어 무관한 스톡 이미지(FALLBACK_IMG) 대신
@@ -19,6 +19,33 @@ function ProductThumb({ p, ctx }) {
     return <img src={p.imageUrl} alt={p.name} draggable={false} onError={() => setFailed(true)} />
   }
   return <Img src={p.imageUrl} alt={p.name} />
+}
+
+/* 콘텐츠 카드 썸네일 — 있으면 그대로, 영상은 유튜브(공개 썸네일)·틱톡(oEmbed) 자동. 끝내 없거나 로드에
+   실패하면 스톡 사진 대신 매체명을 쓴 자리 카드로 정직하게 강등한다 (재생 버튼은 카드가 따로 얹는다) */
+function ContentThumb({ p, ctx, video = false }) {
+  const direct = p.imageUrl || (video ? youtubeThumbnail(p.url) : '')
+  const [fetched, setFetched] = React.useState('')
+  const [failed, setFailed] = React.useState(false)
+  React.useEffect(() => {
+    let alive = true
+    setFailed(false)
+    if (direct || !video || !isTikTokUrl(p.url)) {
+      setFetched('')
+      return undefined
+    }
+    tiktokThumbnail(p.url).then((src) => { if (alive) setFetched(src) })
+    return () => { alive = false }
+  }, [direct, video, p.url])
+  const src = direct || fetched
+  if (!src || failed) {
+    return (
+      <span className="sb-content-card__ph" aria-hidden="true">
+        <span>{kText(p.source, ctx, 'source')}</span>
+      </span>
+    )
+  }
+  return <img src={src} alt={p.title} draggable={false} referrerPolicy="no-referrer" onError={() => setFailed(true)} />
 }
 
 /* 몰 배지 색 — 지마켓/올리브영은 브랜드 색, 그 밖의 몰은 중립 */
@@ -472,7 +499,7 @@ export const PLAN_COMPONENTS = {
         }}
       >
         <div className="sb-content-card__thumb">
-          <Img src={p.imageUrl || youtubeThumbnail(p.url)} alt={p.title} />
+          <ContentThumb p={p} ctx={ctx} video />
           <span className="sb-content-card__play" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5-11-6.5z" /></svg>
           </span>
@@ -528,7 +555,7 @@ export const PLAN_COMPONENTS = {
         }}
       >
         <div className="sb-content-card__thumb">
-          <Img src={p.imageUrl} alt={p.title} />
+          <ContentThumb p={p} ctx={ctx} />
         </div>
         <div className="sb-content-card__meta">
           <p className="sb-content-card__source">

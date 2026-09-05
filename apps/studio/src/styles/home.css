@@ -524,3 +524,18 @@
 }
 .clean-tag-row .suggestion-tag.sb-chip-scenario:hover { border-color: transparent; filter: brightness(0.96); }
 .clean-tag-row .suggestion-tag.sb-chip-scenario--sample { border-color: var(--dk-brand) !important; }
+
+/* ── 홈 첫 화면 히어로 — Figma "[PP1K] EEVEE 공유용" Search 1-1 (2026-09) ──
+   인사말은 상단에 그대로 두고, 검색창·칩 묶음만 뷰포트 높이의 45% 근처(정중앙보다 조금 위, Figma 검색창
+   중심 45.6%)로 내려 보낸다: 히어로 상자를 뷰포트 높이로 잡고 검색창 아이템에 margin-top:auto, 아래 패딩을
+   55dvh 기준으로 계산해 검색창 중심이 화면 크기와 무관하게 같은 비율에 오게 한다(칩 44px는 그 아래).
+   스토리 카드 등 나머지 스택은 그 뒤로 흘린다 */
+.sb-home-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: calc(100dvh - 190px);
+  padding: 0 0 max(24px, calc(55dvh - 188px));
+}
+.sb-home-hero .sb-player__item:has(.clean-search) { margin-top: auto; }
+.sb-home-hero .sb-player__item .clean-tag-row { justify-content: center; text-align: center; }

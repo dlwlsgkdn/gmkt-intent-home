@@ -34,6 +34,24 @@ export function stepPosition(ctx) {
   return index < 0 ? 0 : index + 1
 }
 
+/* 틱톡 영상 URL — 공개 oEmbed(https://www.tiktok.com/oembed)가 CORS 허용이라 브라우저가 직접 썸네일을
+   받아온다. 와이어(웹 검색 콘텐츠)엔 틱톡 썸네일이 없고 서명 URL은 만료되므로 저장하지 않고 렌더 시점에
+   가져온다. 실패하면 '' — 카드가 매체명 자리 카드로 강등한다 (무관한 스톡 사진 폴백은 쓰지 않는다) */
+export const isTikTokUrl = (url) => /tiktok\.com\/.+\/video\/\d+/.test(String(url || ''))
+const tiktokThumbCache = new Map() // url -> Promise<string>
+export function tiktokThumbnail(rawUrl) {
+  const url = String(rawUrl || '').trim()
+  if (!isTikTokUrl(url)) return Promise.resolve('')
+  if (!tiktokThumbCache.has(url)) {
+    const p = fetch('https://www.tiktok.com/oembed?url=' + encodeURIComponent(url))
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => (j && typeof j.thumbnail_url === 'string' ? j.thumbnail_url : ''))
+      .catch(() => '')
+    tiktokThumbCache.set(url, p)
+  }
+  return tiktokThumbCache.get(url)
+}
+
 /* 유튜브 URL이면 별도 썸네일 입력 없이 공개 썸네일을 사용한다. */
 export function youtubeThumbnail(rawUrl) {
   const raw = String(rawUrl || '').trim()

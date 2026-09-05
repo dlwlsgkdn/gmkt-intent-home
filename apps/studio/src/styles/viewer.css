@@ -279,8 +279,6 @@
 .sb-product-card2 .cart-add-btn--disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* 캔버스/플레이어 안에서 원본 패널들이 흐름 배치되도록 */
-.sb-canvas-item__content .saved-profile-section,
-.sb-player__item .saved-profile-section,
 .sb-canvas-item__content .clean-survey-lock,
 .sb-player__item .clean-survey-lock {
   margin: 0;
@@ -1899,3 +1897,86 @@
 .sb-player .clean-survey-nav-btn {
   font-family: var(--dk-font-display) !important;
 }
+
+/* ── 콘텐츠 카드 자리 썸네일 — 썸네일이 끝내 없을 때 매체명만 (스톡 사진 폴백 대신) ── */
+.sb-content-card__ph {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--dk-brand-soft), var(--dk-thumb));
+  color: var(--dk-brand-deep);
+  font-size: var(--sb-t-title);
+  font-weight: 400;
+  letter-spacing: -0.2px;
+}
+
+/* ── 프로필 속성 패널 — 계획의 설문 요약과 같은 톤 (2026-09): 보라 카드 + 흰 라벨/값 칩 한 줄 스크롤.
+   칩은 토글이라 오른쪽 위에 12px 표식(포함 ✓ / 제외 +)을 두고, 제외한 칩은 반투명 흰 면에 취소선 */
+.sb-profile-panel {
+  padding: 16px;
+  border-radius: var(--sb-r-md);
+  background: var(--dk-brand-deep);
+  color: #fff;
+}
+.sb-profile-panel__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin-bottom: 10px;
+}
+.sb-profile-panel__title { font-size: var(--sb-t-caption); font-weight: 400; color: #fff; }
+.sb-profile-panel__hint { margin-left: auto; font-size: var(--sb-t-micro); font-weight: 300; color: rgba(255, 255, 255, 0.7); }
+.sb-profile-panel__chips {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  margin: 0 -16px;
+  padding: 0 16px 2px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.sb-profile-panel__chips::-webkit-scrollbar { display: none; }
+.sb-profile-panel .sb-pinned-panel__empty { color: rgba(255, 255, 255, 0.72); }
+.sb-profile-chip {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 26px 10px 12px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--dk-surface);
+  color: var(--dk-ink);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--sb-dur) var(--sb-ease), opacity var(--sb-dur) var(--sb-ease);
+}
+.sb-profile-chip:hover { background: var(--dk-brand-soft); }
+.sb-profile-chip__label { font-size: var(--sb-t-micro); font-weight: 300; color: var(--dk-ink); white-space: nowrap; }
+.sb-profile-chip__value { font-size: var(--sb-t-caption); font-weight: 500; letter-spacing: -0.2px; color: var(--dk-brand-deep); white-space: nowrap; }
+.sb-profile-chip__toggle {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--dk-brand-soft);
+  color: var(--dk-brand-deep);
+}
+.sb-profile-chip.is-off { background: rgba(255, 255, 255, 0.16); }
+.sb-profile-chip.is-off:hover { background: rgba(255, 255, 255, 0.26); }
+.sb-profile-chip.is-off .sb-profile-chip__label,
+.sb-profile-chip.is-off .sb-profile-chip__value { color: rgba(255, 255, 255, 0.78); text-decoration: line-through; text-decoration-color: rgba(255, 255, 255, 0.45); }
+.sb-profile-chip.is-off .sb-profile-chip__toggle { background: rgba(255, 255, 255, 0.22); color: #fff; }
+:is(.sb-canvas-item__content, .sb-player__item) .sb-content-card__ph,
+:is(.sb-canvas-item__content, .sb-player__item) .sb-content-card__ph * { font-family: var(--dk-font-display) !important; }
