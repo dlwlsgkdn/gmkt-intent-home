@@ -179,7 +179,7 @@ function BeforeAfter({ p, ctx }) {
         <Img src={p.beforeImage} alt={p.beforeLabel || 'BEFORE'} />
       </div>
       <span className="sb-ba__seam" style={{ left: `${split}%` }}>
-        <span className="sb-ba__handle" aria-hidden="true">‹ ›</span>
+        <span className="sb-ba__handle" aria-hidden="true">◂ ▸</span>
       </span>
       <span className="sb-ba__badge sb-ba__badge--before">{kText(p.beforeLabel, ctx, 'beforeLabel')}</span>
       <span className="sb-ba__badge sb-ba__badge--after">{kText(p.afterLabel, ctx, 'afterLabel')}</span>
@@ -668,7 +668,7 @@ export const PLAN_COMPONENTS = {
     hint: '내 사진에 AI로 올려본 모습 — 손잡이를 끌어 비교',
     defaults: {
       title: '코랄 생기 메이크업',
-      desc: '내 사진에 AI로 올려본 모습이에요. 실제 발색은 피부톤 · 조명에 따라 다를 수 있어요.',
+      desc: '내 사진에 AI로 올려본 모습이에요.',
       beforeLabel: 'BEFORE',
       afterLabel: 'AFTER',
       beforeImage: '',
@@ -676,7 +676,7 @@ export const PLAN_COMPONENTS = {
       tone: '',
       split: '50',
       hint: '', // 기본은 표시하지 않는다 — 손잡이는 보면 아는 조작이라 알약이 그림을 가린다
-      disclaimer: '실제 발색은 피부톤 · 조명에 따라 다를 수 있어요',
+      disclaimer: '실제 발색은 피부톤·조명에 따라 다를 수 있어요.', // 설명 바로 밑에 이어지는 둘째 문장
     },
     fields: [
       { key: 'title', label: '제목', kind: 'text' },
@@ -702,14 +702,16 @@ export const PLAN_COMPONENTS = {
       { key: 'afterLabel', label: '오른쪽 배지', kind: 'text' },
       { key: 'split', label: '경계 위치 (%)', kind: 'text' },
       { key: 'hint', label: '안내 알약 (비우면 숨김)', kind: 'text' },
-      { key: 'disclaimer', label: '하단 고지 (비우면 숨김)', kind: 'text' },
+      { key: 'disclaimer', label: '고지 문구 (설명 밑, 비우면 숨김)', kind: 'text' },
     ],
     render: (p, ctx) => (
       <div className="sb-ba">
         {p.title ? <h3 className="sb-ba__title">{kText(p.title, ctx, 'title')}</h3> : null}
         {p.desc ? <p className="sb-ba__desc">{kText(p.desc, ctx, 'desc')}</p> : null}
-        <BeforeAfter p={p} ctx={ctx} />
+        {/* 고지는 설명 바로 밑 — Figma FaceSimulation 은 "내 사진에 AI로 올려본 모습이에요. 실제 발색은 …"
+            한 문단이다. 그림 아래에 따로 두면 사진 뒤에 잔소리가 붙는다 */}
         {p.disclaimer ? <p className="sb-ba__note">{kText(p.disclaimer, ctx, 'disclaimer')}</p> : null}
+        <BeforeAfter p={p} ctx={ctx} />
         {/* 기기 다운로드 폴더로 저장 — 합성 결과(data URL)가 있을 때만 (라이브 투영이 downloadable을 단다).
             자동 저장은 브라우저가 허용하지 않으므로 명시적 버튼이고, 되가져오기는 사진 선택 시트의
             "앨범에서 사진 선택"이 그대로 받는다 */}
