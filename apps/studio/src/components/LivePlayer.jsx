@@ -5,7 +5,7 @@ import { isQuestionType, renderItem, resolveSampleFace } from '../lib/registry.j
 import BottomSheet from './ui/BottomSheet.jsx'
 import { fetchLiveCapabilities, fetchLiveThread, recordLiveEvent, renderLiveLook, sendLiveFeedback, startLiveThread, streamLivePlan, streamLiveSurvey } from '../lib/liveApi.js'
 import { PHOTO_ANSWER, isPhotoValue, livePlanItems, liveSurveyItems } from '../lib/livePage.js'
-import { composeMakeup, toPhotoDataUrl } from '../lib/makeupComposite.js'
+import { composeMakeup, matchAspectTo, toPhotoDataUrl } from '../lib/makeupComposite.js'
 import { loadLookRender, saveLookRender } from '../lib/lookCache.js'
 import { BgBlobs, FloatingBar, ViewerDeviceControl } from './Frame.jsx'
 import ThreadPanel from './ThreadPanel.jsx'
@@ -587,10 +587,14 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
       // 지난 결과가 있으면 그대로 — 같은 쓰레드·색조에 유료 호출을 반복하지 않는다 (IndexedDB)
       const cached = await loadLookRender(threadId)
       if (cached && cached.tone === lookTone && cached.image) {
+        // 옛 보관분은 비율 보정 전 결과일 수 있다 — 원본 비율로 되맞춰 쓰고, 바뀌었으면 보관도 갱신
+        const ref = await toPhotoDataUrl(livePhoto)
+        const fitted = ref ? await matchAspectTo(cached.image, ref) : cached.image
         if (cancelled || cancelledRef.current) return
         preciseRef.current = true
-        setLookAfter(cached.image)
+        setLookAfter(fitted)
         setLookStage('precise')
+        if (fitted !== cached.image) saveLookRender(threadId, lookTone, fitted)
         return
       }
       const caps = await fetchLiveCapabilities()
@@ -608,12 +612,15 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
           title: look.title,
           points: look.points,
         })
+        // 편집 모델은 표준 규격(1024×1536 등)으로 돌려주며 원본을 살짝 늘린다 — 원본 비율로 되맞춰야
+        // 슬라이더의 두 층이 정확히 겹친다 (matchAspectTo). 보관도 보정본으로
+        const fitted = await matchAspectTo(image, photo)
         if (cancelled || cancelledRef.current) return
         preciseRef.current = true
-        setLookAfter(image)
+        setLookAfter(fitted)
         setLookStage('precise')
         // 다음 이어보기에서 재호출하지 않도록 원본 화질 그대로 보관한다 (IndexedDB — 실패해도 화면은 그대로)
-        saveLookRender(threadId, lookTone, image)
+        saveLookRender(threadId, lookTone, fitted)
       } catch (e) {
         if (cancelled || cancelledRef.current) return
         console.warn('[look] 정밀 렌더 실패 — 기기 합성을 유지합니다:', e.message)

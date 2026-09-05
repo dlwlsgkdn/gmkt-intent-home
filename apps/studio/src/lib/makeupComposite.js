@@ -127,6 +127,37 @@ export async function toPhotoDataUrl(src, maxEdge = MAX_EDGE, opts = {}) {
 }
 
 /**
+ * 정밀 렌더 결과를 원본 사진의 가로세로 비율로 되맞춘다. 이미지 편집 API는 출력 크기를 표준 규격
+ * (1024×1536 등)으로 맞추느라 원본(예: 3:4)을 세로로 살짝 늘려 돌려준다 — 비포/애프터 슬라이더는
+ * 두 층을 같은 상자에 cover로 깔기 때문에 비율이 다르면 애프터 얼굴이 원본보다 길어 보이고 이음새가
+ * 어긋난다. 출력 해상도(가로)는 그대로 두고 세로만 원본 비율로 다시 샘플링한다: 모델이 늘린 것을
+ * 되돌리는 것이므로 왜곡을 더하지 않는다. 비율 차이가 0.5% 이내면 그대로, 어떤 실패에도 입력을
+ * 그대로 돌려준다 (향상 계층 원칙).
+ */
+export async function matchAspectTo(dataUrl, refSrc) {
+  if (!dataUrl || !refSrc || typeof document === 'undefined') return dataUrl
+  try {
+    const [img, ref] = await Promise.all([loadImage(dataUrl), loadImage(refSrc)])
+    const iw = img.naturalWidth || img.width
+    const ih = img.naturalHeight || img.height
+    const rw = ref.naturalWidth || ref.width
+    const rh = ref.naturalHeight || ref.height
+    if (!iw || !ih || !rw || !rh) return dataUrl
+    const targetH = Math.round((iw * rh) / rw)
+    if (Math.abs(targetH - ih) / ih < 0.005) return dataUrl
+    const canvas = document.createElement('canvas')
+    canvas.width = iw
+    canvas.height = targetH
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return dataUrl
+    ctx.drawImage(img, 0, 0, iw, ih, 0, 0, iw, targetH)
+    return canvas.toDataURL('image/png')
+  } catch {
+    return dataUrl
+  }
+}
+
+/**
  * 사진 + 룩 색조 → 메이크업을 올린 데이터 URL.
  * 얼굴을 못 찾거나 모델이 없으면 **null** — 호출자는 CSS 색조 프리셋을 그대로 쓰면 된다.
  */
