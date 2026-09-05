@@ -474,7 +474,10 @@
    검색 버튼은 원형 면 없이 오른쏙 안쪽 24px 아이콘만 — 입력 전 회색, 입력 후 보라 */
 .sb-canvas-item__content .beauty-greeting,
 .sb-player__item .beauty-greeting {
-  padding: 16px 12px; /* 문구 사방에 여백 — 프레임 24px 안쪽에서 한 번 더 숨 쉬게 (2026-09 요청) */
+  /* 문구 사방에 넉넉한 여백 — 패딩 36/24 + 마진 24/12 (2026-09 요청: "상하좌우 패딩과 마진을 많이").
+     원본 오버라이드 블록(파일 머리)의 margin:0 을 여기서 다시 덮는다 */
+  margin: 24px 12px;
+  padding: 36px 24px;
   font-size: 24px;
   font-weight: 400;
   line-height: 32px;
