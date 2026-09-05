@@ -693,6 +693,22 @@
 .sb-sheet--center .sb-sheet__head { justify-content: space-between; padding: 0 0 6px; }
 .sb-sheet--center .sb-sheet__title { font-size: 16px; line-height: 21px; text-align: left; }
 .sb-sheet--center .sb-sheet__subtitle { margin: 0 0 16px; text-align: left; }
+/* 제목 왼쪽 + ✕ (Figma SheetHeader ShowClose — 쇼핑 쓰레드 상세) / 가운데 정렬 확인 모달 */
+.sb-sheet__head--start { justify-content: space-between; padding: 12px 0 8px; }
+.sb-sheet__head--start .sb-sheet__title { text-align: left; }
+.sb-sheet--center .sb-sheet__head--center { justify-content: center; padding: 8px 0 6px; }
+.sb-sheet--center .sb-sheet__head--center .sb-sheet__title { text-align: center; }
+.sb-sheet--center .sb-sheet__subtitle.is-center { text-align: center; line-height: 20px; font-size: var(--sb-t-body); color: var(--dk-ink-2); }
+/* 푸터가 있는 시트 — 본문만 스크롤, 푸터는 밑에 고정 (Figma ThreadSheetFooter: 패딩 12/16 · 위 1px border/subtle) */
+.sb-sheet__panel.has-footer { display: flex; flex-direction: column; padding-bottom: 0; overflow: hidden; }
+.sb-sheet__body { flex: 1; min-height: 0; overflow-y: auto; }
+.sb-sheet__footer {
+  flex: 0 0 auto;
+  margin: 0 -16px;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--dk-line-soft);
+  background: var(--dk-surface);
+}
 /* 시트 메뉴 — Figma OptionRow: 52px · radius/md 8 · 패딩 16 · gap 12 · bg/subtle 면 · 20px 선화 아이콘 + 15px Gumi 라벨,
    행 간격 8 */
 .sb-sheet__menu { display: flex; flex-direction: column; gap: 8px; }

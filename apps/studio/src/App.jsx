@@ -354,6 +354,15 @@ export default function App() {
       workspace.setThreads((prev) => prev.filter((thread) => thread.id !== id))
       requestAutoSync()
     },
+    /* 쓰레드 기록 부분 갱신 — 쇼핑 쓰레드 패널의 상세 시트가 담은 상품을 빼는 데 쓴다 (patch 는 객체 또는 업데이터) */
+    updateThread: (id, patch) => {
+      workspace.setThreads((prev) => prev.map((thread) => {
+        if (thread.id !== id) return thread
+        const next = typeof patch === 'function' ? patch(thread) : patch
+        return { ...thread, ...next, updatedAt: new Date().toISOString() }
+      }))
+      requestAutoSync()
+    },
     clearThreads: () => {
       workspace.setThreads([])
       requestAutoSync()

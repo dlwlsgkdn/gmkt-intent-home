@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { stepInfoOfItem } from '../lib/cart.js'
 import { STAGES, DEVICE_PRESETS, resolvePlanCase, uid, visibleProfileItems } from '../lib/store.js'
 import { isQuestionType, renderItem } from '../lib/registry.jsx'
 import BottomSheet from './ui/BottomSheet.jsx'
@@ -161,8 +162,11 @@ export default function Player({ api, scenario, resume }) {
       }
     },
     cart, // 상품 카드가 "담기 / ✓담음"을 가르는 기준
-    addToCart: (name) => {
-      setCart((prev) => [...prev, name])
+    addToCart: (name, meta = {}) => {
+      /* 카드 재료 + 소속 단계(카드 자리로 계산)까지 한 항목으로 — 쇼핑 쓰레드 패널의 썸네일·파트별 시트 재료 */
+      const { itemId, ...rest } = meta
+      const entry = { ...rest, name, ...stepInfoOfItem(stageItems, itemId) }
+      setCart((prev) => [...prev, entry])
       api.showToast(`"${name}" 을(를) 쓰레드에 담았어요.`)
     },
     complete: () => {

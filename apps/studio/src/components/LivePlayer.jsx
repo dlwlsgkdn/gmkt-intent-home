@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { stepInfoOfItem } from '../lib/cart.js'
 import { DEVICE_PRESETS, STAGES } from '../lib/store.js'
 import { isQuestionType, renderItem, resolveSampleFace } from '../lib/registry.jsx'
 import BottomSheet from './ui/BottomSheet.jsx'
@@ -414,6 +415,9 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
           if (cancelledRef.current) return
           const restoredQuery = (t.source && t.source.query) || t.title || ''
           if (restoredQuery) setLiveQuery(restoredQuery)
+          /* 담은 상품은 서버 페이지에 없다 — 워크스페이스 쓰레드 기록(기기)에 남긴 것을 되살린다 */
+          const recorded = (api.threads || []).find((thread) => thread.id === resumeThreadId)
+          if (recorded && Array.isArray(recorded.cart) && recorded.cart.length) setCart(recorded.cart)
           if (t.survey) { setSurveyPage(t.survey); setQStep(0) }
           if (Array.isArray(t.answers) && t.survey) {
             const map = {}
@@ -638,10 +642,13 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         goPlan({ regenerate: true })
       }
     },
-    addToCart: (name) => {
-      setCart((prev) => [...prev, name])
+    addToCart: (name, meta = {}) => {
+      /* 카드 재료 + 소속 단계 — Player 와 같은 형태(lib/cart.js). cartAdd 이벤트도 같은 항목을 싣는다 */
+      const { itemId, ...rest } = meta
+      const entry = { ...rest, name, ...stepInfoOfItem(allItems, itemId) }
+      setCart((prev) => [...prev, entry])
       api.showToast(`"${name}" 을(를) 쓰레드에 담았어요.`)
-      if (threadId) recordLiveEvent(threadId, 'cartAdd', { name })
+      if (threadId) recordLiveEvent(threadId, 'cartAdd', entry)
     },
     complete: () => {
       setCompleted(true)

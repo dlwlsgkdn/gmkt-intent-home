@@ -1,4 +1,5 @@
 import React from 'react'
+import { cartEntryFromProduct, cartHas } from '../cart.js'
 import { splitList, splitTextList } from '../store.js'
 import { Img, isTikTokUrl, kText, parseTableRows, stepPosition, tiktokThumbnail, youtubeThumbnail } from './support.jsx'
 
@@ -392,7 +393,7 @@ export const PLAN_COMPONENTS = {
       const mall = p.external ? p.mall || '외부몰' : p.mall || 'G마켓'
       const tone = MALL_TONE[mall] || (p.external ? 'plain' : 'gmarket')
       const cart = (isPlayer && ctx.player.cart) || []
-      const added = cart.includes(p.name)
+      const added = cartHas(cart, p.name)
       const openDetail = () => {
         if (!isPlayer) return
         // 카드 클릭 = 상품 PDP (Player/LivePlayer의 ProductDetailPanel)
@@ -451,7 +452,11 @@ export const PLAN_COMPONENTS = {
                 type="button"
                 className={'sb-cart-btn' + (added ? ' is-added' : '')}
                 title="쓰레드에 담기"
-                onClick={() => { if (isPlayer && !added) ctx.player.addToCart(p.name) }}
+                onClick={() => {
+                  /* 이름만 아니라 카드 재료(썸네일·가격·몰)와 자리(itemId → 계획 단계)를 함께 실어 쇼핑 쓰레드 패널이
+                     썸네일 동그라미·파트별 상세 시트를 그린다 (lib/cart.js) */
+                  if (isPlayer && !added) ctx.player.addToCart(p.name, cartEntryFromProduct(p, { itemId: ctx.itemId, mall }))
+                }}
               >
                 {added ? '✓ 담음' : '담기'}
               </button>
