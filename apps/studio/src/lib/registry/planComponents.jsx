@@ -165,21 +165,22 @@ function BeforeAfter({ p, ctx }) {
 function FeedbackButtons({ p, ctx }) {
   const [state, setState] = React.useState(p.state || 'none')
   const interactive = ctx.mode === 'player'
-  const btn = (kind, label, path) => (
+  // Figma [PP1K] FeedbackButtons — 이모지 + 라벨이 든 40px 알약 두 개 (아이콘만 있던 옛 버튼 대체)
+  const btn = (kind, label, emoji) => (
     <button
       type="button"
       className={'sb-fbcard__btn' + (state === kind ? ' is-on' : '')}
-      aria-label={label}
       aria-pressed={state === kind}
       onClick={() => { if (interactive) setState((prev) => (prev === kind ? 'none' : kind)) }}
     >
-      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">{path}</svg>
+      <span className="sb-fbcard__emoji" aria-hidden="true">{emoji}</span>
+      <span className="sb-fbcard__label">{label}</span>
     </button>
   )
   return (
     <div className="sb-fbcard__btns">
-      {btn('like', '도움이 됐어요', <path d="M2 21h3V9H2v12zm19.7-10.3c.2-.3.3-.6.3-1V8a2 2 0 0 0-2-2h-5.2l.8-3.8v-.3c0-.4-.2-.8-.4-1L14.2 0 7.6 6.6c-.4.4-.6.9-.6 1.4V19a2 2 0 0 0 2 2h9c.8 0 1.5-.5 1.8-1.2l3-7c0-.4.1-.8-.1-1.1z" />)}
-      {btn('dislike', '아쉬웠어요', <path d="M19 3h3v12h-3V3zM2.3 13.3c-.2.3-.3.6-.3 1V16a2 2 0 0 0 2 2h5.2l-.8 3.8v.3c0 .4.2.8.4 1l1 1 6.6-6.6c.4-.4.6-.9.6-1.4V5a2 2 0 0 0-2-2H6c-.8 0-1.5.5-1.8 1.2l-3 7c0 .4-.1.8.1 1.1z" />)}
+      {btn('like', '좋아요', '👍')}
+      {btn('dislike', '별로예요', '👎')}
     </div>
   )
 }
@@ -347,6 +348,7 @@ export const PLAN_COMPONENTS = {
       { key: 'price', label: '가격 (원 제외)', kind: 'text' },
       { key: 'was', label: '정가 (원 제외)', kind: 'text' },
       { key: 'score', label: '추천도 (%)', kind: 'text' },
+      { key: 'tag', label: '점수 없을 때 배지 문구 (예: AI 추천)', kind: 'text' },
       { key: 'matchHeadline', label: '추천도 말풍선 한 줄', kind: 'text' },
       { key: 'matchNote', label: '추천도 말풍선 설명', kind: 'textarea' },
       { key: 'summary', label: '추천 이유 (줄바꿈 구분)', kind: 'textarea' },
@@ -384,7 +386,12 @@ export const PLAN_COMPONENTS = {
               }
             }}
           >
-            {score ? <MatchBadge p={p} ctx={ctx} score={score} /> : null}
+            {score ? (
+              <MatchBadge p={p} ctx={ctx} score={score} />
+            ) : p.tag ? (
+              /* 점수 없는 태그 배지 — 라이브 와이어엔 추천도가 없어 "AI 추천" 같은 문구만 같은 자리에 (Figma MatchTag 자리) */
+              <span className="sb-match"><span className="sb-match__badge sb-match__badge--static">{kText(p.tag, ctx, 'tag')}</span></span>
+            ) : null}
             <span className={'sb-mall-badge sb-mall-badge--' + tone}>{mall}</span>
             <ProductThumb p={p} ctx={ctx} />
           </div>
@@ -405,19 +412,23 @@ export const PLAN_COMPONENTS = {
                 <em>원</em>
               </span>
             </div>
-            <button
-              type="button"
-              className={
-                'sb-cart-btn' +
-                (added ? ' is-added' : '') +
-                (p.external ? ' is-blocked' : '')
-              }
-              disabled={!!p.external}
-              title={p.external ? '지마켓 상품만 담을 수 있어요' : '쓰레드에 담기'}
-              onClick={() => { if (isPlayer && !p.external && !added) ctx.player.addToCart(p.name) }}
-            >
-              {p.external ? '담기불가' : added ? '✓ 담음' : '담기'}
-            </button>
+            {/* 외부몰 상품은 지마켓 장바구니에 못 담는다 — 회색으로 죽어 있던 "담기불가" 대신 같은 보라
+                버튼으로 상세보기(PDP 패널)를 연다. Figma 카드는 어느 상품이든 보라 CartButton이라 색은 같고
+                동작만 갈린다 */}
+            {p.external ? (
+              <button type="button" className="sb-cart-btn" title="외부몰 상품은 상세 페이지에서 담아 주세요" onClick={openDetail}>
+                상세보기
+              </button>
+            ) : (
+              <button
+                type="button"
+                className={'sb-cart-btn' + (added ? ' is-added' : '')}
+                title="쓰레드에 담기"
+                onClick={() => { if (isPlayer && !added) ctx.player.addToCart(p.name) }}
+              >
+                {added ? '✓ 담음' : '담기'}
+              </button>
+            )}
           </div>
         </div>
       )

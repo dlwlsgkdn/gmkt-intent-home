@@ -208,7 +208,8 @@ export function livePlanItems(page, opts = {}) {
             name: product.name,
             price: Number(product.price || 0).toLocaleString('ko-KR'),
             was: '',
-            score: '', // 와이어에 추천도가 없으면 배지를 그리지 않는다
+            score: '', // 와이어에 추천도(%)가 없다 — 아래 tag 가 같은 자리에 문구 배지를 그린다
+            tag: 'AI 추천',
             summary: '',
             emoji: product.imageUrl ? '' : '🧴', // 썸네일 없는 상품만 이모지 목업 블록으로 렌더
             gradient: '',
@@ -260,7 +261,7 @@ export function livePlanItems(page, opts = {}) {
   }
   /* Figma FeedbackSection — 계획 끝의 "도움이 됐나요?" (섹션이 하나라도 있을 때만, 평가 말풍선 대상 아님) */
   if (sections.some(Boolean)) {
-    items.push({ id: 'live-plan-helpful', type: 'feedbackCard', props: { question: '이 계획이 도움이 됐나요?', state: 'none' } })
+    items.push({ id: 'live-plan-helpful', type: 'feedbackCard', props: { question: '도움이 되셨나요?', state: 'none' } })
   }
   return items
 }

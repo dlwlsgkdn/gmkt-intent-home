@@ -979,9 +979,22 @@
 .sb-ai-notice__tip::before { left: 24px; }
 
 /* 설문 요약 — 라벨 위 / 값 아래 칩을 흘려 배치 */
-.sb-summary__chips { display: flex; flex-wrap: wrap; gap: 8px; }
+/* 설문 요약 칩 — 한 줄 가로 스크롤 (Figma ChipGrid: 칩이 프레임 밖으로 이어진다). 밴드 패딩(16)만큼
+   음수 마진으로 펴서 끝까지 스크롤되게 하고 스크롤바는 숨긴다 */
+.sb-summary__chips {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  margin: 0 -16px;
+  padding: 0 16px 2px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.sb-summary__chips::-webkit-scrollbar { display: none; }
 .sb-summary__chip {
   display: inline-flex;
+  flex: 0 0 auto;
   flex-direction: column;
   gap: 2px;
   max-width: 100%;
@@ -1141,24 +1154,29 @@
 }
 .sb-product-card2__pricebox { display: flex; flex-direction: column; gap: 1px; margin-top: 2px; }
 .sb-product-card2__price { display: flex; align-items: baseline; gap: 4px; }
-.sb-product-card2__price b { font-size: 20px; font-weight: 500; color: var(--dk-ink); }
+.sb-product-card2__price b { font-size: 18px; font-weight: 500; line-height: 23px; color: var(--dk-ink); } /* Figma text/display/lg */
 .sb-product-card2__price em { font-style: normal; font-size: var(--sb-t-caption); font-weight: 300; color: var(--dk-ink-2); }
 
 /* 추천도 배지 + 설명 말풍선 (Figma 상품카드/MatchTooltip) */
 .sb-match { position: absolute; top: 8px; left: 8px; z-index: 5; }
-/* 추천도 배지 — Figma "MATCH 95%" 보라 알약 */
+/* 추천도 배지 — Figma MatchTag: badge/blue 알약(radius 60 · 패딩 4/8 · 흰 11px) */
 .sb-match__badge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 10px;
+  padding: 4px 8px;
   border: 0;
   border-radius: var(--sb-r-pill);
-  background: var(--dk-brand-2);
+  background: var(--dk-info);
+  color: #fff;
+  font-size: var(--sb-t-micro);
+  font-weight: 500;
+  line-height: 1;
   cursor: pointer;
 }
+.sb-match__badge--static { cursor: default; }
 .sb-match__label { font-size: var(--sb-t-micro); font-weight: 500; letter-spacing: 0.02em; color: rgba(255, 255, 255, 0.85); }
-.sb-match__score { font-size: var(--sb-t-caption); font-weight: 500; color: #fff; }
+.sb-match__score { font-size: var(--sb-t-micro); font-weight: 500; color: #fff; }
 .sb-match__tip {
   top: calc(100% + 9px);
   left: 0;
@@ -1212,7 +1230,6 @@
 }
 .sb-cart-btn:hover:not(:disabled):not(.is-added) { background: var(--dk-brand-deep); }
 .sb-cart-btn.is-added { background: var(--dk-brand-added); color: #fff; cursor: default; }
-.sb-cart-btn.is-blocked { background: var(--dk-thumb); color: var(--dk-muted); box-shadow: inset 0 0 0 1px var(--dk-line); cursor: not-allowed; }
 
 /* 참고 콘텐츠 카드 (영상·게시글) — 썸네일 + 출처 · 매체 ↗ + 제목 */
 .sb-content-card {
@@ -1550,33 +1567,39 @@
 .sb-ba__layer--synth[data-tone='plum'] { --sb-ba-tint: #92498c; }
 
 /* 도움 여부 카드 */
-/* 도움 여부 — Figma FeedbackSection: 질문 가운데 + 알약 버튼 두 개 */
+/* 도움 여부 — Figma FeedbackSection: 배경 없는 섹션(패딩 16/20/24·gap 16), 질문 15px 가운데,
+   "👍 좋아요 / 👎 별로예요" 40px 알약(bg/subtle 면·패딩 10/20·gap 6·라벨 14/20) 두 개가 12px 간격 */
 .sb-fbcard {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 16px;
-  padding: 24px 20px;
+  padding: 16px 20px 24px;
   border: 0;
-  border-radius: 8px;
-  background: var(--dk-sunken);
+  border-radius: 0;
+  background: transparent;
 }
-.sb-fbcard__q { min-width: 0; margin: 0; font-size: 16px; font-weight: 400; color: var(--dk-ink); text-align: center; word-break: keep-all; }
+.sb-fbcard__q { min-width: 0; margin: 0; font-size: 15px; font-weight: 400; color: var(--dk-ink); line-height: 1; text-align: center; word-break: keep-all; }
 .sb-fbcard__btns { display: flex; flex: 0 0 auto; gap: 12px; }
 .sb-fbcard__btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 64px;
-  height: 44px;
-  border: 1.5px solid var(--dk-line);
-  border-radius: var(--sb-r-pill);
-  background: #fff;
+  gap: 6px;
+  height: 40px;
+  padding: 10px 20px;
+  border: 1px solid var(--dk-line-soft);
+  border-radius: 20px;
+  background: var(--dk-sunken);
+  font-size: var(--sb-t-body);
+  font-weight: 400;
+  line-height: 20px;
   color: var(--dk-ink-2);
   cursor: pointer;
   transition: background var(--sb-dur) var(--sb-ease), color var(--sb-dur) var(--sb-ease);
 }
-.sb-fbcard__btn svg { width: 17px; height: 17px; }
+.sb-fbcard__btn:hover { background: var(--dk-thumb); }
+.sb-fbcard__emoji { font-size: 16px; line-height: 1; }
 .sb-fbcard__btn.is-on { border-color: var(--dk-brand); background: var(--dk-brand-soft); color: var(--dk-brand); }
 
 /* 체크리스트 카드 */
@@ -1791,6 +1814,7 @@
   .sb-cart-btn,
   .sb-content-card__title,
   .sb-fbcard__q,
+  .sb-fbcard__label,
   .sb-checklist__title
 ),
 .clean-search input.clean-search__field--ellipsis,
