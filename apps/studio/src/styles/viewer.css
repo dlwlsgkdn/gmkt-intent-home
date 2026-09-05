@@ -610,12 +610,13 @@
   border-radius: var(--sb-r-xl);
 }
 
-/* 부분 스트리밍 꼬리 — 도착한 컴포넌트 스택 아래에서 남은 생성 진행을 보여준다 */
+/* 부분 스트리밍 꼬리 — 도착한 컴포넌트 스택 아래에서 남은 생성 진행을 ✦ 문구 한 줄로 보여준다
+   (회색 자리 상자는 2026-09 제거) */
 .sb-live-tail {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 16px 0 28px;
+  padding: 8px 0 24px;
 }
 
 /* 실패 안내 — 가짜 콘텐츠 없이 정직하게. 발행 칩 폴백은 사용자 클릭으로만 넘어간다 */

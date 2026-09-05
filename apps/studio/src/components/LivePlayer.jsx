@@ -108,11 +108,11 @@ function LiveSkeleton({ message }) {
 }
 
 /* 부분 스트리밍 꼬리 — 도착한 컴포넌트 아래에서 나머지 생성이 진행 중임을 보여준다.
-   몇 개가 더 올지는 모르므로 개수 흉내 없이 진행 표시 한 블록만 정직하게 둔다 */
+   몇 개가 더 올지 모르므로 카드 흉내 없이 ✦ 진행 문구 한 줄만 둔다 (회색 자리 상자는 2026-09 제거 —
+   다음에 올 컴포넌트의 크기를 모르는데 상자를 그리면 빈 카드처럼 보였다) */
 function LiveTail({ message }) {
   return (
     <div className="sb-live-tail" role="status" aria-live="polite">
-      <div className="sb-live-skel sb-live-skel--tall" />
       <p className="sb-live-status">
         <span className="sb-live-status__spark" aria-hidden="true">✦</span>
         {message || '이어서 생성하고 있어요…'}

@@ -460,7 +460,6 @@ export default function FlowRunPreview({
               {streaming && (
                 /* 부분 스트리밍 꼬리 — 나머지 생성이 진행 중임을 보여준다 (LiveTail과 동일) */
                 <div className="sb-live-tail" role="status" aria-live="polite">
-                  <div className="sb-live-skel sb-live-skel--tall" />
                   <p className="sb-live-status">
                     <span className="sb-live-status__spark" aria-hidden="true">✦</span>
                     {statusMessage || '이어서 생성하고 있어요…'}
