@@ -59,8 +59,9 @@ export const LOOK_TONE_PROMPT: Record<LookTone, string> = {
  * 지시 준수율이 영어에서 안정적이기 때문이고, 사용자에게 보이는 문구는 아니다.
  *
  * 강도(intensity)의 기본값은 **strong** 이다(2026-09): "subtle·natural everyday" 로 쓰면 모델이 립 틴트
- * 정도로 끝내 비포/애프터 차이가 거의 안 보였다. 기본은 립 불투명 풀커버 · 치크 또렷 · 아이섀도+라이너+
- * 눈썹까지 한 벌의 진한 메이크업으로 지시하고, 얼굴 자체의 보정 금지는 그대로 둔다. 'natural' 은 옛
+ * 정도로 끝내 비포/애프터 차이가 거의 안 보였고, "bold" 한 단계로도 여전히 약하다는 피드백이 있어 지금은
+ * 풀글램(데일리의 두 배 강도 — 립 불투명 풀커버·진한 치크·크리즈까지 올린 섀도+윙 라이너+볼륨 래시·
+ * 또렷한 눈썹·컨투어+하이라이터)을 지시한다. 얼굴 자체의 보정 금지는 그대로 둔다. 'natural' 은 옛
  * 문구를 남겨 둔 선택지다(요청 본문이 고를 수 있게 남김 — 지금 FE 는 보내지 않는다).
  */
 export type LookIntensity = 'strong' | 'natural'
@@ -76,7 +77,7 @@ export function buildLookRenderPrompt(input: {
   const strong = (input.intensity ?? 'strong') === 'strong'
   const lines = [
     strong
-      ? `Apply bold, clearly visible, full-face ${color} makeup to the person in this photo — a finished, polished look that is obvious at first glance.`
+      ? `Apply dramatic, high-impact, full-glam ${color} makeup to the person in this photo — heavy evening/editorial-level makeup that is unmistakable at first glance and far stronger than everyday makeup.`
       : `Apply realistic ${color} makeup to the person in this photo.`,
     '',
     'Preserve exactly (most important):',
@@ -88,11 +89,11 @@ export function buildLookRenderPrompt(input: {
   ]
   if (strong) {
     lines.push(
-      `- Lips: rich, saturated, opaque ${color} lipstick with a crisp, defined lip line — full coverage, not a sheer tint or stain.`,
-      `- Cheeks: strongly pigmented blush in the ${color} family, clearly visible on the cheekbones and blended only at the edges.`,
-      '- Eyes: eyeshadow in the same color family with a defined eyeliner, visibly lengthened lashes (mascara) and well-groomed, filled-in brows.',
-      '- Base: even, luminous complexion makeup that still keeps the natural skin texture.',
-      '- Intensity: high. The makeup must read as a deliberate statement look, not a no-makeup look — if in doubt, apply more pigment, never less.',
+      `- Lips: deep, highly saturated, fully opaque ${color} lipstick with a crisp, sharply defined lip line, slightly overlined for fullness — full coverage, never a sheer tint or stain.`,
+      `- Cheeks: heavy, strongly pigmented blush in the ${color} family, clearly visible even from a distance on the apples and cheekbones, blended only at the edges.`,
+      '- Eyes: full eye makeup — gradient or smoky eyeshadow in the same color family built up to the crease, sharp winged eyeliner, thick dark volumized lashes (dramatic mascara / false-lash effect) and strongly defined, filled-in brows.',
+      '- Base: flawless full-coverage complexion makeup with soft contour under the cheekbones and highlighter on the cheekbones and nose bridge, while the natural skin texture stays visible.',
+      '- Intensity: very high — at least twice as intense as typical daily makeup. The before/after difference must be unmistakable side by side. If in doubt, apply more pigment and more coverage, never less.',
     )
   } else {
     lines.push(`- Lip color in ${color}, blush on the cheeks in the same family, subtle and blended.`)
@@ -101,7 +102,7 @@ export function buildLookRenderPrompt(input: {
   lines.push(
     '',
     strong
-      ? 'Style: glamorous, camera-ready makeup as seen in a beauty campaign — vivid, yet photorealistic on real skin. Not a filter or illustration.'
+      ? 'Style: full-glam, camera-ready editorial beauty-campaign makeup — vivid and dramatic, yet photorealistic on real skin. Not a filter or illustration.'
       : 'Style: natural everyday makeup a real person would wear. Photorealistic, not a filter or illustration.',
     'Keep the original framing and aspect ratio.',
   )
