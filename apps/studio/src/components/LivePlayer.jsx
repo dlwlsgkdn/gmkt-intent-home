@@ -779,7 +779,13 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   playerApi.headerActions = [
     {
       key: 'feedback',
-      icon: '💬',
+      // 이모지 대신 헤더의 뒤로·홈과 같은 24px 라인 아이콘 (Figma TopBar 톤)
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H10l-4.6 3.6V16A2.5 2.5 0 0 1 4 13.5z" />
+          <path d="M8.5 9.5h7M8.5 12.5h4.5" />
+        </svg>
+      ),
       label: '평가',
       title: '생성된 페이지에 별점과 코멘트를 남겨요 — 저장하면 쓰레드 기록에 함께 남아요',
       active: fbMode,
@@ -788,7 +794,12 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     },
     {
       key: 'regen',
-      icon: '↺',
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M20 12a8 8 0 1 1-2.6-5.9" />
+          <path d="M20 4v4.5h-4.5" />
+        </svg>
+      ),
       label: '새로 생성',
       title: '같은 검색어로 새 쓰레드를 시작해 처음부터 다시 생성해요',
       disabled: !liveQuery || !!loading,

@@ -15,14 +15,24 @@ export const PHOTO_ANSWER = '사진 제출됨'
 /** 답 값이 실제로 그릴 수 있는 이미지인지 — 이어보기·관리 페이지에서는 표식만 남는다 */
 export const isPhotoValue = (value) => /^(data:image\/|https?:\/\/|\.{0,2}\/)/.test(String(value || ''))
 
+/** 인트로 문장을 Figma Header(제목 22px + 설명 13px)로 가른다 — 문장이 둘 이상이면 첫 문장이 제목,
+ *  나머지가 설명. 한 문장이면 제목만 (설명 자리는 비운다 — 지어내지 않는다) */
+export function splitIntro(intro) {
+  const text = String(intro || '').trim()
+  if (!text) return { title: '', desc: '' }
+  const m = /^(.+?[.!?。])\s+(\S[\s\S]*)$/.exec(text.replace(/\n+/g, ' '))
+  return m ? { title: m[1].trim(), desc: m[2].trim() } : { title: text, desc: '' }
+}
+
 export function liveSurveyItems(page) {
+  const intro = splitIntro(page.intro)
   const items = [
     // 화면 헤더는 클라이언트 소유 — LLM 산출물과 무관하게 생성 시작부터 늘 그린다
     { id: 'live-survey-header', type: 'screenHeader', props: { title: '설문 단계', back: true, home: true, ai: true } },
     {
       id: 'live-survey-intro',
       type: 'surveyIntro',
-      props: { kicker: '', title: page.intro || '몇 가지만 알려주세요', desc: '' },
+      props: { kicker: '', title: intro.title || '몇 가지만 알려주세요', desc: intro.desc },
     },
     {
       id: 'live-profile-panel',
@@ -78,7 +88,7 @@ export function livePlanItems(page, opts = {}) {
   const pendingSlots = opts.pendingSlots || []
   const items = [
     // 화면 헤더는 클라이언트 소유 — LLM 산출물과 무관하게 생성 시작부터 늘 그린다
-    { id: 'live-plan-header', type: 'screenHeader', props: { title: '계획 단계', back: true, home: true, ai: true } },
+    { id: 'live-plan-header', type: 'screenHeader', props: { title: 'AI 맞춤 계획', back: true, home: true, ai: true } },
     {
       id: 'live-plan-title',
       type: 'planTitle',
@@ -91,14 +101,17 @@ export function livePlanItems(page, opts = {}) {
       },
     },
   ]
-  if (page.summary) {
-    items.push({ id: 'live-plan-summary', type: 'noticeCard', props: { title: '이렇게 정리했어요', body: page.summary } })
-  }
+  /* Figma AIIntro = 인용 제목 + 설문 요약 칩이 한 밴드 — 요약 패널을 타이틀 바로 뒤에 두어
+     플레이어의 인접 규칙이 두 아이템을 한 보라 밴드로 이어 붙인다. LLM 정리 문단은 그 아래
+     카드 없는 텍스트 블록으로 (id는 평가 말풍선 앵커 '요약'이라 유지) */
   items.push({
     id: 'live-plan-survey-summary',
     type: 'surveySummary',
     props: { title: '설문 요약', hiddenProfile: '', hiddenQuestions: '' },
   })
+  if (page.summary) {
+    items.push({ id: 'live-plan-summary', type: 'textBlock', props: { kicker: '', title: '이렇게 정리했어요', body: page.summary } })
+  }
   const sections = page.sections || []
   /* forEach가 아니라 인덱스 순회다 — 스트리밍 중 partial.sections는 도착한 인덱스에만 값이
      있는 희소 배열이고, forEach는 그 구멍을 아예 건너뛴다. 아직 안 온 자리에 로딩 카드를
@@ -182,14 +195,14 @@ export function livePlanItems(page, opts = {}) {
       if (section.reason) {
         items.push({ id: `${base}-reason`, type: 'textBlock', stepSub, props: { kicker: '', title: '', body: section.reason } })
       }
-      items.push({ id: base, type: 'hscroll', stepSub, props: { title: section.title, cardW: '200', items: '' } })
+      items.push({ id: base, type: 'hscroll', stepSub, props: { title: section.title, cardW: '170', items: '' } })
       ;(section.products || []).forEach((product, j) => {
         items.push({
           id: `${base}-p${j}`,
           type: 'productCard',
           parentId: base,
           slot: j,
-          w: 200,
+          w: 170, // Figma [PP1K] ProductCard 170 고정
           props: {
             brand: product.brand || '',
             name: product.name,
@@ -212,9 +225,9 @@ export function livePlanItems(page, opts = {}) {
       if (section.reason) {
         items.push({ id: `${base}-reason`, type: 'textBlock', props: { kicker: '', title: '', body: section.reason } })
       }
-      items.push({ id: base, type: 'hscroll', props: { title: section.title, cardW: '174', items: '' } })
+      items.push({ id: base, type: 'hscroll', props: { title: section.title, cardW: '260', items: '' } })
       ;(section.items || []).forEach((c, j) => {
-        const common = { id: `${base}-c${j}`, parentId: base, slot: j, w: 174 }
+        const common = { id: `${base}-c${j}`, parentId: base, slot: j, w: 260 } // Figma VideoCard 는 전폭 — 트랙에선 한 장 반이 보이는 폭
         if (c.type === 'video') {
           items.push({
             ...common,
@@ -244,6 +257,10 @@ export function livePlanItems(page, opts = {}) {
         }
       })
     }
+  }
+  /* Figma FeedbackSection — 계획 끝의 "도움이 됐나요?" (섹션이 하나라도 있을 때만, 평가 말풍선 대상 아님) */
+  if (sections.some(Boolean)) {
+    items.push({ id: 'live-plan-helpful', type: 'feedbackCard', props: { question: '이 계획이 도움이 됐나요?', state: 'none' } })
   }
   return items
 }

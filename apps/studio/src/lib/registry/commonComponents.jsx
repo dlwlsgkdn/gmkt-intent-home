@@ -84,10 +84,11 @@ export const COMMON_COMPONENTS = {
       { key: 'body', label: '본문', kind: 'textarea' },
     ],
     render: (p, ctx) => (
-      <div className="sb-static">
-        {p.kicker ? <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400 block mb-2">{kText(p.kicker, ctx, 'kicker')}</span> : null}
-        {p.title ? <h3 className="text-xl font-semibold text-slate-900 mb-2">{kText(p.title, ctx, 'title')}</h3> : null}
-        {p.body ? <p className="text-sm leading-relaxed text-slate-600 whitespace-pre-wrap">{kText(p.body, ctx, 'body')}</p> : null}
+      /* Figma [PP1K] 체계 — 키커 12px 회색 · 제목 16px 디스플레이 · 본문 14px (viewer.css .sb-textblock) */
+      <div className="sb-static sb-textblock">
+        {p.kicker ? <span className="sb-textblock__kicker">{kText(p.kicker, ctx, 'kicker')}</span> : null}
+        {p.title ? <h3 className="sb-textblock__title">{kText(p.title, ctx, 'title')}</h3> : null}
+        {p.body ? <p className="sb-textblock__body">{kText(p.body, ctx, 'body')}</p> : null}
       </div>
     ),
   },
@@ -103,9 +104,10 @@ export const COMMON_COMPONENTS = {
       { key: 'body', label: '내용', kind: 'textarea' },
     ],
     render: (p, ctx) => (
-      <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-5 py-5 text-sm leading-relaxed text-slate-500">
-        <p className="font-semibold text-slate-700 mb-1">{kText(p.title, ctx, 'title')}</p>
-        <p className="whitespace-pre-wrap">{kText(p.body, ctx, 'body')}</p>
+      /* 옛 점선 24px 카드 → Figma 체계의 가라앉은 면(bg/subtle) 8px 카드 (viewer.css .sb-notice) */
+      <div className="sb-notice">
+        <p className="sb-notice__title">{kText(p.title, ctx, 'title')}</p>
+        <p className="sb-notice__body">{kText(p.body, ctx, 'body')}</p>
       </div>
     ),
   },
