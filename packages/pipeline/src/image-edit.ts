@@ -57,25 +57,52 @@ export const LOOK_TONE_PROMPT: Record<LookTone, string> = {
  * (identity drift) — 뷰티 트라이온에서는 그게 곧 실패다. 그래서 동일성 보존을 먼저·구체적으로 못
  * 박고, 보정(피부 매끈하게·얼굴 갸름하게)도 명시로 금지한다. 영어로 쓰는 이유는 이미지 모델의
  * 지시 준수율이 영어에서 안정적이기 때문이고, 사용자에게 보이는 문구는 아니다.
+ *
+ * 강도(intensity)의 기본값은 **strong** 이다(2026-09): "subtle·natural everyday" 로 쓰면 모델이 립 틴트
+ * 정도로 끝내 비포/애프터 차이가 거의 안 보였다. 기본은 립 불투명 풀커버 · 치크 또렷 · 아이섀도+라이너+
+ * 눈썹까지 한 벌의 진한 메이크업으로 지시하고, 얼굴 자체의 보정 금지는 그대로 둔다. 'natural' 은 옛
+ * 문구를 남겨 둔 선택지다(요청 본문이 고를 수 있게 남김 — 지금 FE 는 보내지 않는다).
  */
-export function buildLookRenderPrompt(input: { tone: LookTone; title?: string; points?: string[] }): string {
+export type LookIntensity = 'strong' | 'natural'
+
+export function buildLookRenderPrompt(input: {
+  tone: LookTone
+  title?: string
+  points?: string[]
+  intensity?: LookIntensity
+}): string {
   const color = LOOK_TONE_PROMPT[input.tone] ?? 'natural'
   const detail = (input.points ?? []).filter(Boolean).slice(0, 4)
+  const strong = (input.intensity ?? 'strong') === 'strong'
   const lines = [
-    `Apply realistic ${color} makeup to the person in this photo.`,
+    strong
+      ? `Apply bold, clearly visible, full-face ${color} makeup to the person in this photo — a finished, polished look that is obvious at first glance.`
+      : `Apply realistic ${color} makeup to the person in this photo.`,
     '',
     'Preserve exactly (most important):',
-    '- The same person — identical facial features, face shape, eyes, nose, jawline and skin texture.',
+    '- The same person — identical facial features, face shape, eyes, nose, jawline, skin texture, moles and freckles.',
     '- Hair, clothing, pose, camera angle, lighting and background, unchanged.',
-    '- Do not slim, smooth, retouch or beautify the face in any way.',
+    '- Do not slim, reshape, smooth away skin texture, retouch or beautify the face itself — only add makeup on top of it.',
     '',
     'Change only the makeup:',
-    `- Lip color in ${color}, blush on the cheeks in the same family, subtle and blended.`,
   ]
+  if (strong) {
+    lines.push(
+      `- Lips: rich, saturated, opaque ${color} lipstick with a crisp, defined lip line — full coverage, not a sheer tint or stain.`,
+      `- Cheeks: strongly pigmented blush in the ${color} family, clearly visible on the cheekbones and blended only at the edges.`,
+      '- Eyes: eyeshadow in the same color family with a defined eyeliner, visibly lengthened lashes (mascara) and well-groomed, filled-in brows.',
+      '- Base: even, luminous complexion makeup that still keeps the natural skin texture.',
+      '- Intensity: high. The makeup must read as a deliberate statement look, not a no-makeup look — if in doubt, apply more pigment, never less.',
+    )
+  } else {
+    lines.push(`- Lip color in ${color}, blush on the cheeks in the same family, subtle and blended.`)
+  }
   if (detail.length) lines.push(...detail.map((d) => `- ${d}`))
   lines.push(
     '',
-    'Style: natural everyday makeup a real person would wear. Photorealistic, not a filter or illustration.',
+    strong
+      ? 'Style: glamorous, camera-ready makeup as seen in a beauty campaign — vivid, yet photorealistic on real skin. Not a filter or illustration.'
+      : 'Style: natural everyday makeup a real person would wear. Photorealistic, not a filter or illustration.',
     'Keep the original framing and aspect ratio.',
   )
   if (input.title) lines.push('', `Look name (for reference only): ${input.title}`)

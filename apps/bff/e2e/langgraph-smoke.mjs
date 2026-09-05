@@ -306,6 +306,7 @@ try {
     ok(!!editCall, '이미지 편집 모델 호출됨')
     ok((editCall?.user || '').includes('same person'), '편집 지시문에 동일성 보존 지시 포함')
     ok((editCall?.user || '').includes('coral'), '편집 지시문에 룩 색조 반영')
+    ok((editCall?.user || '').includes('opaque coral lipstick'), '편집 지시문 기본 강도 strong (진한 메이크업)')
   }
   {
     const dumpM = await fetch(MOCK + `/internal/dump/${startM.threadId}`).then((r) => r.json())
@@ -501,7 +502,7 @@ try {
   const legacyM = engineMetrics?.engines?.find((e) => e.engine === 'legacy')
   ok(lg?.count >= 1, `전환 계기판 — langgraph 표본 (${lg?.count})`)
   ok(legacyM?.count >= 1, `전환 계기판 — legacy 표본 (${legacyM?.count})`)
-  ok(lg?.promptVersions?.includes('v17'), 'promptVersion 각인 (v17)')
+  ok(lg?.promptVersions?.includes('v18'), 'promptVersion 각인 (v18)')
 } finally {
   shutdown()
 }

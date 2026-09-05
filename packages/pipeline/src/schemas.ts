@@ -133,7 +133,7 @@ export const ProductsSectionGen = z.object({
   reason: z.string().describe('이 상품들을 고른 이유 한두 문장 — 답변을 근거로'),
   productIds: z.array(z.string()).max(4).describe('카탈로그에서 고른 상품 id (없으면 빈 배열)'),
   // 웹 검색 그라운딩: 검색 결과에서 확인한 상품만 — url은 BFF가 http(s)+PDP 검증 후 채택한다
-  webProducts: z.array(WebProductGen).max(4).describe('웹 검색으로 찾은 상품 (없으면 빈 배열)'),
+  webProducts: z.array(WebProductGen).max(8).describe('웹 검색으로 찾은 상품 — 섹션당 4~6개를 목표로 (없으면 빈 배열)'),
   catalogRatings: z
     .array(CatalogRatingGen)
     .max(4)
@@ -159,7 +159,7 @@ export const ContentsSectionGen = z.object({
   kind: z.literal('contents'),
   title: z.string(),
   reason: z.string().describe('이 콘텐츠들을 고른 이유 한두 문장 — 답변을 근거로'),
-  items: z.array(ContentItemGen).min(1).max(4).describe('웹 검색으로 확인한 실제 게시글·영상 (확인 못 했으면 섹션 자체를 만들지 않는다)'),
+  items: z.array(ContentItemGen).min(1).max(8).describe('웹 검색으로 확인한 실제 게시글·영상 — 4~6개를 목표로 (확인 못 했으면 섹션 자체를 만들지 않는다)'),
 })
 export type ContentsSectionGen = z.infer<typeof ContentsSectionGen>
 
