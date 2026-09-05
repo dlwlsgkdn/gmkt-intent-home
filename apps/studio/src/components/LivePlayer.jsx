@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { stepInfoOfItem } from '../lib/cart.js'
+import { enrichCartEntries, productLookupFromPlanPage, stepInfoOfItem } from '../lib/cart.js'
 import { DEVICE_PRESETS, STAGES } from '../lib/store.js'
 import { isQuestionType, renderItem, resolveSampleFace } from '../lib/registry.jsx'
 import BottomSheet from './ui/BottomSheet.jsx'
@@ -195,6 +195,12 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const [answers, setAnswers] = useState({})
   const [excludedProfile, setExcludedProfile] = useState([])
   const [cart, setCart] = useState([])
+  /* 옛 기록(이름만 남은 담기)은 계획 페이지가 오면 그 상품 카드 재료로 채운다 — 무변경이면 같은 참조라 기록 갱신이 없다 */
+  useEffect(() => {
+    if (!planPage) return
+    const lookup = productLookupFromPlanPage(planPage)
+    setCart((prev) => enrichCartEntries(prev, lookup))
+  }, [planPage])
   const [completed, setCompleted] = useState(false)
   const [keyword, setKeyword] = useState(null)
   const [productDetail, setProductDetail] = useState(null) // 상품 상세보기 사이드 패널 (null=닫힘)
@@ -1092,7 +1098,6 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
             </>
           )}
 
-          {cart.length > 0 && !loading && <p className="sb-player__cart">🧺 담은 상품 {cart.length}개</p>}
         </div>
 
         {/* 평가 말풍선 레일 — 페이지 오른쪽, 점선으로 앵커와 연결 (평가 스튜디오와 같은 문법) */}

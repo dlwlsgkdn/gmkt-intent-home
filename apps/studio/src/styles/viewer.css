@@ -520,20 +520,6 @@
   width: min(760px, 100%);
   margin: 40px auto 0;
 }
-.sb-player__cart {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  z-index: 130;
-  padding: 10px 18px;
-  border-radius: 999px;
-  background: #fff;
-  border: 1px solid var(--sb-line);
-  box-shadow: 0 16px 36px -20px rgba(15, 23, 42, 0.4);
-  font-size: 13px;
-  font-weight: 400;
-  color: var(--sb-ink);
-}
 
 
 /* ── 라이브 생성 체험 (LivePlayer) — 상시 배지 · 생성 대기 스켈레톤 · 실패 안내 ──

@@ -1,7 +1,33 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { timeAgo } from '../lib/timeAgo.js'
+import { fetchLiveThread } from '../lib/liveApi.js'
 import BottomSheet from './ui/BottomSheet.jsx'
-import { cartEntries, cartTotal, formatWon, groupCartByStep, parsePrice } from '../lib/cart.js'
+import {
+  cartEntries,
+  cartNeedsEnrich,
+  cartTotal,
+  enrichCartEntries,
+  formatWon,
+  groupCartByStep,
+  parsePrice,
+  productLookupFromItems,
+  productLookupFromPlanPage,
+} from '../lib/cart.js'
+
+/* 옛 이름-만 담기 기록의 썸네일 보정 — 라이브 쓰레드는 서버 계획 페이지를 한 번 받아 상품 표를 만든다.
+   모듈 캐시: threadId → null(받는 중) | Map(완료 — 실패면 빈 표라 다시 받지 않는다) */
+const liveLookupCache = new Map()
+
+/* 시나리오 쓰레드의 상품 표 — 체험한 계획 케이스의 카드를 먼저, 나머지 케이스는 뒤에 (같은 이름은 먼저 것이 이긴다) */
+function scenarioLookup(scenario, planCaseId) {
+  const cases = scenario?.planCases || []
+  const chosen = cases.find((c) => c.id === planCaseId)
+  const items = [
+    ...(chosen ? chosen.items || [] : []),
+    ...cases.filter((c) => c !== chosen).flatMap((c) => c.items || []),
+  ]
+  return productLookupFromItems(items)
+}
 
 /* 원본(gmarket-advanced-clean-home)의 "마지막 페이즈" 라벨을 스튜디오 단계에 맞게 매핑 */
 function phaseLabel(t) {
@@ -170,6 +196,53 @@ export default function ThreadPanel({ api, open, origin = 'right', onClose }) {
   useEffect(() => {
     if (!open) setSheet(null)
   }, [open])
+
+  /* ── 옛 이름-만 기록의 썸네일 보정 ──
+     시나리오 쓰레드는 그 시나리오의 상품 카드에서(즉시), 라이브 쓰레드는 서버 계획 페이지에서(한 번 받아 캐시) 재료를 찾아
+     빈 필드를 채운다. 채워진 결과는 기록에도 저장해(갱신 시각은 안 건드림) 다음부터는 보정 없이 바로 그려진다 */
+  const [, bump] = useState(0)
+  const scenarioLookups = useMemo(() => new Map(), [api.scenarios])
+  const lookupFor = (t) => {
+    if (t.live) return liveLookupCache.get(t.id) || null
+    const key = `${t.scenarioId}|${t.planCaseId || ''}`
+    if (!scenarioLookups.has(key)) {
+      const scenario = api.scenarios.find((s) => s.id === t.scenarioId)
+      scenarioLookups.set(key, scenario ? scenarioLookup(scenario, t.planCaseId) : null)
+    }
+    return scenarioLookups.get(key)
+  }
+  const enrichedCartOf = (t) => {
+    if (!cartNeedsEnrich(t.cart)) return t.cart
+    const lookup = lookupFor(t)
+    return lookup ? enrichCartEntries(t.cart, lookup) : t.cart
+  }
+  const liveNeedKey = open
+    ? api.threads.filter((t) => t.live && cartNeedsEnrich(t.cart) && !liveLookupCache.has(t.id)).map((t) => t.id).join(',')
+    : ''
+  useEffect(() => {
+    if (!liveNeedKey) return undefined
+    let alive = true
+    for (const id of liveNeedKey.split(',')) {
+      liveLookupCache.set(id, null)
+      fetchLiveThread(id)
+        .then((page) => { liveLookupCache.set(id, productLookupFromPlanPage(page && page.plan)) })
+        .catch(() => { liveLookupCache.set(id, new Map()) })
+        .finally(() => { if (alive) bump((n) => n + 1) })
+    }
+    return () => { alive = false }
+  }, [liveNeedKey])
+  const persistedRef = useRef(new Set())
+  useEffect(() => {
+    if (!open) return
+    for (const t of api.threads) {
+      if (!cartNeedsEnrich(t.cart) || persistedRef.current.has(t.id)) continue
+      const next = enrichedCartOf(t)
+      if (next !== t.cart) {
+        persistedRef.current.add(t.id)
+        api.updateThread(t.id, { cart: next }, { touch: false })
+      }
+    }
+  })
   if (!open) return null
 
   const fbCount = api.threads.filter((t) => t.feedback).length
@@ -271,7 +344,7 @@ export default function ThreadPanel({ api, open, origin = 'right', onClose }) {
 
                 <div className="sb-thread__list">
                   {threads.map((t) => {
-                    const entries = cartEntries(t.cart)
+                    const entries = cartEntries(enrichedCartOf(t))
                     const cta = ctaFor(t)
                     return (
                       <article key={t.id} className="sb-thread-card">
@@ -357,7 +430,7 @@ export default function ThreadPanel({ api, open, origin = 'right', onClose }) {
       )}
       {sheet && sheet.kind === 'cart' && sheetThread && (
         <CartSheet
-          thread={sheetThread}
+          thread={{ ...sheetThread, cart: enrichedCartOf(sheetThread) }}
           onClose={() => setSheet(null)}
           onRemove={(index) => removeFromCart(sheetThread, index)}
           onOpenPlan={() => { setSheet(null); resume(sheetThread) }}

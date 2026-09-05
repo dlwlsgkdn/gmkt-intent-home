@@ -86,3 +86,75 @@ export function groupCartByStep(cart) {
   })
   return groups.sort((a, b) => (a.step === '' ? 1 : 0) - (b.step === '' ? 1 : 0))
 }
+
+/* ── 옛 이름-만 기록 보정 ──
+   이름으로 상품 카드 재료를 찾는 표를 만들어 빈 필드(썸네일·가격·몰·단계)를 채운다. 시나리오 쓰레드는 그 시나리오의
+   상품 카드 아이템에서, 라이브 쓰레드는 서버에 남은 계획 페이지(와이어)에서 표를 만든다 */
+const normName = (text) => String(text || '').trim().replace(/\s+/g, ' ')
+
+export function productLookupFromItems(items) {
+  const map = new Map()
+  let step = ''
+  let stepBadge = ''
+  for (const it of Array.isArray(items) ? items : []) {
+    if (it.type === 'planStep' && !it.parentId) {
+      step = String(it.props?.title || '').trim()
+      stepBadge = String(it.props?.badge || '').trim()
+      continue
+    }
+    if (it.type !== 'productCard' || !it.props?.name) continue
+    const key = normName(it.props.name)
+    if (!map.has(key)) map.set(key, { ...cartEntryFromProduct(it.props), step, stepBadge })
+  }
+  return map
+}
+
+/* 라이브 와이어 계획 페이지 — livePage 의 productCard 투영과 같은 규칙(가격 천 단위, 썸네일 없으면 🧴 목업, mall 있음 = 외부몰) */
+export function productLookupFromPlanPage(page) {
+  const map = new Map()
+  let step = ''
+  for (const section of page?.sections || []) {
+    if (!section) continue
+    if (section.kind === 'guide') {
+      step = String(section.title || '').trim()
+      continue
+    }
+    if (section.kind !== 'products') continue
+    for (const product of section.products || []) {
+      if (!product?.name) continue
+      const key = normName(product.name)
+      if (map.has(key)) continue
+      const entry = { name: String(product.name).trim(), step }
+      if (product.brand) entry.brand = String(product.brand)
+      if (product.price != null && product.price !== '') entry.price = Number(product.price || 0).toLocaleString('ko-KR')
+      if (product.mall) { entry.mall = String(product.mall); entry.external = true }
+      if (product.url) entry.url = String(product.url)
+      if (product.imageUrl) entry.imageUrl = String(product.imageUrl)
+      else entry.emoji = '🧴'
+      map.set(key, entry)
+    }
+  }
+  return map
+}
+
+/* 표에서 찾은 재료로 빈 필드를 채운다. 바뀐 게 없으면 원래 배열을 그대로 돌려준다(무변경 참조 유지 — 기록 갱신을 안 일으킨다) */
+export function enrichCartEntries(cart, lookup) {
+  if (!lookup || lookup.size === 0 || !Array.isArray(cart) || cart.length === 0) return cart
+  let changed = false
+  const next = cartEntries(cart).map((entry) => {
+    const found = lookup.get(normName(entry.name))
+    if (!found) return entry
+    const patch = {}
+    for (const key of ['brand', 'price', 'mall', 'imageUrl', 'emoji', 'gradient', 'url', 'step', 'stepBadge']) {
+      if (!entry[key] && found[key]) patch[key] = found[key]
+    }
+    if (found.external && entry.external == null) patch.external = true
+    if (Object.keys(patch).length === 0) return entry
+    changed = true
+    return { ...entry, ...patch }
+  })
+  return changed ? next : cart
+}
+
+/* 썸네일 재료(이미지도 이모지도)가 없는 항목이 하나라도 있으면 보정 대상 */
+export const cartNeedsEnrich = (cart) => cartEntries(cart).some((entry) => !entry.imageUrl && !entry.emoji)

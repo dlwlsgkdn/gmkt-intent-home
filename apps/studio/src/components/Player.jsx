@@ -289,9 +289,6 @@ export default function Player({ api, scenario, resume }) {
         </div>
         )}
 
-        {cart.length > 0 && (
-          <p className="sb-player__cart">🧺 담은 상품 {cart.length}개</p>
-        )}
         </div>
       </section>
 
