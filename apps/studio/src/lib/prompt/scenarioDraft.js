@@ -76,9 +76,8 @@ export const SCENARIO_RESPONSE_SCHEMA = {
     plan: {
       type: 'object',
       additionalProperties: false,
-      required: ['summaryTitle', 'titleKicker', 'titleText', 'noticeTitle', 'noticeBody', 'steps', 'cta'],
+      required: ['titleKicker', 'titleText', 'noticeTitle', 'noticeBody', 'steps', 'cta'],
       properties: {
-        summaryTitle: { type: 'string' },
         titleKicker: { type: 'string' },
         titleText: { type: 'string' },
         noticeTitle: { type: 'string' },
@@ -288,7 +287,6 @@ export function validateScenarioResponse(raw, request) {
         noticeBody: String(survey.noticeBody || ''),
       },
       plan: {
-        summaryTitle: String(plan.summaryTitle || '선택 요약'),
         titleKicker: String(plan.titleKicker || 'Plan'),
         titleText: String(plan.titleText || title),
         noticeTitle: String(plan.noticeTitle || '플랜 구성 기준'),
@@ -339,7 +337,7 @@ export function assembleScenario({ draft, catalog, query }) {
 
   /* 계획 화면(골든 케이스) — 단계마다 planStep + 가로 스크롤 상품 패널 */
   const planItems = [
-    make('surveySummary', { title: draft.plan.summaryTitle }),
+    make('surveySummary', {}), // 제목 라벨 없는 칩 줄 — 프로필·답변은 실행 시 자동
     make('planTitle', { kicker: draft.plan.titleKicker, title: draft.plan.titleText }),
     make('noticeCard', { title: draft.plan.noticeTitle, body: draft.plan.noticeBody }),
   ]

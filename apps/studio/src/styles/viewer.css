@@ -931,8 +931,7 @@
   color: #fff;
   cursor: pointer;
 }
-.sb-ai-notice__tip,
-.sb-match__tip {
+.sb-ai-notice__tip {
   position: absolute;
   z-index: 8;
   display: block;
@@ -951,8 +950,7 @@
   line-height: 1.55;
   white-space: pre-line;
 }
-.sb-ai-notice__tip::before,
-.sb-match__tip::before {
+.sb-ai-notice__tip::before {
   content: '';
   position: absolute;
   top: -7px;
@@ -1141,9 +1139,9 @@
 .sb-product-card2__price b { font-size: 18px; font-weight: 500; line-height: 23px; color: var(--dk-ink); } /* Figma text/display/lg */
 .sb-product-card2__price em { font-style: normal; font-size: var(--sb-t-caption); font-weight: 300; color: var(--dk-ink-2); }
 
-/* 추천도 배지 + 설명 말풍선 (Figma 상품카드/MatchTooltip) */
+/* 매칭율 배지 (Figma MatchTag) — 클릭 팝오버 규칙은 파일 끝 '매칭율 팝오버' 블록 */
 .sb-match { position: absolute; top: 8px; left: 8px; z-index: 5; }
-/* 추천도 배지 — Figma MatchTag: badge/blue 알약(radius 60 · 패딩 4/8 · 흰 11px) */
+/* 매칭율 배지 — Figma MatchTag: badge/blue 알약(radius 60 · 패딩 4/8 · 흰 11px) */
 .sb-match__badge {
   display: inline-flex;
   align-items: center;
@@ -1161,23 +1159,6 @@
 .sb-match__badge--static { cursor: default; }
 .sb-match__label { font-size: var(--sb-t-micro); font-weight: 500; letter-spacing: 0.02em; color: rgba(255, 255, 255, 0.85); }
 .sb-match__score { font-size: var(--sb-t-micro); font-weight: 500; color: #fff; }
-.sb-match__tip {
-  top: calc(100% + 9px);
-  left: 0;
-  width: max-content;
-  max-width: 232px;
-}
-.sb-match__tip::before { left: 16px; }
-.sb-match__tip b { display: block; font-size: var(--sb-t-caption); font-weight: 500; }
-.sb-match__tip em {
-  display: block;
-  margin-top: 5px;
-  font-style: normal;
-  font-size: var(--sb-t-micro);
-  font-weight: 300;
-  color: rgba(255, 255, 255, 0.78);
-  line-height: 1.55;
-}
 
 /* 몰 배지 — 지마켓/올리브영은 브랜드 색, 그 밖은 중립 */
 .sb-mall-badge {
@@ -1778,8 +1759,6 @@
   padding: 0 16px 24px;
   border-radius: 0;
 }
-.sb-summary .clean-survey-lock__head { margin-bottom: 10px; }
-.sb-summary .clean-survey-lock__title { font-size: var(--sb-t-micro); font-weight: 300; color: rgba(255, 255, 255, 0.72); }
 .sb-summary .sb-pinned-panel__empty { color: rgba(255, 255, 255, 0.72); }
 /* 요약이 타이틀 앞에 올 때(템플릿·라이브 선렌더 순서)도 한 밴드로 — 요약을 프레임 폭으로 펴고
    타이틀이 스택 간격을 삼켜 이어 붙는다 */
@@ -1833,6 +1812,7 @@
 .sb-sheet .sb-cart-sheet__total,
 .sb-sheet .sb-cart-sheet__cta,
 .sb-sheet .sb-confirm__btn,
+.sb-match__pop .sb-match__total b,
 .sb-thread__title,
 .sb-thread-card__title,
 .sb-thread-empty__title {
@@ -2029,3 +2009,38 @@
 body:has(.sb-player--fill) .sb-fabbar { bottom: calc(100px + env(safe-area-inset-bottom)); }
 /* 시트·모달이 떠 있는 동안 플로팅 버튼은 숨긴다 — 덮개 위로 흐릿하게 비쳐 시트 안 요소처럼 읽히던 것 */
 body:has(.sb-sheet) .sb-fabbar { opacity: 0; pointer-events: none; }
+
+/* ── 매칭율 팝오버 (Figma 5-2 MATCH 태그 팝오버, 2026-09) — 배지 아래 260px 카드: radius 16 · 패딩 16 · gap 12 ·
+   그림자 0 4 20 12%. 제목 14/20 · 소개 13 · 항목 상자(bg/subtle radius 8 패딩 12 gap 8: 라벨 · 8px 막대 · %) ·
+   종합 점수 22px 보라. 상품 카드 썸네일이 overflow hidden 이라 body 포털 + fixed 로 띄운다 ── */
+.sb-match__pop {
+  position: fixed;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 260px;
+  max-height: calc(100dvh - 16px);
+  overflow-y: auto;
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--dk-surface);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+  color: var(--dk-ink);
+  text-align: left;
+  font-family: var(--sb-font-sans);
+}
+.sb-match__pop-title { display: block; font-size: var(--sb-t-body); font-weight: 500; line-height: 20px; letter-spacing: -0.3px; color: var(--dk-ink); }
+.sb-match__pop-desc { display: block; font-size: var(--sb-t-small); font-weight: 300; line-height: 1.5; color: var(--dk-ink-2); word-break: keep-all; }
+.sb-match__breakdown { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 8px; background: var(--dk-sunken); }
+.sb-match__row { display: flex; flex-direction: column; gap: 3px; }
+.sb-match__row-main { display: flex; align-items: center; gap: 8px; }
+.sb-match__row-label { flex: 0 0 64px; font-size: var(--sb-t-caption); font-weight: 400; color: var(--dk-ink-2); }
+.sb-match__bar { flex: 1; height: 8px; border-radius: 4px; background: var(--dk-line-soft); overflow: hidden; }
+.sb-match__bar > span { display: block; height: 100%; border-radius: inherit; background: var(--dk-brand); }
+.sb-match__row-score { flex: 0 0 36px; text-align: right; font-size: var(--sb-t-caption); font-weight: 500; color: var(--dk-brand); }
+.sb-match__row-note { font-size: var(--sb-t-micro); font-weight: 300; line-height: 1.45; color: var(--dk-muted); word-break: keep-all; }
+.sb-match__pop-note { display: block; font-size: var(--sb-t-caption); font-weight: 300; line-height: 1.5; color: var(--dk-ink-2); word-break: keep-all; }
+.sb-match__total { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: var(--sb-t-small); color: var(--dk-ink-2); }
+.sb-match__total b { font-size: 22px; font-weight: 500; line-height: 1; color: var(--dk-brand); }
+.sb-match__basis { display: block; font-size: var(--sb-t-micro); font-weight: 300; line-height: 1.45; color: var(--dk-subtle); }

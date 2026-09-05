@@ -1,4 +1,5 @@
 import {
+  CatalogRatingGen,
   ContentItemGen,
   PlanSearchSectionGen,
   PlanSearchSectionPartialGen,
@@ -26,6 +27,10 @@ export function completeSearchSection(element: unknown): PlanSearchSectionGen | 
       productIds: settled('productIds', s.productIds).filter((v): v is string => typeof v === 'string'),
       webProducts: settled('webProducts', s.webProducts)
         .map((v) => WebProductGen.safeParse(v))
+        .flatMap((r) => (r.success ? [r.data] : [])),
+      // 카탈로그 매칭 평가도 완성된 항목만 — 아직 안 온 평가는 가드가 태그 대조 폴백으로 채운다
+      catalogRatings: settled('catalogRatings', s.catalogRatings)
+        .map((v) => CatalogRatingGen.safeParse(v))
         .flatMap((r) => (r.success ? [r.data] : [])),
     }
   }

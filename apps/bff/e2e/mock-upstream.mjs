@@ -16,9 +16,33 @@ const SURVEY_JSON = JSON.stringify({
   intro: '모의 인트로입니다. 여름 쿠션을 찾아볼게요.',
   photoQuestion: '', // 사진이 필요 없는 의도 — 사진 질문 자리가 생기지 않는다
   questions: [
-    { question: '피부 타입은 어떻게 되세요?', options: ['지성', '건성', '복합성'], multi: false },
-    { question: '가장 큰 고민은 무엇인가요?', options: ['모공', '수분', '지속력'], multi: true },
-    { question: '예산은 어느 정도 생각하세요?', options: ['1만원대', '3만원대'], multi: false },
+    // 선택지는 제목+부제 객체 — BFF(optionWire)가 와이어 "제목|부제" 문자열로 직렬화한다
+    {
+      question: '피부 타입은 어떻게 되세요?',
+      options: [
+        { label: '지성', desc: '오후만 되면 T존이 번들거려요' },
+        { label: '건성', desc: '세안 뒤 당기고 각질이 일어나요' },
+        { label: '복합성', desc: 'T존은 번들, 볼은 건조해요' },
+      ],
+      multi: false,
+    },
+    {
+      question: '가장 큰 고민은 무엇인가요?',
+      options: [
+        { label: '모공', desc: '코·볼 모공이 두드러져요' },
+        { label: '수분', desc: '속건조로 메이크업이 들떠요' },
+        { label: '지속력', desc: '점심 지나면 무너져요' },
+      ],
+      multi: true,
+    },
+    {
+      question: '예산은 어느 정도 생각하세요?',
+      options: [
+        { label: '1만원대', desc: '부담 없이 써 볼 가격' },
+        { label: '3만원대', desc: '한 단계 좋은 제형까지' },
+      ],
+      multi: false,
+    },
   ],
 })
 
@@ -28,8 +52,24 @@ const SURVEY_PHOTO_JSON = JSON.stringify({
   intro: '올려주신 얼굴에 어울리는 룩을 찾아볼게요.',
   photoQuestion: '얼굴이 잘 보이는 정면 사진을 올려주세요',
   questions: [
-    { question: '어떤 자리에 갈 계획인가요?', options: ['데일리', '데이트', '행사'], multi: false },
-    { question: '평소 선호하는 색조는?', options: ['코랄', '로즈', '뉴트럴'], multi: false },
+    {
+      question: '어떤 자리에 갈 계획인가요?',
+      options: [
+        { label: '데일리', desc: '출근·수업처럼 매일 가는 자리' },
+        { label: '데이트', desc: '가까이서 봐도 예쁜 룩' },
+        { label: '행사', desc: '사진이 많이 남는 자리' },
+      ],
+      multi: false,
+    },
+    {
+      question: '평소 선호하는 색조는?',
+      options: [
+        { label: '코랄', desc: '생기 있는 오렌지 기운' },
+        { label: '로즈', desc: '차분한 핑크 기운' },
+        { label: '뉴트럴', desc: '피부에 스미는 MLBB' },
+      ],
+      multi: false,
+    },
   ],
 })
 
@@ -45,7 +85,7 @@ const SKELETON_LOOK_JSON = JSON.stringify({
       tone: 'coral',
       points: ['립 — 코랄 틴트를 안쪽부터', '볼 — 같은 톤으로 얇게'],
     },
-    { kind: 'guide', title: '베이스 정돈', body: '결을 먼저 정리해요.' },
+    { kind: 'guide', title: '베이스 정돈', subtitle: '룩이 잘 얹히도록 결부터 고르는 준비', body: '결을 먼저 정리해요.' },
     { kind: 'products', title: '이 룩에 쓸 상품', reason: '코랄 톤 기준으로 고를 거예요.' },
   ],
 })
@@ -54,7 +94,7 @@ const SKELETON_JSON = JSON.stringify({
   headline: '모의 여름 쿠션 계획',
   summary: '지성 피부를 위한 모의 요약입니다.',
   sections: [
-    { kind: 'guide', title: '피부 준비', body: '유분을 잡는 것부터 시작해요.' },
+    { kind: 'guide', title: '피부 준비', subtitle: '유분만 덜어내고 결은 남기는 준비', body: '유분을 잡는 것부터 시작해요.' },
     { kind: 'products', title: '추천 쿠션', reason: '지속력 기준으로 고를 거예요.' },
     { kind: 'steps', title: '사용 순서', steps: ['아침 프라이머', '쿠션 얇게 두 번'] },
   ],
@@ -92,6 +132,16 @@ const PRODUCTS_JSON = JSON.stringify({
       title: '추천 쿠션',
       reason: '지성 피부 지속력 기준의 모의 추천입니다.',
       productIds: ['p-012'],
+      // 매칭 평가(match) — 검증 게이트가 가중 합산해 매칭율(%)을 붙인다 (guards/match.ts)
+      catalogRatings: [
+        {
+          id: 'p-012',
+          match: {
+            skin: 4, concern: 4, preference: 3, price: 4,
+            notes: { skin: '지성 피부에 무리 없는 가벼운 제형이에요', concern: '지속력 고민에 맞춘 픽서 쿠션이에요', preference: '10분 루틴엔 한 단계 더 필요해요' },
+          },
+        },
+      ],
       webProducts: [
         {
           name: '모의 세미매트 쿠션',
@@ -101,6 +151,10 @@ const PRODUCTS_JSON = JSON.stringify({
           url: 'https://www.oliveyoung.co.kr/store/goods/getGoodsDetail.do?goodsNo=A000000001',
           imageUrl: '',
           tags: ['지속력', '세미매트'],
+          match: {
+            skin: 5, concern: 4, preference: 4,
+            notes: { skin: '지성 피부에 맞는 세미매트 마감이에요', concern: '번들거림 고민에 맞춘 지속력이에요', preference: '10분 루틴에 맞는 간단한 사용감이에요' },
+          },
         },
         // 의학 단정 차단 대상 — 이름에 '치료' (guard 있을 때만 드롭 — legacy 경로는 통과)
         {

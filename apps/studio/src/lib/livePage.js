@@ -107,7 +107,7 @@ export function livePlanItems(page, opts = {}) {
   items.push({
     id: 'live-plan-survey-summary',
     type: 'surveySummary',
-    props: { title: '설문 요약', hiddenProfile: '', hiddenQuestions: '' },
+    props: { hiddenProfile: '', hiddenQuestions: '' },
   })
   if (page.summary) {
     items.push({ id: 'live-plan-summary', type: 'textBlock', props: { kicker: '', title: '이렇게 정리했어요', body: page.summary } })
@@ -182,8 +182,8 @@ export function livePlanItems(page, opts = {}) {
       items.push({
         id: base,
         type: 'planStep',
-        // 와이어 guide는 제목 + 문단뿐이라 Figma "메인타이틀 + 문단" 변형으로 투영한다
-        props: { badge: '', title: section.title, subtitle: '', points: '', body: section.body },
+        // 와이어 guide = 제목 + 서브타이틀(단계 목적 한 줄 — 뼈대 프롬프트가 채운다, 옛 페이지는 없음) + 문단
+        props: { badge: '', title: section.title, subtitle: section.subtitle || '', points: '', body: section.body },
       })
     } else if (section.kind === 'steps') {
       items.push({
@@ -208,8 +208,12 @@ export function livePlanItems(page, opts = {}) {
             name: product.name,
             price: Number(product.price || 0).toLocaleString('ko-KR'),
             was: '',
-            score: '', // 와이어에 추천도(%)가 없다 — 아래 tag 가 같은 자리에 문구 배지를 그린다
-            tag: 'AI 추천',
+            // 매칭율 — 검증 게이트(@ddak/pipeline guards/match.ts)가 상품마다 계산해 페이지에 남긴 값. 항목 표(factors)와
+            // 계산식(basis)이 배지 팝오버 재료다. 옛 페이지(match 없음)는 예전처럼 "AI 추천" 문구 배지로 남는다
+            score: product.match ? String(product.match.score) : '',
+            tag: product.match ? '' : 'AI 추천',
+            matchFactors: product.match ? product.match.factors : '',
+            matchBasis: (product.match && product.match.basis) || '',
             summary: '',
             emoji: product.imageUrl ? '' : '🧴', // 썸네일 없는 상품만 이모지 목업 블록으로 렌더
             gradient: '',

@@ -1,8 +1,9 @@
 import type { Answer, PlanPageWire, Profile, SurveyPageWire, ThreadStageFeedback } from '@ddak/schema'
 import { CATALOG } from './catalog'
 import type { ConstraintLedger } from './ledger'
+import { optionParts } from './survey-wire'
 
-export const PROMPT_VERSION = 'v16'
+export const PROMPT_VERSION = 'v17'
 
 /*
  * 프롬프트 조립 — 안정 prefix(시스템)와 가변부(사용자 메시지)를 분리한다.
@@ -14,7 +15,7 @@ export const SURVEY_SYSTEM = `너는 지마켓 뷰티의 AI 쇼핑 플래너다.
 
 규칙:
 - 질문은 **꼭 필요한 1~3개만** — 답이 계획을 실제로 바꾸는 질문만 만들고, 이미 아는 것(프로필·의도 해석·참고 신호에 있는 정보)은 절대 다시 묻지 않는다.
-- 사용자가 고르기 쉬운 짧은 선택지 2~6개씩.
+- 선택지는 질문당 2~6개, 각 선택지는 **제목(label)과 부제(desc)** 한 벌이다: 제목은 고르기 쉬운 짧은 명사구(2~8자), 부제는 그 항목이 자기 얘기인지 바로 판단할 수 있는 기준·상황을 담백하게 한 줄(10~25자)로 쓴다 — 예: 제목 "지성" · 부제 "오후만 되면 T존이 번들거려요". 부제는 제목을 되풀이하지 않고, 부제 없는 선택지를 남기지 않는다.
 - 첫 질문은 의도의 핵심 축(용도·고민·대상), 마지막 질문은 예산이나 선호로 마무리한다.
 - 말투는 친근한 존댓말, 이모지 없이 담백하게.
 - 선택지에 "기타"나 "잘 모르겠어요"를 남발하지 않는다 (필요한 질문 하나에만).
@@ -113,6 +114,7 @@ export const PLAN_SKELETON_SYSTEM = `너는 지마켓 뷰티의 AI 쇼핑 플래
 
 규칙:
 - 계획은 **단계별 흐름**으로 구성한다: 안내(guide)를 하나로 끝내지 말고 **2~3개 단계**로 나눈다 — 예: 진단·준비 → 핵심 실행 → 유지·심화. 각 안내가 하나의 단계다. 화면이 단계 번호를 자동으로 붙이니 제목에 "1단계" 같은 번호는 쓰지 않는다.
+- 각 단계 안내(guide)는 **제목(title) · 서브타이틀(subtitle) · 본문(body)** 세 요소를 모두 채운다. 제목은 "무엇을 하는 단계"인지 짧게, 서브타이틀은 그 단계에서 얻는 것이나 왜 지금 필요한지를 한 줄(15~30자)로 요약해 제목 아래에 세우고, 본문은 그 근거와 실행 요령을 2~3문장으로 푼다. 서브타이틀을 비우거나 제목·본문 첫 문장을 되풀이하지 않는다 — 예: 제목 "베이스 정돈" · 서브타이틀 "유분만 덜어내고 속광은 남기는 준비" · 본문 "지성 피부를 고르셨으니 …".
 - 섹션 구성: [단계 안내(guide) → 그 단계의 상품 자리(products — 제목과 "고를 기준" reason만)] 묶음을 단계 순서대로 이어 가고, 마지막에 참고 콘텐츠 자리(contents — 제목·기준만) 0~1개 → 사용 순서(steps)로 닫는 것이 기본 골격이다. **상품 자리는 반드시 그 상품이 필요한 단계 안내 바로 뒤**에 둔다 — 상품이 필요 없는 단계는 자리를 생략한다(상품 자리 총 1~2개). 상품 자리를 단계들과 떨어뜨려 끝에 몰아 두지 않는다.
 - 설문 응답에 **얼굴 사진 제출**이 있으면 **첫 섹션을 가상 메이크업 결과(kind=look) 하나로 연다**: 올린 사진에 올려 볼 룩 이름(title)·고른 이유(desc)·색조(tone)·포인트(points)를 담는다. 화면이 사용자의 사진 위에 그 톤을 올려 비포/애프터로 보여주므로, 실제로 그 사진에 올릴 수 있는 하나의 룩으로 좁혀 쓴다. 사진 제출이 없으면 look 섹션을 **절대 만들지 않는다**.
 - 구체 상품명·브랜드명·콘텐츠 제목은 어디에도 쓰지 않는다 — 검색 단계가 채운다. 안내와 순서는 성분·제형·사용법 같은 기준 중심으로 쓴다.
@@ -135,6 +137,7 @@ ${CATALOG_PLACEHOLDER}
 - 웹 검색은 2~4회 간결하게 쓴다(올리브영 검색을 먼저, 보완 검색은 필요할 때만). 여러 검색이 필요하면 순차로 나누지 말고 한 번에 병렬로 요청한다.
 - 섹션 reason은 사용자의 답변을 근거로 구체적으로 쓴다 ("지성 피부를 고르셨으니…").
 - 예산 답변이 있으면 상품 합계가 그 범위를 크게 넘지 않게 고른다.
+- **매칭 평가(match)는 상품마다 반드시 채운다**: webProducts 의 각 항목에 match 를, productIds 의 각 상품엔 catalogRatings 에 {id, match} 를 넣는다. match 는 skin(피부 타입·톤 적합)·concern(고민·목적 적합)·preference(사용 선호 적합)를 1~5 정수로, notes 의 각 항목에는 근거 한 줄을 사용자 프로필·답변을 인용해 쓴다 ("지성 피부에 맞는 세미매트 마감" 처럼). 예산 답변이 없으면 price(가격 대비 가치)도 1~5 로 준다. 관대하게 주지 않는다 — 답변에서 확인되는 만큼만. 최종 매칭율(%)은 시스템이 가중 합산으로 계산하므로 퍼센트는 쓰지 않는다.
 - 말투는 친근한 존댓말, 이모지 없이 담백하게.
 
 참고 콘텐츠 규칙:
@@ -158,7 +161,7 @@ export const JUDGE_SYSTEM = `너는 지마켓 뷰티 AI 쇼핑 플래너의 **�
 루브릭:
 - grounding (근거 충실): 상품·콘텐츠가 실제 확인된 것인가. 검증 게이트 드롭이 많거나, 상품 자리가 비었거나, 근거(reason)가 상품과 어긋나면 감점.
 - personalization (맞춤성): 프로필·설문 답변이 안내 문구와 상품 선정 근거에 실제로 반영됐는가. 답변과 무관한 일반론이면 감점.
-- structure (단계 구성): 안내가 2~3개 단계 흐름으로 나뉘고 상품 섹션이 해당 단계 안내 뒤에 붙었는가, 사용 순서로 닫히는가.
+- structure (단계 구성): 안내가 2~3개 단계 흐름으로 나뉘고 상품 섹션이 해당 단계 안내 뒤에 붙었는가, 사용 순서로 닫히는가. 각 단계 안내에 목적을 한 줄로 요약한 서브타이틀이 있는가.
 - actionability (실행 가능성): 안내가 구체적이어서 그대로 따라 할 수 있는가. 추상적 조언만 있으면 감점.`
 
 /* 설문 단계 judge — 실행 단계 축(config.stage='survey')의 판정자. 계획 judge와 눈금은
@@ -174,7 +177,7 @@ export const JUDGE_SURVEY_SYSTEM = `너는 지마켓 뷰티 AI 쇼핑 플래너�
 루브릭:
 - necessity (질문 절제): 답이 계획을 실제로 바꾸는 질문만 있는가. 프로필·의도에서 이미 아는 것을 다시 물으면 크게 감점. 질문 수가 1~3개를 넘으면 감점.
 - relevance (의도 적합): 첫 질문이 의도의 핵심 축(용도·고민·대상)을 짚고, 예산·선호로 마무리하는가. 의도와 무관한 일반 질문이면 감점.
-- answerability (답하기 쉬움): 선택지가 2~6개의 짧은 명사구로 고르기 쉬운가. "기타"·"잘 모르겠어요" 남발이면 감점.
+- answerability (답하기 쉬움): 선택지가 2~6개의 짧은 명사구 제목에 판단 기준을 알려주는 부제가 붙어 고르기 쉬운가. 부제가 빠졌거나 제목을 되풀이하면 감점, "기타"·"잘 모르겠어요" 남발이면 감점.
 - tone (말투): 친근한 존댓말, 이모지 없이 담백한가.`
 
 /* ── 시스템 프롬프트 카탈로그 — 운영 콘솔(#ops) 조회·재정의의 원천.
@@ -193,19 +196,19 @@ export const PROMPT_DEFS: { id: PromptDefId; label: string; note: string; templa
   {
     id: 'survey',
     label: '설문 생성',
-    note: '검색 진입 직후 설문 페이지를 만드는 프롬프트 — 질문 수·선택지 규칙·말투와 얼굴 사진 질문(photoQuestion) 판단을 정한다. {{VOCAB}}·{{RULES}} 자리표시자는 지식 KV로 치환된다 (비면 사라짐).',
+    note: '검색 진입 직후 설문 페이지를 만드는 프롬프트 — 질문 수·선택지(제목+부제 한 벌) 규칙·말투와 얼굴 사진 질문(photoQuestion) 판단을 정한다. {{VOCAB}}·{{RULES}} 자리표시자는 지식 KV로 치환된다 (비면 사라짐).',
     template: SURVEY_SYSTEM,
   },
   {
     id: 'plan-skeleton',
     label: '계획 뼈대 생성',
-    note: '계획 1단계(검색 없음) — 단계 안내·순서와 상품/콘텐츠 자리, 사진을 받았을 때의 가상 메이크업 결과(look) 섹션을 확정한다. 구체 상품명 금지 규칙 포함. {{VOCAB}}·{{CRITERIA}}·{{FEWSHOT}} 자리표시자는 지식 KV로 치환된다.',
+    note: '계획 1단계(검색 없음) — 단계 안내(제목·서브타이틀·본문 세 요소)·순서와 상품/콘텐츠 자리, 사진을 받았을 때의 가상 메이크업 결과(look) 섹션을 확정한다. 구체 상품명 금지 규칙 포함. {{VOCAB}}·{{CRITERIA}}·{{FEWSHOT}} 자리표시자는 지식 KV로 치환된다.',
     template: PLAN_SKELETON_SYSTEM,
   },
   {
     id: 'plan-products',
     label: '계획 상품 생성',
-    note: `계획 2단계(웹 검색 포함) — 상품·참고 콘텐츠 섹션을 채운다. ${CATALOG_PLACEHOLDER} 자리표시자가 상품 카탈로그 목록으로 치환되므로 지우지 말 것. {{CRITERIA}}는 지식 KV로 치환된다.`,
+    note: `계획 2단계(웹 검색 포함) — 상품·참고 콘텐츠 섹션을 채우고 상품마다 매칭 평가(skin·concern·preference 1~5 + 근거)를 매긴다. 매칭율(%)은 검증 게이트가 가중 합산으로 계산한다(@ddak/pipeline guards/match.ts). ${CATALOG_PLACEHOLDER} 자리표시자가 상품 카탈로그 목록으로 치환되므로 지우지 말 것. {{CRITERIA}}는 지식 KV로 치환된다.`,
     template: PLAN_PRODUCTS_SYSTEM,
   },
   {
@@ -369,11 +372,16 @@ export type JudgeSurveyInput = {
   survey: SurveyPageWire
 }
 
+/** 와이어 선택지("제목|부제") → 심사관이 읽는 "제목(부제)" */
+function formatOption(option: string): string {
+  const { label, desc } = optionParts(option)
+  return desc ? `${label}(${desc})` : label
+}
 export function buildJudgeSurveyRequest(input: JudgeSurveyInput): string {
   const questions = input.survey.questions
     .map(
       (q, i) =>
-        `${i + 1}. ${q.question}${q.multi ? ' (복수 선택)' : ''}\n   선택지: ${q.options.join(' | ')}`,
+        `${i + 1}. ${q.question}${q.multi ? ' (복수 선택)' : ''}\n   선택지: ${q.options.map(formatOption).join(' / ')}`,
     )
     .join('\n')
   return `사용자 의도: ${input.intent}

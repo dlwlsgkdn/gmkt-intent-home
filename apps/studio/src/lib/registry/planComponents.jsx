@@ -1,4 +1,5 @@
 import React from 'react'
+import { createPortal } from 'react-dom'
 import { cartEntryFromProduct, cartHas } from '../cart.js'
 import { splitList, splitTextList } from '../store.js'
 import { Img, isTikTokUrl, kText, parseTableRows, stepPosition, tiktokThumbnail, youtubeThumbnail } from './support.jsx'
@@ -58,34 +59,133 @@ const MALL_TONE = {
   'OLIVE YOUNG': 'oliveyoung',
 }
 
-/* 추천도 말풍선 — 배지를 누르면 왜 이 점수인지 설명한다 (Figma 상품카드/MatchTooltip) */
-const MATCH_LABEL = '추천도' // Figma 상품카드 배지 — 영문 MATCH에서 한글로 통일
+/* 매칭율 배지 + 계산 기준 팝오버 (Figma 5-1/5-2 "MATCH 태그 팝오버") — 배지를 누르면 아래에 260px 카드(제목 · 소개 ·
+   항목별 막대 · 종합 점수)가 뜬다. 상품 카드 썸네일이 overflow hidden 이라 body 로 포털해 fixed 로 띄우고, 바깥 클릭·
+   스크롤·Esc 로 닫는다. 항목 표(factors)와 근거 문장은 파이프라인 검증 게이트(@ddak/pipeline guards/match.ts)가
+   상품마다 계산해 와이어 match 로 남긴 값이고, 시나리오 카드는 인스펙터의 "라벨|점수|근거" 줄 문자열로 같은 표를 채운다 */
+const MATCH_LABEL = '매칭율' // Figma MatchTag 의 영문 MATCH 를 한글로
+const MATCH_INTRO = '나의 피부 타입, 고민, 선호도를 분석하여 AI가 계산한 제품 적합도입니다.'
+const MATCH_POP_WIDTH = 260
+
+function matchFactorsOf(p) {
+  if (Array.isArray(p.matchFactors)) return p.matchFactors
+  return String(p.matchFactors || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line, i) => {
+      const [label = '', score = '', note = ''] = line.split('|').map((x) => x.trim())
+      const value = Number(String(score).replace(/[^0-9]/g, ''))
+      return { key: `f${i}`, label, score: Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0)), note }
+    })
+    .filter((f) => f.label)
+}
+
 function MatchBadge({ p, ctx, score }) {
   const [open, setOpen] = React.useState(false)
-  const label = MATCH_LABEL
-  const note = p.matchNote || '프로필과 설문 답변을 전문가 기준으로 분석해 계산한 추천도예요.'
+  const [pos, setPos] = React.useState(null)
+  const btnRef = React.useRef(null)
+  const popRef = React.useRef(null)
+  const factors = matchFactorsOf(p)
+  // 렌더 뒤 실제 높이로 자리를 고친다 — 아래에 안 들어가면 배지 위로, 그것도 안 되면 화면 안쪽으로 밀어 넣는다
+  React.useLayoutEffect(() => {
+    if (!open || !pos || !popRef.current || !btnRef.current) return
+    const h = popRef.current.offsetHeight
+    const r = btnRef.current.getBoundingClientRect()
+    let top = r.bottom + 8
+    if (top + h > window.innerHeight - 8) {
+      const above = r.top - 8 - h
+      top = above >= 8 ? above : Math.max(8, window.innerHeight - 8 - h)
+    }
+    if (Math.abs(top - pos.top) > 1) setPos((prev) => ({ ...prev, top }))
+  }, [open, pos])
+  React.useEffect(() => {
+    if (!open) return undefined
+    // 배지 아래 왼쪽 정렬 — 스크롤·창 크기 변화에는 배지를 따라 자리를 다시 재고, 배지가 화면 밖으로 나가면 닫는다
+    const place = () => {
+      const el = btnRef.current
+      if (!el) return
+      const r = el.getBoundingClientRect()
+      if (r.bottom < 0 || r.top > window.innerHeight || r.right < 0 || r.left > window.innerWidth) {
+        setOpen(false)
+        return
+      }
+      const left = Math.max(8, Math.min(r.left, window.innerWidth - MATCH_POP_WIDTH - 8))
+      setPos({ top: r.bottom + 8, left })
+    }
+    place()
+    const onDown = (e) => {
+      if (btnRef.current && btnRef.current.contains(e.target)) return
+      if (e.target.closest && e.target.closest('.sb-match__pop')) return
+      setOpen(false)
+    }
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false) }
+    window.addEventListener('scroll', place, true)
+    window.addEventListener('resize', place)
+    document.addEventListener('pointerdown', onDown)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('scroll', place, true)
+      window.removeEventListener('resize', place)
+      document.removeEventListener('pointerdown', onDown)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [open])
   return (
     <span className="sb-match">
       <button
+        ref={btnRef}
         type="button"
         className="sb-match__badge"
-        title="추천도 설명 보기"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        title={`${MATCH_LABEL} 계산 기준 보기`}
         onClick={(e) => {
           e.stopPropagation()
           setOpen((v) => !v)
         }}
       >
-        <span className="sb-match__label">{label}</span>
+        <span className="sb-match__label">{MATCH_LABEL}</span>
         <span className="sb-match__score">{score}%</span>
       </button>
-      {open ? (
-        <span className="sb-match__tip" role="tooltip">
-          <b>
-            {label} {score}% — {kText(p.matchHeadline, ctx, 'matchHeadline')}
-          </b>
-          <em>{kText(note, ctx, 'matchNote')}</em>
-        </span>
-      ) : null}
+      {open && pos
+        ? createPortal(
+            <span
+              ref={popRef}
+              className="sb-match__pop"
+              role="dialog"
+              aria-label={`${MATCH_LABEL} ${score}% 계산 기준`}
+              style={{ top: pos.top, left: pos.left }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <b className="sb-match__pop-title">{MATCH_LABEL}이란?</b>
+              <span className="sb-match__pop-desc">
+                {p.matchHeadline ? kText(p.matchHeadline, ctx, 'matchHeadline') : MATCH_INTRO}
+              </span>
+              {factors.length > 0 ? (
+                <span className="sb-match__breakdown">
+                  {factors.map((f) => (
+                    <span key={f.key || f.label} className="sb-match__row">
+                      <span className="sb-match__row-main">
+                        <span className="sb-match__row-label">{f.label}</span>
+                        <span className="sb-match__bar" aria-hidden="true"><span style={{ width: `${f.score}%` }} /></span>
+                        <span className="sb-match__row-score">{f.score}%</span>
+                      </span>
+                      {f.note ? <span className="sb-match__row-note">{f.note}</span> : null}
+                    </span>
+                  ))}
+                </span>
+              ) : null}
+              {p.matchNote ? <span className="sb-match__pop-note">{kText(p.matchNote, ctx, 'matchNote')}</span> : null}
+              <span className="sb-match__total">
+                <span>종합 {MATCH_LABEL}</span>
+                <b>{score}%</b>
+              </span>
+              {p.matchBasis ? <span className="sb-match__basis">{p.matchBasis}</span> : null}
+            </span>,
+            document.body,
+          )
+        : null}
     </span>
   )
 }
@@ -219,10 +319,9 @@ export const PLAN_COMPONENTS = {
     label: '설문 요약 패널',
     stage: 'plan',
     icon: '🧾',
-    hint: '프로필 + 설문에서 고른 답을 라벨/값 칩으로 요약',
-    defaults: { title: '설문 요약', hiddenProfile: '', hiddenQuestions: '' },
+    hint: '프로필 + 설문에서 고른 답을 라벨/값 칩으로 요약 (제목 라벨 없이 칩 줄만)',
+    defaults: { hiddenProfile: '', hiddenQuestions: '' },
     fields: [
-      { key: 'title', label: '제목', kind: 'text' },
       // 요약 칩 관리 편집기가 hiddenQuestions까지 함께 편집한다
       { key: 'hiddenProfile', label: '표시 항목 관리', kind: 'summaryChips', questionsKey: 'hiddenQuestions' },
     ],
@@ -240,12 +339,10 @@ export const PLAN_COMPONENTS = {
         ...profile.map((it) => ({ label: it.label, value: it.value })),
         ...questions.map((q) => ({ label: q.q, value: q.a })),
       ]
-      // 원본 clean-survey-lock 컨테이너 위에 칩 랩 레이아웃 (Figma "설문 요약")
+      // 원본 clean-survey-lock 컨테이너 위에 칩 줄만 — "설문 요약" 제목 라벨은 두지 않는다 (Figma AIIntro:
+      // 인용 제목 밴드 바로 아래 답변 칩이 이어진다. 구 데이터의 title 은 무시)
       return (
         <div className="clean-survey-lock sb-summary" style={{ display: 'block' }}>
-          <div className="clean-survey-lock__head">
-            <p className="clean-survey-lock__title">{kText(p.title, ctx, 'title')}</p>
-          </div>
           <div className="sb-summary__chips">
             {chips.length === 0 && (
               <span className="sb-pinned-panel__empty">설문 질문과 프로필 항목이 여기에 요약돼요.</span>
@@ -352,7 +449,7 @@ export const PLAN_COMPONENTS = {
     label: '추천 상품 카드',
     stage: 'plan',
     icon: '🛍️',
-    hint: '추천도 배지 + 몰 배지 + 담기 (카드 클릭 = 상세보기)',
+    hint: '매칭율 배지(클릭 = 계산 기준 팝오버) + 몰 배지 + 담기 (카드 클릭 = 상세보기)',
     defaultW: 200,
     defaults: {
       brand: '',
@@ -360,8 +457,10 @@ export const PLAN_COMPONENTS = {
       price: '27,900',
       was: '',
       score: '92',
-      matchHeadline: '잘 맞는 상품이에요',
-      matchNote: '프로필과 설문 답변을 전문가 기준으로 분석해 계산한 추천도예요.',
+      matchHeadline: '',
+      matchNote: '',
+      matchFactors: '피부 타입|95|지성 피부에 맞는 세미매트 마감이에요\n고민·목적|90|번들거림 고민에 맞춘 지속력이에요\n사용 선호|88|10분 루틴에 맞는 간단한 사용감이에요',
+      matchBasis: '',
       summary: '',
       emoji: '',
       gradient: '',
@@ -375,10 +474,11 @@ export const PLAN_COMPONENTS = {
       { key: 'name', label: '상품명', kind: 'text' },
       { key: 'price', label: '가격 (원 제외)', kind: 'text' },
       { key: 'was', label: '정가 (원 제외)', kind: 'text' },
-      { key: 'score', label: '추천도 (%)', kind: 'text' },
+      { key: 'score', label: '매칭율 (%) — 비우면 배지 없음', kind: 'text' },
+      { key: 'matchFactors', label: '매칭율 항목 (한 줄에 라벨|점수|근거)', kind: 'textarea' },
       { key: 'tag', label: '점수 없을 때 배지 문구 (예: AI 추천)', kind: 'text' },
-      { key: 'matchHeadline', label: '추천도 말풍선 한 줄', kind: 'text' },
-      { key: 'matchNote', label: '추천도 말풍선 설명', kind: 'textarea' },
+      { key: 'matchHeadline', label: '매칭율 팝오버 소개 (비우면 기본 문구)', kind: 'text' },
+      { key: 'matchNote', label: '매칭율 팝오버 덧붙임 (비우면 숨김)', kind: 'textarea' },
       { key: 'summary', label: '추천 이유 (줄바꿈 구분)', kind: 'textarea' },
       { key: 'emoji', label: '상품 이모지', kind: 'text' },
       { key: 'gradient', label: '상품 배경 CSS', kind: 'text' },
@@ -389,7 +489,7 @@ export const PLAN_COMPONENTS = {
     ],
     render: (p, ctx) => {
       const isPlayer = ctx.mode === 'player'
-      const score = String(p.score || '').trim() // 없으면 추천도 배지를 그리지 않는다
+      const score = String(p.score || '').trim() // 없으면 매칭율 배지를 그리지 않는다
       const mall = p.external ? p.mall || '외부몰' : p.mall || 'G마켓'
       const tone = MALL_TONE[mall] || (p.external ? 'plain' : 'gmarket')
       const cart = (isPlayer && ctx.player.cart) || []
@@ -417,7 +517,7 @@ export const PLAN_COMPONENTS = {
             {score ? (
               <MatchBadge p={p} ctx={ctx} score={score} />
             ) : p.tag ? (
-              /* 점수 없는 태그 배지 — 라이브 와이어엔 추천도가 없어 "AI 추천" 같은 문구만 같은 자리에 (Figma MatchTag 자리) */
+              /* 점수 없는 태그 배지 — 매칭율이 없는 옛 라이브 페이지의 "AI 추천" 같은 문구만 같은 자리에 (Figma MatchTag 자리) */
               <span className="sb-match"><span className="sb-match__badge sb-match__badge--static">{kText(p.tag, ctx, 'tag')}</span></span>
             ) : null}
             <span className={'sb-mall-badge sb-mall-badge--' + tone}>{mall}</span>

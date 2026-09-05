@@ -143,12 +143,34 @@ export const SurveyPageWire = z.object({
 })
 export type SurveyPageWire = z.infer<typeof SurveyPageWire>
 
+/** 매칭율 세부 항목 — 항목 점수(0~100)와 가중치(합 100), 근거 한 줄. 화면 팝오버가 그대로 그린다 */
+export const ProductMatchFactor = z.object({
+  key: z.string(),
+  label: z.string(),
+  score: z.number().int().min(0).max(100),
+  weight: z.number().int().min(0).max(100),
+  note: z.string().optional(),
+})
+export type ProductMatchFactor = z.infer<typeof ProductMatchFactor>
+
+/** 매칭율 — 파이프라인 검증 게이트가 상품마다 계산해 계획 페이지(plan 스텝 payload)에 남긴다.
+ * score = Σ weight × factor.score / 100 (정수 반올림). basis 는 계산식 설명, version 은 가중치 표 버전 */
+export const ProductMatch = z.object({
+  score: z.number().int().min(0).max(100),
+  factors: z.array(ProductMatchFactor),
+  basis: z.string().optional(),
+  version: z.number().int().optional(),
+})
+export type ProductMatch = z.infer<typeof ProductMatch>
+
 export const CatalogProduct = z.object({
   id: z.string(),
   name: z.string(),
   brand: z.string(),
   price: z.number().int(),
   tags: z.array(z.string()),
+  /** 매칭율 — 그라운딩 가드(@ddak/pipeline scoreProductMatch)가 붙인다. 옛 페이지에는 없다 */
+  match: ProductMatch.optional(),
   /** 상품 페이지 URL — 웹 검색 상품은 BFF 검증(http/https)을 거쳐 채워진다. FE 상세보기 패널이 연다 */
   url: z.string().optional(),
   /** 판매처 이름 (올리브영 등) — 웹 검색 상품 전용. 없으면 지마켓(데모 카탈로그) 상품 */
@@ -173,7 +195,8 @@ export const PlanContentItem = z.object({
 export type PlanContentItem = z.infer<typeof PlanContentItem>
 
 export const PlanSectionWire = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('guide'), title: z.string(), body: z.string() }),
+  /* 단계 안내 — 제목 · 서브타이틀(단계의 목적 한 줄, 뼈대 프롬프트가 채운다 — 옛 페이지는 없음) · 본문 */
+  z.object({ kind: z.literal('guide'), title: z.string(), subtitle: z.string().optional(), body: z.string() }),
   /* 가상 메이크업 결과 — 사진 질문에 답한 쓰레드에서만 만들어진다. FE는 기기에 남은 사진을
      BEFORE로, 같은 사진에 tone 프리셋을 올린 것을 AFTER로 비포/애프터 컴포넌트에 투영한다
      (합성은 화면에서 — 서버는 어떤 룩인지만 정한다) */

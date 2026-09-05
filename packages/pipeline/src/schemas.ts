@@ -8,9 +8,17 @@ import { LookTone } from '@ddak/schema'
  * 배열 원소 하나가 닫힐 때마다 단독 검증하는 데 재사용한다 (threads.service).
  */
 
+/* 선택지는 제목+부제 한 벌 — 제목은 고르는 말(짧은 명사구), 부제는 "이게 내 얘기인지" 판단할 기준 한 줄.
+   와이어는 FE 옵션 문법과 같은 "제목|부제" 문자열로 직렬화된다 (survey-wire optionWire) */
+export const SurveyOptionGen = z.object({
+  label: z.string().describe('선택지 제목 — 고르기 쉬운 짧은 명사구(2~8자)'),
+  desc: z.string().describe('선택지 부제 — 이 항목이 자기 얘기인지 판단할 기준·상황 한 줄(10~25자), 제목 되풀이 금지'),
+})
+export type SurveyOptionGen = z.infer<typeof SurveyOptionGen>
+
 export const SurveyQuestionGen = z.object({
   question: z.string().describe('질문 문구'),
-  options: z.array(z.string()).min(2).max(8).describe('선택지 2~6개, 짧은 명사구'),
+  options: z.array(SurveyOptionGen).min(2).max(8).describe('선택지 2~6개 — 각각 제목(label)+부제(desc)'),
   multi: z.boolean().describe('복수 선택 허용 여부'),
 })
 export type SurveyQuestionGen = z.infer<typeof SurveyQuestionGen>
@@ -59,7 +67,8 @@ export type IntentGen = z.infer<typeof IntentGen>
 
 const GuideSectionGen = z.object({
   kind: z.literal('guide'),
-  title: z.string(),
+  title: z.string().describe('단계 제목 — 무엇을 하는 단계인지 짧게(번호 없이)'),
+  subtitle: z.string().describe('단계 서브타이틀 — 이 단계에서 얻는 것·왜 지금 필요한지 한 줄(15~30자), 제목 아래에 선다'),
   body: z.string().describe('가이드 본문 — 답변을 근거로 든다'),
 })
 
@@ -79,6 +88,23 @@ const StepsSectionGen = z.object({
   steps: z.array(z.string()).min(2).max(8).describe('실행 순서 — 아침/저녁 루틴 등'),
 })
 
+/** 상품 하나의 매칭 평가 — LLM 이 프로필·답변과 대조해 1~5 로 매기는 세 항목 + 근거 한 줄.
+ * 퍼센트 계산은 LLM 이 아니라 검증 게이트(guards/match.ts)가 가중치 표로 한다 — 눈금은 여기, 가중치는 거기 */
+export const ProductRatingGen = z.object({
+  skin: z.number().int().min(1).max(5).describe('피부 타입·톤 적합 1~5 (프로필의 피부타입·퍼스널 컬러 대조)'),
+  concern: z.number().int().min(1).max(5).describe('고민·목적 적합 1~5 (의도와 설문 답변의 고민·상황 대조)'),
+  preference: z.number().int().min(1).max(5).describe('사용 선호 적합 1~5 (마감·질감·루틴 시간 등 선호 답변 대조)'),
+  price: z.number().int().min(1).max(5).optional().describe('가격 대비 가치 1~5 — 예산 답변이 없을 때 참고'),
+  notes: z
+    .object({
+      skin: z.string().describe('피부 타입 근거 한 줄 — 프로필 값을 인용'),
+      concern: z.string().describe('고민·목적 근거 한 줄 — 답변을 인용'),
+      preference: z.string().describe('사용 선호 근거 한 줄 — 답변을 인용'),
+    })
+    .describe('항목별 근거 — 사용자 답변·프로필을 직접 인용한 짧은 문장'),
+})
+export type ProductRatingGen = z.infer<typeof ProductRatingGen>
+
 /** 웹 검색 상품 항목 — 부분 스트리밍이 완성된 항목만 개별 검증하는 데도 재사용한다 (threads.service) */
 export const WebProductGen = z.object({
   name: z.string().describe('상품명 — 검색 결과에 나온 실제 상품명'),
@@ -90,8 +116,16 @@ export const WebProductGen = z.object({
     .string()
     .describe('상품 썸네일 이미지 URL — 검색 결과에서 확인한 경우만, 없으면 빈 문자열 (지어내기 금지)'),
   tags: z.array(z.string()).max(5).describe('특징 태그'),
+  match: ProductRatingGen.optional().describe('이 상품의 매칭 평가 — 반드시 채운다'),
 })
 export type WebProductGen = z.infer<typeof WebProductGen>
+
+/** 카탈로그 상품의 매칭 평가 — productIds 의 각 id 에 하나씩 */
+export const CatalogRatingGen = z.object({
+  id: z.string().describe('productIds 에 넣은 카탈로그 상품 id'),
+  match: ProductRatingGen,
+})
+export type CatalogRatingGen = z.infer<typeof CatalogRatingGen>
 
 export const ProductsSectionGen = z.object({
   kind: z.literal('products'),
@@ -100,6 +134,11 @@ export const ProductsSectionGen = z.object({
   productIds: z.array(z.string()).max(4).describe('카탈로그에서 고른 상품 id (없으면 빈 배열)'),
   // 웹 검색 그라운딩: 검색 결과에서 확인한 상품만 — url은 BFF가 http(s)+PDP 검증 후 채택한다
   webProducts: z.array(WebProductGen).max(4).describe('웹 검색으로 찾은 상품 (없으면 빈 배열)'),
+  catalogRatings: z
+    .array(CatalogRatingGen)
+    .max(4)
+    .optional()
+    .describe('productIds 각 상품의 매칭 평가 (productIds 가 비었으면 빈 배열)'),
 })
 export type ProductsSectionGen = z.infer<typeof ProductsSectionGen>
 
@@ -232,7 +271,8 @@ export function judgeSurveyRubricEntries(gen: JudgeSurveyGen) {
  */
 export const SurveyQuestionPartialGen = z.object({
   question: z.string().optional(),
-  options: z.array(z.string()).optional(),
+  // 자라는 중인 선택지 객체({label, desc} 일부) — 와이어 직렬화(optionWire)가 제목 있는 것만 살린다
+  options: z.array(z.unknown()).optional(),
   multi: z.boolean().optional(),
 })
 export type SurveyQuestionPartialGen = z.infer<typeof SurveyQuestionPartialGen>
@@ -240,6 +280,7 @@ export type SurveyQuestionPartialGen = z.infer<typeof SurveyQuestionPartialGen>
 export const PlanSectionPartialGen = z.object({
   kind: z.enum(['guide', 'look', 'steps', 'products', 'contents']),
   title: z.string().optional(),
+  subtitle: z.string().optional(),
   body: z.string().optional(),
   desc: z.string().optional(),
   tone: LookTone.optional(),
@@ -256,6 +297,7 @@ export const PlanSearchSectionPartialGen = z.object({
   reason: z.string().optional(),
   productIds: z.array(z.unknown()).optional(),
   webProducts: z.array(z.unknown()).optional(),
+  catalogRatings: z.array(z.unknown()).optional(),
   items: z.array(z.unknown()).optional(),
 })
 export type PlanSearchSectionPartialGen = z.infer<typeof PlanSearchSectionPartialGen>

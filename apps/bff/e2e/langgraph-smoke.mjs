@@ -103,6 +103,7 @@ try {
   const svResult = last(sv, 'result')?.data?.page
   ok(!!svResult && svResult.questions?.length === 3, `result 설문 3문항 (${svResult?.questions?.length})`)
   ok(svResult?.questions?.[0]?.id === 'q1', '질문 id 부여(q1)')
+  ok(svResult?.questions?.[0]?.options?.[0] === '지성|오후만 되면 T존이 번들거려요', '선택지 제목|부제 와이어 직렬화')
   ok(count(sv, 'question') >= 3, `question 부분 스트리밍 ${count(sv, 'question')}회`)
   ok(count(sv, 'head') >= 1, `head(intro) 스트리밍 ${count(sv, 'head')}회`)
   ok(!last(sv, 'error'), '오류 없음')
@@ -128,6 +129,15 @@ try {
     prodSection?.products?.length === 1,
     `확장 게이트 통과 1개 — 블록리스트·의학 단정 드롭 후 카탈로그만 (${prodSection?.products?.length})`,
   )
+  {
+    const match = prodSection?.products?.[0]?.match
+    ok(
+      Number.isInteger(match?.score) && match.score >= 0 && match.score <= 100 && match.factors?.length === 5,
+      `매칭율 계산·기록 — ${match?.score}% (항목 ${match?.factors?.length})`,
+    )
+    ok(match?.factors?.some((f) => f.key === 'skin' && f.note), '매칭율 항목 근거(LLM notes) 전달')
+    ok(planPage?.sections?.find((s) => s.kind === 'guide')?.subtitle === '유분만 덜어내고 결은 남기는 준비', '단계 안내 서브타이틀 전달')
+  }
   ok(prodSection?.products?.[0]?.id === 'p-012', '남은 상품은 카탈로그 p-012')
   const sk = last(plan, 'skeleton')?.data
   ok(!!sk && sk.pending?.length === 1 && sk.pending[0] === 1, `skeleton 조기 확정 + pending [1] (${JSON.stringify(sk?.pending)})`)
@@ -491,7 +501,7 @@ try {
   const legacyM = engineMetrics?.engines?.find((e) => e.engine === 'legacy')
   ok(lg?.count >= 1, `전환 계기판 — langgraph 표본 (${lg?.count})`)
   ok(legacyM?.count >= 1, `전환 계기판 — legacy 표본 (${legacyM?.count})`)
-  ok(lg?.promptVersions?.includes('v16'), 'promptVersion 각인 (v16)')
+  ok(lg?.promptVersions?.includes('v17'), 'promptVersion 각인 (v17)')
 } finally {
   shutdown()
 }

@@ -83,11 +83,13 @@ pending(재생성 게이트)으로 유지한다. **`skeleton`은 계획 전용 �
 
 ```ts
 SurveyPageWire = { intro, questions: [{ id, question, kind?: 'choice'|'photo', options[0..6], multi, placeholder? }] }
+// options 원소는 "제목|부제" 문자열 (FE 옵션 문법과 동일 — @ddak/pipeline optionWire). 설문 프롬프트가 선택지마다 제목(짧은 명사구)+부제(판단
+// 기준 한 줄)를 만들고, 답변(choices)에는 제목만 실린다. 옛 페이지의 부제 없는 문자열도 그대로 유효
 // kind 생략 = choice (구 응답 호환). kind='photo'는 선택지가 없는 얼굴 사진 질문 — id는 p1, 언제나 첫
 // 질문 자리다. **사진 원본은 서버로 오지 않는다**: 기기에 남고 답변에는 표식('사진 제출됨')만 실린다
 // (데이터 URL을 스텝·프롬프트에 싣지 않기 위해서 — 계획 프롬프트는 "사진을 올렸다"만 안다)
 PlanPageWire   = { headline, summary, sections: [
-                   { kind: 'guide',    title, body } |                                 // 단계 안내 — 2~3개(다단계 계획), FE가 단계 번호를 붙인다
+                   { kind: 'guide',    title, subtitle?, body } |                      // 단계 안내 — 2~3개(다단계 계획), FE가 단계 번호를 붙인다. subtitle = 단계 목적 한 줄(v17부터 필수 생성, 옛 페이지 없음)
                    { kind: 'look',     title, desc, tone, points?[0..4] } |            // 가상 메이크업 결과 — 사진 질문에 답한 쓰레드에서만. tone = coral|rose|red|peach|brown|plum
                                                                                        // FE가 기기에 남은 사진을 BEFORE, 같은 사진에 tone을 올린 것을 AFTER로 비포/애프터 투영 (합성은 화면에서)
                    { kind: 'products', title, reason, products: CatalogProduct[] } |  // 카탈로그 id 검증 + 웹 상품 URL 검증 통과분만
@@ -96,7 +98,10 @@ PlanPageWire   = { headline, summary, sections: [
 PlanContentItem = { type: 'video'|'article', source, title, url, imageUrl?, meta?, snippet?, duration? }
 // meta = 영상은 채널·조회수, 게시글은 작성자·시점. FE 투영: video→videoCard(썸네일 없으면 유튜브
 // 자동 썸네일), article→articleCard. 카드 클릭 = 새 탭 열기(openExternal)
-CatalogProduct = { id, name, brand, price, tags[], url?, mall?, imageUrl? }
+CatalogProduct = { id, name, brand, price, tags[], url?, mall?, imageUrl?, match? }
+// match = { score 0~100, factors: [{ key, label, score 0~100, weight, note? }], basis?, version? } — 검증 게이트(@ddak/pipeline guards/match.ts)가
+// 상품마다 계산한 매칭율: LLM 1~5 평가(skin·concern·preference, 예산 없으면 price)와 결정적 가중치(피부 25 · 고민 30 · 선호 20 · 가격 15 · 근거 10)의
+// 가중 합산. FE 상품 카드 「매칭율 n%」 배지와 클릭 팝오버(항목별 막대·근거·계산식)의 원천이며 plan 스텝 payload 에 그대로 남는다
 // url·mall = 웹 검색으로 찾은 외부몰 상품 (id는 `web-*`, mall이 있으면 FE가 외부몰 태그·담기불가로 렌더,
 // url은 상세보기 사이드 패널이 iframe으로 연다). url은 상품 상세 페이지(PDP)만 — BFF가 검색/목록
 // 페이지로 보이는 URL(/search 경로·검색어 쿼리 키)을 드롭한다. 카탈로그(지마켓) 상품은 url(지마켓
