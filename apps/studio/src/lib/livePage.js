@@ -116,11 +116,16 @@ export function livePlanItems(page, opts = {}) {
   /* forEach가 아니라 인덱스 순회다 — 스트리밍 중 partial.sections는 도착한 인덱스에만 값이
      있는 희소 배열이고, forEach는 그 구멍을 아예 건너뛴다. 아직 안 온 자리에 로딩 카드를
      제자리에 그리려면 구멍도 방문해야 한다 (렌더 여부는 pendingSlots가 정한다) */
+  // 단계 하위 연쇄 — 직전 섹션이 단계 안내(guide)이거나, 그 단계에 붙은 상품·콘텐츠 섹션(빈 자리 포함)이면
+  // 이번 섹션도 같은 단계에 속한다. 뼈대(v20)가 단계마다 [안내 → 상품 자리 → 콘텐츠 자리]를 이어 두므로
+  // 콘텐츠 카드가 계획 끝이 아니라 단계 본문 사이에 서고, LivePlayer가 stepSub로 간격만 당겨 붙인다
+  let chain = false
   for (let i = 0; i < sections.length; i += 1) {
     const section = sections[i]
-    // 단계 하위 표시 — 단계 안내(guide) 바로 뒤의 상품 섹션(자리 포함)은 그 단계에 속한
-    // 콘텐츠처럼 들여 배치한다 (LivePlayer가 stepSub로 래퍼 클래스를 단다)
-    const stepSub = sections[i - 1] != null && sections[i - 1].kind === 'guide'
+    // 상품·콘텐츠(빈 자리 포함)만 단계 하위가 될 수 있다 — 다음 단계 안내·사용 순서는 연쇄를 끊는다
+    const isSlotKind = !section || section.kind === 'products' || section.kind === 'contents'
+    const stepSub = chain && isSlotKind
+    chain = (section != null && section.kind === 'guide') || stepSub
     if (!section) {
       // 빈 슬롯 — 아직 안 온 상품·콘텐츠 자리. 인덱스는 보존되고, 자리 표시는 로딩 카드
       if (pendingSlots.includes(i)) {

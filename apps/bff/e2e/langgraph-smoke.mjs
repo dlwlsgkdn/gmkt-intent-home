@@ -502,7 +502,7 @@ try {
   const legacyM = engineMetrics?.engines?.find((e) => e.engine === 'legacy')
   ok(lg?.count >= 1, `전환 계기판 — langgraph 표본 (${lg?.count})`)
   ok(legacyM?.count >= 1, `전환 계기판 — legacy 표본 (${legacyM?.count})`)
-  ok(lg?.promptVersions?.includes('v19'), 'promptVersion 각인 (v19)')
+  ok(lg?.promptVersions?.includes('v20'), 'promptVersion 각인 (v20)')
 } finally {
   shutdown()
 }
