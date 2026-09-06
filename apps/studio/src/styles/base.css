@@ -113,6 +113,12 @@
   --dk-surface: #fff;       /* bg/default — 카드 면 */
   --dk-sunken: #fafafa;     /* bg/subtle — 화면 배경·콘텐츠 카드 면 */
   --dk-thumb: #f4f4f6;      /* 썸네일·시트 행 바닥 (중립) */
+  --dk-thumb-soft: #f6e6ee; /* 시트 상품 썸네일 자리 그라데이션 시작 (Figma ThreadMoreSheet Thumb) */
+  --dk-thumb-soft-2: #ecc9da; /* 같은 그라데이션 끝 */
+  --dk-muted-2: #6b6b6b;    /* text/muted — 시트 상품 메타·몰 이름 */
+  --dk-label: #717182;      /* 시트 요약 행 라벨 (Figma text/label/md 색) */
+  --dk-coral: #ff3b5c;      /* badge/coral — 파트 '중요' 배지 글자 */
+  --dk-coral-soft: rgba(255, 59, 92, 0.1); /* 같은 배지 면 (coral 10%) */
   --dk-photo: #f2ede8;      /* 비포애프터 사진 바닥 — Figma BeforeAfterSlider fill (얼굴 사진 톤) */
   --dk-brand: #7950f2;      /* bg/main — 다음 버튼·진행 바·검색창 테두리·자연어 칩 글자 */
   --dk-brand-2: #7c6fe0;    /* action/primary — 단계 번호·담기 버튼·진행 라벨·추천도 배지 */

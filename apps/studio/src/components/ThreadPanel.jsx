@@ -68,6 +68,11 @@ const MoreIcon = () => (
     <circle cx="19" cy="12" r="1.8" />
   </svg>
 )
+const ChevronIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M9 6l6 6-6 6" />
+  </svg>
+)
 const TrashIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13M10 11v6M14 11v6" />
@@ -112,15 +117,28 @@ const mallOf = (entry) => (entry.external ? entry.mall || '외부몰' : entry.ma
 
 /* 담은 상품 상세 시트 — Figma ThreadMoreSheet: 제목 + ✕ · 요약 행(파트 · 개수 | 합계) · 파트 카드(단계 제목 + 배지, 상품 행:
    60px 썸네일 · [브랜드] 상품명 · 가격 · 몰 · 빼기 ⊖) · 푸터 「뷰티 맞춤 계획 보기」 */
-function CartSheet({ thread, onClose, onRemove, onOpenPlan }) {
+function CartSheet({ thread, steps = [], onClose, onRemove, onOpenPlan }) {
   const entries = cartEntries(thread.cart)
   const groups = groupCartByStep(thread.cart)
   const total = cartTotal(thread.cart)
-  const parts = groups.filter((group) => group.step).length
-  const summary = `${parts ? `${parts}파트 · ` : ''}${entries.length}개 담음`
+  /* 파트 순서는 계획의 단계 목록을 따른다 — 담은 상품이 없는 단계도 빈 파트 행으로 보여 "어느 단계가 비었는지"가
+     한눈에 들어온다 (Figma ThreadPartCardMargin/EmptyPartRow). 단계 목록을 모르는 옛 기록은 담은 순서 그대로 */
+  const byStep = new Map(groups.map((group) => [group.step, group]))
+  const ordered = steps.map((s) => ({
+    step: s.title,
+    stepBadge: byStep.get(s.title)?.stepBadge || s.badge || '',
+    entries: byStep.get(s.title)?.entries || [],
+  }))
+  const leftovers = groups.filter((group) => !steps.some((s) => s.title === group.step))
+  const parts = [...ordered, ...leftovers]
+  const filled = parts.filter((part) => part.entries.length > 0).length
+  const summary = steps.length
+    ? `${filled}/${parts.length} 파트 · ${entries.length}개 담음`
+    : `${filled ? `${filled}파트 · ` : ''}${entries.length}개 담음`
   return (
     <BottomSheet
       title={thread.title}
+      align="start"
       closable
       onClose={onClose}
       footer={
@@ -132,39 +150,56 @@ function CartSheet({ thread, onClose, onRemove, onOpenPlan }) {
         {total != null && <strong className="sb-cart-sheet__total">{formatWon(total)}</strong>}
       </div>
       <div className="sb-cart-sheet__parts">
-        {groups.map((group) => (
+        {parts.map((group) => (
           <section key={group.step || '__rest'} className="sb-cart-part">
-            <div className="sb-cart-part__head">
-              <h4 className="sb-cart-part__title">{group.step || '담은 상품'}</h4>
-              {group.stepBadge ? <span className="sb-cart-part__badge">{group.stepBadge}</span> : null}
-            </div>
-            {group.entries.map((entry) => {
-              const mall = mallOf(entry)
-              const tone = MALL_TONE[mall] || (entry.external ? 'plain' : 'gmarket')
-              const price = parsePrice(entry.price)
-              return (
-                <div key={entry.index} className="sb-cart-item">
-                  <CartThumb entry={entry} className="sb-cart-item__thumb" />
-                  <div className="sb-cart-item__info">
-                    <p className="sb-cart-item__name">
-                      {entry.brand ? <span className="sb-cart-item__brand">[{entry.brand}]</span> : null}
-                      {entry.name}
-                    </p>
-                    {price != null && <p className="sb-cart-item__meta">{formatWon(price)}</p>}
-                    <span className={'sb-cart-item__mall sb-cart-item__mall--' + tone}>{mall}</span>
-                  </div>
-                  <button
-                    type="button"
-                    className="sb-cart-item__remove"
-                    aria-label={`${entry.name} 빼기`}
-                    title="담은 상품에서 빼기"
-                    onClick={() => onRemove(entry.index)}
-                  >
-                    <MinusIcon />
-                  </button>
+            {group.entries.length === 0 ? (
+              /* 빈 파트 — 점선 썸네일 자리 + 단계 제목·배지 + 안내, 누르면 계획으로 (Figma EmptyPartRow) */
+              <button type="button" className="sb-cart-part__empty" onClick={onOpenPlan} title="계획에서 이 단계의 상품을 담기">
+                <span className="sb-cart-part__empty-thumb" aria-hidden="true"><PlusIcon /></span>
+                <span className="sb-cart-part__empty-info">
+                  <span className="sb-cart-part__head sb-cart-part__head--empty">
+                    <span className="sb-cart-part__title">{group.step || '담은 상품'}</span>
+                    {group.stepBadge ? <span className="sb-cart-part__badge">{group.stepBadge}</span> : null}
+                  </span>
+                  <span className="sb-cart-part__placeholder">상품을 추가해 보세요</span>
+                </span>
+                <span className="sb-cart-part__chevron" aria-hidden="true"><ChevronIcon /></span>
+              </button>
+            ) : (
+              <>
+                <div className="sb-cart-part__head">
+                  <h4 className="sb-cart-part__title">{group.step || '담은 상품'}</h4>
+                  {group.stepBadge ? <span className="sb-cart-part__badge">{group.stepBadge}</span> : null}
                 </div>
-              )
-            })}
+                {group.entries.map((entry) => {
+                  const mall = mallOf(entry)
+                  const tone = MALL_TONE[mall] || (entry.external ? 'plain' : 'gmarket')
+                  const price = parsePrice(entry.price)
+                  return (
+                    <div key={entry.index} className="sb-cart-item">
+                      <CartThumb entry={entry} className="sb-cart-item__thumb" />
+                      <div className="sb-cart-item__info">
+                        <p className="sb-cart-item__name">
+                          {entry.brand ? <span className="sb-cart-item__brand">[{entry.brand}]</span> : null}
+                          {entry.name}
+                        </p>
+                        {price != null && <p className="sb-cart-item__meta">{formatWon(price)}</p>}
+                        <span className={'sb-cart-item__mall sb-cart-item__mall--' + tone}>{mall}</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="sb-cart-item__remove"
+                        aria-label={`${entry.name} 빼기`}
+                        title="담은 상품에서 빼기"
+                        onClick={() => onRemove(entry.index)}
+                      >
+                        <MinusIcon />
+                      </button>
+                    </div>
+                  )
+                })}
+              </>
+            )}
           </section>
         ))}
       </div>
@@ -595,6 +630,7 @@ export default function ThreadPanel({ api, open, origin = 'right', onClose }) {
       {sheet && sheet.kind === 'cart' && sheetThread && (
         <CartSheet
           thread={{ ...sheetThread, cart: enrichedCartOf(sheetThread) }}
+          steps={(lookupFor(sheetThread) && lookupFor(sheetThread).steps) || []}
           onClose={() => setSheet(null)}
           onRemove={(index) => removeFromCart(sheetThread, index)}
           onOpenPlan={() => { setSheet(null); resume(sheetThread) }}

@@ -94,12 +94,14 @@ const normName = (text) => String(text || '').trim().replace(/\s+/g, ' ')
 
 export function productLookupFromItems(items) {
   const map = new Map()
+  map.steps = [] // 계획 단계 목록(순서대로) — 담은 상품 시트가 빈 파트 행("상품을 추가해 보세요")을 그리는 재료
   let step = ''
   let stepBadge = ''
   for (const it of Array.isArray(items) ? items : []) {
     if (it.type === 'planStep' && !it.parentId) {
       step = String(it.props?.title || '').trim()
       stepBadge = String(it.props?.badge || '').trim()
+      if (step) map.steps.push({ title: step, badge: stepBadge })
       continue
     }
     if (it.type !== 'productCard' || !it.props?.name) continue
@@ -112,11 +114,13 @@ export function productLookupFromItems(items) {
 /* 라이브 와이어 계획 페이지 — livePage 의 productCard 투영과 같은 규칙(가격 천 단위, 썸네일 없으면 🧴 목업, mall 있음 = 외부몰) */
 export function productLookupFromPlanPage(page) {
   const map = new Map()
+  map.steps = [] // 라이브 계획의 단계(guide) 목록 — 시트의 빈 파트 행 재료 (라이브 단계엔 배지가 없다)
   let step = ''
   for (const section of page?.sections || []) {
     if (!section) continue
     if (section.kind === 'guide') {
       step = String(section.title || '').trim()
+      if (step) map.steps.push({ title: step, badge: '' })
       continue
     }
     if (section.kind !== 'products') continue
