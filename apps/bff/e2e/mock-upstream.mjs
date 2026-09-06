@@ -321,7 +321,7 @@ const server = http.createServer(async (req, res) => {
     const all = [...real, ...fake].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
     const filtered = cursor ? all.filter((t) => t.updatedAt < cursor) : all
     const items = filtered.slice(0, limit)
-    return send(200, { items, nextCursor: filtered.length > limit ? items[items.length - 1].updatedAt : null })
+    return send(200, { items, nextCursor: filtered.length > limit ? items[items.length - 1].updatedAt : null, total: all.length })
   }
   if ((m = url.match(/^\/internal\/threads\/(\d+)\/steps\/(\d+)$/)) && req.method === 'PUT') {
     const t = threads.get(m[1])

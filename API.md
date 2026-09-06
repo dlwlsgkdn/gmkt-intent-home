@@ -40,7 +40,7 @@ Base: `https://ddak-bff.vercel.app` · 사용자 식별: **`x-device-id` 헤더*
 | POST | `/api/threads/:id/plan` | **응답 제출 → 계획 생성 (LLM #2 — 2단계 병렬**: 뼈대(검색 없음·medium, 수 초 스트리밍 — 단계 안내 2~3개) ∥ 검색(상품+참고 콘텐츠, 카탈로그+웹 검색 그라운딩·high) — 뼈대가 끝나면 `skeleton` 이벤트로 **조기 확정**되고 검색 섹션이 자리 인덱스로 비동기로 끼어든다, DESIGN §9-1**)**. `feedback`(stage=plan)이 있으면 **피드백 반영 재생성** — 직전 계획(plan 스텝)+피드백을 프롬프트 가변부에 실어 지적된 상품을 웹 검색 대안으로 교체 | `{ answers: [{questionId, choices[]}], profile?, feedback? }` | **SSE** → `result.page: PlanPageWire` |
 | POST | `/api/threads/:id/events` | 담기/완료 행동 + **피드백 제출**(`type=feedback`, data=`ThreadStageFeedback`) 기록 (`complete`면 status=done) | `{ type, data? }` | `{ ok: true }` |
 | GET | `/api/threads/:id` | 이어보기 — 단계별 페이지 + 최신 피드백 복원 | — | `{ threadId, title, status, source, survey, answers, plan, feedback, updatedAt }` |
-| GET | `/api/threads?cursor=&limit=` | 쓰레드 목록 (히스토리 패널) | — | `ThreadListPage` |
+| GET | `/api/threads?cursor=&limit=` | 쓰레드 목록 (히스토리 패널 — 무한스크롤 페이지) | — | `ThreadListPage` = `{ items, nextCursor, total }` — `total`은 이 기기의 전체 쓰레드 수(archived 제외)로 첫 페이지에서 미리 총 개수를 알린다 |
 | GET | `/healthz` | 상태 — `llm: configured\|not_configured`, `core` | — | 상태 JSON |
 
 **SSE 프레임** (`Content-Type: text/event-stream`) — 토큰 단위 부분 스트리밍:

@@ -229,6 +229,27 @@ export default function ThreadPanel({ api, open, origin = 'right', onClose }) {
   const bodyRef = useRef(null)
   const sentinelRef = useRef(null)
   const olderEnabled = open && !fbOnly && api.threads.length >= THREAD_RECORD_LIMIT
+  /* 총 개수는 스크롤 전에 미리 구한다 — 패널을 열 때 서버 목록 첫 페이지(limit 1)의 total(이 기기의 라이브 쓰레드 전체 수)을
+     받아, 기록의 시나리오 쓰레드 수와 합쳐 "전체 n개"로 보여준다. 기록의 라이브 쓰레드는 모두 서버에도 있으므로 겹치지 않는다 */
+  const [serverTotal, setServerTotal] = useState(null)
+  useEffect(() => {
+    if (!open || api.threads.length < THREAD_RECORD_LIMIT) return undefined
+    let cancelled = false
+    listLiveThreads({ limit: 1 })
+      .then((res) => {
+        if (!cancelled && typeof res.total === 'number') setServerTotal(res.total)
+      })
+      .catch(() => {
+        /* 총 개수는 보조 정보 — 실패해도 기록 개수로 보여준다 */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open, api.threads.length])
+  const localNonLive = api.threads.filter((t) => !t.live).length
+  const totalCount = olderEnabled && serverTotal != null ? Math.max(api.threads.length, localNonLive + serverTotal) : api.threads.length
+  const remainingOlder = Math.max(0, totalCount - api.threads.length - older.items.length)
+  const olderDone = older.exhausted || (serverTotal != null && remainingOlder === 0)
   const loadOlder = async () => {
     const cur = olderRef.current
     if (cur.loading || cur.exhausted) return
@@ -258,7 +279,7 @@ export default function ThreadPanel({ api, open, origin = 'right', onClose }) {
     }
   }
   useEffect(() => {
-    if (!olderEnabled || older.exhausted || older.loading) return undefined
+    if (!olderEnabled || olderDone || older.loading) return undefined
     const root = bodyRef.current
     const target = sentinelRef.current
     if (!root || !target || typeof IntersectionObserver === 'undefined') return undefined
@@ -271,7 +292,7 @@ export default function ThreadPanel({ api, open, origin = 'right', onClose }) {
     io.observe(target)
     return () => io.disconnect()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [olderEnabled, older.exhausted, older.loading, older.items.length, api.threads.length])
+  }, [olderEnabled, olderDone, older.loading, older.items.length, api.threads.length])
 
   /* ── 옛 이름-만 기록의 썸네일 보정 ──
      시나리오 쓰레드는 그 시나리오의 상품 카드에서(즉시), 라이브 쓰레드는 서버 계획 페이지에서(한 번 받아 캐시) 재료를 찾아
@@ -378,7 +399,7 @@ export default function ThreadPanel({ api, open, origin = 'right', onClose }) {
           <div className="sb-thread__head">
             <h2 className="sb-thread__title">
               쇼핑 쓰레드
-              {api.threads.length > 0 && <span className="sb-thread__count">{api.threads.length}</span>}
+              {totalCount > 0 && <span className="sb-thread__count">{totalCount}</span>}
             </h2>
             <div className="sb-thread__actions">
               <button type="button" className="sb-thread__icon-btn" aria-label="새 쇼핑 쓰레드 만들기" title="새 쓰레드" onClick={newThread}>
@@ -400,7 +421,13 @@ export default function ThreadPanel({ api, open, origin = 'right', onClose }) {
             ) : (
               <>
                 <div className="sb-thread__meta">
-                  <span>{fbOnly ? `평가한 쓰레드 ${threads.length}개` : `최근 쓰레드 ${api.threads.length}개`}</span>
+                  <span>
+                    {fbOnly
+                      ? `평가한 쓰레드 ${threads.length}개`
+                      : totalCount > api.threads.length
+                        ? `전체 ${totalCount}개 · 최근 ${api.threads.length}개`
+                        : `최근 쓰레드 ${api.threads.length}개`}
+                  </span>
                   <div className="sb-thread__meta-actions">
                     {fbCount > 0 && (
                       <button
@@ -484,7 +511,9 @@ export default function ThreadPanel({ api, open, origin = 'right', onClose }) {
                   })}
                   {/* 지난 쓰레드 — 기록 상한 뒤의 라이브 쓰레드를 서버 목록에서 이어 받는다 (기기 단위, 점선 카드) */}
                   {olderEnabled && older.items.length > 0 && (
-                    <p className="sb-thread__older-head">지난 라이브 쓰레드 · 이 기기 기록 {older.items.length}개</p>
+                    <p className="sb-thread__older-head">
+                      지난 라이브 쓰레드 · 이 기기 기록 {older.items.length}개{serverTotal != null ? ` · 남은 ${remainingOlder}개` : ''}
+                    </p>
                   )}
                   {olderEnabled &&
                     older.items.map((t) => {
@@ -529,11 +558,11 @@ export default function ThreadPanel({ api, open, origin = 'right', onClose }) {
                         <button type="button" className="sb-thread__more-btn" onClick={loadOlder}>
                           다시 시도 — {older.error}
                         </button>
-                      ) : older.exhausted ? (
+                      ) : olderDone ? (
                         older.items.length > 0 ? <span className="sb-thread__more-text">지난 쓰레드를 모두 불러왔어요</span> : null
                       ) : (
                         <button type="button" className="sb-thread__more-btn" onClick={loadOlder}>
-                          지난 쓰레드 더 보기
+                          지난 쓰레드 더 보기{serverTotal != null ? ` (${remainingOlder}개 남음)` : ''}
                         </button>
                       )}
                     </div>
