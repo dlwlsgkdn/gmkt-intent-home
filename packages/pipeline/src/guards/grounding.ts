@@ -115,10 +115,13 @@ export function groundProductsSection(
       drops.push({ code: 'invalid-url', message: `웹 상품 URL 검증 실패로 드롭: ${w.name} (${w.url})` })
       return
     }
-    if (isSearchLikeUrl(url)) {
+    // 검색/목록 페이지 주소는 상품이 그렇다고 표시한 경우(urlKind=search — PDP 를 못 찾은 대체 링크)만 통과시킨다.
+    // PDP 라고 하면서 검색 페이지를 준 것은 예전처럼 드롭 — "PDP 만" 정책은 표시 없는 링크에 그대로 남는다 (2026-09)
+    const searchLink = w.urlKind === 'search'
+    if (!searchLink && isSearchLikeUrl(url)) {
       drops.push({
         code: 'search-like-url',
-        message: `웹 상품 URL이 검색/목록 페이지로 보여 드롭 (PDP만 허용): ${w.name} (${w.url})`,
+        message: `웹 상품 URL이 검색/목록 페이지로 보여 드롭 (PDP 또는 urlKind=search 만 허용): ${w.name} (${w.url})`,
       })
       return
     }
@@ -133,6 +136,7 @@ export function groundProductsSection(
         tags: w.tags,
         url: w.url,
         mall: w.mall.trim() || '외부몰',
+        ...(searchLink ? { urlKind: 'search' as const } : {}),
         ...(imageUrl ? { imageUrl } : {}),
       },
       w.match,

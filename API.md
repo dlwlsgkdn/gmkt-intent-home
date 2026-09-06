@@ -98,7 +98,9 @@ PlanPageWire   = { headline, summary, sections: [
 PlanContentItem = { type: 'video'|'article', source, title, url, imageUrl?, meta?, snippet?, duration? }
 // meta = 영상은 채널·조회수, 게시글은 작성자·시점. FE 투영: video→videoCard(썸네일 없으면 유튜브
 // 자동 썸네일), article→articleCard. 카드 클릭 = 새 탭 열기(openExternal)
-CatalogProduct = { id, name, brand, price, tags[], url?, mall?, imageUrl?, match? }
+CatalogProduct = { id, name, brand, price, tags[], url?, urlKind?: 'pdp'|'search', mall?, imageUrl?, match? }
+// urlKind=search (v21) — 검색 결과에 PDP 주소가 없어 몰 검색 결과 주소를 대신 실은 웹 상품. 게이트는 이 표식이 있을 때만 검색 페이지
+// 주소를 통과시키고(표식 없는 검색 주소는 드롭) FE 카드 버튼은 「몰에서 찾기」, 근거 신뢰 점수는 25
 // match = { score 0~100, factors: [{ key, label, score 0~100, weight, note? }], basis?, version? } — 검증 게이트(@ddak/pipeline guards/match.ts)가
 // 상품마다 계산한 매칭율: LLM 1~5 평가(skin·concern·preference, 예산 없으면 price)와 결정적 가중치(피부 25 · 고민 30 · 선호 20 · 가격 15 · 근거 10)의
 // 가중 합산. FE 상품 카드 「매칭율 n%」 배지와 클릭 팝오버(항목별 막대·근거·계산식)의 원천이며 plan 스텝 payload 에 그대로 남는다

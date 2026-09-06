@@ -65,6 +65,7 @@ function priceFactor(product: CatalogProduct, ledger: ConstraintLedger | null | 
 function evidenceFactor(product: CatalogProduct): { score: number; note: string } {
   const isCatalog = !product.mall
   if (isCatalog) return { score: 100, note: '지마켓 카탈로그의 검증된 상품이에요' }
+  if (product.urlKind === 'search') return { score: 25, note: `${product.mall} 검색 결과로 확인한 상품이에요 (상세 페이지는 미확인)` }
   if (product.imageUrl) return { score: 75, note: `${product.mall} 상품 페이지와 썸네일을 확인했어요` }
   return { score: 50, note: `${product.mall} 상품 페이지를 확인했어요 (썸네일은 미확인)` }
 }

@@ -191,11 +191,11 @@ export default function Player({ api, scenario, resume }) {
       }
     },
     /* 상품 상세보기 — 외부몰 페이지를 사이드 패널 iframe으로 (http(s) URL만) */
-    openProduct: ({ name, mall, url: rawUrl }) => {
+    openProduct: ({ name, mall, url: rawUrl, urlKind }) => {
       try {
         const url = new URL(String(rawUrl || '').trim())
         if (!['http:', 'https:'].includes(url.protocol)) throw new Error('unsupported protocol')
-        setProductDetail({ name, mall, url: url.href })
+        setProductDetail({ name, mall, url: url.href, urlKind })
       } catch {
         api.showToast('상품 페이지 URL을 먼저 입력해주세요. (인스펙터의 "상품 페이지 URL")')
       }

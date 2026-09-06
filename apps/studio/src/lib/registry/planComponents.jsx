@@ -465,6 +465,7 @@ export const PLAN_COMPONENTS = {
       emoji: '',
       gradient: '',
       external: false,
+      urlKind: 'pdp',
       mall: '',
       url: '',
       imageUrl: './makeup-clone-assets/8e01e19fb7cf7c96.avif',
@@ -483,6 +484,16 @@ export const PLAN_COMPONENTS = {
       { key: 'emoji', label: '상품 이모지', kind: 'text' },
       { key: 'gradient', label: '상품 배경 CSS', kind: 'text' },
       { key: 'external', label: '외부몰 상품', kind: 'toggle' },
+      {
+        key: 'urlKind',
+        label: '링크 종류',
+        kind: 'select',
+        defaultValue: 'pdp',
+        options: [
+          { value: 'pdp', label: '상품 상세 페이지' },
+          { value: 'search', label: '몰 검색 결과 (PDP 못 찾음 — 「몰에서 찾기」)' },
+        ],
+      },
       { key: 'mall', label: '몰 이름 (예: 올리브영)', kind: 'text' },
       { key: 'url', label: '상품 페이지 URL (상세보기 패널)', kind: 'url', placeholder: 'https://...' },
       { key: 'imageUrl', label: '이미지 URL', kind: 'text' },
@@ -497,7 +508,7 @@ export const PLAN_COMPONENTS = {
       const openDetail = () => {
         if (!isPlayer) return
         // 카드 클릭 = 상품 PDP (Player/LivePlayer의 ProductDetailPanel)
-        ctx.player.openProduct({ name: p.name, mall, url: p.url })
+        ctx.player.openProduct({ name: p.name, mall, url: p.url, urlKind: p.urlKind })
       }
       return (
         <div className="sb-product-card2">
@@ -544,8 +555,13 @@ export const PLAN_COMPONENTS = {
                 버튼으로 상세보기(PDP 패널)를 연다. Figma 카드는 어느 상품이든 보라 CartButton이라 색은 같고
                 동작만 갈린다 */}
             {p.external ? (
-              <button type="button" className="sb-cart-btn" title="외부몰 상품은 상세 페이지에서 담아 주세요" onClick={openDetail}>
-                상세보기
+              <button
+                type="button"
+                className="sb-cart-btn"
+                title={p.urlKind === 'search' ? '상세 페이지를 못 찾아 몰 검색 결과를 열어요' : '외부몰 상품은 상세 페이지에서 담아 주세요'}
+                onClick={openDetail}
+              >
+                {p.urlKind === 'search' ? '몰에서 찾기' : '상세보기'}
               </button>
             ) : (
               <button

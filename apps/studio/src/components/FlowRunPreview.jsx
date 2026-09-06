@@ -300,6 +300,7 @@ export default function FlowRunPreview({
                     domainOf(product.url),
                     product.imageUrl ? '썸네일 ✓' : '이모지 폴백',
                     product.match ? `매칭율 ${product.match.score}%` : null,
+                    product.urlKind === 'search' ? '검색 링크 (PDP 미확인)' : null,
                   ]
                     .filter(Boolean)
                     .join(' · ')}

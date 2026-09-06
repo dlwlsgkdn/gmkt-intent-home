@@ -128,6 +128,22 @@ export async function fetchLiveThread(threadId) {
   return res.json()
 }
 
+/* 쓰레드 목록 — 히스토리 패널 "지난 쓰레드 더 보기"(무한스크롤). 이 기기(x-device-id) 기준 updatedAt 내림차순
+   키셋 커서 — 응답 { items, nextCursor } 의 nextCursor 를 다음 호출 cursor 로 넘긴다 */
+export async function listLiveThreads({ cursor, limit = 30 } = {}) {
+  const qs = new URLSearchParams()
+  if (cursor) qs.set('cursor', cursor)
+  qs.set('limit', String(limit))
+  let res
+  try {
+    res = await fetch(`${BASE}/threads?${qs.toString()}`, { headers: headers(false) })
+  } catch {
+    throw networkError()
+  }
+  if (!res.ok) throw await toLiveError(res)
+  return res.json()
+}
+
 /* 행동 기록(담기/완료 등) — fire-and-forget. 실패해도 체험을 막지 않는다 */
 export function recordLiveEvent(threadId, type, data) {
   fetch(`${BASE}/threads/${encodeURIComponent(threadId)}/events`, {

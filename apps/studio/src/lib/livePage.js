@@ -224,6 +224,7 @@ export function livePlanItems(page, opts = {}) {
             gradient: '',
             // mall 있음 = 웹 검색으로 찾은 외부몰 상품 (외부몰 태그·담기불가), 없음 = 데모 카탈로그(지마켓)
             external: !!product.mall,
+            urlKind: product.urlKind || 'pdp', // search = PDP 를 못 찾아 몰 검색 결과를 여는 상품 (「몰에서 찾기」)
             mall: product.mall || '',
             url: product.url || '', // 상세보기 사이드 패널이 iframe으로 연다
             imageUrl: product.imageUrl || '', // 카탈로그(지마켓 gdimg)·웹 검색 상품의 실제 썸네일

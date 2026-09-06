@@ -149,6 +149,7 @@ const PRODUCTS_JSON = JSON.stringify({
           price: 19900,
           mall: '올리브영',
           url: 'https://www.oliveyoung.co.kr/store/goods/getGoodsDetail.do?goodsNo=A000000001',
+          urlKind: 'pdp',
           imageUrl: '',
           tags: ['지속력', '세미매트'],
           match: {
@@ -163,8 +164,24 @@ const PRODUCTS_JSON = JSON.stringify({
           price: 15000,
           mall: '올리브영',
           url: 'https://www.oliveyoung.co.kr/store/goods/getGoodsDetail.do?goodsNo=A000000002',
+          urlKind: 'pdp',
           imageUrl: '',
           tags: ['진정'],
+        },
+        // PDP 를 못 찾은 상품 — 몰 검색 결과 주소 + urlKind=search (게이트가 검색 페이지 주소를 이 표식으로만 통과시킨다)
+        {
+          name: '모의 픽서 미스트',
+          brand: '모의브랜드',
+          price: 12000,
+          mall: '지마켓',
+          url: 'https://browse.gmarket.co.kr/search?keyword=%EB%AA%A8%EC%9D%98%20%ED%94%BD%EC%84%9C%20%EB%AF%B8%EC%8A%A4%ED%8A%B8',
+          urlKind: 'search',
+          imageUrl: '',
+          tags: ['픽서', '지속력'],
+          match: {
+            skin: 4, concern: 5, preference: 4,
+            notes: { skin: '지성 피부에 산뜻한 미스트예요', concern: '지속력 고민에 직접 닿는 픽서예요', preference: '한 번 뿌리는 간단한 사용감이에요' },
+          },
         },
       ],
     },
@@ -289,6 +306,23 @@ const server = http.createServer(async (req, res) => {
     return send(201, thread)
   }
   let m
+  if ((m = url.match(/^\/internal\/users\/([^/?]+)\/threads(?:\?(.*))?$/)) && req.method === 'GET') {
+    const params = new URLSearchParams(m[2] || '')
+    const limit = Number(params.get('limit') || 20)
+    const cursor = params.get('cursor')
+    const uid = decodeURIComponent(m[1])
+    const real = [...threads.values()].map((t) => t.thread).filter((t) => t.userId === uid)
+    const fake = Array.from({ length: 45 }, (_, i) => ({
+      id: String(9000000000 + i), userId: uid, title: `모의 지난 쓰레드 ${i + 1}`, source: { kind: 'search', query: `모의 지난 쓰레드 ${i + 1}` },
+      status: i % 3 === 0 ? 'done' : 'planning',
+      createdAt: new Date(Date.UTC(2026, 0, 1) + i * 3600_000).toISOString(),
+      updatedAt: new Date(Date.UTC(2026, 0, 1) + i * 3600_000 + 60_000).toISOString(),
+    }))
+    const all = [...real, ...fake].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
+    const filtered = cursor ? all.filter((t) => t.updatedAt < cursor) : all
+    const items = filtered.slice(0, limit)
+    return send(200, { items, nextCursor: filtered.length > limit ? items[items.length - 1].updatedAt : null })
+  }
   if ((m = url.match(/^\/internal\/threads\/(\d+)\/steps\/(\d+)$/)) && req.method === 'PUT') {
     const t = threads.get(m[1])
     if (!t) return send(404, { message: 'no thread' })

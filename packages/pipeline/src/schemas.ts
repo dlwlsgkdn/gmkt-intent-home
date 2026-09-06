@@ -111,7 +111,10 @@ export const WebProductGen = z.object({
   brand: z.string().describe('브랜드'),
   price: z.number().int().describe('판매가 (원 단위 정수) — 검색 결과에서 확인한 값'),
   mall: z.string().describe('판매처 이름 (예: 올리브영, 쿠팡)'),
-  url: z.string().describe('상품 상세 페이지(PDP) URL — 검색 결과의 주소 그대로. 검색 결과·목록 페이지 금지'),
+  url: z
+    .string()
+    .describe('상품 링크 — 검색 결과에서 확인한 상세 페이지(PDP) 주소 그대로. PDP 를 못 찾았으면 그 몰의 검색 결과 주소(상품명 검색)를 넣고 urlKind 를 search 로'),
+  urlKind: z.enum(['pdp', 'search']).describe('url 종류 — pdp: 상품 상세 페이지 주소, search: 상세 페이지를 못 찾아 몰 검색 결과 주소를 대신 실음'),
   imageUrl: z
     .string()
     .describe('상품 썸네일 이미지 URL — 검색 결과에서 확인한 경우만, 없으면 빈 문자열 (지어내기 금지)'),

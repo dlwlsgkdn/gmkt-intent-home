@@ -684,11 +684,11 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
       }
     },
     /* 상품 상세보기 — 카탈로그에 URL이 있으면 사이드 패널 iframe, 없으면 정직한 안내 */
-    openProduct: ({ name, mall, url: rawUrl }) => {
+    openProduct: ({ name, mall, url: rawUrl, urlKind }) => {
       try {
         const url = new URL(String(rawUrl || '').trim())
         if (!['http:', 'https:'].includes(url.protocol)) throw new Error('unsupported protocol')
-        setProductDetail({ name, mall, url: url.href })
+        setProductDetail({ name, mall, url: url.href, urlKind })
         if (threadId) recordLiveEvent(threadId, 'productOpen', { name })
       } catch {
         api.showToast('이 상품은 연결된 상세 페이지가 아직 없어요.')

@@ -853,3 +853,22 @@
 }
 .sb-home-hero .sb-player__item:has(.clean-search) { margin-top: auto; }
 .sb-home-hero .sb-player__item .clean-tag-row { justify-content: center; text-align: center; }
+
+/* ── 지난 쓰레드 더 보기 (무한스크롤, 2026-09) — 기록 상한(30) 뒤의 라이브 쓰레드를 서버 목록에서 30개씩 이어 받는다.
+   서버 기록 카드는 점선 테두리로 기기 기록과 구분한다 ── */
+.sb-thread__older-head { margin: 8px 0 -4px; font-size: var(--sb-t-micro); font-weight: 400; color: var(--dk-muted); }
+.sb-thread-card--server { border: 1px dashed var(--dk-line); }
+.sb-thread__more { display: flex; justify-content: center; align-items: center; min-height: 32px; padding: 4px 0 12px; }
+.sb-thread__more-text { font-size: var(--sb-t-caption); font-weight: 300; color: var(--dk-muted); }
+.sb-thread__more-btn {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1.5px solid var(--dk-line);
+  border-radius: 8px;
+  background: var(--dk-surface);
+  color: var(--dk-ink);
+  font-size: var(--sb-t-small);
+  font-weight: 400;
+  cursor: pointer;
+}
+.sb-thread__more-btn:hover { border-color: var(--dk-brand); color: var(--dk-brand); }
