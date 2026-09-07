@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import AdminScenarioPreview from './AdminScenarioPreview.jsx'
+import { previewAnswers, previewPlan } from '../lib/promptPreview.js'
 import {
   assistAdminPrompt,
   decideAdminPromptTrial,
@@ -23,11 +25,6 @@ const SECTION_LABEL = {
 }
 
 const sampleIntent = '여름에 무너지지 않는 쿠션 찾아줘'
-
-const autoAnswers = (survey) =>
-  (survey?.questions || [])
-    .map((question) => ({ questionId: question.id, choices: question.options?.slice(0, 1) || [] }))
-    .filter((answer) => answer.choices.length > 0)
 
 const sameValue = (left, right) => JSON.stringify(left ?? null) === JSON.stringify(right ?? null)
 
@@ -276,6 +273,8 @@ export default function AdminPromptTrial({ wire, seed, onApplied, api }) {
   const [overallComment, setOverallComment] = useState('')
   const [savedThread, setSavedThread] = useState(null)
   const [savingThread, setSavingThread] = useState(false)
+  const [previewInput, setPreviewInput] = useState(null)
+  const [previewBusy, setPreviewBusy] = useState(false)
   const promptWorkRef = useRef({})
 
   const selected = useMemo(() => prompts.find((prompt) => prompt.id === selectedId) || null, [prompts, selectedId])
@@ -300,7 +299,7 @@ export default function AdminPromptTrial({ wire, seed, onApplied, api }) {
   }, [seed])
 
   const choosePrompt = (id) => {
-    if (id === selectedId || making || running || applying) return
+    if (id === selectedId || making || running || applying || previewBusy) return
     promptWorkRef.current[selectedId] = {
       instruction,
       proposal,
@@ -311,6 +310,7 @@ export default function AdminPromptTrial({ wire, seed, onApplied, api }) {
       overallScore,
       overallComment,
       savedThread,
+      previewInput,
     }
     const saved = promptWorkRef.current[id]
     setSelectedId(id)
@@ -322,12 +322,13 @@ export default function AdminPromptTrial({ wire, seed, onApplied, api }) {
     setOverallScore(saved?.overallScore ?? null)
     setOverallComment(saved?.overallComment ?? '')
     setSavedThread(saved?.savedThread ?? null)
+    setPreviewInput(saved?.previewInput ?? null)
     setError(saved?.error ?? null)
     setStatus(null)
   }
 
   const makeProposal = async () => {
-    if (!selected || !instruction.trim() || making) return
+    if (!selected || !instruction.trim() || making || running || previewBusy) return
     setMaking(true)
     setError(null)
     setResult(null)
@@ -345,8 +346,59 @@ export default function AdminPromptTrial({ wire, seed, onApplied, api }) {
     }
   }
 
+  const changeIntent = (value) => {
+    setIntent(value)
+    setResult(null)
+    setApplied(false)
+    setSavedThread(null)
+    setOverallScore(null)
+    setOverallComment('')
+  }
+
+  const changePreviewAnswer = (id, value) => {
+    setPreviewInput((prev) => prev ? { ...prev, answers: { ...prev.answers, [id]: value } } : prev)
+    setResult(null)
+    setApplied(false)
+    setSavedThread(null)
+    setOverallScore(null)
+    setOverallComment('')
+  }
+
+  const currentProfile = () => (api.profile?.items || []).filter((item) => item.label?.trim()).map((item) => ({ label: item.label, value: String(item.value || '') }))
+
+  const preparePreview = async () => {
+    if (!intent.trim() || previewBusy || running || making) return
+    setPreviewBusy(true)
+    setError(null)
+    setStatus('오른쪽 고객 화면에 설문을 준비하고 있어요…')
+    try {
+      const profile = currentProfile()
+      const output = await dryRunStage({ stageId: 'survey', intent: intent.trim(), profile })
+      setResult(null)
+      setPreviewInput({ intent: intent.trim(), profile, survey: output.survey, answers: {} })
+      setSavedThread(null)
+      setOverallScore(null)
+      setOverallComment('')
+      setApplied(false)
+    } catch (e) {
+      setError(e.message || '고객 화면을 불러오지 못했어요.')
+    } finally {
+      setPreviewBusy(false)
+      setStatus(null)
+    }
+  }
+
   const runTrial = async () => {
-    if (!selected || !proposal?.proposedText || !intent.trim() || running) return
+    if (!selected || !proposal?.proposedText || !intent.trim() || running || previewBusy || making) return
+    if (selected.id !== 'survey' && (!previewInput?.survey || previewInput.intent !== intent.trim())) {
+      await preparePreview()
+      return
+    }
+    const answers = previewAnswers(previewInput?.survey, previewInput?.answers || {})
+    if (selected.id !== 'survey' && (!answers.length || previewInput.survey.questions.some((q) => q.kind !== 'photo' && !answers.some((answer) => answer.questionId === q.id)))) {
+      setError('오른쪽 고객 화면에서 설문에 답한 뒤 비교해주세요. 사진은 건너뛸 수 있어요.')
+      return
+    }
     setRunning(true)
     setError(null)
     setResult(null)
@@ -357,32 +409,34 @@ export default function AdminPromptTrial({ wire, seed, onApplied, api }) {
     setStatus('시험 준비 중…')
     try {
       if (selected.id === 'survey') {
+        const profile = currentProfile()
         setStatus('현재 결과와 시험안 결과를 함께 만들고 있어요…')
         const [baseline, trial] = await Promise.all([
-          dryRunStage({ stageId: 'survey', intent: intent.trim() }),
+          dryRunStage({ stageId: 'survey', intent: intent.trim(), profile }),
           dryRunStage(
-            { stageId: 'survey', intent: intent.trim(), promptOverride: proposal.proposedText },
+            { stageId: 'survey', intent: intent.trim(), profile, promptOverride: proposal.proposedText },
             { onStatus: setStatus },
           ),
         ])
+        setPreviewInput({ intent: intent.trim(), profile, survey: trial.survey, answers: {} })
         setResult({ baseline, trial })
       } else {
-        setStatus('같은 고객 문장으로 설문과 임시 답변을 준비하고 있어요…')
-        const surveyOutput = await dryRunStage({ stageId: 'survey', intent: intent.trim() })
-        const answers = autoAnswers(surveyOutput.survey)
-        if (!answers.length) throw new Error('계획 시험에 사용할 설문 답변을 만들지 못했어요.')
         const input = {
           stageId: selected.id,
           intent: intent.trim(),
-          survey: surveyOutput.survey,
+          profile: previewInput.profile,
+          survey: previewInput.survey,
           answers,
         }
         setStatus('같은 조건으로 현재 결과와 시험안 결과를 비교하고 있어요…')
-        const [baseline, trial] = await Promise.all([
+        const otherStage = selected.id === 'plan-skeleton' ? 'plan-products' : 'plan-skeleton'
+        const [baseline, trial, companion] = await Promise.all([
           dryRunStage(input),
           dryRunStage({ ...input, promptOverride: proposal.proposedText }, { onStatus: setStatus }),
+          dryRunStage({ ...input, stageId: otherStage }),
         ])
-        setResult({ survey: surveyOutput.survey, answers, baseline, trial })
+        const pageFor = (output) => selected.id === 'plan-skeleton' ? previewPlan(output, companion) : previewPlan(companion, output)
+        setResult({ survey: previewInput.survey, answers, baseline, trial, preview: { baseline: pageFor(baseline), trial: pageFor(trial) } })
       }
       setStatus(null)
     } catch (e) {
@@ -446,6 +500,7 @@ export default function AdminPromptTrial({ wire, seed, onApplied, api }) {
   if (!wire) return <div className="sb-admin-card"><p className="sb-admin__muted">지시서를 불러오는 중…</p></div>
 
   return (
+    <div className="sb-prompt-workbench">
     <div className="sb-prompt-trial">
       <section className="sb-prompt-trial__intro">
         <span>안전한 시험 공간</span>
@@ -461,7 +516,7 @@ export default function AdminPromptTrial({ wire, seed, onApplied, api }) {
               {TESTABLE_PROMPTS.filter((item) => prompts.some((prompt) => prompt.id === item.id)).map((item) => {
                 const prompt = prompts.find((entry) => entry.id === item.id)
                 return (
-                  <button key={item.id} type="button" className={selectedId === item.id ? 'is-on' : ''} disabled={making || running || applying} onClick={() => choosePrompt(item.id)}>
+                  <button key={item.id} type="button" className={selectedId === item.id ? 'is-on' : ''} disabled={making || running || applying || previewBusy} onClick={() => choosePrompt(item.id)}>
                     <b>{item.label}</b><small>{item.note}</small><em>{prompt?.configured ? '현재 수정본 사용 중' : '현재 기본값 사용 중'}</em>
                   </button>
                 )
@@ -476,10 +531,11 @@ export default function AdminPromptTrial({ wire, seed, onApplied, api }) {
               value={instruction}
               rows={3}
               maxLength={2000}
+              disabled={making || running || applying || previewBusy}
               placeholder={selectedId === 'survey' ? '예: 질문은 최대 3개만 만들고 문장을 짧게 써줘' : selectedId === 'plan-skeleton' ? '예: 추천 이유는 3문장 이내로 쓰고 단계는 간결하게 구성해줘' : '예: 가격과 피부 타입에 맞는 상품을 우선 추천해줘'}
               onChange={(event) => setInstruction(event.target.value)}
             />
-            <button type="button" className="sb-btn sb-btn--ai" disabled={making || instruction.trim().length < 2} onClick={makeProposal}>
+            <button type="button" className="sb-btn sb-btn--ai" disabled={making || running || previewBusy || instruction.trim().length < 2} onClick={makeProposal}>
               {making ? '시험안 프롬프트 만드는 중…' : '⇄ 시험안 프롬프트 만들기'}
             </button>
             {proposal && (
@@ -493,13 +549,13 @@ export default function AdminPromptTrial({ wire, seed, onApplied, api }) {
 
           <section className="sb-admin-card sb-prompt-trial__step">
             <header><i>3</i><div><h2>같은 조건으로 비교할게요</h2><p>현재 결과와 시험안 결과를 한 번에 만들며 고객 기록에는 남지 않습니다.</p></div></header>
-            <label>처음 입력한 문장 다시 입력<input value={intent} maxLength={500} placeholder="예: 소개팅 메이크업 해줘" onChange={(event) => setIntent(event.target.value)} /></label>
+            <label>고객이 처음 입력한 문장<input value={intent} disabled={making || running || applying || previewBusy} maxLength={500} placeholder="예: 소개팅 메이크업 해줘" onChange={(event) => changeIntent(event.target.value)} /></label>
             <small className="sb-prompt-trial__auto">실제 서비스 검색창에 입력했던 자연어 문장을 그대로 적어주세요.</small>
-            <button type="button" className="sb-btn sb-btn--ai" disabled={!proposal || !intent.trim() || running} onClick={runTrial}>
+            <button type="button" className="sb-btn sb-btn--ai" disabled={!proposal || !intent.trim() || running || making || previewBusy} onClick={runTrial}>
               {running ? status || '시험 중…' : '⇄ 이 문장으로 비교 실행'}
             </button>
             <small className="sb-prompt-trial__auto">비교를 위해 같은 AI 단계를 두 번 실행합니다. 생성 결과는 실행할 때마다 조금 달라질 수 있어요.</small>
-            {selectedId !== 'survey' && <small className="sb-prompt-trial__auto">계획 시험은 같은 문장으로 설문을 준비하고 첫 번째 선택지를 임시 답변으로 사용해요.</small>}
+            {selectedId !== 'survey' && <small className="sb-prompt-trial__auto">오른쪽 고객 화면에서 직접 고른 답변으로 비교해요. 검색 문장·프로필·답변과 수정하지 않는 단계는 두 버전에서 같게 유지해요.</small>}
           </section>
           {error && <p className="sb-admin-gate__error">{error}</p>}
         </div>
@@ -508,7 +564,7 @@ export default function AdminPromptTrial({ wire, seed, onApplied, api }) {
           <header><div><span>비교 결과</span><h2>{result ? `${selectedMeta?.label} 결과를 나란히 확인하세요` : '아직 실제 설정은 바뀌지 않았어요'}</h2></div>{result && <em>두 결과 모두 저장 안 됨</em>}</header>
           {!result && <div className="sb-prompt-trial__empty"><i>✓</i><p>시험안을 실행하면 현재 운영 결과와<br />바꾼 결과가 나란히 나타납니다.</p></div>}
           {result?.survey && (
-            <details className="sb-prompt-trial__input"><summary>시험에 사용한 설문과 임시 답변</summary><SurveyResult survey={result.survey} answers={result.answers} /></details>
+            <details className="sb-prompt-trial__input"><summary>시험에 사용한 설문과 직접 고른 답변</summary><SurveyResult survey={result.survey} answers={result.answers} /></details>
           )}
           {result && <DiffOverview selectedId={selectedId} baseline={result.baseline} trial={result.trial} diffCount={diffCount} proposal={proposal} instruction={instruction} />}
           {result && (
@@ -548,6 +604,8 @@ export default function AdminPromptTrial({ wire, seed, onApplied, api }) {
           )}
         </section>
       </div>
+    </div>
+    <AdminScenarioPreview intent={intent} onIntent={changeIntent} selectedId={selectedId} result={result} input={previewInput} onPrepare={preparePreview} onAnswer={changePreviewAnswer} onRun={runTrial} busy={making || running || applying || previewBusy} status={status} proposal={proposal} onBusy={setPreviewBusy} />
     </div>
   )
 }
