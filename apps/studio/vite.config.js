@@ -13,6 +13,14 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
+      // /api/state → 기본은 지금과 같은 Vercel 배포본(Neon). VITE_STATE_PROXY(또는 VITE_API_PROXY)를
+      // 로컬 tagging-api(예: http://localhost:8790)로 주면 그쪽 라우트(Postgres/Mongo 택일)를 대신 쓴다.
+      // '/api'보다 먼저 선언할 것 — 프록시 매칭이 선언 순서라 뒤에 두면 /api가 삼킨다
+      '/api/state': {
+        target: process.env.VITE_STATE_PROXY || process.env.VITE_API_PROXY || 'https://ddak-scenario-studio.vercel.app',
+        changeOrigin: true,
+        secure: false,
+      },
       // /api/bff → 로컬 bff (배포에선 루트 middleware.js가 같은 경로를 토큰 주입해 rewrite).
       // '/api'보다 먼저 선언할 것 — 프록시 매칭이 선언 순서라 뒤에 두면 /api가 삼킨다
       '/api/bff': {
