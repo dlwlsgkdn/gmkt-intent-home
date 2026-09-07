@@ -77,6 +77,49 @@
 3. **저장소 clone 권한.** 퓨전이 개인 네임스페이스 repo는 clone하지 못한다
    (`md-calculator`가 겪음). 지금 정본은 사내 `org-labs/eevee-labatory`라 해당 없다.
 
+## 4-1. S2I 등록 — 실제로 걸린 것들 (2026-09-07 첫 빌드 실측)
+
+이 리포는 S2I 빌더가 기대하는 모양이 아니었다. 아래를 갖춰 두었다.
+
+**루트 `package.json`에 스크립트가 없었다.** S2I nodejs 빌더는 `npm install` → `npm run build`
+→ `npm start` 순으로 도는데 셋 다 없어 컨테이너가 기동하자마자 죽는다. 이제 있다:
+
+| 스크립트 | 하는 일 |
+|---|---|
+| `build` | 스튜디오 + tagging-api 빌드 (schema·pipeline dist 는 install 시 prepare 가 만든다) |
+| `start` | tagging-api 기동 (= `start:tagging`) |
+| `start:bff` · `start:core` | 다른 앱을 올릴 때. BuildConfig 에서 `NPM_RUN` 으로 고른다 |
+
+**사내 npm 미러 주소가 틀렸다 — 이게 첫 빌드를 깬 진짜 원인이다.**
+
+```
+npm error 404 Not Found - GET http://prm.gmarket.com/nexus/content/groups/npm-group/zod/-/zod-4.4.3.tgz
+```
+
+`zod@4.4.3` 이 없어서가 아니다. 실측 결과 그 경로(Nexus 2 형식)는 **`react`·`express` 를 포함해
+모든 패키지가 404** 이고, Nexus 3 경로에는 zod 4.4.3 을 포함해 1005개 버전이 다 있다:
+
+| 경로 | 결과 |
+|---|---|
+| `/nexus/content/groups/npm-group` | 전부 404 |
+| **`/repository/npm-group`** | 200, `zod@4.4.3` tarball 도 200 |
+
+그래서 `.s2i/environment` 에 `NPM_CONFIG_REGISTRY` 로 올바른 주소를 건다. **`.npmrc` 로 리포에
+박지 않은 이유**는 사외에서 일하는 개발자의 `npm install` 이 사내 주소에 못 닿아 깨지기
+때문이다 — 빌드 환경에만 건다.
+
+**devDependencies 가 필요하다.** 빌드에 `nest` CLI 와 `vite` 가 필요한데 이미지가
+`NODE_ENV=production` 을 기본으로 두면 npm 이 devDependencies 를 건너뛰어 `nest: not found` 로
+깨진다. `.s2i/environment` 의 `NPM_CONFIG_PRODUCTION=false` 가 그것을 막는다.
+
+**`.env` 파일은 컨테이너에서 쓰이지 않는다.** 앱은 `dotenv` 로 프로세스 cwd 의 `.env` 를 읽는데
+루트에서 기동하면 그 파일이 없다(로컬에서 `apps/tagging-api` 안에서 띄울 때만 읽힌다).
+퓨전에서는 아래 표의 값을 **Deployment 환경변수·Secret 으로 주입**해야 한다. `MONGO_URI` 가
+없으면 상품 라우트가 503 을 낸다(화면은 뜬다).
+
+로컬에서 S2I 와 같은 순서를 재현해 확인한 결과: `npm run build` → `npm start` 로 스튜디오가
+`/` 에서 200 으로 뜨고 API 라우트가 응답한다.
+
 ## 5. tagging-api 배포 시 반드시 넘길 환경변수
 
 | 변수 | 값 | 빠뜨리면 |
@@ -87,7 +130,7 @@
 | `TAXONOMY_CACHE_PATH` | 쓰기 가능한 경로(기본 `os.tmpdir()`) | 폴백 캐시가 안 쌓인다 |
 | `TAXONOMY_PATH` | (선택) 레거시 파일 폴백. 컨테이너엔 그 파일이 없으므로 보통 생략 | — |
 | `STUDIO_DIST` | 스튜디오 빌드 경로. 화면까지 같이 서빙할 때만 | 화면은 안 뜨고 API만 뜬다 |
-| `PORT` | 기본 8790 | — |
+| `PORT` | 퓨전은 보통 **8080** (`.s2i/environment` 기본값). 로컬 기본은 8790 | — |
 
 헬스체크로 쓸 경로: `GET /api/tagging/summary` (Mongo까지 닿아야 200이므로 진짜 준비 상태를
 반영한다).

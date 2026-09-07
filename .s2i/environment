@@ -1,0 +1,23 @@
+# S2I(Source-to-Image) 빌드·런타임 환경 — 퓨전(OpenShift) nodejs 빌더가 이 값으로 앱을 실행한다.
+#
+# 이 리포는 배포 대상이 여럿인 모노레포다(tagging-api·bff·core). 기본은 tagging-api이고,
+# 다른 앱을 올릴 때는 BuildConfig에서 NPM_RUN 을 start:bff / start:core 로 바꾼다.
+#
+# NPM_CONFIG_PRODUCTION=false 가 핵심이다 — 빌드에 devDependencies(nest CLI·vite)가 필요한데
+# 이미지가 NODE_ENV=production 을 기본으로 두면 npm 이 devDependencies 를 건너뛰어
+# `nest: not found` 로 빌드가 깨진다.
+NPM_CONFIG_PRODUCTION=false
+
+# 스튜디오 화면을 같은 오리진에서 함께 서빙한다 — 그래야 mixed content·CORS·
+# Private Network Access 문제가 아예 생기지 않는다. 경로는 프로세스 cwd(앱 루트) 기준이다.
+STUDIO_DIST=apps/studio/dist
+
+# 기본 바인딩이 127.0.0.1 이라(인증 없는 쓰기 API의 안전장치) Route 뒤에서 닿으려면 반드시 넓혀야 한다.
+HOST=0.0.0.0
+PORT=8080
+
+# 사내 npm 미러 주소. 이미지 기본값이 Nexus 2 옛 경로(/nexus/content/groups/npm-group)를 가리켜
+# 모든 패키지가 404 였다(실측: react·express·zod 전부 404). Nexus 3 경로가 정답이고 거기엔
+# zod@4.4.3 을 포함해 1005개 버전이 다 있다. .npmrc 로 리포에 박지 않는 이유는 사외에서
+# 일하는 개발자의 npm install 이 깨지기 때문 — 빌드 환경에만 건다.
+NPM_CONFIG_REGISTRY=http://prm.gmarket.com/repository/npm-group

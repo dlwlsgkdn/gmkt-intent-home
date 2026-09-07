@@ -6,6 +6,13 @@
     "apps/*",
     "packages/*"
   ],
+  "scripts": {
+      "build": "npm run build --workspace=apps/studio && npm run build --workspace=apps/tagging-api",
+      "start": "node apps/tagging-api/dist/main.js",
+      "start:tagging": "node apps/tagging-api/dist/main.js",
+      "start:bff": "node apps/bff/dist/main.js",
+      "start:core": "node apps/core/dist/main.js"
+  },
   "engines": { "node": ">=20" },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",
