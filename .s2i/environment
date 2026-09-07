@@ -20,6 +20,10 @@ PORT=8080
 # 모든 패키지가 404 였다(실측: react·express·zod 전부 404). Nexus 3 경로가 정답이고 거기엔
 # zod@4.4.3 을 포함해 1005개 버전이 다 있다. .npmrc 로 리포에 박지 않는 이유는 사외에서
 # 일하는 개발자의 npm install 이 깨지기 때문 — 빌드 환경에만 건다.
+# NPM_MIRROR 는 Red Hat nodejs S2I 의 assemble 스크립트가 읽는 이름이다. 앞서
+# NPM_CONFIG_REGISTRY 만 걸었더니 안 먹었다 — assemble 이 레지스트리를 명령줄로 넘기면
+# 환경변수보다 우선하기 때문으로 보인다. 리포 루트 .npmrc 까지 셋을 겹쳐 둔다.
+NPM_MIRROR=http://prm.gmarket.com/repository/npm-group
 NPM_CONFIG_REGISTRY=http://prm.gmarket.com/repository/npm-group
 
 
