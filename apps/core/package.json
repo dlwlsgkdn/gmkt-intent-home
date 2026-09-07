@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "DDAK backend core — 쓰레드 저장·조회 (NestJS + Drizzle + Neon)",
+  "engines": { "node": ">=20" },
   "scripts": {
     "build": "nest build",
     "start": "node dist/main.js",
