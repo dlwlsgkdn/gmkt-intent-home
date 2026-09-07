@@ -101,15 +101,44 @@ export type SanitizedTaxonomy = {
   updatedAt: string | null
 }
 
+/* categories가 비지 않은 배열인지 — sanitizeTaxonomyDoc과 캐시 봉투 검증이 같은 기준을 쓴다. */
+const hasValidCategories = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === 'object' && !Array.isArray(value) &&
+  Array.isArray((value as Record<string, unknown>).categories) &&
+  ((value as Record<string, unknown>).categories as unknown[]).length > 0
+
 export function sanitizeTaxonomyDoc(doc: unknown): SanitizedTaxonomy | null {
-  if (!doc || typeof doc !== 'object') return null
-  const record = doc as Record<string, unknown>
-  if (!Array.isArray(record.categories) || record.categories.length === 0) return null
+  if (!hasValidCategories(doc)) return null
+  const record = doc
   const taxonomy: Record<string, unknown> = { ...record }
   for (const key of TAXONOMY_META_KEYS) delete taxonomy[key]
   const rev = typeof record._rev === 'number' ? record._rev : null
   const updatedAt = typeof record.updated_at === 'string' ? record.updated_at : null
   return { taxonomy, rev, updatedAt }
+}
+
+/* 폴백 캐시 파일(TAXONOMY_CACHE_PATH)의 봉투 형태: Mongo에서 마지막으로 성공한
+   사전(taxonomy)·rev·updatedAt에 기록 시각(cachedAt)을 더한 것. 파일 내용을 신뢰하지
+   않고 여기서 한 번 더 검증한다 — 무효면 taxonomy.service.ts가 다음 폴백으로 넘어간다. */
+export type CacheEnvelope = {
+  taxonomy: Record<string, unknown>
+  rev: number | null
+  updatedAt: string | null
+  cachedAt: string
+}
+
+export function readCacheEnvelope(raw: unknown): CacheEnvelope | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const record = raw as Record<string, unknown>
+  if (!hasValidCategories(record.taxonomy)) return null
+  const cachedAt = typeof record.cachedAt === 'string' ? record.cachedAt : null
+  if (!cachedAt) return null
+  return {
+    taxonomy: record.taxonomy,
+    rev: typeof record.rev === 'number' ? record.rev : null,
+    updatedAt: typeof record.updatedAt === 'string' ? record.updatedAt : null,
+    cachedAt,
+  }
 }
 
 export function decisionToReview(decision: unknown) {

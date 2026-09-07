@@ -765,6 +765,28 @@
   font-size: var(--sb-t-body);
 }
 
+/* 사전(taxonomy) 판 표시 — 검토자가 어느 판으로 판정받는지 알게 한다 */
+.sb-tagging__taxonomy-line {
+  margin: 8px 0 0;
+  color: var(--sb-muted);
+  font-size: var(--sb-t-small);
+}
+.sb-tagging__taxonomy-warn,
+.sb-tagging__taxonomy-block {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  border-radius: var(--sb-r-sm);
+  font-size: var(--sb-t-small);
+}
+.sb-tagging__taxonomy-warn {
+  background: var(--sb-n-50);
+  color: var(--sb-warn-ink);
+}
+.sb-tagging__taxonomy-block {
+  background: var(--sb-danger-soft);
+  color: var(--sb-danger);
+}
+
 /* 수백 건에서 한 건을 찾는 입구 — 상태 필터 알약만으로는 못 찾는다 */
 .sb-tagging__search {
   min-width: 200px;
