@@ -17,11 +17,11 @@ export class TaggingService {
      느려지면 그때 목록/상세를 나눈다. */
   async bootstrap() {
     const docs = await this.collection().find({ status: 'analyzed' }).toArray()
-    const { taxonomy, source, rev, updatedAt } = await this.taxonomy.read()
+    const { taxonomy, source, rev, updatedAt, cachedAt } = await this.taxonomy.read()
     return {
       taxonomy,
       units: docs.map(toUnit),
-      taxonomyMeta: { source, rev, updatedAt },
+      taxonomyMeta: { source, rev, updatedAt, cachedAt },
     }
   }
 

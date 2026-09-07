@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import mapping from '../dist/mapping.js'
 
-const { toUnit, toDocPatch, sanitizeTaxonomyDoc } = mapping
+const { toUnit, toDocPatch, sanitizeTaxonomyDoc, readCacheEnvelope } = mapping
 
 /* 실제 문서에서 추린 모양 — 필드 이름·중첩 구조를 바꾸지 말 것 */
 const DOC = {
@@ -231,4 +231,39 @@ test('decisionToReview — 화면 결정을 Flask와 공유하는 review_status�
   assert.equal(decisionToReview('rejected').reviewed_at, null)
   assert.equal(decisionToReview(null).review_status, 'unreviewed')
   assert.equal(decisionToReview(null).reviewed_at, null)
+})
+
+const CACHE_ENVELOPE = {
+  taxonomy: { categories: ['클렌징', '스킨케어'], sub_types: ['클렌징폼', '토너'] },
+  rev: 2,
+  updatedAt: '2026-09-07T00:11:54.540175+00:00',
+  cachedAt: '2026-09-07T03:20:00.000Z',
+}
+
+test('readCacheEnvelope — 정상 봉투를 그대로 복원하고 택소노미에 메타 키가 없다', () => {
+  const result = readCacheEnvelope(CACHE_ENVELOPE)
+  assert.deepEqual(result, CACHE_ENVELOPE)
+  assert.equal('_id' in result.taxonomy, false)
+  assert.equal('_rev' in result.taxonomy, false)
+  assert.equal('updated_at' in result.taxonomy, false)
+})
+
+test('readCacheEnvelope — categories가 비었거나 없으면 무효로 판정한다', () => {
+  assert.equal(readCacheEnvelope({ ...CACHE_ENVELOPE, taxonomy: { categories: [] } }), null)
+  const { categories, ...taxonomyWithoutCategories } = CACHE_ENVELOPE.taxonomy
+  assert.equal(readCacheEnvelope({ ...CACHE_ENVELOPE, taxonomy: taxonomyWithoutCategories }), null)
+  assert.equal(readCacheEnvelope({ ...CACHE_ENVELOPE, taxonomy: null }), null)
+})
+
+test('readCacheEnvelope — 봉투가 아닌 값은 무효로 판정한다', () => {
+  assert.equal(readCacheEnvelope(null), null)
+  assert.equal(readCacheEnvelope('current'), null)
+  assert.equal(readCacheEnvelope([CACHE_ENVELOPE]), null)
+  assert.equal(readCacheEnvelope(42), null)
+})
+
+test('readCacheEnvelope — cachedAt이 없거나 문자열이 아니면 무효로 판정한다', () => {
+  const { cachedAt, ...withoutCachedAt } = CACHE_ENVELOPE
+  assert.equal(readCacheEnvelope(withoutCachedAt), null)
+  assert.equal(readCacheEnvelope({ ...CACHE_ENVELOPE, cachedAt: 12345 }), null)
 })

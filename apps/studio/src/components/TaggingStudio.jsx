@@ -39,6 +39,18 @@ const EMPTY_UNIT = {
 
 const formatPrice = (price) => (typeof price === 'number' ? `${price.toLocaleString('ko-KR')}원` : '가격 정보 없음')
 
+/* 사전 캐시 시각을 검토자가 훑기 좋은 형태로 — 1시간 안은 상대 표기, 그 밖은 절대 시각(분까지). */
+const formatTaxonomyTime = (iso) => {
+  const date = iso ? new Date(iso) : null
+  if (!date || Number.isNaN(date.getTime())) return null
+  const diffMin = Math.floor((Date.now() - date.getTime()) / 60000)
+  if (diffMin < 1) return '방금 전'
+  if (diffMin < 60) return `${diffMin}분 전`
+  if (diffMin < 60 * 24) return `${Math.floor(diffMin / 60)}시간 전`
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
 const confLevel = (confidence) => (confidence >= 75 ? 'ok' : confidence >= 60 ? 'warn' : 'bad')
 const needsReviewUnit = (unit) => ['unreviewed', 'fix'].includes(unitStatusKey(unit))
 const fieldEditKey = (unitId, fieldKey) => `${unitId}:${fieldKey}`
@@ -100,6 +112,7 @@ function UnitThumb({ unit, className }) {
 export default function TaggingStudio({ api, embedded = false }) {
   const [units, setUnits] = useState([])
   const [source, setSource] = useState('loading') // 'loading' | 'remote' | 'local'
+  const [taxonomyMeta, setTaxonomyMeta] = useState(null) // 원격 모드 전용 — { source, rev, updatedAt, cachedAt }
   const [selectedId, setSelectedId] = useState(null)
   const [listFilter, setListFilter] = useState('needs-review')
   const [query, setQuery] = useState('')
@@ -116,6 +129,7 @@ export default function TaggingStudio({ api, embedded = false }) {
       if (!alive) return
       if (boot) {
         setUnits(boot.units)
+        setTaxonomyMeta(boot.taxonomyMeta || null)
         setSource('remote')
       } else {
         setUnits(loadTaggingReview())
@@ -191,6 +205,10 @@ export default function TaggingStudio({ api, embedded = false }) {
   )
   const unreviewedFields = FIELD_DEFS.filter((d) => unit.fields[d.key].status === 'unreviewed')
   const currentReviewFields = FIELD_DEFS.filter((def) => fieldNeedsReview(unit, def))
+  /* 사전 판을 알 수 없는 채로(file·none) 판정하면 최근 승격 태그를 "허용 목록 밖"으로
+     오판해 멀쩡한 태그를 지우는 사고로 이어진다 — 승인만 막는다(반려는 보수적이라 허용). */
+  const taxonomySource = source === 'remote' ? taxonomyMeta?.source ?? 'none' : null
+  const taxonomyBlocked = source === 'remote' && (taxonomySource === 'file' || taxonomySource === 'none')
 
   useEffect(() => {
     if (!jumpTarget) return undefined
@@ -391,6 +409,7 @@ export default function TaggingStudio({ api, embedded = false }) {
   }
 
   const approve = async () => {
+    if (taxonomyBlocked) return api.showToast('사전 판을 확인할 수 없어 승인할 수 없어요. 사내망 연결을 확인해주세요.')
     if (errs.length) return api.showToast('규칙 위반이 있어 승인할 수 없어요.')
     if (unreviewedFields.length) return api.showToast('미검토 항목이 남아 있어요. 확인 후 승인해주세요.')
     const previousDecision = unit.decision
@@ -462,6 +481,20 @@ export default function TaggingStudio({ api, embedded = false }) {
         {source === 'local' && (
           <p className="sb-tagging__fallback">
             사내망 태깅 서버에 닿지 못해 <b>예시 데이터</b>를 보고 있어요. 실제 검토는 사내망에서 열어주세요.
+          </p>
+        )}
+        {taxonomySource === 'mongo' && (
+          <p className="sb-tagging__taxonomy-line">사전 rev {taxonomyMeta?.rev ?? '?'}</p>
+        )}
+        {taxonomySource === 'cache' && (
+          <p className="sb-tagging__taxonomy-warn">
+            정본 사전을 읽지 못해 캐시본(<b>rev {taxonomyMeta?.rev ?? '?'}</b>, {formatTaxonomyTime(taxonomyMeta?.cachedAt) || '시각 미상'} 기준)으로
+            검증 중이에요.
+          </p>
+        )}
+        {(taxonomySource === 'file' || taxonomySource === 'none') && (
+          <p className="sb-tagging__taxonomy-block">
+            사전 판을 확인할 수 없어요. 어느 판으로 판정하는지 알 수 없으니 <b>승인은 막혀 있어요</b> — 반려는 계속할 수 있어요.
           </p>
         )}
         <input
