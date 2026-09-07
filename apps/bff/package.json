@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "DDAK BFF — journeys API(SSE) + Claude 오케스트레이션 + core 기록",
+  "engines": { "node": ">=20" },
   "scripts": {
     "build": "nest build",
     "start": "node dist/main.js",
