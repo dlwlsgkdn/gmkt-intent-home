@@ -91,6 +91,27 @@ export function toUnit(doc: any) {
 export const nowIso = () => `${new Date().toISOString().slice(0, 19)}+00:00`
 
 /* Flask 대시보드와 공유하는 필드다. store.py set_review_status와 같은 규칙으로 쓴다. */
+/* 사전(taxonomy) 문서: 메타 세 필드를 걷어내고 유효성(categories 존재)을 가른다.
+   Mongo I/O를 모르는 순수 함수라 taxonomy.service.ts가 이 판정만 위임한다. */
+export const TAXONOMY_META_KEYS = ['_id', '_rev', 'updated_at'] as const
+
+export type SanitizedTaxonomy = {
+  taxonomy: Record<string, unknown>
+  rev: number | null
+  updatedAt: string | null
+}
+
+export function sanitizeTaxonomyDoc(doc: unknown): SanitizedTaxonomy | null {
+  if (!doc || typeof doc !== 'object') return null
+  const record = doc as Record<string, unknown>
+  if (!Array.isArray(record.categories) || record.categories.length === 0) return null
+  const taxonomy: Record<string, unknown> = { ...record }
+  for (const key of TAXONOMY_META_KEYS) delete taxonomy[key]
+  const rev = typeof record._rev === 'number' ? record._rev : null
+  const updatedAt = typeof record.updated_at === 'string' ? record.updated_at : null
+  return { taxonomy, rev, updatedAt }
+}
+
 export function decisionToReview(decision: unknown) {
   if (decision === 'approved') return { review_status: 'reviewed', reviewed_at: nowIso() }
   if (decision === 'rejected') return { review_status: 'needs_fix', reviewed_at: null }

@@ -22,8 +22,8 @@ export class MongoService implements OnModuleInit, OnModuleDestroy {
     await this.client?.close()
   }
 
-  collection(): Collection | null {
+  collection(name?: string): Collection | null {
     if (!this.client) return null
-    return this.client.db(process.env.MONGO_DB || 'eevee').collection(process.env.MONGO_COLL || 'products')
+    return this.client.db(process.env.MONGO_DB || 'eevee').collection(name || process.env.MONGO_COLL || 'products')
   }
 }

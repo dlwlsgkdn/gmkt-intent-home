@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import mapping from '../dist/mapping.js'
 
-const { toUnit, toDocPatch } = mapping
+const { toUnit, toDocPatch, sanitizeTaxonomyDoc } = mapping
 
 /* 실제 문서에서 추린 모양 — 필드 이름·중첩 구조를 바꾸지 말 것 */
 const DOC = {
@@ -190,6 +190,36 @@ test('toDocPatch — 문서가 이미 미검토면 태그를 바꿔도 review_st
   /* 태그가 바뀌었지만 doc.review_status가 null이므로 리셋 조건이 없다 */
   assert.equal('review_status' in set, false)
   assert.equal('reviewed_at' in set, false)
+})
+
+const TAXONOMY_DOC = {
+  _id: 'current',
+  _rev: 2,
+  updated_at: '2026-09-07T00:11:54.540175+00:00',
+  categories: ['클렌징', '스킨케어'],
+  sub_types: ['클렌징폼', '토너'],
+}
+
+test('sanitizeTaxonomyDoc — 메타 세 필드를 빼고 택소노미 키는 그대로 둔다', () => {
+  const result = sanitizeTaxonomyDoc(TAXONOMY_DOC)
+  assert.equal('_id' in result.taxonomy, false)
+  assert.equal('_rev' in result.taxonomy, false)
+  assert.equal('updated_at' in result.taxonomy, false)
+  assert.deepEqual(result.taxonomy.categories, ['클렌징', '스킨케어'])
+  assert.deepEqual(result.taxonomy.sub_types, ['클렌징폼', '토너'])
+  assert.equal(result.rev, 2)
+  assert.equal(result.updatedAt, '2026-09-07T00:11:54.540175+00:00')
+})
+
+test('sanitizeTaxonomyDoc — categories가 비어 있거나 없으면 무효로 판정한다', () => {
+  assert.equal(sanitizeTaxonomyDoc({ ...TAXONOMY_DOC, categories: [] }), null)
+  const { categories, ...withoutCategories } = TAXONOMY_DOC
+  assert.equal(sanitizeTaxonomyDoc(withoutCategories), null)
+})
+
+test('sanitizeTaxonomyDoc — null·undefined 문서는 무효로 판정한다', () => {
+  assert.equal(sanitizeTaxonomyDoc(null), null)
+  assert.equal(sanitizeTaxonomyDoc(undefined), null)
 })
 
 test('decisionToReview — 화면 결정을 Flask와 공유하는 review_status로 되돌린다', () => {

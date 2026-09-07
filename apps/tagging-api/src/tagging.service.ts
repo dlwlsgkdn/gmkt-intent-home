@@ -17,7 +17,12 @@ export class TaggingService {
      느려지면 그때 목록/상세를 나눈다. */
   async bootstrap() {
     const docs = await this.collection().find({ status: 'analyzed' }).toArray()
-    return { taxonomy: this.taxonomy.read(), units: docs.map(toUnit) }
+    const { taxonomy, source, rev, updatedAt } = await this.taxonomy.read()
+    return {
+      taxonomy,
+      units: docs.map(toUnit),
+      taxonomyMeta: { source, rev, updatedAt },
+    }
   }
 
   /* 대시보드 타일용 — 719건 본문을 받지 않으려고 따로 둔다. */
