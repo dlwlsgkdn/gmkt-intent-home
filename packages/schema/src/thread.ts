@@ -106,5 +106,7 @@ export const ThreadListPage = z.object({
   items: z.array(Thread),
   /** 다음 페이지 커서 (마지막 항목의 updatedAt ISO) — 더 없으면 null */
   nextCursor: z.string().nullable(),
+  /** 이 사용자(기기)의 전체 쓰레드 수(archived 제외) — 히스토리 패널이 스크롤 전에 총 개수를 알기 위해 첫 페이지와 함께 돌려준다 (2026-09) */
+  total: z.number().int().nonnegative().optional(),
 })
 export type ThreadListPage = z.infer<typeof ThreadListPage>

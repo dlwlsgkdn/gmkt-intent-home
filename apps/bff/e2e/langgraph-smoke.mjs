@@ -103,6 +103,7 @@ try {
   const svResult = last(sv, 'result')?.data?.page
   ok(!!svResult && svResult.questions?.length === 3, `result 설문 3문항 (${svResult?.questions?.length})`)
   ok(svResult?.questions?.[0]?.id === 'q1', '질문 id 부여(q1)')
+  ok(svResult?.questions?.[0]?.options?.[0] === '지성|오후만 되면 T존이 번들거려요', '선택지 제목|부제 와이어 직렬화')
   ok(count(sv, 'question') >= 3, `question 부분 스트리밍 ${count(sv, 'question')}회`)
   ok(count(sv, 'head') >= 1, `head(intro) 스트리밍 ${count(sv, 'head')}회`)
   ok(!last(sv, 'error'), '오류 없음')
@@ -125,10 +126,21 @@ try {
   ok(planPage?.sections?.length === 3, `섹션 3개 병합 (${planPage?.sections?.length})`)
   const prodSection = planPage?.sections?.find((s) => s.kind === 'products')
   ok(
-    prodSection?.products?.length === 1,
-    `확장 게이트 통과 1개 — 블록리스트·의학 단정 드롭 후 카탈로그만 (${prodSection?.products?.length})`,
+    prodSection?.products?.length === 2,
+    `확장 게이트 통과 2개 — 블록리스트·의학 단정 드롭 뒤 검색 링크 상품 + 카탈로그 (${prodSection?.products?.length})`,
   )
-  ok(prodSection?.products?.[0]?.id === 'p-012', '남은 상품은 카탈로그 p-012')
+  {
+    const match = prodSection?.products?.[0]?.match
+    ok(
+      Number.isInteger(match?.score) && match.score >= 0 && match.score <= 100 && match.factors?.length === 5,
+      `매칭율 계산·기록 — ${match?.score}% (항목 ${match?.factors?.length})`,
+    )
+    ok(match?.factors?.some((f) => f.key === 'skin' && f.note), '매칭율 항목 근거(LLM notes) 전달')
+    ok(planPage?.sections?.find((s) => s.kind === 'guide')?.subtitle === '유분만 덜어내고 결은 남기는 준비', '단계 안내 서브타이틀 전달')
+  }
+  ok(prodSection?.products?.[0]?.urlKind === 'search' && prodSection?.products?.[0]?.mall === '지마켓', '검색 링크 상품(urlKind=search)이 게이트를 통과')
+  ok(prodSection?.products?.[0]?.match?.factors?.find((f) => f.key === 'evidence')?.score === 25, '검색 링크 상품의 근거 신뢰 25점')
+  ok(prodSection?.products?.[1]?.id === 'p-012', '카탈로그 p-012 가 뒤에 붙는다')
   const sk = last(plan, 'skeleton')?.data
   ok(!!sk && sk.pending?.length === 1 && sk.pending[0] === 1, `skeleton 조기 확정 + pending [1] (${JSON.stringify(sk?.pending)})`)
   const secFinal = plan.filter((e) => e.event === 'section' && e.data.final)
@@ -296,6 +308,7 @@ try {
     ok(!!editCall, '이미지 편집 모델 호출됨')
     ok((editCall?.user || '').includes('same person'), '편집 지시문에 동일성 보존 지시 포함')
     ok((editCall?.user || '').includes('coral'), '편집 지시문에 룩 색조 반영')
+    ok((editCall?.user || '').includes('opaque coral lipstick'), '편집 지시문 기본 강도 strong (진한 메이크업)')
   }
   {
     const dumpM = await fetch(MOCK + `/internal/dump/${startM.threadId}`).then((r) => r.json())
@@ -491,7 +504,7 @@ try {
   const legacyM = engineMetrics?.engines?.find((e) => e.engine === 'legacy')
   ok(lg?.count >= 1, `전환 계기판 — langgraph 표본 (${lg?.count})`)
   ok(legacyM?.count >= 1, `전환 계기판 — legacy 표본 (${legacyM?.count})`)
-  ok(lg?.promptVersions?.includes('v16'), 'promptVersion 각인 (v16)')
+  ok(lg?.promptVersions?.includes('v21'), 'promptVersion 각인 (v21)')
 } finally {
   shutdown()
 }

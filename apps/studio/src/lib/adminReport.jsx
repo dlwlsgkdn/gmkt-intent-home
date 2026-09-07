@@ -67,7 +67,8 @@ function stepSummary(step, surveyPage) {
     const sections = Array.isArray(page.sections) ? page.sections : []
     for (const s of sections) {
       if (s.kind === 'products') {
-        lines.push(`- [products] ${s.title} — 상품 ${(s.products || []).length}개`)
+        const matches = (s.products || []).filter((x) => x.match).map((x) => `${x.match.score}%`)
+        lines.push(`- [products] ${s.title} — 상품 ${(s.products || []).length}개${matches.length ? ` (매칭율 ${matches.join(' · ')})` : ''}`)
       } else if (s.kind === 'contents') {
         lines.push(`- [contents] ${s.title} — 콘텐츠 ${(s.items || []).length}개`)
       } else if (s.kind === 'steps') {

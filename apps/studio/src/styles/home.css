@@ -317,12 +317,12 @@
 .sb-drawer__empty span { font-size: var(--sb-t-small); }
 
 /* ── 쇼핑 쓰레드 히스토리 패널 — 여는 버튼 위치에 따라 좌/우/중앙에서 등장.
-   내부 룩은 원본 clean-home의 history-sidebar(#history-panel) CSS를 그대로 재사용하고,
-   이 래퍼는 위치·등장 애니메이션·그림자만 담당한다 ── */
+   이 래퍼는 위치·등장 애니메이션·그림자만 담당하고, 안쪽 룩은 아래 .sb-thread* (Figma Shopping Threads) 가 맡는다 ── */
 .sb-thread-panel {
   position: fixed;
   z-index: 250;
   overflow: hidden;
+  background: var(--dk-sunken);
 }
 .sb-thread-panel--right {
   top: 0;
@@ -462,38 +462,472 @@
 .sb-json-option--ai strong { color: var(--sb-ai); }
 .sb-json-option--ai:hover { border-color: var(--sb-ai); background: var(--sb-ai-soft); }
 
-/* 쓰레드 패널 카드의 라이브 배지 — 시나리오 쓰레드의 #칩 라벨 자리를 대신한다 */
-.sb-thread-live-badge {
-  font-size: var(--sb-t-micro);
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  color: var(--sb-ai);
+/* ── 쇼핑 쓰레드 패널 안쪽 — Figma [PP1K] Shopping Threads(내 프로필 · 쇼핑쓰레드 탭) 룩 (2026-09):
+   머리(제목 Gumi 18 + 개수 배지 · + / ✕) · bg/subtle 바닥 위 카드 리스트(패딩 12 · 간격 12) · 카드 흰 면 radius/lg 16
+   패딩 16 간격 12 (제목 + ⋯ · 태그 칩 21px · 담은 상품 48px 동그라미 겹침 + "+n" · CTA). CTA 는 설문 중이면
+   Primary 「이어서 답하기」, 계획을 봤으면 Secondary 「계획 보기」(1.5px border/default · 40px · radius/md 8) ── */
+.sb-thread { display: flex; flex-direction: column; height: 100%; }
+.sb-thread__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex: 0 0 auto;
+  min-height: 56px;
+  padding: 0 8px 0 16px;
+  border-bottom: 1px solid var(--dk-line-soft);
+  background: var(--dk-surface);
 }
-
-/* 평가를 남긴 쓰레드 배지 + 패널 상단 "평가한 쓰레드" 모아보기 필터 */
-.sb-thread-fb-badge {
-  flex-shrink: 0;
-  padding: 2px 8px;
+.sb-thread__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--dk-ink);
+}
+.sb-thread__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
   border-radius: var(--sb-r-pill);
-  background: var(--sb-info-soft);
-  color: var(--sb-info);
+  background: var(--dk-brand);
+  color: #fff;
   font-size: var(--sb-t-micro);
   font-weight: 500;
-  white-space: nowrap;
 }
+.sb-thread__actions { display: flex; align-items: center; gap: 2px; }
+.sb-thread__icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--dk-ink-2);
+  cursor: pointer;
+  transition: background var(--sb-dur) var(--sb-ease);
+}
+.sb-thread__icon-btn:hover { background: var(--dk-brand-soft); color: var(--dk-ink); }
+.sb-thread__icon-btn svg { width: 20px; height: 20px; }
+.sb-thread__body { flex: 1; min-height: 0; overflow-y: auto; padding: 12px; }
+.sb-thread__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 4px 10px;
+  font-size: var(--sb-t-caption);
+  color: var(--dk-muted);
+}
+.sb-thread__meta-actions { display: flex; align-items: center; gap: 8px; }
+.sb-thread__clear { border: 0; background: none; font-size: var(--sb-t-caption); color: var(--dk-muted); cursor: pointer; }
+.sb-thread__clear:hover { color: var(--dk-ink-2); text-decoration: underline; }
+/* 평가한 쓰레드 모아보기 필터 — 평가 계층 색(info) 유지 */
 .sb-thread-fb-filter {
   padding: 3px 9px;
-  border: 1px solid var(--sb-line);
+  border: 1px solid var(--dk-line);
   border-radius: var(--sb-r-pill);
-  background: var(--sb-surface);
-  color: var(--sb-muted);
+  background: var(--dk-surface);
+  color: var(--dk-muted);
   font-size: var(--sb-t-micro);
   font-weight: 400;
+  cursor: pointer;
   transition: all var(--sb-dur) var(--sb-ease);
 }
 .sb-thread-fb-filter:hover { border-color: var(--sb-info); color: var(--sb-info); }
-.sb-thread-fb-filter.is-on {
-  border-color: var(--sb-info);
-  background: var(--sb-info-soft);
-  color: var(--sb-info);
+.sb-thread-fb-filter.is-on { border-color: var(--sb-info); background: var(--sb-info-soft); color: var(--sb-info); }
+.sb-thread__list { display: flex; flex-direction: column; gap: 12px; }
+.sb-thread-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--dk-surface);
+  box-shadow: 0 1px 2px rgba(31, 41, 51, 0.04);
 }
+.sb-thread-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.sb-thread-card__title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.3;
+  color: var(--dk-ink);
+  word-break: keep-all;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.sb-thread-card__more {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: -2px -4px 0 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--dk-muted);
+  cursor: pointer;
+  transition: background var(--sb-dur) var(--sb-ease), color var(--sb-dur) var(--sb-ease);
+}
+.sb-thread-card__more:hover,
+.sb-thread-card.is-expanded .sb-thread-card__more { background: var(--dk-brand-soft); color: var(--dk-brand-deep); }
+.sb-thread-card__more svg { width: 18px; height: 18px; }
+.sb-thread-card__tags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.sb-thread-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 21px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: var(--dk-brand-soft);
+  color: var(--dk-brand-deep);
+  font-size: var(--sb-t-caption);
+  font-weight: 400;
+  white-space: nowrap;
+}
+.sb-thread-tag--ai { color: var(--sb-ai); }
+.sb-thread-tag--fb { background: var(--sb-info-soft); color: var(--sb-info); }
+.sb-thread-card__time { margin-left: auto; font-size: var(--sb-t-micro); color: var(--dk-subtle); white-space: nowrap; }
+.sb-thread-card__cart { display: flex; align-items: center; gap: 8px; min-height: 48px; }
+.sb-thread-card__thumbs { display: flex; }
+.sb-thread-card__thumb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border: 2px solid var(--dk-surface);
+  border-radius: 50%;
+  background: var(--dk-brand-soft);
+  color: var(--dk-brand-deep);
+  font-size: 15px;
+  font-weight: 400;
+  box-shadow: 0 1px 3px rgba(31, 41, 51, 0.08);
+}
+.sb-thread-card__thumb + .sb-thread-card__thumb { margin-left: -8px; }
+.sb-thread-card__more-count { font-size: var(--sb-t-small); color: var(--dk-muted); }
+.sb-thread-card__cart-label { margin-left: auto; font-size: var(--sb-t-caption); color: var(--dk-muted); }
+.sb-thread-card__empty { font-size: var(--sb-t-caption); color: var(--dk-subtle); }
+.sb-thread-card__detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--dk-line-soft);
+}
+.sb-thread-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; background: var(--dk-sunken); }
+.sb-thread-item__thumb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--dk-surface);
+  color: var(--dk-muted);
+}
+.sb-thread-item__thumb svg { width: 16px; height: 16px; }
+.sb-thread-item__name { flex: 1; min-width: 0; font-size: var(--sb-t-small); color: var(--dk-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-thread-card__manage { display: flex; justify-content: flex-end; gap: 12px; }
+.sb-thread-card__link { border: 0; background: none; font-size: var(--sb-t-caption); color: var(--dk-muted); cursor: pointer; }
+.sb-thread-card__link:hover { color: var(--dk-ink-2); text-decoration: underline; }
+.sb-thread-card__link--danger:hover { color: var(--sb-danger); }
+.sb-thread-card__cta {
+  width: 100%;
+  min-height: 40px;
+  padding: 10px 16px;
+  border: 1.5px solid var(--dk-line);
+  border-radius: 8px;
+  background: var(--dk-surface);
+  font-size: var(--sb-t-body);
+  font-weight: 500;
+  letter-spacing: -0.3px;
+  color: var(--dk-ink-2);
+  cursor: pointer;
+  transition: background var(--sb-dur) var(--sb-ease), border-color var(--sb-dur) var(--sb-ease), color var(--sb-dur) var(--sb-ease);
+}
+.sb-thread-card__cta:hover { border-color: var(--dk-brand-2); color: var(--dk-brand-deep); }
+.sb-thread-card__cta.is-primary { border-color: var(--dk-brand-2); background: var(--dk-brand-2); color: #fff; }
+.sb-thread-card__cta.is-primary:hover { border-color: var(--dk-brand-deep); background: var(--dk-brand-deep); color: #fff; }
+/* 빈 상태 — Figma "아직 쇼핑 쓰레드가 없어요" */
+.sb-thread-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 64px 20px; text-align: center; }
+.sb-thread-empty__title { margin: 0; font-size: 16px; font-weight: 400; color: var(--dk-ink); }
+.sb-thread-empty__hint { margin: 0; font-size: var(--sb-t-caption); line-height: 17px; color: var(--dk-muted); word-break: keep-all; }
+.sb-thread-empty__btn {
+  height: 40px;
+  margin-top: 12px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--dk-brand-2);
+  color: #fff;
+  font-size: var(--sb-t-body);
+  font-weight: 500;
+  cursor: pointer;
+}
+.sb-thread-empty__btn:hover { background: var(--dk-brand-deep); }
+/* 담은 상품 요약은 버튼 — 누르면 상세 시트. 썸네일은 상품 카드 재료: 이미지는 잘라 채우고(cover), 목업은 이모지+배경 */
+.sb-thread-card__cart--btn {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  border-radius: 8px;
+  transition: background var(--sb-dur) var(--sb-ease);
+}
+.sb-thread-card__cart--btn:hover { background: var(--dk-sunken); }
+.sb-thread-card__thumb { overflow: hidden; }
+.sb-thread-card__thumb.is-image { background: var(--dk-thumb); }
+.sb-thread-card__thumb.is-image img,
+.sb-cart-item__thumb.is-image img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.sb-thread-card__thumb.is-emoji { font-size: 20px; background: var(--dk-thumb); }
+
+/* ── 담은 상품 상세 시트 (body 포털 — Figma "내 프로필 · 쇼핑쓰레드 바텀시트" ThreadMoreSheet, 2026-09-06 대조):
+   요약 행(패딩 0/20/12 · 13/18 #717182 | 합계 Gumi 14/20) 밑줄 1px border/subtle 전폭 · 파트 목록 패딩 12/0/24 gap 10 ·
+   파트 카드 bg/subtle radius 8 패딩 밑 4 (헤더 12/12/4 gap 4: 제목 Gumi 12/17 text/strong + 18px 코랄 배지) ·
+   상품 행 패딩 8/12 gap 12: 썸네일 60 radius 8(자리 그라데이션) · [브랜드] 14/20 500 + 상품명 14/20 · 메타 12/17 #6B6B6B ·
+   몰 16px 원 아이콘 + 11/15 500 · ⊖ 24px #EDEDED 안 10px 선 #ADADAD · 빈 파트 행(패딩 12 gap 12: 64px 점선 자리 +
+   제목·배지 + 14/20 #ADADAD 안내 + 24px 쉐브론) ── */
+.sb-cart-sheet__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 -16px;
+  padding: 0 20px 12px;
+  border-bottom: 1px solid var(--dk-line-soft);
+  font-size: var(--sb-t-small);
+  font-weight: 500;
+  line-height: 18px;
+  letter-spacing: -0.2px;
+  color: var(--dk-label);
+}
+.sb-cart-sheet__total { font-size: var(--sb-t-body); font-weight: 400; line-height: 20px; letter-spacing: 0; color: var(--dk-ink); }
+.sb-cart-sheet__parts { display: flex; flex-direction: column; gap: 10px; padding: 12px 0 24px; }
+.sb-cart-part { padding: 0 0 4px; border-radius: 8px; background: var(--dk-sunken); }
+.sb-cart-part__head { display: flex; align-items: center; gap: 4px; padding: 12px 12px 4px; }
+.sb-cart-part__title { margin: 0; font-size: var(--sb-t-caption); font-weight: 400; line-height: 17px; color: var(--dk-ink-2); }
+.sb-cart-part__badge {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--dk-coral-soft);
+  color: var(--dk-coral);
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 13px;
+}
+.sb-cart-item { display: flex; align-items: center; gap: 12px; padding: 8px 12px; }
+.sb-cart-item__thumb {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--dk-thumb-soft), var(--dk-thumb-soft-2));
+  color: var(--dk-brand-deep);
+  font-size: 20px;
+  overflow: hidden;
+}
+.sb-cart-item__thumb.is-emoji { font-size: 26px; }
+.sb-cart-item__thumb.is-image { background: var(--dk-thumb); }
+.sb-cart-item__info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sb-cart-item__name {
+  margin: 0;
+  font-size: var(--sb-t-body);
+  font-weight: 400;
+  line-height: 20px;
+  letter-spacing: -0.3px;
+  color: var(--dk-ink);
+  word-break: keep-all;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.sb-cart-item__brand { margin-right: 4px; font-weight: 500; }
+.sb-cart-item__meta { margin: 0; font-size: var(--sb-t-caption); line-height: 17px; letter-spacing: -0.2px; color: var(--dk-muted-2); }
+.sb-cart-item__mall {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: var(--sb-t-micro);
+  font-weight: 500;
+  line-height: 15px;
+  color: var(--dk-muted-2);
+}
+/* 몰 아이콘 — Figma Domain: 16px 흰 원 + 0.5px border/default, 안에 몰 색 점 (로고 대신) */
+.sb-cart-item__mall::before {
+  content: '';
+  width: 16px;
+  height: 16px;
+  border: 0.5px solid var(--dk-line);
+  border-radius: 50%;
+  box-sizing: border-box;
+  background: radial-gradient(circle, var(--dk-gmarket) 0 3.5px, var(--dk-surface) 4px);
+}
+.sb-cart-item__mall--oliveyoung::before { background: radial-gradient(circle, var(--dk-oliveyoung) 0 3.5px, var(--dk-surface) 4px); }
+.sb-cart-item__mall--plain::before { background: radial-gradient(circle, var(--dk-subtle) 0 3.5px, var(--dk-surface) 4px); }
+.sb-cart-item__remove {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--dk-line-soft);
+  color: var(--dk-subtle);
+  cursor: pointer;
+  transition: background var(--sb-dur) var(--sb-ease);
+}
+.sb-cart-item__remove svg { width: 10px; height: 10px; stroke-width: 2.4; }
+.sb-cart-item__remove:hover { background: var(--dk-line); color: var(--dk-ink-2); }
+/* 빈 파트 행 — Figma EmptyPartRow */
+.sb-cart-part__empty {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.sb-cart-part__empty:hover { background: var(--dk-brand-soft); }
+.sb-cart-part__empty-thumb {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border: 1px dashed var(--dk-line-soft);
+  border-radius: 8px;
+  background: var(--dk-surface);
+  color: var(--dk-subtle);
+}
+.sb-cart-part__empty-thumb svg { width: 16px; height: 16px; }
+.sb-cart-part__empty-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.sb-cart-part__head--empty { padding: 0; }
+.sb-cart-part__placeholder { font-size: var(--sb-t-body); font-weight: 400; line-height: 20px; letter-spacing: -0.3px; color: var(--dk-subtle); }
+.sb-cart-part__chevron { flex: 0 0 auto; display: inline-flex; width: 24px; height: 24px; color: var(--dk-subtle); }
+.sb-cart-part__chevron svg { width: 24px; height: 24px; }
+.sb-cart-sheet__cta {
+  width: 100%;
+  height: 40px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--dk-brand-2);
+  color: #fff;
+  font-size: var(--sb-t-body);
+  font-weight: 500;
+  letter-spacing: -0.3px;
+  cursor: pointer;
+  transition: background var(--sb-dur) var(--sb-ease);
+}
+.sb-cart-sheet__cta:hover { background: var(--dk-brand-deep); }
+/* ⋯ 관리 시트의 위험 행 · 삭제 확인 모달 버튼 — Figma 삭제 플로우(삭제할게요 Primary / 아니오 Secondary) */
+.sb-sheet__menu button.is-danger,
+.sb-sheet__menu button.is-danger svg { color: var(--sb-danger); }
+.sb-sheet__subtitle.is-center { white-space: pre-line; }
+.sb-confirm__actions { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.sb-confirm__btn {
+  width: 100%;
+  height: 44px;
+  border: 1.5px solid var(--dk-line);
+  border-radius: 8px;
+  background: var(--dk-surface);
+  color: var(--dk-ink-2);
+  font-size: 15px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: background var(--sb-dur) var(--sb-ease), border-color var(--sb-dur) var(--sb-ease);
+}
+.sb-confirm__btn:hover { border-color: var(--dk-brand-2); color: var(--dk-brand-deep); }
+.sb-confirm__btn.is-primary { border-color: var(--dk-brand-2); background: var(--dk-brand-2); color: #fff; }
+.sb-confirm__btn.is-primary:hover { border-color: var(--dk-brand-deep); background: var(--dk-brand-deep); color: #fff; }
+
+/* ── 홈 칩 — Figma "[PP1K] EEVEE 공유용" Search 랜딩 ChipSection (2026-09) ──
+   44px 알약 · 12/16 패딩 · 12/18 라벨(Figma 14 에서 두 단계 줄임 — 2026-09 요청) · 테두리 없음. 키워드 칩은 blue 톤(badge/blue 위 연파랑 면),
+   시나리오 칩은 시나리오별 chip color(인라인 color/background)가 정하고 여기서는 도형·타이포만.
+   ✦ 아이콘은 Figma 자연어 칩에 있지만 DDAK에서는 라이브 생성 전용 기호라 달지 않는다 */
+.clean-tag-row .suggestion-tag {
+  min-height: 44px;
+  padding: 12px 16px;
+  gap: 4px;
+  border-color: transparent;
+  background: var(--dk-info-soft);
+  color: var(--dk-info);
+  font-size: var(--sb-t-caption);
+  font-weight: 400;
+  line-height: 18px;
+}
+.clean-tag-row .suggestion-tag:hover {
+  border-color: transparent;
+  background: #d6e3ff;
+  color: var(--dk-info);
+}
+.clean-tag-row .suggestion-tag.sb-chip-scenario {
+  border-color: transparent;
+  font-weight: 400;
+}
+.clean-tag-row .suggestion-tag.sb-chip-scenario:hover { border-color: transparent; filter: brightness(0.96); }
+.clean-tag-row .suggestion-tag.sb-chip-scenario--sample { border-color: var(--dk-brand) !important; }
+
+/* ── 홈 첫 화면 히어로 — Figma "[PP1K] EEVEE 공유용" Search 1-1 (2026-09) ──
+   인사말은 상단에 그대로 두고, 검색창·칩 묶음만 뷰포트 높이의 45% 근처(정중앙보다 조금 위, Figma 검색창
+   중심 45.6%)로 내려 보낸다: 히어로 상자를 뷰포트 높이로 잡고 검색창 아이템에 margin-top:auto, 아래 패딩을
+   55dvh 기준으로 계산해 검색창 중심이 화면 크기와 무관하게 같은 비율에 오게 한다(칩 44px는 그 아래).
+   스토리 카드 등 나머지 스택은 그 뒤로 흘린다 */
+.sb-home-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: calc(100dvh - 190px);
+  padding: 0 0 max(24px, calc(55dvh - 188px));
+}
+.sb-home-hero .sb-player__item:has(.clean-search) { margin-top: auto; }
+.sb-home-hero .sb-player__item .clean-tag-row { justify-content: center; text-align: center; }
+
+/* ── 지난 쓰레드 더 보기 (무한스크롤, 2026-09) — 기록 상한(30) 뒤의 라이브 쓰레드를 서버 목록에서 30개씩 이어 받는다.
+   서버 기록 카드는 점선 테두리로 기기 기록과 구분한다 ── */
+.sb-thread__older-head { margin: 8px 0 -4px; font-size: var(--sb-t-micro); font-weight: 400; color: var(--dk-muted); }
+.sb-thread-card--server { border: 1px dashed var(--dk-line); }
+.sb-thread__more { display: flex; justify-content: center; align-items: center; min-height: 32px; padding: 4px 0 12px; }
+.sb-thread__more-text { font-size: var(--sb-t-caption); font-weight: 300; color: var(--dk-muted); }
+.sb-thread__more-btn {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1.5px solid var(--dk-line);
+  border-radius: 8px;
+  background: var(--dk-surface);
+  color: var(--dk-ink);
+  font-size: var(--sb-t-small);
+  font-weight: 400;
+  cursor: pointer;
+}
+.sb-thread__more-btn:hover { border-color: var(--dk-brand); color: var(--dk-brand); }

@@ -15,6 +15,29 @@ import { SurveyGen, SurveyQuestionGen, SurveyQuestionPartialGen } from './schema
 /** 사진 질문의 와이어 id — 답변 키이자 FE 아이템 id (선택지 질문의 q1..과 겹치지 않는다) */
 export const PHOTO_QUESTION_ID = 'p1'
 
+/*
+ * 선택지 와이어 문법 — FE 옵션 파서(store splitOptions "메인|서브|상세")와 같은 "제목|부제" 한 줄.
+ * 생성물은 {label, desc} 객체지만 와이어 options 는 문자열 배열이고 답변(choices)은 제목만 실린다.
+ * 구분자 '|'가 제목·부제 안에 들어오면 공백으로 바꿔 자리를 지킨다. 옛 문자열 선택지도 그대로 통과.
+ */
+export const OPTION_SEP = '|'
+export function optionWire(option: unknown): string {
+  if (typeof option === 'string') return option.trim()
+  const o = (option ?? {}) as { label?: unknown; desc?: unknown }
+  const label = String(o.label ?? '').replace(/\|/g, ' ').trim()
+  const desc = String(o.desc ?? '').replace(/\|/g, ' ').trim()
+  if (!label) return ''
+  return desc ? `${label}${OPTION_SEP}${desc}` : label
+}
+/** 와이어 선택지 → 제목·부제 (프롬프트 가변부·심사 요청·답변 대조는 제목만 본다) */
+export function optionParts(option: string): { label: string; desc: string } {
+  const [label = '', ...rest] = String(option ?? '').split(OPTION_SEP)
+  return { label: label.trim(), desc: rest.join(OPTION_SEP).trim() }
+}
+export function optionLabel(option: string): string {
+  return optionParts(option).label
+}
+
 /** 생성물의 photoQuestion → 와이어 질문. 빈 문자열이면 null (사진 불필요) */
 export function photoQuestionWire(text: string | undefined): SurveyQuestionWire | null {
   const question = (text ?? '').trim()
@@ -24,7 +47,13 @@ export function photoQuestionWire(text: string | undefined): SurveyQuestionWire 
 
 /** 선택지 질문 → 와이어. index는 사진 질문을 뺀 배열 인덱스다 (id는 q1부터) */
 export function choiceQuestionWire(gen: SurveyQuestionGen, index: number): SurveyQuestionWire {
-  return { id: `q${index + 1}`, kind: 'choice', question: gen.question, options: gen.options, multi: gen.multi }
+  return {
+    id: `q${index + 1}`,
+    kind: 'choice',
+    question: gen.question,
+    options: gen.options.map(optionWire).filter(Boolean),
+    multi: gen.multi,
+  }
 }
 
 /** 설문 생성물 → 와이어 페이지 (사진 질문이 있으면 맨 앞) */
@@ -76,7 +105,7 @@ export function surveyStreamHandlers(sink: SurveyStreamSink): LlmStreamHandlers 
           id: `q${index + 1}`,
           kind: 'choice',
           question: parsed.data.question,
-          options: parsed.data.options ?? [],
+          options: (parsed.data.options ?? []).map(optionWire).filter(Boolean),
           multi: parsed.data.multi ?? false,
         },
         index + photoOffset,

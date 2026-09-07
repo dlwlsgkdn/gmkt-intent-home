@@ -1,8 +1,9 @@
 import type { CatalogProduct, PlanContentItem, PlanSectionWire } from '@ddak/schema'
-import type { ContentsSectionGen, ProductsSectionGen } from '../schemas'
+import type { ContentsSectionGen, ProductRatingGen, ProductsSectionGen } from '../schemas'
 import type { ConstraintLedger } from '../ledger'
 import { CATALOG_BY_ID } from '../catalog'
 import { findMedicalClaim } from './claims'
+import { scoreProductMatch } from './match'
 
 /*
  * 검증 게이트(전략 문서 6단계)의 그라운딩 가드 — LLM이 만든 상품·콘텐츠 섹션을
@@ -100,12 +101,13 @@ export function groundProductsSection(
       message: `카탈로그 밖이거나 PDP url 없는 상품 id ${s.productIds.length - catalogProducts.length}건 드롭`,
     })
   }
-  // 외부몰 우선 정책: 웹 상품(올리브영 등)을 앞에 싣고 카탈로그(지마켓)는 뒤에 보조로 붙인다
+  // 외부몰 우선 정책: 웹 상품(올리브영 등)을 앞에 싣고 카탈로그(지마켓)는 뒤에 보조로 붙인다.
+  // 통과한 상품에는 매칭율(항목 점수·가중 합산)을 붙여 페이지에 그대로 남긴다 — LLM 평가(rating)가 없으면 폴백 대조
   const products: CatalogProduct[] = []
-  const admit = (product: CatalogProduct) => {
+  const admit = (product: CatalogProduct, rating?: ProductRatingGen) => {
     const guardDrop = productGuardDrop(product, guard)
     if (guardDrop) drops.push(guardDrop)
-    else products.push(product)
+    else products.push({ ...product, match: scoreProductMatch(product, rating, guard?.ledger) })
   }
   s.webProducts.forEach((w, webIndex) => {
     const url = parseHttpUrl(w.url)
@@ -113,27 +115,34 @@ export function groundProductsSection(
       drops.push({ code: 'invalid-url', message: `웹 상품 URL 검증 실패로 드롭: ${w.name} (${w.url})` })
       return
     }
-    if (isSearchLikeUrl(url)) {
+    // 검색/목록 페이지 주소는 상품이 그렇다고 표시한 경우(urlKind=search — PDP 를 못 찾은 대체 링크)만 통과시킨다.
+    // PDP 라고 하면서 검색 페이지를 준 것은 예전처럼 드롭 — "PDP 만" 정책은 표시 없는 링크에 그대로 남는다 (2026-09)
+    const searchLink = w.urlKind === 'search'
+    if (!searchLink && isSearchLikeUrl(url)) {
       drops.push({
         code: 'search-like-url',
-        message: `웹 상품 URL이 검색/목록 페이지로 보여 드롭 (PDP만 허용): ${w.name} (${w.url})`,
+        message: `웹 상품 URL이 검색/목록 페이지로 보여 드롭 (PDP 또는 urlKind=search 만 허용): ${w.name} (${w.url})`,
       })
       return
     }
     // 썸네일도 http(s) 검증 통과분만 — 실패해도 상품은 싣는다 (FE가 이모지 목업 폴백)
     const imageUrl = parseHttpUrl(w.imageUrl) ? w.imageUrl : undefined
-    admit({
-      id: `web-${sectionIndex}-${webIndex}`,
-      name: w.name,
-      brand: w.brand,
-      price: w.price,
-      tags: w.tags,
-      url: w.url,
-      mall: w.mall.trim() || '외부몰',
-      ...(imageUrl ? { imageUrl } : {}),
-    })
+    admit(
+      {
+        id: `web-${sectionIndex}-${webIndex}`,
+        name: w.name,
+        brand: w.brand,
+        price: w.price,
+        tags: w.tags,
+        url: w.url,
+        mall: w.mall.trim() || '외부몰',
+        ...(searchLink ? { urlKind: 'search' as const } : {}),
+        ...(imageUrl ? { imageUrl } : {}),
+      },
+      w.match,
+    )
   })
-  catalogProducts.forEach(admit)
+  catalogProducts.forEach((product) => admit(product, s.catalogRatings?.find((r) => r.id === product.id)?.match))
   return {
     section: products.length ? { kind: 'products', title: s.title, reason: s.reason, products } : null,
     drops,

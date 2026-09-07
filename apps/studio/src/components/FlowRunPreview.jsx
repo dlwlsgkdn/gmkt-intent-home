@@ -242,19 +242,22 @@ export default function FlowRunPreview({
           </p>
           <div className="sb-pipe-play__opts">
             {(q.options || []).map((option) => {
-              const on = (answers[q.id] || []).includes(option)
+              // 와이어 선택지는 "제목|부제" — 답(choices)은 제목만 실리므로 칩도 제목으로 대조한다
+              const [label = '', sub = ''] = String(option).split('|').map((part) => part.trim())
+              const on = (answers[q.id] || []).includes(label)
               return (
                 <button
                   key={option}
                   type="button"
                   className={'sb-pipe-play__opt' + (on ? ' is-on' : '')}
                   disabled={!interactive}
+                  title={sub || undefined}
                   onClick={(event) => {
                     event.stopPropagation()
-                    toggleOption(q, option)
+                    toggleOption(q, label)
                   }}
                 >
-                  {option}
+                  {label}
                 </button>
               )
             })}
@@ -281,7 +284,7 @@ export default function FlowRunPreview({
           {s.kind === 'steps' ? ` · 항목 ${(s.steps || []).length}개` : ''}
           {s.kind === 'products' ? ` · 상품 ${(s.products || []).length}개` : ''}
           {s.kind === 'contents' ? ` · 콘텐츠 ${(s.items || []).length}개` : ''}
-          {s.kind === 'guide' ? ` · 본문 ${(s.body || '').length}자` : ''}
+          {s.kind === 'guide' ? ` · 본문 ${(s.body || '').length}자${s.subtitle ? ' · 서브타이틀 ✓' : ' · 서브타이틀 없음'}` : ''}
         </p>
         {b.slotReason && <p className="sb-flow-bubble__text">자리 선정 기준 (뼈대 5a) — {b.slotReason}</p>}
         {s.kind === 'products' && (
@@ -296,6 +299,8 @@ export default function FlowRunPreview({
                     product.mall ? `외부몰 ${product.mall}` : '카탈로그 · 지마켓',
                     domainOf(product.url),
                     product.imageUrl ? '썸네일 ✓' : '이모지 폴백',
+                    product.match ? `매칭율 ${product.match.score}%` : null,
+                    product.urlKind === 'search' ? '검색 링크 (PDP 미확인)' : null,
                   ]
                     .filter(Boolean)
                     .join(' · ')}
@@ -456,7 +461,6 @@ export default function FlowRunPreview({
               {streaming && (
                 /* 부분 스트리밍 꼬리 — 나머지 생성이 진행 중임을 보여준다 (LiveTail과 동일) */
                 <div className="sb-live-tail" role="status" aria-live="polite">
-                  <div className="sb-live-skel sb-live-skel--tall" />
                   <p className="sb-live-status">
                     <span className="sb-live-status__spark" aria-hidden="true">✦</span>
                     {statusMessage || '이어서 생성하고 있어요…'}

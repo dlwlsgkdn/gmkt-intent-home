@@ -15,9 +15,19 @@ import React, { useEffect } from 'react'
 
 /* 알려진 몰의 PDP를 모바일 URL로 정규화 — 상품 키만 뽑아 모바일 경로에 다시 매단다.
    못 알아보는 URL은 원본 그대로 시도한다 (차단 여부는 몰마다 다르다) */
-function frameFor(rawUrl) {
+function frameFor(rawUrl, urlKind) {
   try {
     const url = new URL(rawUrl)
+    // 검색 링크 상품(urlKind=search) — 몰 검색 결과를 모바일 검색 경로로 (PDP 를 못 찾은 상품의 대체 링크)
+    if (urlKind === 'search') {
+      const q = url.searchParams.get('query') || url.searchParams.get('keyword') || url.searchParams.get('q') || ''
+      if (q) {
+        if (/(^|\.)oliveyoung\.co\.kr$/.test(url.hostname)) return { src: `https://m.oliveyoung.co.kr/m/search/searchList?query=${encodeURIComponent(q)}` }
+        if (/(^|\.)gmarket\.co\.kr$/.test(url.hostname)) return { src: `https://m.gmarket.co.kr/n/search?keyword=${encodeURIComponent(q)}` }
+        if (/(^|\.)coupang\.com$/.test(url.hostname)) return { src: `https://m.coupang.com/nm/search?q=${encodeURIComponent(q)}` }
+      }
+      return { src: rawUrl }
+    }
     // 지마켓: item.gmarket.co.kr/Item?goodsCode=… ·구/신 모바일 경로 → m.gmarket.co.kr/vi/product/{code}
     if (/(^|\.)gmarket\.co\.kr$/.test(url.hostname)) {
       const code =
@@ -76,9 +86,14 @@ export default function ProductDetailPanel({ product, onClose }) {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
+        {product.urlKind === 'search' && (
+          <p className="sb-product-detail__note">
+            상세 페이지를 찾지 못해 {product.mall || '외부몰'} 검색 결과를 열었어요 — 같은 이름의 상품을 골라 보세요.
+          </p>
+        )}
         <iframe
           className="sb-product-detail__frame"
-          src={frameFor(product.url).src}
+          src={frameFor(product.url, product.urlKind).src}
           title={`${product.name} 상품 페이지`}
           referrerPolicy="no-referrer"
         />

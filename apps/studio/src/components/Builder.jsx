@@ -338,7 +338,7 @@ export default function Builder({ api, scenario }) {
         isEvaluation={isEvaluation}
         exploreItemCount={(api.explore.items || []).length}
         evaluatedCaseCount={planCases.filter((planCase) => normalizeCaseEvaluation(planCase.evaluation).selection.active).length}
-        chipColor={scenario.color || '#5f7465'}
+        chipColor={scenario.color || '#7950f2'}
         device={device}
         canvasView={canvasView}
         setCanvasView={setCanvasView}

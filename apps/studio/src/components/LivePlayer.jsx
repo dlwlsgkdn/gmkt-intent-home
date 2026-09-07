@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { enrichCartEntries, productLookupFromPlanPage, stepInfoOfItem } from '../lib/cart.js'
 import { DEVICE_PRESETS, STAGES } from '../lib/store.js'
 import { isQuestionType, renderItem, resolveSampleFace } from '../lib/registry.jsx'
 import BottomSheet from './ui/BottomSheet.jsx'
 import { fetchLiveCapabilities, fetchLiveThread, recordLiveEvent, renderLiveLook, sendLiveFeedback, startLiveThread, streamLivePlan, streamLiveSurvey } from '../lib/liveApi.js'
 import { PHOTO_ANSWER, isPhotoValue, livePlanItems, liveSurveyItems } from '../lib/livePage.js'
-import { composeMakeup, toPhotoDataUrl } from '../lib/makeupComposite.js'
+import { composeMakeup, matchAspectTo, toPhotoDataUrl } from '../lib/makeupComposite.js'
 import { loadLookRender, saveLookRender } from '../lib/lookCache.js'
 import { BgBlobs, FloatingBar, ViewerDeviceControl } from './Frame.jsx'
 import ThreadPanel from './ThreadPanel.jsx'
@@ -107,11 +108,11 @@ function LiveSkeleton({ message }) {
 }
 
 /* 부분 스트리밍 꼬리 — 도착한 컴포넌트 아래에서 나머지 생성이 진행 중임을 보여준다.
-   몇 개가 더 올지는 모르므로 개수 흉내 없이 진행 표시 한 블록만 정직하게 둔다 */
+   몇 개가 더 올지 모르므로 카드 흉내 없이 ✦ 진행 문구 한 줄만 둔다 (회색 자리 상자는 2026-09 제거 —
+   다음에 올 컴포넌트의 크기를 모르는데 상자를 그리면 빈 카드처럼 보였다) */
 function LiveTail({ message }) {
   return (
     <div className="sb-live-tail" role="status" aria-live="polite">
-      <div className="sb-live-skel sb-live-skel--tall" />
       <p className="sb-live-status">
         <span className="sb-live-status__spark" aria-hidden="true">✦</span>
         {message || '이어서 생성하고 있어요…'}
@@ -194,6 +195,12 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const [answers, setAnswers] = useState({})
   const [excludedProfile, setExcludedProfile] = useState([])
   const [cart, setCart] = useState([])
+  /* 옛 기록(이름만 남은 담기)은 계획 페이지가 오면 그 상품 카드 재료로 채운다 — 무변경이면 같은 참조라 기록 갱신이 없다 */
+  useEffect(() => {
+    if (!planPage) return
+    const lookup = productLookupFromPlanPage(planPage)
+    setCart((prev) => enrichCartEntries(prev, lookup))
+  }, [planPage])
   const [completed, setCompleted] = useState(false)
   const [keyword, setKeyword] = useState(null)
   const [productDetail, setProductDetail] = useState(null) // 상품 상세보기 사이드 패널 (null=닫힘)
@@ -414,6 +421,9 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
           if (cancelledRef.current) return
           const restoredQuery = (t.source && t.source.query) || t.title || ''
           if (restoredQuery) setLiveQuery(restoredQuery)
+          /* 담은 상품은 서버 페이지에 없다 — 워크스페이스 쓰레드 기록(기기)에 남긴 것을 되살린다 */
+          const recorded = (api.threads || []).find((thread) => thread.id === resumeThreadId)
+          if (recorded && Array.isArray(recorded.cart) && recorded.cart.length) setCart(recorded.cart)
           if (t.survey) { setSurveyPage(t.survey); setQStep(0) }
           if (Array.isArray(t.answers) && t.survey) {
             const map = {}
@@ -577,10 +587,14 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
       // 지난 결과가 있으면 그대로 — 같은 쓰레드·색조에 유료 호출을 반복하지 않는다 (IndexedDB)
       const cached = await loadLookRender(threadId)
       if (cached && cached.tone === lookTone && cached.image) {
+        // 옛 보관분은 비율 보정 전 결과일 수 있다 — 원본 비율로 되맞춰 쓰고, 바뀌었으면 보관도 갱신
+        const ref = await toPhotoDataUrl(livePhoto)
+        const fitted = ref ? await matchAspectTo(cached.image, ref) : cached.image
         if (cancelled || cancelledRef.current) return
         preciseRef.current = true
-        setLookAfter(cached.image)
+        setLookAfter(fitted)
         setLookStage('precise')
+        if (fitted !== cached.image) saveLookRender(threadId, lookTone, fitted)
         return
       }
       const caps = await fetchLiveCapabilities()
@@ -598,12 +612,15 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
           title: look.title,
           points: look.points,
         })
+        // 편집 모델은 표준 규격(1024×1536 등)으로 돌려주며 원본을 살짝 늘린다 — 원본 비율로 되맞춰야
+        // 슬라이더의 두 층이 정확히 겹친다 (matchAspectTo). 보관도 보정본으로
+        const fitted = await matchAspectTo(image, photo)
         if (cancelled || cancelledRef.current) return
         preciseRef.current = true
-        setLookAfter(image)
+        setLookAfter(fitted)
         setLookStage('precise')
         // 다음 이어보기에서 재호출하지 않도록 원본 화질 그대로 보관한다 (IndexedDB — 실패해도 화면은 그대로)
-        saveLookRender(threadId, lookTone, image)
+        saveLookRender(threadId, lookTone, fitted)
       } catch (e) {
         if (cancelled || cancelledRef.current) return
         console.warn('[look] 정밀 렌더 실패 — 기기 합성을 유지합니다:', e.message)
@@ -638,10 +655,13 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         goPlan({ regenerate: true })
       }
     },
-    addToCart: (name) => {
-      setCart((prev) => [...prev, name])
+    addToCart: (name, meta = {}) => {
+      /* 카드 재료 + 소속 단계 — Player 와 같은 형태(lib/cart.js). cartAdd 이벤트도 같은 항목을 싣는다 */
+      const { itemId, ...rest } = meta
+      const entry = { ...rest, name, ...stepInfoOfItem(allItems, itemId) }
+      setCart((prev) => [...prev, entry])
       api.showToast(`"${name}" 을(를) 쓰레드에 담았어요.`)
-      if (threadId) recordLiveEvent(threadId, 'cartAdd', { name })
+      if (threadId) recordLiveEvent(threadId, 'cartAdd', entry)
     },
     complete: () => {
       setCompleted(true)
@@ -664,11 +684,11 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
       }
     },
     /* 상품 상세보기 — 카탈로그에 URL이 있으면 사이드 패널 iframe, 없으면 정직한 안내 */
-    openProduct: ({ name, mall, url: rawUrl }) => {
+    openProduct: ({ name, mall, url: rawUrl, urlKind }) => {
       try {
         const url = new URL(String(rawUrl || '').trim())
         if (!['http:', 'https:'].includes(url.protocol)) throw new Error('unsupported protocol')
-        setProductDetail({ name, mall, url: url.href })
+        setProductDetail({ name, mall, url: url.href, urlKind })
         if (threadId) recordLiveEvent(threadId, 'productOpen', { name })
       } catch {
         api.showToast('이 상품은 연결된 상세 페이지가 아직 없어요.')
@@ -710,6 +730,9 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const topItems = allItems.filter((it) => !it.parentId)
   const stepQuestions = topItems.filter((it) => isQuestionType(it.type))
   const qIndex = stepQuestions.length ? Math.min(qStep, stepQuestions.length - 1) : 0
+  /* 화면 꽉 채우기 — Player 와 같은 규칙. 라이브 투영 아이템은 fillScreen 을 싣지 않으므로(기본 켜짐) 언제나 켜진다 */
+  const fillActive = stageKey === 'survey' && stepQuestions.length > 0 && stepQuestions[qIndex].props?.fillScreen !== false
+  const navHidden = fillActive && topItems.some((it) => it.type === 'screenHeader')
   const items = stageKey === 'survey' ? pageQuestions(topItems, qStep) : topItems
 
   /* 생성 중 부분 페이지 투영 — 최종과 같은 livePage 투영을 그대로 쓴다 (아이템 id가 인덱스
@@ -779,7 +802,13 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   playerApi.headerActions = [
     {
       key: 'feedback',
-      icon: '💬',
+      // 이모지 대신 헤더의 뒤로·홈과 같은 24px 라인 아이콘 (Figma TopBar 톤)
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H10l-4.6 3.6V16A2.5 2.5 0 0 1 4 13.5z" />
+          <path d="M8.5 9.5h7M8.5 12.5h4.5" />
+        </svg>
+      ),
       label: '평가',
       title: '생성된 페이지에 별점과 코멘트를 남겨요 — 저장하면 쓰레드 기록에 함께 남아요',
       active: fbMode,
@@ -788,7 +817,12 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     },
     {
       key: 'regen',
-      icon: '↺',
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M20 12a8 8 0 1 1-2.6-5.9" />
+          <path d="M20 4v4.5h-4.5" />
+        </svg>
+      ),
       label: '새로 생성',
       title: '같은 검색어로 새 쓰레드를 시작해 처음부터 다시 생성해요',
       disabled: !liveQuery || !!loading,
@@ -952,7 +986,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         ))}
       </nav>
 
-      <section className="sb-player sb-player--live min-h-screen relative z-10">
+      <section className={'sb-player sb-player--live min-h-screen relative z-10' + (fillActive ? ' sb-player--fill' : '')}>
         <div className={'sb-live-annotate' + (fbMode && fbAvailable ? ' is-on' : '')}>
         <div className="sb-phone sb-phone--player" ref={phoneRef} style={{ width: viewer.w }}>
           {error ? (
@@ -1032,6 +1066,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
                   )
                 })}
               </div>
+              {!navHidden && (
               <div className="clean-survey-nav sb-player__nav">
                 {stageKey === 'survey' && qIndex > 0 ? (
                   <button
@@ -1066,10 +1101,10 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
                   </button>
                 )}
               </div>
+              )}
             </>
           )}
 
-          {cart.length > 0 && !loading && <p className="sb-player__cart">🧺 담은 상품 {cart.length}개</p>}
         </div>
 
         {/* 평가 말풍선 레일 — 페이지 오른쪽, 점선으로 앵커와 연결 (평가 스튜디오와 같은 문법) */}

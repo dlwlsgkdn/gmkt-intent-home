@@ -15,14 +15,24 @@ export const PHOTO_ANSWER = '사진 제출됨'
 /** 답 값이 실제로 그릴 수 있는 이미지인지 — 이어보기·관리 페이지에서는 표식만 남는다 */
 export const isPhotoValue = (value) => /^(data:image\/|https?:\/\/|\.{0,2}\/)/.test(String(value || ''))
 
+/** 인트로 문장을 Figma Header(제목 22px + 설명 13px)로 가른다 — 문장이 둘 이상이면 첫 문장이 제목,
+ *  나머지가 설명. 한 문장이면 제목만 (설명 자리는 비운다 — 지어내지 않는다) */
+export function splitIntro(intro) {
+  const text = String(intro || '').trim()
+  if (!text) return { title: '', desc: '' }
+  const m = /^(.+?[.!?。])\s+(\S[\s\S]*)$/.exec(text.replace(/\n+/g, ' '))
+  return m ? { title: m[1].trim(), desc: m[2].trim() } : { title: text, desc: '' }
+}
+
 export function liveSurveyItems(page) {
+  const intro = splitIntro(page.intro)
   const items = [
     // 화면 헤더는 클라이언트 소유 — LLM 산출물과 무관하게 생성 시작부터 늘 그린다
     { id: 'live-survey-header', type: 'screenHeader', props: { title: '설문 단계', back: true, home: true, ai: true } },
     {
       id: 'live-survey-intro',
       type: 'surveyIntro',
-      props: { kicker: '', title: page.intro || '몇 가지만 알려주세요', desc: '' },
+      props: { kicker: '', title: intro.title || '몇 가지만 알려주세요', desc: intro.desc },
     },
     {
       id: 'live-profile-panel',
@@ -78,7 +88,7 @@ export function livePlanItems(page, opts = {}) {
   const pendingSlots = opts.pendingSlots || []
   const items = [
     // 화면 헤더는 클라이언트 소유 — LLM 산출물과 무관하게 생성 시작부터 늘 그린다
-    { id: 'live-plan-header', type: 'screenHeader', props: { title: '계획 단계', back: true, home: true, ai: true } },
+    { id: 'live-plan-header', type: 'screenHeader', props: { title: 'AI 맞춤 계획', back: true, home: true, ai: true } },
     {
       id: 'live-plan-title',
       type: 'planTitle',
@@ -91,23 +101,31 @@ export function livePlanItems(page, opts = {}) {
       },
     },
   ]
-  if (page.summary) {
-    items.push({ id: 'live-plan-summary', type: 'noticeCard', props: { title: '이렇게 정리했어요', body: page.summary } })
-  }
+  /* Figma AIIntro = 인용 제목 + 설문 요약 칩이 한 밴드 — 요약 패널을 타이틀 바로 뒤에 두어
+     플레이어의 인접 규칙이 두 아이템을 한 보라 밴드로 이어 붙인다. LLM 정리 문단은 그 아래
+     카드 없는 텍스트 블록으로 (id는 평가 말풍선 앵커 '요약'이라 유지) */
   items.push({
     id: 'live-plan-survey-summary',
     type: 'surveySummary',
-    props: { title: '설문 요약', hiddenProfile: '', hiddenQuestions: '' },
+    props: { hiddenProfile: '', hiddenQuestions: '' },
   })
+  if (page.summary) {
+    items.push({ id: 'live-plan-summary', type: 'textBlock', props: { kicker: '', title: '이렇게 정리했어요', body: page.summary } })
+  }
   const sections = page.sections || []
   /* forEach가 아니라 인덱스 순회다 — 스트리밍 중 partial.sections는 도착한 인덱스에만 값이
      있는 희소 배열이고, forEach는 그 구멍을 아예 건너뛴다. 아직 안 온 자리에 로딩 카드를
      제자리에 그리려면 구멍도 방문해야 한다 (렌더 여부는 pendingSlots가 정한다) */
+  // 단계 하위 연쇄 — 직전 섹션이 단계 안내(guide)이거나, 그 단계에 붙은 상품·콘텐츠 섹션(빈 자리 포함)이면
+  // 이번 섹션도 같은 단계에 속한다. 뼈대(v20)가 단계마다 [안내 → 상품 자리 → 콘텐츠 자리]를 이어 두므로
+  // 콘텐츠 카드가 계획 끝이 아니라 단계 본문 사이에 서고, LivePlayer가 stepSub로 간격만 당겨 붙인다
+  let chain = false
   for (let i = 0; i < sections.length; i += 1) {
     const section = sections[i]
-    // 단계 하위 표시 — 단계 안내(guide) 바로 뒤의 상품 섹션(자리 포함)은 그 단계에 속한
-    // 콘텐츠처럼 들여 배치한다 (LivePlayer가 stepSub로 래퍼 클래스를 단다)
-    const stepSub = sections[i - 1] != null && sections[i - 1].kind === 'guide'
+    // 상품·콘텐츠(빈 자리 포함)만 단계 하위가 될 수 있다 — 다음 단계 안내·사용 순서는 연쇄를 끊는다
+    const isSlotKind = !section || section.kind === 'products' || section.kind === 'contents'
+    const stepSub = chain && isSlotKind
+    chain = (section != null && section.kind === 'guide') || stepSub
     if (!section) {
       // 빈 슬롯 — 아직 안 온 상품·콘텐츠 자리. 인덱스는 보존되고, 자리 표시는 로딩 카드
       if (pendingSlots.includes(i)) {
@@ -169,8 +187,8 @@ export function livePlanItems(page, opts = {}) {
       items.push({
         id: base,
         type: 'planStep',
-        // 와이어 guide는 제목 + 문단뿐이라 Figma "메인타이틀 + 문단" 변형으로 투영한다
-        props: { badge: '', title: section.title, subtitle: '', points: '', body: section.body },
+        // 와이어 guide = 제목 + 서브타이틀(단계 목적 한 줄 — 뼈대 프롬프트가 채운다, 옛 페이지는 없음) + 문단
+        props: { badge: '', title: section.title, subtitle: section.subtitle || '', points: '', body: section.body },
       })
     } else if (section.kind === 'steps') {
       items.push({
@@ -182,25 +200,31 @@ export function livePlanItems(page, opts = {}) {
       if (section.reason) {
         items.push({ id: `${base}-reason`, type: 'textBlock', stepSub, props: { kicker: '', title: '', body: section.reason } })
       }
-      items.push({ id: base, type: 'hscroll', stepSub, props: { title: section.title, cardW: '200', items: '' } })
+      items.push({ id: base, type: 'hscroll', stepSub, props: { title: section.title, cardW: '170', items: '' } })
       ;(section.products || []).forEach((product, j) => {
         items.push({
           id: `${base}-p${j}`,
           type: 'productCard',
           parentId: base,
           slot: j,
-          w: 200,
+          w: 170, // Figma [PP1K] ProductCard 170 고정
           props: {
             brand: product.brand || '',
             name: product.name,
             price: Number(product.price || 0).toLocaleString('ko-KR'),
             was: '',
-            score: '', // 와이어에 추천도가 없으면 배지를 그리지 않는다
+            // 매칭율 — 검증 게이트(@ddak/pipeline guards/match.ts)가 상품마다 계산해 페이지에 남긴 값. 항목 표(factors)와
+            // 계산식(basis)이 배지 팝오버 재료다. 옛 페이지(match 없음)는 예전처럼 "AI 추천" 문구 배지로 남는다
+            score: product.match ? String(product.match.score) : '',
+            tag: product.match ? '' : 'AI 추천',
+            matchFactors: product.match ? product.match.factors : '',
+            matchBasis: (product.match && product.match.basis) || '',
             summary: '',
             emoji: product.imageUrl ? '' : '🧴', // 썸네일 없는 상품만 이모지 목업 블록으로 렌더
             gradient: '',
             // mall 있음 = 웹 검색으로 찾은 외부몰 상품 (외부몰 태그·담기불가), 없음 = 데모 카탈로그(지마켓)
             external: !!product.mall,
+            urlKind: product.urlKind || 'pdp', // search = PDP 를 못 찾아 몰 검색 결과를 여는 상품 (「몰에서 찾기」)
             mall: product.mall || '',
             url: product.url || '', // 상세보기 사이드 패널이 iframe으로 연다
             imageUrl: product.imageUrl || '', // 카탈로그(지마켓 gdimg)·웹 검색 상품의 실제 썸네일
@@ -212,9 +236,9 @@ export function livePlanItems(page, opts = {}) {
       if (section.reason) {
         items.push({ id: `${base}-reason`, type: 'textBlock', props: { kicker: '', title: '', body: section.reason } })
       }
-      items.push({ id: base, type: 'hscroll', props: { title: section.title, cardW: '174', items: '' } })
+      items.push({ id: base, type: 'hscroll', props: { title: section.title, cardW: '260', items: '' } })
       ;(section.items || []).forEach((c, j) => {
-        const common = { id: `${base}-c${j}`, parentId: base, slot: j, w: 174 }
+        const common = { id: `${base}-c${j}`, parentId: base, slot: j, w: 260 } // Figma VideoCard 는 전폭 — 트랙에선 한 장 반이 보이는 폭
         if (c.type === 'video') {
           items.push({
             ...common,
@@ -244,6 +268,10 @@ export function livePlanItems(page, opts = {}) {
         }
       })
     }
+  }
+  /* Figma FeedbackSection — 계획 끝의 "도움이 됐나요?" (섹션이 하나라도 있을 때만, 평가 말풍선 대상 아님) */
+  if (sections.some(Boolean)) {
+    items.push({ id: 'live-plan-helpful', type: 'feedbackCard', props: { question: '도움이 되셨나요?', state: 'none' } })
   }
   return items
 }

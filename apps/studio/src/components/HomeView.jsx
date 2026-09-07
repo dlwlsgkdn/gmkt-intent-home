@@ -5,6 +5,10 @@ import ThreadPanel from './ThreadPanel.jsx'
 import StarterPanel from './StarterPanel.jsx'
 import { TEMPLATES } from '../lib/templates.js'
 import { classifyImportPayload, createScenariosExport, hexToRgba, DEVICE_PRESETS } from '../lib/store.js'
+
+/* 홈 첫 화면을 이루는 탐색 컴포넌트 — 이 타입들이 스택 앞머리에 연속으로 있으면 히어로 블록으로 묶여
+   화면 세로 중앙에 놓인다 (Figma Search 랜딩: 제목 · 검색창 · 추천 칩) */
+const HOME_HERO_TYPES = new Set(['greeting', 'searchBox', 'scenarioChips', 'tagRow'])
 import { scenariosFromImport } from '../lib/scenarioOps.js'
 import { downloadJson, readFileText } from '../lib/jsonFile.js'
 import { renderItem } from '../lib/registry.jsx'
@@ -138,7 +142,7 @@ export default function HomeView({ api }) {
 
   /* 발행 칩 목록 — 탐색 아이템의 "발행 칩 목록" 컴포넌트 자리에 렌더된다 */
   const chips = published.map((s) => {
-    const c = s.color || '#5f7465'
+    const c = s.color || '#7950f2'
     return (
       <button
         key={s.id}
@@ -146,7 +150,7 @@ export default function HomeView({ api }) {
         data-chip-id={s.id}
         className={'suggestion-tag sb-chip-scenario' + (draggingChipId === s.id ? ' sb-chip-scenario--dragging' : '')}
         title={s.title + ' (드래그로 순서 변경)'}
-        style={{ color: c, borderColor: hexToRgba(c, 0.45), background: hexToRgba(c, 0.08) }}
+        style={{ color: c, background: hexToRgba(c, 0.08) }}
         onPointerDown={(e) => onChipPointerDown(e, s.id)}
       >
         {/* ✦ 는 라이브 생성 표기 전용이라 시나리오 칩에서는 뗐다 (기호 충돌 방지) */}
@@ -158,6 +162,15 @@ export default function HomeView({ api }) {
   /* 탐색 아이템 — 숨김·컨테이너 자식 제외한 최상위만, 배열 순서대로 스택 */
   const allExploreItems = api.explore.items || []
   const exploreItems = allExploreItems.filter((it) => !it.hidden && !it.parentId)
+  /* 첫 화면(히어로) — Figma Search 1-1처럼 인사말·검색창·칩을 화면 세로 중앙에 두고, 그 뒤 스토리 카드는
+     아래로 흘린다. 스택 앞머리의 히어로 타입 연속 구간만 묶는다(순서는 빌더 탐색 탭이 정한다) */
+  const heroEnd = (() => {
+    let n = 0
+    while (n < exploreItems.length && HOME_HERO_TYPES.has(exploreItems[n].type)) n += 1
+    return n
+  })()
+  const heroItems = exploreItems.slice(0, heroEnd)
+  const restItems = exploreItems.slice(heroEnd)
 
   /* 검색 진입 분기 — 칩 = 시나리오 체험, 자유 검색 = AI 라이브 생성 (BFF).
      검색어가 발행 시나리오와 매칭되면 어느 쪽으로 체험할지 시트로 명시적으로 고르게 한다
@@ -214,7 +227,16 @@ export default function HomeView({ api }) {
         {exploreItems.length > 0 ? (
           /* 탐색 페이지 = 캔버스 아이템 스택 (빌더 탐색 탭에서 자유 배치·편집) */
           <div className="sb-player__stack sb-home-stack">
-            {exploreItems.map((it) => (
+            {heroItems.length > 0 ? (
+              <div className="sb-home-hero">
+                {heroItems.map((it) => (
+                  <div key={it.id} className="sb-player__item">
+                    {renderItem(it, { mode: 'player', player: homePlayer, profile: api.profile, chips, allItems: allExploreItems })}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {restItems.map((it) => (
               <div key={it.id} className="sb-player__item">
                 {renderItem(it, { mode: 'player', player: homePlayer, profile: api.profile, chips, allItems: allExploreItems })}
               </div>
@@ -301,7 +323,7 @@ export default function HomeView({ api }) {
                     </span>
                     {api.isStarterSource(s) && <span className="sb-status sb-status--default" title="이 시나리오로 기본 시나리오를 만들었어요.">기본 원천</span>}
                     <p className="sb-scenario-row__title">{s.title}</p>
-                    <p className="sb-scenario-row__chip" style={{ color: s.color || '#5f7465' }}>#{s.chip}</p>
+                    <p className="sb-scenario-row__chip" style={{ color: s.color || '#7950f2' }}>#{s.chip}</p>
                   </div>
                   <div className="sb-scenario-row__actions">
                     <button type="button" onClick={() => api.playScenario(s.id)}>시험</button>

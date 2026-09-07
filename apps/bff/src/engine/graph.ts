@@ -190,7 +190,8 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
           if (!parsed.success) return
           const s = parsed.data
           if (!s.title) return
-          if (s.kind === 'guide') coord.section({ kind: 'guide', title: s.title, body: s.body ?? '' }, index, false)
+          if (s.kind === 'guide')
+            coord.section({ kind: 'guide', title: s.title, ...(s.subtitle ? { subtitle: s.subtitle } : {}), body: s.body ?? '' }, index, false)
           else if (s.kind === 'steps')
             coord.section({ kind: 'steps', title: s.title, steps: (s.steps ?? []).filter(Boolean) }, index, false)
           // products·contents 자리는 부분도 내보내지 않는다 — 검색 단계 결과가 차지할 인덱스

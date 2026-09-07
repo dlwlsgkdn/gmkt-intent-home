@@ -30,6 +30,7 @@ export const DEVICE_PRESETS = [
 
 /* 시나리오 칩 색상 프리셋 */
 export const CHIP_COLORS = [
+  { key: 'violet', label: '바이올렛', color: '#7950f2' }, // Figma [PP1K] bg/main — 기본
   { key: 'sage', label: '세이지', color: '#5f7465' },
   { key: 'rose', label: '로즈', color: '#b45a6b' },
   { key: 'blue', label: '블루', color: '#4a6b8a' },
@@ -40,7 +41,7 @@ export const CHIP_COLORS = [
 
 export function hexToRgba(hex, alpha) {
   const match = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim())
-  if (!match) return `rgba(95, 116, 101, ${alpha})`
+  if (!match) return `rgba(121, 80, 242, ${alpha})`
   const value = parseInt(match[1], 16)
   return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`
 }
@@ -104,7 +105,7 @@ export function normalizeScenario(input = {}) {
     chip: '새_시나리오',
     query: '',
     device: 'desktop',
-    color: '#5f7465',
+    color: '#7950f2',
     versions: [], // 발행 시점 스냅샷 (최근 5개 — publishing.js VERSION_LIMIT)
     status: 'draft',
     createdAt: now,

@@ -88,17 +88,25 @@ export class ThreadsService {
    * 보관(archived) 쓰레드는 사용자 목록에서 숨긴다 — 관리 목록(listAll)에만 보인다 */
   async listByUser(userId: string, cursor?: string, limit = 20) {
     const db = this.conn()
-    const conds = [eq(threads.userId, userId), ne(threads.status, 'archived' as const)]
+    const baseConds = [eq(threads.userId, userId), ne(threads.status, 'archived' as const)]
+    const conds = [...baseConds]
     if (cursor) conds.push(lt(threads.updatedAt, new Date(cursor)))
-    const rows = await db
-      .select()
-      .from(threads)
-      .where(and(...conds))
-      .orderBy(desc(threads.updatedAt))
-      .limit(limit + 1)
+    // 총 개수는 커서와 무관한 전체(archived 제외) — 히스토리 패널이 스크롤 전에 "전체 n개"를 알아야 한다
+    const [rows, [{ total }]] = await Promise.all([
+      db
+        .select()
+        .from(threads)
+        .where(and(...conds))
+        .orderBy(desc(threads.updatedAt))
+        .limit(limit + 1),
+      db
+        .select({ total: sql<number>`count(*)::int` })
+        .from(threads)
+        .where(and(...baseConds)),
+    ])
     const items = rows.slice(0, limit)
     const nextCursor = rows.length > limit ? items[items.length - 1].updatedAt.toISOString() : null
-    return { items, nextCursor }
+    return { items, nextCursor, total: Number(total) }
   }
 
   /** 관리 평가 모아보기의 원천 — 피드백 제출 스텝(stage='action', payload.type='feedback')을

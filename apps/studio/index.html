@@ -14,6 +14,8 @@
          clean-home CSS 스택은 Pretendard 1순위지만 원본 프로토타입부터 로드 없이
          시스템 폴백(맥 Apple SD Gothic Neo Light)으로 렌더돼 왔고, 그게 DDAK의 룩이다.
          Pretendard CDN을 추가하면 메인 페이지의 인상이 통째로 바뀐다. -->
+    <!-- 디스플레이 서체(낭만있구미체) 선로드 — @font-face 는 src/styles/base.css, 적용 자리는 viewer.css 끝 -->
+    <link rel="preload" href="./fonts/GumiRomance.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="./gmarket-advanced.css">
     <link rel="stylesheet" href="./gmarket-advanced-clean-home.css">
 </head>
