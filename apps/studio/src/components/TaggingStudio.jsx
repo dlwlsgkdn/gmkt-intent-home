@@ -4,11 +4,14 @@ import {
   TAGGING_SEED,
   TAG_LIMIT,
   UNIT_STATUS,
+  fetchTaggingBootstrap,
   loadTaggingReview,
   optionsFor,
   productEmoji,
   resetTaggingReview,
+  saveTaggingDecision,
   saveTaggingReview,
+  saveTaggingUnit,
   taggingExportPayload,
   totalTags,
   unitStatusKey,
@@ -19,11 +22,22 @@ import {
  * 상품 태깅 검토 스튜디오 — 라이브 생성의 상품 매칭(그라운딩) 근거인 카탈로그 태그를
  * 사람이 점검하는 화면. AI 1차 분류(필드별 태그·확신도·근거)를 3컬럼으로 검토한다:
  * 좌측 작업 단위 목록+상품 정보, 가운데 필드별 태깅 편집(대표 태그 ★·근거·미검토 확인),
- * 우측 태그 게이지·최종 태그·규칙 검증·승인/반려. 결과는 이 브라우저에만 저장되고,
- * 카탈로그(코드) 반영·기기 이동은 JSON 내보내기로 한다. 진입은 홈 드로어의 도구 행.
+ * 우측 태그 게이지·최종 태그·규칙 검증·승인/반려. 결과는 사내망 API가 Mongo에서 읽고
+ * 되쓴다 — 닿지 못하면(배포 환경 등) 예시 데이터로 폴백하고, 그 폴백 한정으로 이 브라우저에만
+ * 저장되며 카탈로그(코드) 반영·기기 이동은 JSON 내보내기로 한다. 진입은 홈 드로어의 도구 행.
  */
 
-const formatPrice = (price) => `${Number(price).toLocaleString('ko-KR')}원`
+/* 로딩 중·빈 목록에서 파생값 계산이 터지지 않게 하는 자리표시자.
+   화면 자체는 아래 로딩 가드에서 갈린다 — 이 값이 그려지는 일은 없다. */
+const EMPTY_UNIT = {
+  id: null, brand: '', name: '', option: '', price: null, imageUrl: null, catalogTags: [],
+  copy: '', review: '', confidence: 0, confidenceLevel: null, rationale: '', decision: null,
+  note: '', tagRequest: {},
+  fields: Object.fromEntries(FIELD_DEFS.map((d) => [d.key, { selected: [], rep: null, status: 'unreviewed', origin: 'ai' }])),
+  aiFields: Object.fromEntries(FIELD_DEFS.map((d) => [d.key, { selected: [], rep: null, status: 'unreviewed', origin: 'ai' }])),
+}
+
+const formatPrice = (price) => (typeof price === 'number' ? `${price.toLocaleString('ko-KR')}원` : '가격 정보 없음')
 
 const confLevel = (confidence) => (confidence >= 75 ? 'ok' : confidence >= 60 ? 'warn' : 'bad')
 const needsReviewUnit = (unit) => ['unreviewed', 'fix'].includes(unitStatusKey(unit))
@@ -84,9 +98,11 @@ function UnitThumb({ unit, className }) {
 }
 
 export default function TaggingStudio({ api, embedded = false }) {
-  const [units, setUnits] = useState(loadTaggingReview)
-  const [selectedId, setSelectedId] = useState(() => units.find(needsReviewUnit)?.id ?? units[0]?.id ?? null)
+  const [units, setUnits] = useState([])
+  const [source, setSource] = useState('loading') // 'loading' | 'remote' | 'local'
+  const [selectedId, setSelectedId] = useState(null)
   const [listFilter, setListFilter] = useState('needs-review')
+  const [query, setQuery] = useState('')
   const [onlyNeedsReview, setOnlyNeedsReview] = useState(true)
   const [openWhy, setOpenWhy] = useState({})
   /* 잠금 해제는 편집 세션 상태다. 저장본의 status=done이 기본 잠금 원천이라 새로 열면 다시 안전하게 잠긴다. */
@@ -95,8 +111,62 @@ export default function TaggingStudio({ api, embedded = false }) {
   const fieldRefs = useRef({})
 
   useEffect(() => {
-    saveTaggingReview(units)
-  }, [units])
+    let alive = true
+    fetchTaggingBootstrap().then((boot) => {
+      if (!alive) return
+      if (boot) {
+        setUnits(boot.units)
+        setSource('remote')
+      } else {
+        setUnits(loadTaggingReview())
+        setSource('local')
+      }
+    })
+    return () => { alive = false }
+  }, [])
+
+  /* 목업 모드에서만 로컬에 남긴다. 원격 모드의 저장은 Task 5의 단건 PATCH가 맡는다. */
+  useEffect(() => {
+    if (source === 'local') saveTaggingReview(units)
+  }, [units, source])
+
+  /* 원격 모드의 저장은 바뀐 단위 한 건만 보낸다. 네트워크 너머라 침묵이 곧 유실이므로
+     실패는 토스트로 알린다(로컬 저장 시절엔 조용해도 무방했다).
+     승인/반려는 먼저 이 큐를 비운 뒤 결정을 보내야 한다 — 그래야 뒤늦게 도착한 편집 PATCH가
+     방금 보낸 승인/반려를 review_status='unreviewed'로 되돌리지 않는다. */
+  const dirtyRef = useRef(new Map())
+  const flushTimer = useRef(null)
+  /* 실패한 항목이 있어도 나머지 항목은 끝까지 시도한다 — 하나가 막혔다고 뒤에 줄 선
+     편집들을 조용히 버리면(재큐잉·재시도·토스트 전부 없이) 침묵 유실이 된다.
+     실패한 항목은 dirtyRef에 되돌리지 않는다: 서버가 계속 죽어 있으면 그 뒤 편집마다
+     같은 실패가 반복 재전송되어 토스트가 계속 울리는 소음이 생기고, 이미 뜬 토스트로
+     사용자가 인지했으니 재시도는 사용자가 그 항목을 다시 건드릴 때(그러면 patchUnit이
+     최신 전체 상태를 다시 큐잉한다)로 미룬다. */
+  const flushPending = async () => {
+    window.clearTimeout(flushTimer.current)
+    const pending = [...dirtyRef.current.values()]
+    dirtyRef.current.clear()
+    let allOk = true
+    for (const item of pending) {
+      const ok = await saveTaggingUnit(item)
+      if (!ok) {
+        allOk = false
+        api.showToast(`「${item.name}」 저장에 실패했어요. 연결을 확인해주세요.`)
+      }
+    }
+    return allOk
+  }
+  const queueSave = (nextUnit) => {
+    if (source !== 'remote' || !nextUnit?.id) return
+    dirtyRef.current.set(nextUnit.id, nextUnit)
+    window.clearTimeout(flushTimer.current)
+    flushTimer.current = window.setTimeout(() => { flushPending() }, 600)
+  }
+
+  useEffect(() => {
+    if (selectedId || !units.length) return
+    setSelectedId(units.find(needsReviewUnit)?.id ?? units[0].id)
+  }, [units, selectedId])
 
   const statusById = useMemo(() => new Map(units.map((u) => [u.id, unitStatusKey(u)])), [units])
   const counts = useMemo(() => {
@@ -105,13 +175,15 @@ export default function TaggingStudio({ api, embedded = false }) {
     return out
   }, [statusById])
 
+  const needle = query.trim().toLowerCase()
   const listed = units.filter((u) => {
+    if (needle && !`${u.brand} ${u.name}`.toLowerCase().includes(needle)) return false
     if (listFilter === 'all') return true
     if (listFilter === 'needs-review') return needsReviewUnit(u)
     return statusById.get(u.id) === listFilter
   })
   /* 현재 항목이 검수 완료되어 큐에서 빠지면 다음 검수 항목을 즉시 보여준다. */
-  const unit = listed.find((u) => u.id === selectedId) || listed[0] || units.find((u) => u.id === selectedId) || units[0]
+  const unit = listed.find((u) => u.id === selectedId) || listed[0] || units.find((u) => u.id === selectedId) || units[0] || EMPTY_UNIT
   const { errs, warns } = useMemo(() => validateUnit(unit), [unit])
   const total = totalTags(unit)
   const finalTags = FIELD_DEFS.flatMap((d) =>
@@ -156,7 +228,12 @@ export default function TaggingStudio({ api, embedded = false }) {
   }
 
   const patchUnit = (updater) => {
-    setUnits((prev) => prev.map((u) => (u.id === unit.id ? updater(u) : u)))
+    setUnits((prev) => prev.map((u) => {
+      if (u.id !== unit.id) return u
+      const next = updater(u)
+      queueSave(next)
+      return next
+    }))
   }
 
   const setFieldUnlocked = (key, unlocked) => {
@@ -173,16 +250,20 @@ export default function TaggingStudio({ api, embedded = false }) {
   }
 
   const restoreAiField = (key) => {
-    const seed = TAGGING_SEED.find((candidate) => candidate.id === unit.id)
-    if (!seed) return
+    /* 원격 모드에는 TAGGING_SEED가 없다 — 서버가 준 AI 원본 스냅샷(unit.aiFields)을 쓴다. */
+    const origin = source === 'remote' ? unit.aiFields : TAGGING_SEED.find((candidate) => candidate.id === unit.id)?.fields
+    if (!origin) return
     /* 대분류를 되돌릴 때 종속 사전도 함께 복원해 서로 허용되지 않는 조합이 남지 않게 한다. */
     const keys = key === 'category' ? ['category', 'subtype', 'type'] : [key]
+    const hadDecision = unit.decision
+    const unitId = unit.id
+    const unitName = unit.name
     patchUnit((current) => {
       const fields = { ...current.fields }
       const tagRequest = { ...current.tagRequest }
       for (const restoreKey of keys) {
-        fields[restoreKey] = cloneSeedField(seed.fields[restoreKey])
-        tagRequest[restoreKey] = !!seed.tagRequest?.[restoreKey]
+        fields[restoreKey] = { ...origin[restoreKey], selected: [...origin[restoreKey].selected] }
+        tagRequest[restoreKey] = false
       }
       return { ...current, fields, tagRequest, decision: null }
     })
@@ -191,14 +272,45 @@ export default function TaggingStudio({ api, embedded = false }) {
       for (const restoreKey of keys) delete next[fieldEditKey(unit.id, restoreKey)]
       return next
     })
+    /* 태그를 되돌린 것만으로는 서버에 결정 변경이 실리지 않는다(리뷰 상태는 태그가
+       실제로 바뀐 편집 PATCH에서만 내려간다) — 이미 승인/반려된 문서였다면 결정
+       해제도 별도로 보내 화면과 Mongo/Flask가 갈라지지 않게 한다. */
+    if (source === 'remote' && hadDecision) {
+      saveTaggingDecision(unitId, null).then((ok) => {
+        if (!ok) api.showToast(`「${unitName}」의 승인/반려 상태를 되돌리지 못했어요. 연결을 확인해주세요.`)
+      })
+    }
     api.showToast(key === 'category' ? '대분류와 연결 항목을 AI 원본으로 되돌렸어요.' : 'AI가 분류한 원본 값으로 되돌렸어요.')
   }
 
+  /* 원격 모드에는 시드가 없다 — 서버가 준 AI 원본 스냅샷으로 되돌리고 그 값을 다시 저장한다. */
   const restoreCurrentUnit = () => {
     if (!window.confirm(`「${unit.name}」의 담당자 수정·검토 메모를 지우고 AI 원본으로 되돌릴까요?`)) return
-    const fresh = freshSeedUnit(unit.id)
-    if (!fresh) return
-    setUnits((prev) => prev.map((candidate) => candidate.id === unit.id ? fresh : candidate))
+    const hadDecision = unit.decision
+    const unitId = unit.id
+    const unitName = unit.name
+    if (source === 'remote') {
+      const restored = {
+        ...unit,
+        fields: Object.fromEntries(FIELD_DEFS.map((d) => [d.key, { ...unit.aiFields[d.key], selected: [...unit.aiFields[d.key].selected] }])),
+        tagRequest: {},
+        note: '',
+        decision: null,
+      }
+      setUnits((prev) => prev.map((c) => (c.id === unit.id ? restored : c)))
+      queueSave(restored)
+      /* 태그를 되돌린 것만으로는 서버에 결정 변경이 실리지 않는다 — 이미 승인/반려된
+         문서였다면 결정 해제도 별도로 보내 화면과 Mongo/Flask가 갈라지지 않게 한다. */
+      if (hadDecision) {
+        saveTaggingDecision(unitId, null).then((ok) => {
+          if (!ok) api.showToast(`「${unitName}」의 승인/반려 상태를 되돌리지 못했어요. 연결을 확인해주세요.`)
+        })
+      }
+    } else {
+      const fresh = freshSeedUnit(unit.id)
+      if (!fresh) return
+      setUnits((prev) => prev.map((candidate) => candidate.id === unit.id ? fresh : candidate))
+    }
     setUnlockedFields((prev) => Object.fromEntries(
       Object.entries(prev).filter(([key]) => !key.startsWith(`${unit.id}:`)),
     ))
@@ -271,15 +383,38 @@ export default function TaggingStudio({ api, embedded = false }) {
     patchUnit((u) => ({ ...u, tagRequest: { ...u.tagRequest, [key]: !u.tagRequest[key] } }))
   }
 
-  const approve = () => {
+  /* 승인/반려 실패 시 화면 배지만 조용히 되돌린다(queueSave를 또 타지 않도록 patchUnit이
+     아니라 setUnits로 직접 — 저장이 막힌 상태에서 같은 필드를 다시 큐잉해 재실패 토스트를
+     겹쳐 띄우지 않기 위해서다). */
+  const revertDecision = (id, decision) => {
+    setUnits((prev) => prev.map((u) => (u.id === id ? { ...u, decision } : u)))
+  }
+
+  const approve = async () => {
     if (errs.length) return api.showToast('규칙 위반이 있어 승인할 수 없어요.')
     if (unreviewedFields.length) return api.showToast('미검토 항목이 남아 있어요. 확인 후 승인해주세요.')
+    const previousDecision = unit.decision
     patchUnit((u) => ({ ...u, decision: 'approved' }))
+    if (source === 'remote') {
+      if (!(await flushPending())) return revertDecision(unit.id, previousDecision)
+      if (!(await saveTaggingDecision(unit.id, 'approved'))) {
+        revertDecision(unit.id, previousDecision)
+        return api.showToast('승인을 저장하지 못했어요. 연결을 확인해주세요.')
+      }
+    }
     api.showToast('승인 처리되었습니다.')
   }
 
-  const reject = () => {
+  const reject = async () => {
+    const previousDecision = unit.decision
     patchUnit((u) => ({ ...u, decision: 'rejected' }))
+    if (source === 'remote') {
+      if (!(await flushPending())) return revertDecision(unit.id, previousDecision)
+      if (!(await saveTaggingDecision(unit.id, 'rejected'))) {
+        revertDecision(unit.id, previousDecision)
+        return api.showToast('반려를 저장하지 못했어요. 연결을 확인해주세요.')
+      }
+    }
     api.showToast('반려 처리되었습니다.')
   }
 
@@ -306,6 +441,14 @@ export default function TaggingStudio({ api, embedded = false }) {
     api.showToast('카탈로그 원본으로 되돌렸어요.')
   }
 
+  if (source === 'loading') {
+    return (
+      <section className={'sb-tagging' + (embedded ? ' sb-tagging--embedded' : '')}>
+        <p className="sb-tagging__loading">태깅 데이터를 불러오는 중…</p>
+      </section>
+    )
+  }
+
   return (
     <section className={'sb-tagging' + (embedded ? ' sb-tagging--embedded' : '')}>
       <div className="sb-tagging__head">
@@ -316,6 +459,18 @@ export default function TaggingStudio({ api, embedded = false }) {
             언제든 AI 원본으로 되돌릴 수 있어요.
           </p>
         </div>
+        {source === 'local' && (
+          <p className="sb-tagging__fallback">
+            사내망 태깅 서버에 닿지 못해 <b>예시 데이터</b>를 보고 있어요. 실제 검토는 사내망에서 열어주세요.
+          </p>
+        )}
+        <input
+          className="sb-tagging__search"
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="브랜드·상품명 검색"
+        />
         <div className="sb-tagging__filters">
           <button
             type="button"
@@ -350,9 +505,11 @@ export default function TaggingStudio({ api, embedded = false }) {
           <button type="button" className="sb-btn sb-btn--ghost sb-btn--small" onClick={exportJson}>
             JSON 내보내기
           </button>
-          <button type="button" className="sb-btn sb-btn--ghost sb-btn--small" onClick={resetAll}>
-            원본으로 초기화
-          </button>
+          {source !== 'remote' && (
+            <button type="button" className="sb-btn sb-btn--ghost sb-btn--small" onClick={resetAll}>
+              원본으로 초기화
+            </button>
+          )}
           {!embedded && <button type="button" className="sb-btn sb-btn--ghost sb-btn--small" onClick={api.closeTaggingStudio}>
             홈으로
           </button>}
@@ -411,6 +568,19 @@ export default function TaggingStudio({ api, embedded = false }) {
               </dd>
               <dt>상품 ID</dt>
               <dd><code>{unit.id}</code></dd>
+              {source === 'remote' && (
+                <>
+                  <dt>AI 확신도</dt>
+                  <dd>
+                    <span className={`sb-tagging-conf sb-tagging-conf--${confLevel(unit.confidence)}`} title="AI 확신도">
+                      <i style={{ width: `${unit.confidence}%` }} />
+                      <b>{unit.confidence}%</b>
+                    </span>
+                  </dd>
+                  <dt>AI 판단 근거</dt>
+                  <dd>{unit.rationale}</dd>
+                </>
+              )}
             </dl>
           </div>
         </aside>
@@ -471,13 +641,15 @@ export default function TaggingStudio({ api, embedded = false }) {
                     </span>
                   </div>
                   <div className="sb-tagging-field__meta">
-                    <span
-                      className={`sb-tagging-conf sb-tagging-conf--${confLevel(field.confidence)}`}
-                      title="AI 확신도"
-                    >
-                      <i style={{ width: `${field.confidence}%` }} />
-                      <b>{field.confidence}%</b>
-                    </span>
+                    {source !== 'remote' && (
+                      <span
+                        className={`sb-tagging-conf sb-tagging-conf--${confLevel(field.confidence)}`}
+                        title="AI 확신도"
+                      >
+                        <i style={{ width: `${field.confidence}%` }} />
+                        <b>{field.confidence}%</b>
+                      </span>
+                    )}
                     <span className={`sb-tagging-chip sb-tagging-chip--${status.cls}`}>{status.label}</span>
                     <span className={'sb-tagging-origin' + (field.origin === 'human' ? ' sb-tagging-origin--human' : '')}>
                       {field.origin === 'ai' ? 'AI' : '담당자'}
@@ -531,13 +703,15 @@ export default function TaggingStudio({ api, embedded = false }) {
                   })}
                 </div>
                 <div className="sb-tagging-field__ft">
-                  <button
-                    type="button"
-                    className="sb-tagging-why"
-                    onClick={() => setOpenWhy((prev) => ({ ...prev, [def.key]: !prev[def.key] }))}
-                  >
-                    {openWhy[def.key] ? '근거 접기 ▴' : '선택 근거 ▾'}
-                  </button>
+                  {source !== 'remote' && (
+                    <button
+                      type="button"
+                      className="sb-tagging-why"
+                      onClick={() => setOpenWhy((prev) => ({ ...prev, [def.key]: !prev[def.key] }))}
+                    >
+                      {openWhy[def.key] ? '근거 접기 ▴' : '선택 근거 ▾'}
+                    </button>
+                  )}
                   {field.status !== 'done' && (
                     <button type="button" className="sb-tagging-mini sb-tagging-mini--ok" onClick={() => markDone(def.key)}>
                       {field.status === 'fix' ? '수정 완료로 표시' : '확인 완료로 표시'}
@@ -557,7 +731,7 @@ export default function TaggingStudio({ api, embedded = false }) {
                     </button>
                   )}
                 </div>
-                {openWhy[def.key] && <p className="sb-tagging-rationale">{field.rationale}</p>}
+                {source !== 'remote' && openWhy[def.key] && <p className="sb-tagging-rationale">{field.rationale}</p>}
               </section>
             )
           })}

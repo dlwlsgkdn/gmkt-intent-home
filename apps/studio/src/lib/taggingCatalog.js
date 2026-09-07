@@ -7,8 +7,9 @@
  * 점검하는 곳: 애매한 필드(미검토)만 확인하고, 규칙 위반(수정 필요)을 고친 뒤
  * 작업 단위를 승인/반려한다.
  *
- * 검토 상태는 이 브라우저 localStorage에만 저장한다 — 계정 서버 동기화 기계 밖의
- * 검토 유틸이라서다. 기기 간 이동·카탈로그 반영은 JSON 내보내기가 담당한다.
+ * 검토 상태는 사내망 tagging-api가 Mongo에서 읽고 되쓴다 — 계정 서버 동기화 기계 밖의
+ * 별도 경로다. API에 닿지 못하면(배포 환경 등) 예시 데이터로 폴백하고, 그 폴백 한정으로
+ * 이 브라우저 localStorage에 저장하며 기기 간 이동·카탈로그 반영은 JSON 내보내기가 담당한다.
  * (AI 확신도·근거는 데모용 목데이터 — 카탈로그 원본은 코드라 자동 반영되지 않는다)
  */
 
@@ -41,12 +42,40 @@ export const FIELD_DEFS = [
   { key: 'type', label: '타입', min: 1, max: 2, required: true },
   { key: 'concern', label: '고민', min: 0, max: 2, required: false },
   { key: 'result', label: '결과', min: 1, max: 2, required: true },
-  { key: 'condition', label: '조건', min: 0, max: 1, required: false },
+  { key: 'condition', label: '조건', min: 0, max: 2, required: false },
 ]
 
 export const TAG_LIMIT = { min: 3, max: 10 }
 
+/* 사전의 원천은 서버가 실어 보내는 taxonomy(=Python 저장소의 taxonomy.json)다.
+   위 상수들은 서버가 없을 때(배포본·사내망 밖) 쓰는 폴백으로 남는다. */
+let TAXONOMY = null
+export function applyTaxonomy(taxonomy) {
+  TAXONOMY = taxonomy && Array.isArray(taxonomy.categories) ? taxonomy : null
+}
+
+/* 그룹 스코프: 대분류 → 그룹(category_groups) → 그 그룹에 속한 값만(sub_types_groups 등) */
+const scoped = (key, groupKey, category) => {
+  const all = TAXONOMY[key] || []
+  const group = TAXONOMY.category_groups?.[category]
+  const groups = TAXONOMY[groupKey]
+  if (!group || !groups) return all
+  return all.filter((value) => !groups[value] || groups[value].includes(group))
+}
+
 export function optionsFor(key, category) {
+  if (TAXONOMY) {
+    switch (key) {
+      case 'category': return TAXONOMY.categories || []
+      case 'subtype': return category ? scoped('sub_types', 'sub_types_groups', category) : []
+      case 'area': return scoped('body_parts', 'body_parts_groups', category)
+      case 'type': return scoped('skin_types', 'skin_types_groups', category)
+      case 'concern': return scoped('concerns', 'concerns_groups', category)
+      case 'result': return scoped('results', 'results_groups', category)
+      case 'condition': return TAXONOMY.conditions || []
+      default: return []
+    }
+  }
   switch (key) {
     case 'category': return CATEGORIES
     case 'subtype': return category ? SUBTYPES[category] || [] : []
@@ -445,5 +474,56 @@ export function taggingExportPayload(units) {
       })),
       finalTags: FIELD_DEFS.flatMap((d) => u.fields[d.key].selected),
     })),
+  }
+}
+
+/* ── 원격(사내망 tagging-api) ──
+   실패하면 null을 돌려준다 — 호출부가 목업 시드로 폴백해 화면이 깨지지 않게 한다. */
+const TAGGING_API = '/api/tagging'
+
+export async function fetchTaggingBootstrap() {
+  try {
+    const res = await fetch(`${TAGGING_API}/bootstrap`)
+    if (!res.ok) throw new Error(`bootstrap ${res.status}`)
+    const data = await res.json()
+    if (!Array.isArray(data.units)) throw new Error('units 없음')
+    applyTaxonomy(data.taxonomy)
+    return data
+  } catch (err) {
+    console.warn('[tagging] 원격 로드 실패 — 목업으로 표시합니다:', err.message)
+    applyTaxonomy(null)
+    return null
+  }
+}
+
+/* 편집 저장. 서버가 화이트리스트를 들고 있으므로 화면은 필요한 것만 실어 보낸다. */
+export async function saveTaggingUnit(unit) {
+  const body = {
+    fields: Object.fromEntries(FIELD_DEFS.map((d) => {
+      const f = unit.fields[d.key]
+      return [d.key, { selected: f.selected, rep: f.rep, status: f.status, origin: f.origin }]
+    })),
+    tagRequest: unit.tagRequest || {},
+    note: unit.note || '',
+  }
+  return postTagging(`/units/${encodeURIComponent(unit.id)}`, 'PATCH', body)
+}
+
+export async function saveTaggingDecision(id, decision) {
+  return postTagging(`/units/${encodeURIComponent(id)}/review`, 'POST', { decision })
+}
+
+async function postTagging(path, method, body) {
+  try {
+    const res = await fetch(`${TAGGING_API}${path}`, {
+      method,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) throw new Error(`${method} ${path} ${res.status}`)
+    return true
+  } catch (err) {
+    console.warn('[tagging] 저장 실패:', err.message)
+    return false
   }
 }
