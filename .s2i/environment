@@ -21,3 +21,5 @@ PORT=8080
 # zod@4.4.3 을 포함해 1005개 버전이 다 있다. .npmrc 로 리포에 박지 않는 이유는 사외에서
 # 일하는 개발자의 npm install 이 깨지기 때문 — 빌드 환경에만 건다.
 NPM_CONFIG_REGISTRY=http://prm.gmarket.com/repository/npm-group
+
+

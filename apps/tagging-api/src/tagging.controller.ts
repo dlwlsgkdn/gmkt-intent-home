@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common'
 import { TaggingService } from './tagging.service'
 
-@Controller()
+@Controller('tagging')
 export class TaggingController {
   constructor(private readonly tagging: TaggingService) {}
 
