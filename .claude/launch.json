@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "scenario-studio",
-      "runtimeExecutable": "/Users/jinhalee/.nvm/versions/node/v24.5.0/bin/node",
+      "runtimeExecutable": "node",
       "runtimeArgs": [
         "node_modules/vite/bin/vite.js",
         "apps/studio",
@@ -16,7 +16,7 @@
     },
     {
       "name": "pages-static",
-      "runtimeExecutable": "/Users/jinhalee/.nvm/versions/node/v24.5.0/bin/node",
+      "runtimeExecutable": "node",
       "runtimeArgs": [
         "node_modules/vite/bin/vite.js",
         "preview",

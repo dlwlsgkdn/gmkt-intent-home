@@ -6,3 +6,5 @@ node_modules/
 dist/
 # MediaPipe 런타임 — 설치된 패키지에서 predev/prebuild가 복사한다 (12MB 바이너리)
 apps/studio/public/mediapipe/wasm/
+# 에이전트 작업 산출물 — 커밋 대상 아님
+.superpowers/
