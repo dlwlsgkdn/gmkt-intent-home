@@ -19,6 +19,66 @@
 .sb-admin--wide {
   max-width: 1600px;
 }
+
+/* AI 지시서 작업대 — 가운데 편집, 양옆에 고객 화면 두 대(왼쪽 = 변경 전 운영, 오른쪽 = 변경 후 시험안).
+   두 폰이 설 자리가 필요해 이 작업대가 있을 때만 컨테이너를 더 넓게 편다 */
+.sb-admin-app .sb-admin--wide:has(.sb-prompt-workbench) { max-width: 1800px; }
+.sb-prompt-workbench { display: grid; grid-template-columns: minmax(300px, 360px) minmax(0, 1fr) minmax(320px, 390px); align-items: start; gap: 18px; }
+.sb-prompt-workbench > .sb-prompt-trial { min-width: 0; grid-column: 2; grid-row: 1; }
+.sb-scenario-preview--before { grid-column: 1; grid-row: 1; }
+.sb-scenario-preview--after { grid-column: 3; grid-row: 1; }
+.sb-prompt-workbench .sb-prompt-trial__controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.sb-prompt-workbench .sb-prompt-trial__controls > :first-child { grid-column: 1 / -1; }
+.sb-prompt-workbench .sb-prompt-trial__intro { grid-template-columns: 1fr; gap: 8px; }
+.sb-prompt-workbench .sb-prompt-trial__intro > span { width: fit-content; }
+.sb-prompt-workbench .sb-prompt-trial__overall-body { grid-template-columns: 1fr; }
+.sb-scenario-preview { position: sticky; top: 20px; min-width: 0; overflow: hidden; border: 1px solid var(--sb-n-200); border-radius: var(--sb-r-2xl); background: var(--sb-n-0); box-shadow: var(--sb-shadow-lg); }
+.sb-scenario-preview__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 18px 0; }
+.sb-scenario-preview__head span { color: var(--sb-muted); font-size: var(--sb-t-caption); }
+.sb-scenario-preview__head h2 { margin: 4px 0 0; color: var(--sb-ink); font-size: var(--sb-t-title); font-weight: 500; }
+.sb-scenario-preview__head > b { border-radius: var(--sb-r-pill); padding: 4px 9px; color: var(--sb-info); background: var(--sb-info-soft); font-size: var(--sb-t-caption); white-space: nowrap; }
+.sb-scenario-preview__note { margin: 8px 18px 14px; color: var(--sb-muted); font-size: var(--sb-t-caption); }
+.sb-scenario-preview--before .sb-scenario-preview__head > b.is-before { color: var(--sb-ink-2); background: var(--sb-n-100); }
+.sb-scenario-preview--before .sb-scenario-preview__viewport { border-top: 1px solid var(--sb-n-200); }
+.sb-scenario-preview__mirror-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 72px 24px; text-align: center; }
+.sb-scenario-preview__mirror-empty i { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; color: var(--sb-subtle); background: var(--sb-n-100); font-style: normal; font-size: var(--sb-t-title); }
+.sb-scenario-preview__mirror-empty p { margin: 0; color: var(--sb-muted); font-size: var(--sb-t-caption); line-height: 1.7; }
+.sb-scenario-preview__steps { display: flex; gap: 8px; padding: 0 18px 14px; }
+.sb-scenario-preview__steps button { display: flex; align-items: center; justify-content: center; gap: 6px; flex: 1; border: 0; padding: 6px; background: transparent; color: var(--sb-muted); font: inherit; font-size: var(--sb-t-caption); cursor: pointer; }
+.sb-scenario-preview__steps button > span { display: grid; place-items: center; width: 22px; height: 22px; border-radius: var(--sb-r-pill); background: var(--sb-n-100); }
+.sb-scenario-preview__steps button.is-on { color: var(--sb-info); font-weight: 500; }
+.sb-scenario-preview__steps button.is-on > span { background: var(--sb-info-soft); }
+.sb-scenario-preview button:disabled { opacity: .5; cursor: default; }
+.sb-scenario-preview__viewport { height: min(570px, 60vh); min-height: 320px; overflow: auto; overscroll-behavior: contain; border-block: 1px solid var(--sb-n-200); background: var(--sb-surface-sunken); }
+.sb-scenario-preview .sb-scenario-preview__phone { width: 100%; max-width: 390px; min-height: 100%; height: auto; margin: 0 auto; border: 0; border-radius: 0; box-shadow: none; padding: 16px 12px; box-sizing: border-box; }
+.sb-scenario-preview__search { display: flex; flex-direction: column; gap: 18px; padding: 28px 14px; }
+.sb-scenario-preview__brand { color: var(--sb-ink); font-size: var(--sb-t-title); font-weight: 500; }
+.sb-scenario-preview__search h3 { margin: 6px 0 0; color: var(--sb-ink); font-size: var(--sb-t-title); font-weight: 500; }
+.sb-scenario-preview__search p { margin: 0; color: var(--sb-muted); font-size: var(--sb-t-caption); line-height: 1.6; }
+.sb-scenario-preview__search label { display: flex; flex-direction: column; gap: 8px; color: var(--sb-ink-2); font-size: var(--sb-t-caption); }
+.sb-scenario-preview__search textarea { box-sizing: border-box; width: 100%; resize: vertical; border: 1px solid var(--sb-n-200); border-radius: var(--sb-r-lg); padding: 12px; color: var(--sb-ink); background: var(--sb-n-0); font: inherit; font-size: var(--sb-t-body); line-height: 1.6; }
+.sb-scenario-preview__search small, .sb-scenario-preview__foot small { color: var(--sb-muted); font-size: var(--sb-t-caption); line-height: 1.6; }
+.sb-scenario-preview__foot { display: flex; flex-direction: column; gap: 10px; padding: 14px 18px 18px; }
+.sb-scenario-preview__foot > span { color: var(--sb-muted); font-size: var(--sb-t-caption); }
+.sb-scenario-preview__foot > p { margin: 0; color: var(--sb-info); font-size: var(--sb-t-caption); line-height: 1.6; }
+.sb-scenario-preview__actions { display: flex; justify-content: space-between; gap: 10px; }
+.sb-scenario-preview__warning { margin: 0; padding: 10px 18px; color: var(--sb-warn); background: var(--sb-warn-soft); font-size: var(--sb-t-caption); line-height: 1.6; }
+.sb-scenario-preview .sb-survey-card__next { display: none; }
+@media (max-width: 1460px) {
+  /* 폭이 모자라면 거울(변경 전)은 본문 아래로 내려가고, 시험 화면은 오른쪽에 남는다 */
+  .sb-prompt-workbench { grid-template-columns: minmax(0, 1fr) 350px; gap: 14px; }
+  .sb-prompt-workbench > .sb-prompt-trial { grid-column: 1; }
+  .sb-scenario-preview--after { grid-column: 2; grid-row: 1; }
+  .sb-scenario-preview--before { position: static; grid-column: 1; grid-row: 2; }
+  .sb-prompt-workbench .sb-prompt-trial__controls { grid-template-columns: 1fr; }
+  .sb-prompt-workbench .sb-prompt-trial__compare { grid-template-columns: 1fr; }
+}
+@media (max-width: 900px) {
+  .sb-prompt-workbench { grid-template-columns: minmax(0, 1fr); }
+  .sb-scenario-preview { position: static; width: 100%; max-width: 480px; justify-self: center; }
+  .sb-scenario-preview--after { grid-column: 1; grid-row: 1; }
+  .sb-scenario-preview--before { grid-column: 1; grid-row: 3; }
+}
 .sb-admin__muted {
   font-size: var(--sb-t-caption);
   color: var(--sb-subtle);
