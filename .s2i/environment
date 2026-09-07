@@ -22,8 +22,4 @@ PORT=8080
 # 일하는 개발자의 npm install 이 깨지기 때문 — 빌드 환경에만 건다.
 NPM_CONFIG_REGISTRY=http://prm.gmarket.com/repository/npm-group
 
-# 워크스페이스 상태 API(/api/state, apps/tagging-api)는 DATABASE_URL(비밀값 — 여긴 안 둔다,
-# 시크릿/컨피그맵으로 주입할 것)이 있으면 Neon Postgres, 없으면 사내 Mongo(MONGO_URI 필요)로
-# 떨어진다. 퓨전은 보통 Neon(외부 인터넷)에 닿을지 불확실해 Mongo 경로가 기본이 될 것 —
-# 그때 컬렉션 이름을 바꾸고 싶으면만 아래를 켠다 (기본값 app_state로 충분하면 그대로 둘 것).
-# STATE_COLL=app_state
+

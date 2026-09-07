@@ -1,6 +1,6 @@
 /* 워크스페이스 상태 API의 순수 로직 — DB 없이 테스트할 수 있는 부분만 여기 둔다.
    원본은 api/state.js (Vercel 함수, Neon Postgres). 이 파일은 그 계약을 그대로
-   옮기되 저장소(Postgres/Mongo)를 갈아끼울 수 있도록 IO를 걷어냈다. */
+   옮기되 IO 를 걷어내 저장소(사내 Mongo) 없이도 규칙을 검증할 수 있게 했다. */
 
 /* 키 화이트리스트 — api/state.js 의 정규식 그대로. 절대 바꾸지 말 것. */
 export const KEY_PATTERN =

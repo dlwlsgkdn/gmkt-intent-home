@@ -1,5 +1,5 @@
 /* 워크스페이스 상태 API — 원본은 api/state.js (Vercel 함수, Neon 전용).
-   여기서는 저장소(Postgres/Mongo)를 StateService 가 고르고, 이 컨트롤러는 그 위에
+   여기서는 저장소를 StateService 가 쥐고, 이 컨트롤러는 그 위에
    원본과 같은 요청/응답 계약만 구현한다. 응답 JSON 의 모양·키 이름은 FE(hooks/remote/)가
    그대로 기대하므로 절대 바꾸지 않는다 — 주석 상단 문서는 api/state.js 를 그대로 참고. */
 import { Body, Controller, Delete, Get, Patch, Post, Put, Query, Res } from '@nestjs/common'
