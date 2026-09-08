@@ -1,4 +1,5 @@
-/* 서버 영속화 클라이언트 — /api/state (Vercel Functions + Neon Postgres).
+/* 서버 영속화 클라이언트 — /api/state (Vercel: api/state.js 함수 · 사내 퓨전: apps/tagging-api).
+   저장소는 2026-09 Neon Postgres에서 사내 MongoDB로 이관했다 — 와이어 계약은 그대로다.
    localStorage는 즉시 캐시(자동). 서버 업로드는 useWorkspace가 두 경로로 수행한다:
    수동("서버에 저장" 버튼 — 빌더의 연속 편집)과 자동 트랜잭션 싱크(스튜디오 밖 단발
    작업 — 프로필·시나리오 생성, 쓰레드 기록, 가져오기 등). 충돌 정책: 문서(키) 단위
@@ -13,9 +14,11 @@
 
 /* 실행 환경 데이터 프로필:
    - 'local' → localStorage만 사용 (서버 하이드레이션·미러링 전부 끔)
-   - 'prod'  → localStorage + Neon DB 미러링
+   - 'prod'  → localStorage + 서버 DB 미러링
    기본값: vite 개발 서버(npm run dev)는 local, 빌드 산출물(배포)은 prod.
    오버라이드: VITE_DATA_PROFILE=prod npm run dev (로컬에서 운영 DB에 붙어 확인할 때) */
+import { apiBase } from './apiOrigin.js'
+
 const OVERRIDE = import.meta.env.VITE_DATA_PROFILE
 export const DATA_PROFILE =
   OVERRIDE === 'local' || OVERRIDE === 'prod'
@@ -25,16 +28,11 @@ export const REMOTE_ENABLED = DATA_PROFILE === 'prod'
 
 console.info(
   `[remote] 데이터 프로필: ${DATA_PROFILE} — ` +
-  (REMOTE_ENABLED ? 'localStorage + Neon DB 미러링' : 'localStorage 전용 (서버 동기화 없음)')
+  (REMOTE_ENABLED ? 'localStorage + 서버 DB 미러링' : 'localStorage 전용 (서버 동기화 없음)')
 )
 
-/* Vercel 배포·로컬 개발(vite 프록시)은 같은 오리진, GitHub Pages 등은 Vercel API로 교차 호출 */
-const SAME_ORIGIN =
-  typeof location !== 'undefined' &&
-  (/(^|\.)vercel\.app$/.test(location.hostname) ||
-    location.hostname === 'localhost' ||
-    location.hostname === '127.0.0.1')
-const API = (SAME_ORIGIN ? '' : 'https://ddak-scenario-studio.vercel.app') + '/api/state'
+/* 오리진 규칙은 apiOrigin.js 한 곳 — 기본은 같은 오리진, GitHub Pages 만 교차 호출 */
+const API = apiBase('/api/state')
 
 async function getJson(url) {
   const res = await fetch(url, { headers: { accept: 'application/json' } })

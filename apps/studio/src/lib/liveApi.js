@@ -1,16 +1,13 @@
 /* 라이브 생성 체험 클라이언트 — BFF threads API (API.md §1).
-   FE는 same-origin `/api/bff/*`만 부른다: 배포에선 루트 middleware.js(엣지)가 BFF로
-   rewrite + 서비스 토큰을 주입하고, 로컬 개발에선 vite 프록시(vite.config.js)가 로컬
-   BFF(8788)로 넘긴다. GitHub Pages 등 교차 오리진은 스튜디오 Vercel 도메인으로 부른다
-   (remote.js와 같은 규칙). 설문·계획 생성은 SSE(status→result|error)를 fetch 스트림으로
+   FE는 same-origin `/api/bff/*`만 부른다: Vercel 에선 루트 middleware.js(엣지)가, 사내
+   퓨전에선 apps/tagging-api 의 bff-proxy 가 BFF로 rewrite + 서비스 토큰을 주입하고,
+   로컬 개발에선 vite 프록시(vite.config.js)가 로컬 BFF(8788)로 넘긴다. 오리진 판정은
+   apiOrigin.js 한 곳에 있다. 설문·계획 생성은 SSE(status→result|error)를 fetch 스트림으로
    소비한다 — POST라 EventSource를 못 쓴다. */
 
-const SAME_ORIGIN =
-  typeof location !== 'undefined' &&
-  (/(^|\.)vercel\.app$/.test(location.hostname) ||
-    location.hostname === 'localhost' ||
-    location.hostname === '127.0.0.1')
-const BASE = (SAME_ORIGIN ? '' : 'https://ddak-scenario-studio.vercel.app') + '/api/bff'
+import { apiBase } from './apiOrigin.js'
+
+const BASE = apiBase('/api/bff')
 
 /* 실패 안내 정책(API.md): 가짜 콘텐츠로 대체하지 않고 code·message·retryable을 그대로 전한다 */
 export class LiveApiError extends Error {

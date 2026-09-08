@@ -1,12 +1,9 @@
 /* 운영 콘솔(#ops) 클라이언트 — BFF `/api/admin/*` (API 경로·오리진 규칙은 liveApi.js와 동일).
    별도 인증 없음 — 서비스 토큰은 엣지 미들웨어가 주입하고, 옛 관리 토큰(x-admin-token) 게이트는 뗐다. */
 
-const SAME_ORIGIN =
-  typeof location !== 'undefined' &&
-  (/(^|\.)vercel\.app$/.test(location.hostname) ||
-    location.hostname === 'localhost' ||
-    location.hostname === '127.0.0.1')
-const BASE = (SAME_ORIGIN ? '' : 'https://ddak-scenario-studio.vercel.app') + '/api/bff/admin'
+import { apiBase } from './apiOrigin.js'
+
+const BASE = apiBase('/api/bff/admin')
 export const PROMPT_TEST_SESSION_KEY = 'ddak-ops-prompt-test-v1'
 
 export class AdminApiError extends Error {
