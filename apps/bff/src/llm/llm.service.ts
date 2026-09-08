@@ -1,9 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common'
 import Anthropic from '@anthropic-ai/sdk'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
-import type { z } from 'zod'
+import { z } from 'zod'
 import {
   AssistAdminPromptResult,
+  AssistPromptFlowResult,
+  PromptFlowChange,
+  type AssistPromptFlowBody,
   type AdminModelOption,
   type Answer,
   type AssistAdminPromptBody,
@@ -198,6 +201,37 @@ export class LlmService implements LlmPort {
       this.logger.warn(`지시서 수정안 첫 시도 실패 — 자동 재시도: ${error.code}`)
       return generateProposal()
     }
+  }
+
+  async assistFlowRevision(input: AssistPromptFlowBody): Promise<AssistPromptFlowResult> {
+    const system = [
+      '너는 고객 여정 전체의 지시서 조정자다. 쉬운 자연어 요청 하나를 설문 → 계획 안내·상품 검색 전체에 일관되게 반영한다.',
+      'instruction의 핵심 목적을 먼저 해석하고 prompts 세 원문을 함께 읽어 필요한 지시서만 changes에 담는다. 무관한 지시서는 바꾸지 않는다.',
+      'focus는 특히 신경 쓸 부분이며 수정 범위 제한이 아니다. 비어 있으면 스스로 관련 부분을 판단한다. 다른 부분도 필요하면 바꾸고 reason으로 연결 이유를 설명한다.',
+      '예: 실전 팁을 원하면 설문은 실제로 막히는 상황과 가진 도구를 확인하고, 계획은 상황·행동·확인·실패 보정을 설명하며, 상품은 그 행동에 필요한 제품과 사용법 근거를 찾도록 역할을 나눈다. 모든 요청에 이 예시를 강제로 적용하지 않는다.',
+      '현재 실행 구조: 설문 응답 뒤 계획 안내와 상품·콘텐츠 검색이 병렬 실행된다. 안내는 검색 결과를 읽지 못한다. 실행 순서 변경, 영상 시청·외부 자료 분석, 자동 학습을 프롬프트만으로 구현했다고 약속하지 않는다. 이런 요청은 가능한 문구 개선과 구분해 warnings에 쉬운 한국어로 알린다.',
+      '각 변경은 id, proposedText(수정된 전체 원문), reason(사용자에게 설명할 이유)를 담는다. id는 입력 목록에서만 고르고 중복시키지 않는다.',
+      '각 원문의 {{PLACEHOLDER}}는 철자와 개수를 모두 보존한다. 출력 스키마·사실 검증·허용 상품 규칙은 유지한다. 구체적 팁을 위해 경험·수치·출처를 지어내지 않는다.',
+      '새 지시와 충돌하는 기존 문장을 함께 고친다. 규칙을 맨 끝에 덧붙여 모순을 남기지 않는다.',
+      'summary는 2문장 이내, reason은 항목별 2문장 이내로 쉽게 쓴다. 초등학생도 읽게 전문 용어 대신 일상어를 쓴다. 예: 원장·가변부·그라운딩 대신 고객 정보·답변·확인한 근거. 실제 변경이 필요 없으면 changes를 비우고 이유를 summary에 쓴다.',
+      'previousChanges가 있으면 직전 수정안에서 시작해 refinements를 순서대로 반영한다. 최신 추가 요청을 우선하고 이전에 합의한 개선은 유지한다. 결과 changes는 원래 prompts와 비교한 최종 전체 변경 목록이다. 직전 수정안의 변경을 누락시키지 않는다.',
+      'review는 이번 수정안 자체를 비판적으로 점검한 결과다. good은 기대되는 좋은 점, bad는 아직 부족한 점, risks는 적용할 때 생길 수 있는 문제와 확인 방법이다. 각 항목을 1~2개의 짧은 문장으로, 실제 수정 문구에 근거해 적는다. 빈 칭찬·추상적 경고·전문 용어는 쓰지 않는다.',
+      '실제 고객 화면과 사용 효과를 평가한 것처럼 쓰지 않는다. 확인할 수 없는 효과는 예상임을 밝힌다. 부족한 점이나 위험을 못 찾으면 해당 배열을 비우며 억지로 만들어내지 않는다. warnings는 실행 구조상 불가능한 요청에만 쓰고 review와 중복시키지 않는다.',
+    ].join('\n')
+    const before = new Map(input.prompts.map((prompt) => [prompt.id, prompt.text]))
+    const placeholders = (text: string) => [...text.matchAll(/\{\{[^{}\r\n]+\}\}/g)].map((match) => match[0]).sort().join('\n')
+    const { content } = await this.generate('전체 지시서 수정안 생성', AssistPromptFlowResult.extend({ changes: z.array(PromptFlowChange.omit({ baseText: true })).max(3) }), {
+      system: { text: system, custom: false }, effort: 'medium', user: JSON.stringify(input),
+    })
+    const seen = new Set<string>()
+    for (const change of content.changes) {
+      const original = before.get(change.id)
+      if (!original || seen.has(change.id) || placeholders(original) !== placeholders(change.proposedText)) {
+        throw new LlmGenerationError('llm_failed', '수정안이 원래 지시서의 필수 정보를 유지하지 못했어요. 다시 만들어 주세요.', true)
+      }
+      seen.add(change.id)
+    }
+    return { ...content, changes: content.changes.filter((change) => before.get(change.id) !== change.proposedText).map((change) => ({ ...change, baseText: before.get(change.id)! })) }
   }
 
   async generateSurvey(

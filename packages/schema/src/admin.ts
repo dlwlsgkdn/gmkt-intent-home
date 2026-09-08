@@ -152,8 +152,50 @@ export const AssistAdminPromptResult = z.object({
 })
 export type AssistAdminPromptResult = z.infer<typeof AssistAdminPromptResult>
 
+/** One request is interpreted against the whole customer flow. Focus is a preference, not an allowlist. */
+export const PromptFlowId = z.enum(['survey', 'plan-skeleton', 'plan-products'])
+export const PromptFlowText = z.object({ id: PromptFlowId, text: z.string().min(1).max(20000) })
+export const PromptFlowChange = z.object({
+  id: PromptFlowId,
+  baseText: z.string().min(1).max(20000),
+  proposedText: z.string().min(1).max(20000),
+  reason: z.string().trim().min(1).max(300),
+})
+export const PromptFlowReview = z.object({
+  good: z.array(z.string().trim().min(1).max(160)).max(3),
+  bad: z.array(z.string().trim().min(1).max(160)).max(3),
+  risks: z.array(z.string().trim().min(1).max(160)).max(3),
+})
+export const AssistPromptFlowBody = z.object({
+  previousChanges: z.array(PromptFlowChange).max(3).optional(),
+  refinements: z.array(z.string().trim().min(2).max(2000)).max(10).optional(),
+  instruction: z.string().trim().min(2).max(2000),
+  focus: z.array(PromptFlowId).max(3).default([]),
+  prompts: z.array(PromptFlowText).length(3),
+})
+export type AssistPromptFlowBody = z.infer<typeof AssistPromptFlowBody>
+export const AssistPromptFlowResult = z.object({
+  review: PromptFlowReview,
+  summary: z.string().trim().min(1).max(200),
+  warnings: z.array(z.string().trim().min(1).max(300)).max(5),
+  changes: z.array(PromptFlowChange).max(3),
+})
+export type AssistPromptFlowResult = z.infer<typeof AssistPromptFlowResult>
+export const ApplyPromptFlowBody = z.object({
+  changes: z.array(PromptFlowChange).min(1).max(3),
+  prompts: z.array(PromptFlowText).length(3),
+  summary: z.string().trim().min(1).max(200),
+})
+export type ApplyPromptFlowBody = z.infer<typeof ApplyPromptFlowBody>
+
 /** 저장 없이 비교한 지시서 시험을 나중에 검토·적용할 수 있도록 쓰레드에 남기는 스냅샷. */
 export const AdminPromptTrialRecord = z.object({
+  review: PromptFlowReview.optional(),
+  refinements: z.array(z.string().trim().min(2).max(2000)).max(10).optional(),
+  /** Optional bundle keeps older single-prompt trials readable. */
+  changes: z.array(PromptFlowChange).min(1).max(3).optional(),
+  prompts: z.array(PromptFlowText).length(3).optional(),
+  focus: z.array(PromptFlowId).max(3).optional(),
   promptId: AdminPromptId,
   promptLabel: z.string().trim().min(1).max(100),
   instruction: z.string().trim().min(2).max(2000),
