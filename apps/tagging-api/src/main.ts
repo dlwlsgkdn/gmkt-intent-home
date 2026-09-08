@@ -2,10 +2,21 @@ import 'dotenv/config'
 import { RequestMethod } from '@nestjs/common'
 import { NestFactory } from '@nestjs/core'
 import { NestExpressApplication } from '@nestjs/platform-express'
+import { json, urlencoded } from 'express'
 import { AppModule } from './app.module'
+import { bffProxy } from './bff-proxy'
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule)
+  /* 본문 파서를 끄고 직접 단다 — BFF 프록시가 파서보다 먼저 서야 요청 본문을
+     버퍼에 모으지 않고 그대로 흘려보낼 수 있다(SSE·12MB 사진). */
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false })
+  /* `/api/bff/*` → BFF. Vercel 에서는 루트 middleware.js(엣지)가 맡는 자리를,
+     스튜디오를 직접 서빙하는 사내 배포에서는 이 프록시가 대신한다. BFF_URL 이 없으면 달지 않는다. */
+  const proxy = bffProxy()
+  if (proxy) app.use('/api/bff', proxy)
+  /* 워크스페이스 상태 행은 시나리오 통째(stages·planCases)라 express 기본 100kb를 넘는다 */
+  app.use(json({ limit: '8mb' }))
+  app.use(urlencoded({ extended: true, limit: '1mb' }))
   /* 전역 접두사는 'api' — 태깅은 컨트롤러가 'tagging'을 붙여 외부 주소(/api/tagging/*)는
      그대로고, 새 워크스페이스 상태 API가 /api/state/* 로 나란히 붙는다. */
   /* 헬스체크만 접두사 밖(/health)에 둔다 — 퓨전(OpenShift) 콘솔의 Readiness Probe Path

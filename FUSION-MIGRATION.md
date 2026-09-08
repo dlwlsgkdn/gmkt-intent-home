@@ -51,7 +51,7 @@
 |---|---|---|
 | `apps/bff`, `apps/core`, `apps/tagging-api` | **이미 서버다** (NestJS, `node dist/main.js`) | 그대로 컨테이너. Vercel은 배포처였을 뿐이다 |
 | `api/pdp.js` | 지마켓 PDP iframe 프록시 | **이관 대상 아님.** FE가 2026-08에 떼어냈고 옛 배포 호환용 잔재다 |
-| `middleware.js` | `/api/bff/*` → BFF로 rewrite + `Authorization: Bearer <BFF_SERVICE_TOKEN>` 주입 | 리버스 프록시 몇 줄. `@vercel/edge` 의존만 걷어내면 된다 |
+| `middleware.js` | `/api/bff/*` → BFF로 rewrite + `Authorization: Bearer <BFF_SERVICE_TOKEN>` 주입 | **이관 완료**(2026-09-08) — `apps/tagging-api/src/bff-proxy.ts`. `BFF_URL` 을 주면 달리고, 없으면 안 달린다 |
 | `api/state.js` | 워크스페이스 상태를 Neon Postgres에 읽기/쓰기 (`@neondatabase/serverless`) | **여기가 진짜 일이다** — 아래 참고 |
 
 `api/state.js`의 쟁점은 Node가 아니라 **DB 위치**다. Neon은 외부 클라우드인데 사내 Pod에서
@@ -131,6 +131,8 @@ npm error 404 Not Found - GET http://prm.gmarket.com/nexus/content/groups/npm-gr
 | `TAXONOMY_PATH` | (선택) 레거시 파일 폴백. 컨테이너엔 그 파일이 없으므로 보통 생략 | — |
 | `STUDIO_DIST` | 스튜디오 빌드 경로. 화면까지 같이 서빙할 때만 | 화면은 안 뜨고 API만 뜬다 |
 | `PORT` | 퓨전은 보통 **8080** (`.s2i/environment` 기본값). 로컬 기본은 8790 | — |
+| `BFF_URL` | (선택) BFF 주소. 주면 `/api/bff/*` 프록시가 달린다 | 라이브 생성·운영 콘솔 탭이 404. 태깅은 정상 |
+| `BFF_SERVICE_TOKEN` | (선택) BFF 가 토큰 가드를 켰을 때. **Secret 으로 넣을 것** | BFF 가 401 |
 
 헬스체크로 쓸 경로: **`GET /health`** (전역 접두사 `api` 밖에 둔 유일한 경로 — 퓨전 콘솔의
 Readiness Probe Path 기본값이 `/health` 라 거기 맞췄다).

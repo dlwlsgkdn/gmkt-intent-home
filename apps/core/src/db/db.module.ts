@@ -1,21 +1,14 @@
 import { Global, Module } from '@nestjs/common'
-import { createDb, type Db } from './client'
-
-export const DB = Symbol('DB')
-export type DbOrNull = Db | null
+import { MongoService } from './mongo.service'
 
 /*
- * DATABASE_URL이 없으면 null을 주입한다 — 부팅은 되고(healthz 등),
- * DB를 쓰는 라우트만 503으로 명확히 실패한다 (ThreadsService.conn 참고).
+ * MONGO_URI가 없거나 연결에 실패해도 부팅은 된다(MongoService.onModuleInit 참고) —
+ * DB를 쓰는 라우트만 503으로 명확히 실패하고, healthz는 계속 200이라 쿠버네티스
+ * 프로브가 Pod을 죽이지 않는다.
  */
 @Global()
 @Module({
-  providers: [
-    {
-      provide: DB,
-      useFactory: (): DbOrNull => (process.env.DATABASE_URL ? createDb() : null),
-    },
-  ],
-  exports: [DB],
+  providers: [MongoService],
+  exports: [MongoService],
 })
 export class DbModule {}
