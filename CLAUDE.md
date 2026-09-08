@@ -8,7 +8,7 @@
 
 ```
 apps/studio/       ← 스튜디오 소스 (React 18 + Vite 5). 빌드 산출물은 apps/studio/dist (커밋 안 함)
-apps/core/         ← NestJS backend core — 쓰레드 저장·조회 (Drizzle+Neon). 실행·배포는 apps/core/README.md
+apps/core/         ← NestJS backend core — 쓰레드 저장·조회 (사내 MongoDB, 2026-09 Neon+Drizzle에서 이관). 실행·배포는 apps/core/README.md
 apps/bff/          ← NestJS BFF — LLM(설문·계획 생성, 계획은 웹 검색 병행)·core 오케스트레이션. DESIGN-LLM-SERVICE.md §4, API.md §1 참고. src/engine/ = LangGraph 그래프 엔진(전략 문서 8단계 StateGraph — interrupt/재개·병렬·custom 스트림→SSE 브리지): core KV `engine`(legacy|langgraph, 기본 legacy) + 요청 헤더 `x-ddak-engine`으로 병행 배치, checkpointer는 LANGGRAPH_DATABASE_URL 있으면 Neon lg 스키마·없으면 메모리(유실 시 core 스텝 시딩 복구 — 진실 원천은 언제나 core). 노드 로직은 @ddak/pipeline 순수 함수 소비. 지식 5종·블록리스트는 core 설정 KV(knowledge-*·guard-blocklist, 30s 캐시)로 주입 — 시스템 자리표시자({{VOCAB}} 등, 캐시 흡수)와 원장 가변부로 갈라 싣고, 검증 게이트(블록리스트·의학 단정·원장 역대조) 드롭 사유와 원장 스냅샷은 plan 스텝 payload(dropLog·ledger)에 남는다. 게이트를 통과한 상품에는 **매칭율**(`@ddak/pipeline guards/match.ts` `scoreProductMatch` — 상품 프롬프트가 매긴 skin·concern·preference 1~5(+근거 notes, 예산 없으면 price)와 결정적 가중치 피부 25·고민 30·선호 20·가격 15(원장 예산 대비 가격비)·근거 10(카탈로그/PDP+썸네일/PDP)의 가중 합산 0~100, 항목별 점수·근거·계산식 basis)을 와이어 `match`로 붙여 같은 payload 에 남긴다 — LLM 평가가 없으면 원장 facts 태그 대조 휴리스틱으로 채운다
 apps/tagging-api/  ← NestJS 서비스 — 사내망 Mongo(올리브영 상품)를 읽고 태깅 검토 결과를 되쓴다 (포트 8790). 문서↔화면 변환·되쓰기 화이트리스트는 src/mapping.ts 한 곳
 packages/schema/   ← @ddak/schema — 쓰레드 도메인·internal API zod 계약 (install 시 prepare로 dist 빌드)
@@ -31,9 +31,8 @@ legacy/            ← 옛 HTML 프로토타입 원본 (빌드 시 apps/studio/d
 ```bash
 npm run build --workspace=apps/studio       # 스튜디오 빌드. vite build && cp -R ../../legacy dist/legacy
 npm run build --workspace=apps/core         # core(NestJS) 빌드
-npm run start:dev --workspace=apps/core     # core 로컬 실행 (환경변수: apps/core/.env.example — 없어도 부팅, DB 라우트만 503)
-npm run db:generate --workspace=apps/core   # core 스키마 → drizzle/ 마이그레이션 SQL (오프라인)
-npm run db:migrate --workspace=apps/core    # 마이그레이션 SQL 순서 적용 — DB 반영은 push(diff·타입 전환 실패)보다 이쪽 (--status·--baseline 지원)
+npm run start:dev --workspace=apps/core     # core 로컬 실행 (환경변수: apps/core/.env.example — MONGO_URI 없어도/사내망 밖이라 연결 실패해도 부팅, DB 라우트만 503)
+npm run test --workspace=apps/core          # core 단위 테스트 (node --test, 네트워크·Mongo 불필요) — 문서↔응답 변환·커서·피드백 필터 등 순수 함수만
 npm run build --workspace=apps/bff && npm run e2e:mock --workspace=apps/bff  # bff 오프라인 E2E — 모의 core+Anthropic 위에서 LangGraph 엔진·legacy 전 구간 스모크 (네트워크·키 불필요)
 npm run build --workspace=apps/tagging-api      # tagging-api(NestJS) 빌드
 npm run start:dev --workspace=apps/tagging-api  # tagging-api 로컬 실행 (환경변수: MONGO_URI 등 — apps/tagging-api 참고, 사내망에서만 Mongo에 닿는다)
@@ -42,7 +41,7 @@ docker build -f apps/bff/Dockerfile -t ddak-bff .  # bff 컨테이너 (컨텍스
 ```
 개발 서버: `.claude/launch.json`의 `scenario-studio` (포트 5173), 정적 검증용 `pages-static` (포트 8899, apps/studio/dist 서빙 — 빌드 후 사용).
 
-워크스페이스 주의: `@ddak/schema`·`@ddak/pipeline`을 수정하면 소비자가 dist를 보므로 `npm run build --workspace=@ddak/schema`(또는 `--workspace=@ddak/pipeline`)로 재빌드할 것(설치 시엔 prepare가 자동 빌드). **루트 devDependencies의 drizzle-orm은 지우지 말 것** — npm이 orm을 apps/core 아래로 중첩 배치해 루트에 호이스팅된 drizzle-kit가 못 찾는 문제를, 루트 선언으로 호이스팅을 강제해 해결한 것이다(core와 버전 범위를 항상 맞출 것).
+워크스페이스 주의: `@ddak/schema`·`@ddak/pipeline`을 수정하면 소비자가 dist를 보므로 `npm run build --workspace=@ddak/schema`(또는 `--workspace=@ddak/pipeline`)로 재빌드할 것(설치 시엔 prepare가 자동 빌드). (옛 안내: 루트 devDependencies에 drizzle-orm 호이스팅 강제용 선언이 있었다 — core가 2026-09 Mongo로 이관하며 drizzle 자체를 걷어내 근거가 사라져 함께 지웠다.)
 
 **데이터 프로필** (`lib/remote.js`): 개발 서버 = `local`(localStorage 전용, 서버 동기화 없음), 빌드 산출물 = `prod`(localStorage + Neon DB 미러링). 로컬에서 운영 DB에 붙으려면 `VITE_DATA_PROFILE=prod npm run dev`. 콘솔 `[remote] 데이터 프로필:` 로그로 확인. 서버 미러링을 운영 DB 없이 검증하려면 목 API(+`VITE_API_PROXY`)를 쓰는 `scenario-studio-mockdb`(포트 5174) 참고.
 

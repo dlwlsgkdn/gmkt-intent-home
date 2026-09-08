@@ -1,8 +1,13 @@
 # ddak-core
 
-DDAK backend core — 쓰레드 저장·조회. NestJS + Drizzle + Neon Postgres.
+DDAK backend core — 쓰레드 저장·조회. NestJS + 사내 MongoDB.
 계약(요청/응답 zod 스키마)은 `@ddak/schema`(packages/schema)가 단일 출처다.
 설계 배경은 저장소 루트의 [DESIGN-LLM-SERVICE.md](../../DESIGN-LLM-SERVICE.md) §3 참고.
+
+**저장소는 사내 MongoDB다**(2026-09, Neon Postgres/Drizzle에서 이관). 사내 OpenShift Pod에서
+Neon(외부 인터넷)에 닿을지 불확실했고, 사내 Mongo는 `apps/tagging-api`가 이미 검증한 경로다.
+core는 tagging-api와 별도 프로세스라 자기 Mongo 연결을 따로 갖는다. 문서 형태는
+`src/db/schema.ts`, 문서↔API 응답 변환은 `src/db/wire.ts`(순수 함수, `test/`가 검증) 참고.
 
 ## 로컬 실행
 
@@ -11,35 +16,28 @@ DDAK backend core — 쓰레드 저장·조회. NestJS + Drizzle + Neon Postgres
 npm install
 
 # .env 준비
-cp apps/core/.env.example apps/core/.env   # DATABASE_URL·CORE_SERVICE_TOKEN 채우기
+cp apps/core/.env.example apps/core/.env   # MONGO_URI·CORE_SERVICE_TOKEN 채우기
 
 # 실행
 npm run start:dev --workspace=apps/core    # http://localhost:8790/healthz
 ```
 
-DATABASE_URL 없이도 부팅된다 — DB를 쓰는 라우트만 503을 준다(스모크 테스트 용도).
+MONGO_URI 없이도, 사내망 밖이라 연결에 실패해도 부팅된다 — DB를 쓰는 라우트만 503을 준다
+(healthz는 항상 200, 쿠버네티스 프로브가 Pod을 죽이지 않는다). 인덱스(유니크 포함)는
+연결 성공 시 기동 로그 한 줄과 함께 자동 생성된다(`src/db/mongo.service.ts` ensureIndexes).
 
-## DB 마이그레이션 (drizzle)
+## 기존 Neon 데이터 이관
 
-```bash
-npm run db:generate --workspace=apps/core   # src/db/schema.ts → drizzle/ SQL 생성
-npm run db:migrate --workspace=apps/core    # drizzle/ SQL을 저널 순서대로 적용 (권장 반영 경로)
-npm run db:push --workspace=apps/core       # (개발 편의) diff 직접 반영 — 대화형 확인
-```
-
-**반영은 `db:migrate`가 기본 경로다.** push는 diff를 즉석 ALTER로 만들기 때문에 타입 전환처럼
-캐스트가 없는 변경(실사례: 0001의 uuid→text)에서 실패한다 — migrate는 커밋된 SQL을 그대로
-실행하므로 이런 변경도 파일에 적힌 대로 재현된다. 적용 이력은 `drizzle.__drizzle_migrations`에
-남고, `-- --status`로 조회한다.
-
-push 등으로 이미 최신 스키마가 된 DB는 최초 1회 baseline으로 이력만 채운다 (SQL 실행 없음):
+`scripts/import-from-neon.mjs` — 일회성 스크립트. `DATABASE_URL`(Neon)에서 5개 테이블을 읽어
+Mongo로 옮긴다.
 
 ```bash
-npm run db:migrate --workspace=apps/core -- --baseline
+DATABASE_URL=<neon> MONGO_URI=<mongo> node apps/core/scripts/import-from-neon.mjs --dry-run   # 건수만 확인
+DATABASE_URL=<neon> MONGO_URI=<mongo> node apps/core/scripts/import-from-neon.mjs --overwrite  # 실제 적재
 ```
 
-> `0001` 마이그레이션은 threadId를 uuid → **스노우플레이크(text 19자리)** 로 바꾸며 테이블을
-> 재생성한다(기존 쓰레드 데이터 삭제 — uuid 값은 19자리 숫자 계약에 안 맞는다).
+`--overwrite` 없이는 실제 적재를 거부한다(안전장치). 대상 컬렉션에 이미 있는 문서는 `_id`로
+덮어쓴다(재실행 멱등).
 
 ## threadId — 스노우플레이크
 
@@ -64,8 +62,9 @@ npm run db:migrate --workspace=apps/core -- --baseline
 
 1. Vercel에서 **같은 GitHub 리포**로 새 프로젝트 생성 (예: `ddak-core`)
 2. **Root Directory: `apps/core`**, Framework Preset: Other (Build Command는 자동으로 `npm run build`)
-3. 환경변수: `DATABASE_URL`, `CORE_SERVICE_TOKEN`, **`NODEJS_HELPERS=0`** (Vercel의 body 헬퍼가
-   Express 파서와 이중 파싱하는 문제 방지)
+3. 환경변수: `MONGO_URI`, `MONGO_DB`, `CORE_SERVICE_TOKEN`, **`NODEJS_HELPERS=0`** (Vercel의 body
+   헬퍼가 Express 파서와 이중 파싱하는 문제 방지). Vercel 서버리스가 사내망 Mongo에 실제로
+   닿을 수 있는지는 별개 확인 사항이다 — 이 앱의 주 배포 대상은 사내 OpenShift다.
 4. Ignored Build Step은 apps/core/vercel.json의 ignoreCommand로 설정됨 — 대시보드 설정 불필요
 5. 배포 후 `https://<프로젝트>.vercel.app/healthz` 확인
 
