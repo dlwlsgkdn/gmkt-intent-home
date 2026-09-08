@@ -213,7 +213,10 @@ export class LlmService implements LlmPort {
       '각 변경은 id, proposedText(수정된 전체 원문), reason(사용자에게 설명할 이유)를 담는다. id는 입력 목록에서만 고르고 중복시키지 않는다.',
       '각 원문의 {{PLACEHOLDER}}는 철자와 개수를 모두 보존한다. 출력 스키마·사실 검증·허용 상품 규칙은 유지한다. 구체적 팁을 위해 경험·수치·출처를 지어내지 않는다.',
       '새 지시와 충돌하는 기존 문장을 함께 고친다. 규칙을 맨 끝에 덧붙여 모순을 남기지 않는다.',
-      'summary와 reason은 개발 용어 없이 무엇이 달라지는지 설명한다. 실제 변경이 필요 없으면 changes를 비우고 이유를 summary에 쓴다.',
+      'summary는 2문장 이내, reason은 항목별 2문장 이내로 쉽게 쓴다. 초등학생도 읽게 전문 용어 대신 일상어를 쓴다. 예: 원장·가변부·그라운딩 대신 고객 정보·답변·확인한 근거. 실제 변경이 필요 없으면 changes를 비우고 이유를 summary에 쓴다.',
+      'previousChanges가 있으면 직전 수정안에서 시작해 refinements를 순서대로 반영한다. 최신 추가 요청을 우선하고 이전에 합의한 개선은 유지한다. 결과 changes는 원래 prompts와 비교한 최종 전체 변경 목록이다. 직전 수정안의 변경을 누락시키지 않는다.',
+      'review는 이번 수정안 자체를 비판적으로 점검한 결과다. good은 기대되는 좋은 점, bad는 아직 부족한 점, risks는 적용할 때 생길 수 있는 문제와 확인 방법이다. 각 항목을 1~2개의 짧은 문장으로, 실제 수정 문구에 근거해 적는다. 빈 칭찬·추상적 경고·전문 용어는 쓰지 않는다.',
+      '실제 고객 화면과 사용 효과를 평가한 것처럼 쓰지 않는다. 확인할 수 없는 효과는 예상임을 밝힌다. 부족한 점이나 위험을 못 찾으면 해당 배열을 비우며 억지로 만들어내지 않는다. warnings는 실행 구조상 불가능한 요청에만 쓰고 review와 중복시키지 않는다.',
     ].join('\n')
     const before = new Map(input.prompts.map((prompt) => [prompt.id, prompt.text]))
     const placeholders = (text: string) => [...text.matchAll(/\{\{[^{}\r\n]+\}\}/g)].map((match) => match[0]).sort().join('\n')

@@ -56,7 +56,7 @@ function SurveyOptions({ p, ctx, opts, shape, isPlayer }) {
             <button
               key={i}
               type="button"
-              className={optionClass(selected)}
+              className={optionClass(selected) + (ctx.previewChanges?.[ctx.itemId]?.options?.[i] ? ' sb-flow-option-change' : '')}
               aria-disabled={!!p.locked}
               aria-pressed={selected}
               onClick={() => {
@@ -64,6 +64,7 @@ function SurveyOptions({ p, ctx, opts, shape, isPlayer }) {
                 pick(opt.main)
               }}
             >
+              {ctx.previewChanges?.[ctx.itemId]?.options?.[i] && <span className="sb-flow-option-change__label">{ctx.previewChanges[ctx.itemId].options[i].label}</span>}
               <span className={'sb-survey-option__main' + (isList ? '' : ' text-sm font-semibold text-slate-800 whitespace-nowrap')}>{kText(opt.main, ctx)}</span>
               {opt.sub ? <span className={'sb-survey-option__sub' + (isList ? '' : ' text-[11px] font-normal text-slate-400 whitespace-nowrap')}>{kText(opt.sub, ctx)}</span> : null}
               {opt.desc ? <span className="sb-survey-option__desc">{kText(opt.desc, ctx)}</span> : null}

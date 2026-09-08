@@ -259,9 +259,10 @@ const server = http.createServer(async (req, res) => {
       const input = JSON.parse(user)
       const output = {
         summary: '설문에서 상황을 묻고 계획과 상품을 실전 팁으로 연결해요.', warnings: [],
+        review: { good: ['따라 할 순서가 분명해질 수 있어요.'], bad: ['설명이 길어질 수 있어요.'], risks: ['상품 사용법은 실제 안내와 맞는지 확인하세요.'] },
         changes: input.prompts.map((prompt) => ({
           id: prompt.id,
-          proposedText: input.instruction === '필수 자리 삭제 시험' ? prompt.text.replace(/\{\{[^{}]+\}\}/g, '') : prompt.text + '\n추가 시험 규칙: ' + input.instruction,
+          proposedText: input.instruction === '필수 자리 삭제 시험' ? prompt.text.replace(/\{\{[^{}]+\}\}/g, '') : (input.previousChanges?.find((change) => change.id === prompt.id)?.proposedText || prompt.text) + '\n추가 시험 규칙: ' + (input.refinements?.at(-1) || input.instruction),
           reason: prompt.id + '에도 요청을 연결해요.',
         })),
       }
@@ -302,7 +303,12 @@ const server = http.createServer(async (req, res) => {
     llmCalls.push({ type: 'survey', system, user })
     // 가상 메이크업 의도만 사진 질문을 요청하는 설문을 돌려준다 (그 밖에는 photoQuestion='')
     const wantsPhoto = user.includes('메이크업')
-    return streamAnthropic(res, wantsPhoto ? SURVEY_PHOTO_JSON : SURVEY_JSON, { delayMs: 4, chunkSize: 18 })
+    const previewSurvey = JSON.parse(wantsPhoto ? SURVEY_PHOTO_JSON : SURVEY_JSON)
+    if (system.includes('추가 시험 규칙:')) {
+      previewSurvey.questions[0].question = '어느 부분에서 가장 먼저 무너지나요?'
+      previewSurvey.questions[0].options[1] = { label: '볼 건조 들뜸', desc: '오후에 볼이 갈라지듯 일어나요.' }
+    }
+    return streamAnthropic(res, JSON.stringify(previewSurvey), { delayMs: 4, chunkSize: 18 })
   }
 
   // ── 모의 core internal API ──────────────────────────────────────

@@ -12,3 +12,24 @@ const p={prompts:[{id:'survey',text:'before'}],changes:[{id:'survey',proposedTex
 assert.equal(flowText(p,'survey','baseline'),'before')
 assert.equal(flowText(p,'survey','trial'),'after')
 console.log('답변 연결·필수 답변·기준선 분리 검증 통과')
+import { compareRows, comparePreviewItems } from '../src/lib/promptFlow.js'
+const rows = compareRows(['그대로 A', '그대로 B'], ['새 선택지', '그대로 A', '그대로 B'])
+assert.equal(rows.after[0].type, 'added')
+assert.equal(rows.after[1], null)
+assert.equal(rows.after[2], null)
+assert.equal(compareRows(['A','B'],['B','A']).after[0].type,'moved')
+assert.equal(compareRows(['A','B'],['A']).before[1].type,'removed')
+const item = { id:'q1', type:'surveyQuestion', props:{question:'피부 타입은?', options:'지성|번들거려요\n건성|당겨요', locked:false} }
+assert.deepEqual(comparePreviewItems([item],[{...item,id:'q9',props:{...item.props,locked:true}}]),{baseline:{},trial:{}})
+const modified = {...item,props:{...item.props,options:'지성|번들거려요\n건성|각질이 일어나요'}}
+const marks = comparePreviewItems([item],[modified])
+assert.equal(marks.trial.q1.type,'changed')
+assert.equal(marks.trial.q1.options[0],null)
+assert.equal(marks.trial.q1.options[1].type,'changed')
+const parent={id:'products',type:'hscroll',props:{title:'추천'}}
+const product={id:'p1',parentId:'products',type:'productCard',props:{name:'제품 A',price:10000}}
+assert.equal(comparePreviewItems([parent,product],[parent,{...product,props:{...product.props,price:12000}}]).trial.products.type,'changed')
+console.log('추가·삭제·순서·선택지·상품 변경 표시 검증 통과')
+
+const summaryItems = [{ id: 'summary', type: 'surveySummary', props: {} }]
+assert.equal(comparePreviewItems(summaryItems, summaryItems, { baseline: { questions: [{ q: '고민', a: '건성' }] }, trial: { questions: [{ q: '고민', a: '들뜸' }] } }).trial.summary.type, 'changed')
