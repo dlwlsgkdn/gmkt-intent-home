@@ -254,6 +254,19 @@ const server = http.createServer(async (req, res) => {
       .join('\n')
     // 판별 순서 주의: 상품 시스템에도 '뼈대', 뼈대 시스템에도 '설문' 문구가 있다 —
     // 상품 고유 마커(productIds) → 뼈대 → 설문 순으로 좁힌다
+    if (system.includes('고객 여정 전체의 지시서 조정자')) {
+      llmCalls.push({ type: 'flow-assist', system, user })
+      const input = JSON.parse(user)
+      const output = {
+        summary: '설문에서 상황을 묻고 계획과 상품을 실전 팁으로 연결해요.', warnings: [],
+        changes: input.prompts.map((prompt) => ({
+          id: prompt.id,
+          proposedText: input.instruction === '필수 자리 삭제 시험' ? prompt.text.replace(/\{\{[^{}]+\}\}/g, '') : prompt.text + '\n추가 시험 규칙: ' + input.instruction,
+          reason: prompt.id + '에도 요청을 연결해요.',
+        })),
+      }
+      return streamAnthropic(res, JSON.stringify(output), { delayMs: 1, chunkSize: 2000 })
+    }
     if (system.includes('설문 심사관')) {
       llmCalls.push({ type: 'judge-survey', system, user })
       return streamAnthropic(res, JUDGE_SURVEY_JSON, { delayMs: 2, chunkSize: 40 })

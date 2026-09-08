@@ -111,7 +111,7 @@ export class PipelineDryRunService {
     }
 
     // plan-* 단계는 설문·답변이 입력이다 — 보통 survey dry-run 결과를 그대로 싣는다
-    if (!body.survey || !body.answers?.length) {
+    if (!body.survey || !body.answers || (!body.answers.length && body.survey.questions.some((question) => question.kind !== 'photo'))) {
       throw new BadRequestException('계획 단계 dry-run에는 survey(설문 페이지)와 answers(답변)가 필요합니다')
     }
 

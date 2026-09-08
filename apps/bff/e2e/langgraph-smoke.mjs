@@ -48,11 +48,11 @@ const last = (events, name) => events.filter((e) => e.event === name).at(-1)
 const count = (events, name) => events.filter((e) => e.event === name).length
 const llmCalls = async () => (await fetch(MOCK + '/internal/llm-calls')).json()
 
-const mock = spawn('node', [path.join(here, 'mock-upstream.mjs')], {
+const mock = spawn(process.execPath, [path.join(here, 'mock-upstream.mjs')], {
   env: { ...process.env, MOCK_PORT: String(MOCK_PORT) },
   stdio: 'ignore',
 })
-const bff = spawn('node', [path.join(here, '..', 'dist', 'main.js')], {
+const bff = spawn(process.execPath, [path.join(here, '..', 'dist', 'main.js')], {
   env: {
     ...process.env,
     PORT: String(BFF_PORT),
@@ -505,6 +505,49 @@ try {
   ok(lg?.count >= 1, `전환 계기판 — langgraph 표본 (${lg?.count})`)
   ok(legacyM?.count >= 1, `전환 계기판 — legacy 표본 (${legacyM?.count})`)
   ok(lg?.promptVersions?.includes('v21'), 'promptVersion 각인 (v21)')
+
+  {
+  console.log('11) 전체 지시서 요청·묶음 적용·충돌 보호')
+  const flowWire = await fetch(BFF + '/api/admin/prompts').then((r) => r.json())
+  const prompts = ['survey', 'plan-skeleton', 'plan-products'].map((id) => {
+    const p = flowWire.prompts.find((entry) => entry.id === id)
+    return { id, text: p.configured ?? p.defaultText }
+  })
+  const flowReq = (path, body, method = 'POST') => fetch(BFF + '/api/admin/' + path, { method, headers: plain, body: JSON.stringify(body) })
+  const proposalRes = await flowReq('prompt-flow/assist', { instruction: '실전 팁으로 쉽게 알려줘', focus: ['plan-skeleton', 'plan-products'], prompts })
+  const proposal = await proposalRes.json()
+  ok(proposalRes.status === 201 && proposal.changes?.length === 3, '한 요청으로 세 지시서 수정안 생성')
+  ok(proposal.changes?.every((change) => change.baseText === prompts.find((p) => p.id === change.id).text), '원본 기준선은 서버가 부착')
+  const unchanged = await fetch(BFF + '/api/admin/prompts').then((r) => r.json())
+  ok(unchanged.prompts.every((p) => p.configured === flowWire.prompts.find((old) => old.id === p.id).configured), '시험안 생성은 운영값을 쓰지 않음')
+  const calls = (await llmCalls()).filter((call) => call.type === 'flow-assist')
+  ok(calls.length === 1 && JSON.parse(calls[0].user).focus.length === 2, '선택사항 여러 개와 전체 문맥을 한 호출에 전달')
+  const duplicate = await flowReq('prompt-flow/assist', { instruction: '잘 알려줘', prompts: [prompts[0], prompts[0], prompts[2]] })
+  ok(duplicate.status === 400, '중복·누락 지시서 거부')
+  const invalid = await flowReq('prompt-flow/assist', { instruction: '필수 자리 삭제 시험', prompts })
+  ok(invalid.status === 503, '필수 자리표시자를 지운 AI 수정안 거부')
+  const threadRes = await flowReq('prompt-trials', {
+    promptId: proposal.changes[0].id, promptLabel: '전체 흐름', instruction: '실전 팁으로 쉽게 알려줘',
+    summary: proposal.summary, warnings: [], ...proposal.changes[0], changes: proposal.changes, prompts, focus: [],
+    intent: '쿠션 추천', baseline: {}, trial: {}, evaluation: { score: 4, comment: '함께 좋아졌어요' },
+  })
+  const trialThread = await threadRes.json()
+  ok(threadRes.status === 201 && trialThread.steps?.[0]?.payload?.data?.changes?.length === 3, '묶음과 기준선이 시험 쓰레드에 함께 저장')
+  const applyBody = { changes: proposal.changes, prompts, summary: proposal.summary }
+  await putSetting('llm-prompt-survey', prompts[0].text + '\n다른 운영자 수정')
+  const conflict = await flowReq('prompt-flow', applyBody, 'PUT')
+  ok(conflict.status === 400, '세 지시서 중 하나라도 바뀌면 쓰기 전에 충돌 차단')
+  const afterConflict = await fetch(BFF + '/api/admin/prompts').then((r) => r.json())
+  ok(afterConflict.prompts.find((p) => p.id === 'plan-products').configured === flowWire.prompts.find((p) => p.id === 'plan-products').configured, '충돌 시 다른 지시서도 미적용')
+  await putSetting('llm-prompt-survey', prompts[0].text)
+  const appliedFlow = await flowReq('threads/' + trialThread.id + '/prompt-trial/decision', { decision: 'applied' })
+  ok(appliedFlow.status === 201, '저장된 시험에서 세 지시서 함께 적용')
+  const appliedWire = await fetch(BFF + '/api/admin/prompts').then((r) => r.json())
+  ok(proposal.changes.every((c) => appliedWire.prompts.find((p) => p.id === c.id).configured === c.proposedText), '실제 운영 설정 세 곳에 수정값 반영')
+  ok((await flowReq('prompt-flow', applyBody, 'PUT')).status === 200, '동일 묶음 재시도 허용')
+  const noAnswers = await sse('/api/admin/pipeline/dry-run', { stageId: 'plan-skeleton', intent: '쿠션 추천', survey: { ...drResult.survey, questions: [{ id: 'p1', kind: 'photo', question: '사진을 올려주세요', options: [], multi: false }] }, answers: [] }, plain)
+  ok(Boolean(last(noAnswers, 'result')?.data?.skeleton), '사진만 있는 설문도 건너뛰고 계획까지 진행')
+  }
 } finally {
   shutdown()
 }
