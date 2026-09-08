@@ -47,7 +47,7 @@ const lineDiff = (before, after) => {
 }
 
 export default function AdminPromptLibrary({ api }) {
-  const [view, setView] = useState('library')
+  const [view, setView] = useState('trial')
   const [trialSeed, setTrialSeed] = useState(null)
   const [wire, setWire] = useState(null)
   const [error, setError] = useState(null)
@@ -173,7 +173,7 @@ export default function AdminPromptLibrary({ api }) {
   return (
     <div className="sb-admin-prompts-page">
       <header className="sb-admin-pagehead sb-admin-prompt-head">
-        <div><p className="sb-admin-pagehead__eyebrow">AI에게 일을 설명하는 곳</p><h1>AI 지시서</h1><p>AI가 어떤 말투와 기준으로 답할지 정합니다. 처음이라면 아래 3단계만 따라 하세요.</p></div>
+        <div><p className="sb-admin-pagehead__eyebrow">AI에게 일을 설명하는 곳</p><h1>AI 지시서</h1><p>원하는 변화를 편하게 말해주세요. 설문부터 추천까지 함께 고치고, 화면으로 확인해요.</p></div>
         <img src={promptGuide} alt="AI 지시서의 중요한 문장을 가리키는 안내 캐릭터" />
         {wire && <span className="sb-admin-health is-live"><i /> {wire.promptVersion}</span>}
       </header>
@@ -194,7 +194,7 @@ export default function AdminPromptLibrary({ api }) {
       <section className="sb-admin-prompt-guide" aria-label="AI 지시서 수정 방법">
         <div className="sb-admin-prompt-guide__title"><b>처음이라면 이것만 하세요</b><span>약 3분</span></div>
         <ol>
-          <li><i>1</i><span><b>바꾸고 싶은 항목 선택</b><small>말투, 질문, 추천 기준 중 하나만 고르세요.</small></span></li>
+          <li><i>1</i><span><b>바꾸고 싶은 점 말하기</b><small>어디를 고칠지 몰라도 괜찮아요. 원하는 모습을 적어주세요.</small></span></li>
           <li><i>2</i><span><b>원하는 결과를 한 문장으로 추가</b><small>“답변은 3문장 이하로 써줘”처럼 구체적으로 적으세요.</small></span></li>
           <li><i>3</i><span><b>저장 없이 시험하고 적용</b><small>결과를 먼저 확인하고, 마음에 들 때만 전체에 적용하세요.</small></span></li>
         </ol>

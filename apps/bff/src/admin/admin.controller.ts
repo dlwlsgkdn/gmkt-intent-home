@@ -44,6 +44,9 @@ import {
   AdminPromptsWire,
   AssistAdminPromptBody,
   AssistAdminPromptResult,
+  AssistPromptFlowBody,
+  AssistPromptFlowResult,
+  ApplyPromptFlowBody,
   type AdminPromptRevision,
   EvalCasesWire,
   EvalRunsWire,
@@ -274,7 +277,10 @@ export class AdminController {
     if (!parsed.success) throw new BadRequestException('이 쓰레드에는 적용할 지시서 시험안이 없습니다')
     const trial = parsed.data
 
-    if (body.decision === 'applied') {
+    if (body.decision === 'applied' && trial.changes) {
+      if (!trial.prompts) throw new BadRequestException('시험 당시 지시서가 없어 적용할 수 없어요. 다시 시험해 주세요.')
+      await this.applyPromptFlow({ changes: trial.changes, prompts: trial.prompts, summary: trial.summary })
+    } else if (body.decision === 'applied') {
       const def = PROMPT_DEFS.find((candidate) => candidate.id === trial.promptId)!
       const setting = await this.core.getSetting(promptSettingKey(trial.promptId))
       const currentText = typeof setting?.value === 'string' ? setting.value : def.template
@@ -434,6 +440,53 @@ export class AdminController {
       }),
     )
     return { promptVersion: PROMPT_VERSION, prompts }
+  }
+
+  @Post('prompt-flow/assist')
+  @ApiOperation({ summary: '자연어 요청 하나로 설문·계획·상품 지시서의 미저장 수정안 생성' })
+  @ApiBody({ schema: toOpenApi(AssistPromptFlowBody) })
+  @ApiOkResponse({ schema: toOpenApi(AssistPromptFlowResult) })
+  async assistPromptFlow(@Body(new ZodValidationPipe(AssistPromptFlowBody)) body: AssistPromptFlowBody) {
+    if (new Set(body.prompts.map((prompt) => prompt.id)).size !== 3) throw new BadRequestException('설문·계획·상품 지시서를 모두 보내주세요.')
+    try {
+      return await this.llm.assistFlowRevision(body)
+    } catch (error) {
+      if (error instanceof LlmGenerationError) throw new ServiceUnavailableException(error.message)
+      throw error
+    }
+  }
+
+  @Put('prompt-flow')
+  @ApiOperation({ summary: '시험한 지시서 묶음 적용 — 전체 기준선 확인, 부분 실패는 명시하고 재시도 허용' })
+  @ApiBody({ schema: toOpenApi(ApplyPromptFlowBody) })
+  @ApiOkResponse({ schema: toOpenApi(AdminPromptsWire) })
+  async applyPromptFlow(@Body(new ZodValidationPipe(ApplyPromptFlowBody)) body: ApplyPromptFlowBody): Promise<AdminPromptsWire> {
+    const snapshots = new Map(body.prompts.map((prompt) => [prompt.id, prompt.text]))
+    if (snapshots.size !== 3 || new Set(body.changes.map((change) => change.id)).size !== body.changes.length) {
+      throw new BadRequestException('지시서 목록이 중복되거나 빠져 있어요. 다시 시험해 주세요.')
+    }
+    for (const change of body.changes) {
+      if (snapshots.get(change.id) !== change.baseText) throw new BadRequestException('수정안의 기준 지시서가 달라요. 다시 시험해 주세요.')
+    }
+    const wire = await this.getPrompts()
+    for (const [id, baseText] of snapshots) {
+      const entry = wire.prompts.find((prompt) => prompt.id === id)!
+      const current = entry.configured ?? entry.defaultText
+      const change = body.changes.find((item) => item.id === id)
+      if (current !== baseText && current !== change?.proposedText) {
+        throw new BadRequestException(entry.label + ' 설정이 시험 후 바뀌었어요. 최신 설정으로 다시 시험해 주세요.')
+      }
+    }
+    let completed = 0
+    try {
+      for (const change of body.changes) {
+        await this.putPrompt(change.id, { text: change.proposedText, note: body.summary })
+        completed += 1
+      }
+    } catch {
+      throw new ServiceUnavailableException('적용 도중 연결이 끊겼어요. ' + completed + '개 완료를 확인했고 나머지는 확인이 필요해요. 같은 적용 버튼을 다시 누르면 이어서 확인하고 적용합니다.')
+    }
+    return this.getPrompts()
   }
 
   @Post('prompts/:id/assist')

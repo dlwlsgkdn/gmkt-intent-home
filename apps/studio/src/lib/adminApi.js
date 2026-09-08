@@ -241,3 +241,6 @@ export function judgeEvalRun(id, opts) {
 export function fetchEngineMetrics() {
   return req('GET', '/metrics/engines')
 }
+
+export function assistPromptFlow(body) { return req('POST', '/prompt-flow/assist', body) }
+export function applyPromptFlow(body) { return req('PUT', '/prompt-flow', body) }

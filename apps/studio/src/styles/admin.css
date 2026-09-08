@@ -3678,3 +3678,38 @@
   .sb-admin-prompt-proposal__head > div:last-child { flex-wrap: wrap; }
   .sb-admin-prompt-chat p { max-width: 100%; }
 }
+
+/* 전체 요청을 먼저 쓰고 선택사항은 그 아래에서 가볍게 고른다. */
+.sb-prompt-flow__request > textarea { min-height: 136px; }
+.sb-prompt-flow .sb-prompt-trial__step > header label { color: inherit; font-size: inherit; font-weight: inherit; }
+.sb-prompt-flow__examples { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.sb-prompt-flow__examples > span { flex-basis: 100%; color: var(--sb-muted); font-size: var(--sb-t-caption); }
+.sb-prompt-flow__focus { min-width: 0; margin: 12px 0 0; padding: 14px 0 0; border: 0; border-top: 1px solid var(--sb-n-200); }
+.sb-prompt-flow__focus legend { color: var(--sb-ink); font-size: var(--sb-t-body); font-weight: 400; padding: 0 8px 0 0; }
+.sb-prompt-flow__focus legend span { margin-left: 6px; color: var(--sb-muted); font-size: var(--sb-t-caption); font-weight: 300; }
+.sb-prompt-flow__focus > p { margin: 0 0 10px; color: var(--sb-muted); font-size: var(--sb-t-caption); }
+.sb-prompt-flow__focus > small { display: block; margin-top: 10px; color: var(--sb-muted); font-size: var(--sb-t-caption); line-height: 1.6; }
+.sb-prompt-flow__focus .sb-prompt-trial__choices button { min-height: 76px; padding: 12px; }
+.sb-prompt-flow__focus button.is-on { border-color: var(--sb-info); background: var(--sb-info-soft); }
+.sb-prompt-flow__change { padding: 10px 12px; border-radius: var(--sb-r-lg); background: var(--sb-surface-inset); }
+.sb-prompt-flow__change > b { color: var(--sb-info); font-size: var(--sb-t-caption); font-weight: 500; }
+.sb-prompt-flow__change > p { margin: 4px 0 0; color: var(--sb-ink-2); font-size: var(--sb-t-body); line-height: 1.7; }
+.sb-prompt-flow details > summary { cursor: pointer; color: var(--sb-ink-2); font-size: var(--sb-t-caption); padding: 8px 0; }
+.sb-prompt-flow details pre { max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--sb-t-micro); font-family: ui-monospace, monospace; }
+.sb-prompt-flow__proposal > ul { color: var(--sb-warn); font-size: var(--sb-t-caption); line-height: 1.7; padding-left: 20px; }
+.sb-prompt-flow__status { margin: 0; color: var(--sb-info); font-size: var(--sb-t-caption); }
+.sb-prompt-flow__details { min-width: 0; padding: 14px; }
+.sb-prompt-flow .sb-prompt-trial__intro > p { margin: 0; font-size: var(--sb-t-caption); line-height: 1.7; color: var(--sb-n-0); }
+.sb-prompt-flow .sb-prompt-trial__step > small { color: var(--sb-muted); font-size: var(--sb-t-caption); line-height: 1.6; }
+@media (max-width: 900px) {
+  .sb-prompt-flow > .sb-prompt-trial { grid-row: 1; }
+  .sb-prompt-flow > .sb-scenario-preview--after { grid-row: 2; }
+  .sb-prompt-flow > .sb-scenario-preview--before { grid-row: 3; }
+}
+@media (max-width: 520px) {
+  .sb-prompt-flow__focus .sb-prompt-trial__choices { grid-template-columns: 1fr; }
+}
+/* 원본 홈의 header 숨김 규칙보다 우선해 시험 안내와 비교 제목을 표시한다. */
+.clean-home-page .sb-prompt-flow header { display: block !important; }
+.clean-home-page .sb-prompt-flow .sb-prompt-trial__step > header,
+.clean-home-page .sb-prompt-flow .sb-prompt-trial__compare > section > header { display: flex !important; }
