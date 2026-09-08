@@ -27,3 +27,12 @@ NPM_MIRROR=http://prm.gmarket.com/repository/npm-group
 NPM_CONFIG_REGISTRY=http://prm.gmarket.com/repository/npm-group
 
 
+
+# 서비스 간 주소. 비밀이 아니라 여기 둔다 — 그래야 blue/green 양쪽에 따로 넣을 일이 없다
+# (Deployment 환경변수가 이 값을 덮으므로, 다른 클러스터에 올릴 땐 거기서 덮으면 된다).
+# 비밀(MONGO_URI·API 키·서비스 토큰)은 절대 여기 두지 말 것 — 시크릿으로만.
+#
+# tagging-api 가 /api/bff/* 를 넘길 곳. 없으면 프록시를 아예 달지 않는다.
+BFF_URL=https://eevee-lab-bff.d3.clouz.io
+# bff 가 쓰레드를 맡길 core.
+CORE_URL=https://eevee-lab-core.d3.clouz.io

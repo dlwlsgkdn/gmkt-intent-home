@@ -144,6 +144,23 @@ core·bff 는 `/healthz` 로도 같은 응답을 준다(별칭). 셋 다 의존�
 bff → tagging-api → studio 순서, 실측 약 12초). 예전에는 studio·tagging-api 만 만들어서
 `NPM_RUN=start:core` 로 띄우면 빌드는 성공하고 팟이 `Cannot find module` 로 죽었다.
 
+## 4-2. 소스에 두는 값과 시크릿에 두는 값
+
+`.s2i/environment` 는 저장소에 커밋되고 이미지의 환경변수가 된다. **비밀이 아닌 값은 여기
+두는 게 낫다** — blue/green 두 슬롯에 따로 넣을 일이 없어지고, 넣는 걸 잊어 트래픽 전환
+순간 깨지는 사고가 사라진다. Deployment 환경변수가 이 값을 덮으므로 예외는 거기서 준다.
+
+| 값 | 어디에 | 왜 |
+|---|---|---|
+| `HOST`·`PORT`·`STUDIO_DIST`·`NPM_MIRROR` | `.s2i/environment` | 배포 불변 |
+| `BFF_URL`·`CORE_URL` | `.s2i/environment` | 주소는 비밀이 아니다 |
+| `NPM_RUN` | BuildConfig | **앱마다 다르다** — 이것만은 소스에 못 둔다 |
+| `MONGO_URI`·`ANTHROPIC_API_KEY`·`OPENAI_API_KEY`·서비스 토큰 | **시크릿** | 절대 커밋 금지 |
+
+시크릿은 앱 단위가 아니라 **비밀 단위**로 나눈다 — 같은 값이 여러 곳에 복제되면 교체할 때
+빠뜨린다: `ddak-mongo`(core·tagging-api) · `ddak-tokens`(셋 다) · `ddak-bff-secrets`(bff).
+한 Deployment 에 시크릿을 여러 개 붙일 수 있다(envFrom 을 여러 번).
+
 ## 5. tagging-api 배포 시 반드시 넘길 환경변수
 
 | 변수 | 값 | 빠뜨리면 |
