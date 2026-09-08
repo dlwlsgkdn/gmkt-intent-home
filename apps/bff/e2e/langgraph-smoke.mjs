@@ -20,7 +20,7 @@ const ok = (cond, label) => {
   if (!cond) failures++
 }
 
-async function waitFor(url, tries = 40) {
+async function waitFor(url, tries = 120) {
   for (let i = 0; i < tries; i++) {
     try {
       const res = await fetch(url)
@@ -522,16 +522,22 @@ try {
   ok(unchanged.prompts.every((p) => p.configured === flowWire.prompts.find((old) => old.id === p.id).configured), '시험안 생성은 운영값을 쓰지 않음')
   const calls = (await llmCalls()).filter((call) => call.type === 'flow-assist')
   ok(calls.length === 1 && JSON.parse(calls[0].user).focus.length === 2, '선택사항 여러 개와 전체 문맥을 한 호출에 전달')
+  ok(proposal.review?.good?.length && proposal.review?.bad?.length && proposal.review?.risks?.length, '수정안에 좋은 점·아쉬운 점·주의할 점 포함')
+  const refinementRes = await flowReq('prompt-flow/assist', { instruction: '실전 팁으로 쉽게 알려줘', prompts, previousChanges: proposal.changes, refinements: ['설명은 더 짧게 해줘'] })
+  const refined = await refinementRes.json()
+  ok(refinementRes.status === 201 && refined.changes?.every((c) => c.proposedText.includes('실전 팁으로 쉽게 알려줘') && c.proposedText.includes('설명은 더 짧게 해줘')), '추가 요청이 직전 수정안을 유지하며 반영')
+  ok(refined.changes?.every((c) => c.baseText === prompts.find((p) => p.id === c.id).text), '반복 수정 후에도 운영 기준선 보존')
   const duplicate = await flowReq('prompt-flow/assist', { instruction: '잘 알려줘', prompts: [prompts[0], prompts[0], prompts[2]] })
   ok(duplicate.status === 400, '중복·누락 지시서 거부')
   const invalid = await flowReq('prompt-flow/assist', { instruction: '필수 자리 삭제 시험', prompts })
   ok(invalid.status === 503, '필수 자리표시자를 지운 AI 수정안 거부')
   const threadRes = await flowReq('prompt-trials', {
     promptId: proposal.changes[0].id, promptLabel: '전체 흐름', instruction: '실전 팁으로 쉽게 알려줘',
-    summary: proposal.summary, warnings: [], ...proposal.changes[0], changes: proposal.changes, prompts, focus: [],
+    summary: proposal.summary, warnings: [], ...proposal.changes[0], changes: proposal.changes, prompts, focus: [], review: proposal.review, refinements: ['더 쉽게 해줘'],
     intent: '쿠션 추천', baseline: {}, trial: {}, evaluation: { score: 4, comment: '함께 좋아졌어요' },
   })
   const trialThread = await threadRes.json()
+  ok(trialThread.steps?.[0]?.payload?.data?.review?.risks?.length && trialThread.steps?.[0]?.payload?.data?.refinements?.length === 1, 'AI 점검과 추가 요청 이력 함께 저장')
   ok(threadRes.status === 201 && trialThread.steps?.[0]?.payload?.data?.changes?.length === 3, '묶음과 기준선이 시험 쓰레드에 함께 저장')
   const applyBody = { changes: proposal.changes, prompts, summary: proposal.summary }
   await putSetting('llm-prompt-survey', prompts[0].text + '\n다른 운영자 수정')

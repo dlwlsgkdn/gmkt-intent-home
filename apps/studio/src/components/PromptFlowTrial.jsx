@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { applyPromptFlow, assistPromptFlow, decideAdminPromptTrial, dryRunStage, fetchAdminPrompts, saveAdminPromptTrial } from '../lib/adminApi.js'
 import { FLOW_PARTS, flowLabel, flowSnapshot, flowText, matchingAnswers, surveyReady } from '../lib/promptFlow.js'
 import { previewAnswers, previewPlan } from '../lib/promptPreview.js'
 import PromptFlowPreview from './PromptFlowPreview.jsx'
+import PromptFlowReview from './PromptFlowReview.jsx'
 import { TrialOutput } from './AdminPromptTrialOutput.jsx'
 
 const EXAMPLES = [
@@ -12,6 +13,9 @@ const EXAMPLES = [
 ]
 export default function PromptFlowTrial({ wire, seed, onApplied, api }) {
   const [instruction, setInstruction] = useState('')
+  const [refining, setRefining] = useState(false)
+  const [refinement, setRefinement] = useState('')
+  const refinementField = useRef(null)
   const [focus, setFocus] = useState([])
   const [proposal, setProposal] = useState(null)
   const [intent, setIntent] = useState('여름에 무너지지 않는 쿠션 찾아줘')
@@ -36,8 +40,9 @@ export default function PromptFlowTrial({ wire, seed, onApplied, api }) {
     setProposal({ prompts, changes: [{ id: seed.promptId, baseText: original.text, proposedText: seed.text, reason: seed.summary || '직접 고친 내용이에요.' }], summary: seed.summary || '직접 고친 지시서를 시험해요.', warnings: [] })
     clearTrial()
   }, [seed])
-  const changeRequest = (text) => { setInstruction(text); setProposal(null); clearTrial() }
+  const changeRequest = (text) => { setRefining(false); setRefinement(''); setInstruction(text); setProposal(null); clearTrial() }
   const toggleFocus = (id) => {
+    setRefining(false); setRefinement('')
     setFocus((previous) => previous.includes(id) ? previous.filter((value) => value !== id) : [...previous, id])
     setProposal(null); clearTrial()
   }
@@ -49,8 +54,22 @@ export default function PromptFlowTrial({ wire, seed, onApplied, api }) {
     try {
       const prompts = flowSnapshot(await fetchAdminPrompts())
       const next = await assistPromptFlow({ instruction: instruction.trim(), focus, prompts })
-      setProposal({ ...next, prompts })
+      setProposal({ ...next, prompts, refinements: [] }); setRefining(false); setRefinement('')
     } catch (e) { setError(e.message || '수정안을 만들지 못했어요. 다시 시도해 주세요.') }
+    finally { setBusy(false); setStatus('') }
+  }
+  useEffect(() => {
+    if (refining) { refinementField.current?.focus(); refinementField.current?.scrollIntoView({ block: 'center', behavior: 'smooth' }) }
+  }, [refining])
+  const refineProposal = async () => {
+    if (busy || !proposal || refinement.trim().length < 2 || (proposal.refinements?.length || 0) >= 10) return
+    setBusy(true); setError(null); setStatus('방금 만든 내용에 추가 요청을 반영하고 있어요…')
+    try {
+      const refinements = [...(proposal.refinements || []), refinement.trim()]
+      const next = await assistPromptFlow({ instruction: instruction.trim(), focus, prompts: proposal.prompts, previousChanges: proposal.changes, refinements })
+      setProposal({ ...next, prompts: proposal.prompts, refinements })
+      clearTrial(); setRefining(false); setRefinement('')
+    } catch (e) { setError(e.message || '다시 고치지 못했어요. 이전 수정안과 추가 요청은 그대로 두었어요.') }
     finally { setBusy(false); setStatus('') }
   }
   const prepare = async () => {
@@ -96,7 +115,7 @@ export default function PromptFlowTrial({ wire, seed, onApplied, api }) {
     } catch (e) { setError(e.message || '추천을 만들지 못했어요. 답변은 그대로 두었으니 다시 눌러주세요.') }
     finally { setBusy(false); setStatus('') }
   }
-  const canApply = proposal?.changes.length > 0 && result?.phase === 'plan' && result.snapshot === proposal
+  const canApply = !refining && proposal?.changes.length > 0 && result?.phase === 'plan' && result.snapshot === proposal
   const apply = async () => {
     if (busy || !canApply || applied) return
     setBusy(true); setError(null); setStatus('확인한 수정안을 적용하고 있어요…')
@@ -119,7 +138,7 @@ export default function PromptFlowTrial({ wire, seed, onApplied, api }) {
       setSavedThread(await saveAdminPromptTrial({
         promptId: first.id, promptLabel: '전체 흐름', instruction: instruction.trim(),
         summary: proposal.summary, warnings: proposal.warnings, baseText: first.baseText, proposedText: first.proposedText,
-        changes: proposal.changes, prompts: proposal.prompts, focus,
+        changes: proposal.changes, prompts: proposal.prompts, focus, review: proposal.review, refinements: proposal.refinements,
         intent: result.intent, baseline: result.baseline, trial: result.trial,
         evaluation: { score, comment: comment.trim() },
       }))
@@ -151,8 +170,18 @@ export default function PromptFlowTrial({ wire, seed, onApplied, api }) {
       {proposal && <section className="sb-admin-card sb-prompt-trial__step sb-prompt-flow__proposal">
         <header><div><h2>이렇게 바꿔볼게요</h2><p>{proposal.summary}</p></div></header>
         {proposal.changes.map((change) => <div className="sb-prompt-flow__change" key={change.id}><b>{flowLabel(change.id)}</b><p>{change.reason}</p></div>)}
-        {proposal.warnings.length > 0 && <ul>{proposal.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
-        {proposal.changes.length > 0 && <details><summary>자세한 지시서 보기</summary>{proposal.changes.map((change) => <div key={change.id}><b>{flowLabel(change.id)}</b><pre>{change.proposedText}</pre></div>)}</details>}
+        <PromptFlowReview review={proposal.review} warnings={proposal.warnings} />
+        {proposal.changes.length > 0 && <details><summary>자세한 지시서 펼쳐보기 · 궁금할 때만 보세요</summary>{proposal.changes.map((change) => <div key={change.id}><b>{flowLabel(change.id)}</b><pre>{change.proposedText}</pre></div>)}</details>}
+        {!applied && <div className="sb-flow-refine">
+          {!refining ? <button type="button" className="sb-btn sb-btn--ghost" disabled={busy} onClick={() => setRefining(true)}>마음에 안 들어요, 다시 수정할래요</button> : <>
+            <label htmlFor="prompt-flow-refinement">어떤 점을 더 바꾸고 싶어요?</label>
+            <p>방금 만든 내용에서 이어서 고칠게요. 마음에 드는 점과 바꾸고 싶은 점을 함께 말해줘도 좋아요.</p>
+            <textarea ref={refinementField} id="prompt-flow-refinement" rows={3} value={refinement} maxLength={2000} disabled={busy} onChange={(event) => setRefinement(event.target.value)} placeholder="예: 순서는 좋아요. 설명은 더 짧게 하고, 실패했을 때 고치는 방법을 넣어줘요." />
+            {(proposal.refinements?.length || 0) >= 10 ? <p>열 번 함께 고쳤어요. 더 바꾸려면 위쪽에 원하는 내용을 정리해 새 요청으로 시작해 주세요.</p> : null}
+            <div><button type="button" className="sb-btn sb-btn--ghost" disabled={busy} onClick={() => setRefining(false)}>지금 수정안 유지하기</button><button type="button" className="sb-btn sb-btn--ai" disabled={busy || refinement.trim().length < 2 || (proposal.refinements?.length || 0) >= 10} onClick={refineProposal}>⇄ 추가 요청으로 프롬프트 다시 고치기</button></div>
+            <small>다시 고친 뒤에는 화면도 새로 확인해 주세요. 확인 전에는 적용하지 않아요.</small>
+          </>}
+        </div>}
       </section>}
       <section className="sb-admin-card sb-prompt-trial__step">
         <header><div><h2>옆 화면에서 직접 확인해 보세요</h2><p>고객이 할 법한 말을 적고, 설문에 답하면 마지막 추천까지 볼 수 있어요.</p></div></header>
@@ -168,7 +197,7 @@ export default function PromptFlowTrial({ wire, seed, onApplied, api }) {
       </details>}
       {canApply && <section className="sb-admin-card sb-prompt-trial__step">
         <header><div><h2>{applied ? '적용했어요!' : '원하던 모습에 가까워졌나요?'}</h2><p>{applied ? '새로 만드는 결과부터 이 수정안을 사용해요.' : '마음에 들면 함께 바꾼 내용을 한 번에 적용하세요.'}</p></div></header>
-        {!applied && <button type="button" className="sb-btn sb-btn--primary" disabled={busy} onClick={apply}>마음에 들어요, 이대로 적용하기</button>}
+        {!applied && <><button type="button" className="sb-btn sb-btn--primary" disabled={busy} onClick={apply}>마음에 들어요, 이대로 적용하기</button><button type="button" className="sb-btn sb-btn--ghost" disabled={busy} onClick={() => setRefining(true)}>마음에 안 들어요, 다시 수정할래요</button></>}
         {!applied && <details><summary>평가를 남기고 나중에 결정할래요</summary><div className="sb-prompt-trial__stars" role="group" aria-label="수정안 점수">{[1, 2, 3, 4, 5].map((value) => <button type="button" key={value} className={score >= value ? 'is-on' : ''} aria-pressed={score === value} aria-label={`${value}점`} disabled={busy || Boolean(savedThread)} onClick={() => setScore(value)}>★</button>)}</div><textarea aria-label="수정안 평가 메모" value={comment} maxLength={2000} disabled={busy || Boolean(savedThread)} onChange={(event) => setComment(event.target.value)} placeholder="어떤 점이 좋았나요? 더 바꾸고 싶은 점도 적어주세요." />{savedThread ? <button type="button" className="sb-btn sb-btn--ghost" onClick={() => api.openAdminThread(savedThread.id)}>저장한 시험 열기</button> : <button type="button" className="sb-btn sb-btn--ghost" disabled={score == null || busy} onClick={save}>평가와 시험 저장하기</button>}</details>}
       </section>}
     </div>
