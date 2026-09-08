@@ -13,6 +13,8 @@ import { scenariosFromImport } from '../lib/scenarioOps.js'
 import { downloadJson, readFileText } from '../lib/jsonFile.js'
 import { renderItem } from '../lib/registry.jsx'
 import ScenarioGenerationDialog from './builder/ScenarioGenerationDialog.jsx'
+import SearchOverlay from './SearchOverlay.jsx'
+import { useSearchEntry } from '../hooks/useSearchEntry.js'
 
 export default function HomeView({ api }) {
   const [query, setQuery] = useState('')
@@ -21,6 +23,7 @@ export default function HomeView({ api }) {
   const [scenarioGenOpen, setScenarioGenOpen] = useState(false)
   const [threadOrigin, setThreadOrigin] = useState(null) // null=닫힘 | 'left'|'center'|'right'
   const [liveChoice, setLiveChoice] = useState(null) // 검색어가 발행 칩과 매칭될 때의 체험 선택 시트: { query, hit }
+  const [searchOpen, setSearchOpen] = useState(false) // 검색 화면(최근 검색어·자동완성·AI 추천) — 검색창을 누르면 뜬다
   const [draggingChipId, setDraggingChipId] = useState(null)
   const [scenarioFilter, setScenarioFilter] = useState('')
   const importInputRef = useRef(null)
@@ -175,8 +178,8 @@ export default function HomeView({ api }) {
   /* 검색 진입 분기 — 칩 = 시나리오 체험, 자유 검색 = AI 라이브 생성 (BFF).
      검색어가 발행 시나리오와 매칭되면 어느 쪽으로 체험할지 시트로 명시적으로 고르게 한다
      — 자동으로 한쪽에 보내면 "지금 뭘 보는지"가 불투명해지기 때문 */
-  const submit = () => {
-    const q = query.trim()
+  const submitDdak = (raw) => {
+    const q = String(raw == null ? query : raw).trim()
     if (!q) return
     // 공백/언더스코어 차이를 무시하고 매칭한다 ("나이트 루틴" ↔ "나이트_루틴")
     const norm = (str) => String(str || '').toLowerCase().replace(/[\s_]+/g, '')
@@ -188,12 +191,16 @@ export default function HomeView({ api }) {
     if (hit) setLiveChoice({ query: q, hit })
     else api.playLive(q)
   }
+  /* 검색 제출은 라우터를 거친다 — DDAK(위 submitDdak) / 검색 결과 페이지. 최근 검색어 기록도 훅 몫 */
+  const search = useSearchEntry(api, { onDdak: submitDdak })
+  const viewerW = (DEVICE_PRESETS.find((d) => d.key === api.viewerDevice) || DEVICE_PRESETS[0]).w
 
   /* 탐색 아이템에 공급하는 실행 컨텍스트 — 검색/칩/키워드만 실제 동작, 나머지는 목업 */
   const homePlayer = {
     query,
     setQuery,
-    submitQuery: submit,
+    submitQuery: () => search.runSearch(query),
+    openSearch: () => setSearchOpen(true), // 검색창 포커스 → 검색 화면 (Figma 1-2/1-3)
     answers: {},
     setAnswer: () => {},
     addToCart: () => {},
@@ -248,7 +255,7 @@ export default function HomeView({ api }) {
             config={api.explore}
             searchValue={query}
             onSearchChange={setQuery}
-            onSubmit={submit}
+            onSubmit={() => search.runSearch(query)}
             chips={chips}
           />
         )}
@@ -257,6 +264,25 @@ export default function HomeView({ api }) {
 
       {/* 쇼핑 쓰레드 히스토리 패널 — 햄버거 버튼 위치에서 등장 */}
       <ThreadPanel api={api} open={!!threadOrigin} origin={threadOrigin || 'right'} onClose={() => setThreadOrigin(null)} />
+
+      {/* 검색 화면 — 최근 검색어 · 자동완성 · AI 추천. 제출은 라우터를 거쳐 DDAK / 검색 결과 페이지로 */}
+      <SearchOverlay
+        open={searchOpen}
+        initialQuery={query}
+        width={viewerW}
+        profile={search.profile}
+        recents={search.recents}
+        onRemoveRecent={search.removeRecent}
+        onSubmit={(q) => {
+          setSearchOpen(false)
+          setQuery(q)
+          search.runSearch(q)
+        }}
+        onClose={() => setSearchOpen(false)}
+      />
+      {search.routing ? (
+        <div className="sb-search-routing" role="status">✦ 「{search.routing}」 — 어떤 화면이 맞을지 살펴보고 있어요…</div>
+      ) : null}
 
       {/* 시나리오 관리 드로어 */}
       {drawerOpen && (

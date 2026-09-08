@@ -268,6 +268,17 @@ const server = http.createServer(async (req, res) => {
       }
       return streamAnthropic(res, JSON.stringify(output), { delayMs: 1, chunkSize: 2000 })
     }
+    if (system.includes('검색 라우터')) {
+      llmCalls.push({ type: 'search-route', system, user })
+      const q = (/검색어: (.*)/.exec(user)?.[1] ?? '').trim()
+      const ddak = /추천|메이크업|피부|무너|고민|어울리/.test(q)
+      return streamAnthropic(res, JSON.stringify({ ddak, reason: ddak ? '모의: 고민·요청형 검색어' : '모의: 상품 종류 조회', normalized: ddak ? `${q} 추천해줘` : q }), { delayMs: 1, chunkSize: 200 })
+    }
+    if (system.includes('검색어 추천')) {
+      llmCalls.push({ type: 'search-suggest', system, user })
+      const q = (/입력 중인 검색어: (.*)/.exec(user)?.[1] ?? '').trim()
+      return streamAnthropic(res, JSON.stringify({ suggestions: [`지성피부에 쓰기 좋은 여름 ${q} 추천해줘`, `부드럽게 착 붙는 ${q} 추천해줘`, `밝은 피부톤으로 만들어주는 ${q} 추천해줘`] }), { delayMs: 1, chunkSize: 200 })
+    }
     if (system.includes('설문 심사관')) {
       llmCalls.push({ type: 'judge-survey', system, user })
       return streamAnthropic(res, JUDGE_SURVEY_JSON, { delayMs: 2, chunkSize: 40 })

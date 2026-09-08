@@ -484,6 +484,20 @@ try {
   }
 
   // ── 10.7 단계 축 — 설문 단계 실행 + 설문 judge (다른 루브릭) ──
+  console.log('10.6) 홈 검색 라우팅·추천')
+  {
+    const srp = await fetch(BFF + '/api/search/route', { method: 'POST', headers: plain, body: JSON.stringify({ query: '바디워시' }) }).then((r) => r.json())
+    ok(srp?.ddak === false && srp?.source === 'llm', `상품 종류 검색어는 SRP (ddak=${srp?.ddak}, ${srp?.source})`)
+    const ddak = await fetch(BFF + '/api/search/route', { method: 'POST', headers: plain, body: JSON.stringify({ query: '여드름 트러블 피부 기초 메이크업', profile: [{ label: '피부타입', value: '지성' }] }) }).then((r) => r.json())
+    ok(ddak?.ddak === true && ddak?.normalized?.includes('메이크업'), `고민형 검색어는 DDAK (ddak=${ddak?.ddak})`)
+    const sug = await fetch(BFF + '/api/search/suggest', { method: 'POST', headers: plain, body: JSON.stringify({ query: '쿠션' }) }).then((r) => r.json())
+    ok(sug?.suggestions?.length === 3 && sug.suggestions.every((s) => s.includes('쿠션')), `AI 검색어 추천 3개 (${sug?.suggestions?.length})`)
+    const bad = await fetch(BFF + '/api/search/route', { method: 'POST', headers: plain, body: JSON.stringify({ query: '' }) })
+    ok(bad.status === 400, `빈 검색어는 400 (${bad.status})`)
+    const calls = await llmCalls()
+    ok(calls.some((c) => c.type === 'search-route') && calls.some((c) => c.type === 'search-suggest'), '라우터·추천 LLM 호출 기록')
+  }
+
   console.log('10.7) 설문 단계 실행·판정 (stage=survey)')
   const svRunEvents = await sse(`/api/admin/eval/cases/${promo.id}/run`, { stage: 'survey', label: '설문 회귀' }, plain)
   const svRun = last(svRunEvents, 'result')?.data?.run

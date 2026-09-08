@@ -173,6 +173,17 @@ Base: `/api/admin/*` (스튜디오 프록시 `/api/bff/admin/*` 경유) · 인�
 | POST | `/api/admin/eval/runs/:id/judge` | **자동 채점** (SSE) — LLM 심사관이 케이스 입력과 실행 결과를 대조해 루브릭 4차원으로 채점, `run.judge`에 저장. 사람 채점과 절대 안 섞인다(source 축). 단계 축 분기: config.stage=plan(기본)은 `judge`(근거 충실·맞춤성·단계 구성·실행 가능성, dropLog 포함 심사), survey는 `judge-survey`(질문 절제·의도 적합·답하기 쉬움·말투) — 재정의는 각각 `llm-prompt-judge`/`llm-prompt-judge-survey`. SSE: `status` → `result({ run })` \| `error` |
 | GET | `/api/admin/metrics/engines` | **전환 판정 계기판** — 실주행 plan 스텝 llmMeta(engine 각인) 엔진별 집계: 표본·평균 지연·뼈대/상품·캐시 적중률·promptVersion |
 
+## 1-2. BFF — search API (홈 검색창 전용, 공개)
+
+홈 검색창의 **진입 분기**와 **AI 검색어 추천**. threads API 와 같은 `x-device-id` 규약, 쓰레드·core 기록 없음(LLM 1회, effort low). LLM 이 막히면(키 없음·실패·파싱 실패) 같은 규칙의 휴리스틱이 대신 답하고 `source: 'fallback'` 으로 표시한다 — 검색은 언제나 어디론가 가야 한다. 계약은 `@ddak/schema` `search.ts`.
+
+| 메서드 | 경로 | 역할 | 요청 본문 | 응답 |
+|---|---|---|---|---|
+| POST | `/api/search/route` | **두 갈래 판정** — 뷰티 카테고리 한정으로 설문→맞춤 계획(DDAK)을 요구하는 검색어면 `ddak: true`(추천·비교·고민·루틴·상황·피부 타입·"~추천해줘"), 상품 종류 한 단어·브랜드·모델명 조회·비뷰티·서비스 문의·애매하면 `false`(검색 결과 페이지). 프롬프트는 @ddak/pipeline `SEARCH_ROUTE_SYSTEM`(PROMPT_DEFS 밖 — 운영 콘솔 재정의 대상 아님) | `SearchRouteBody` `{ query(1~200), profile? }` | `SearchRouteResult` `{ ddak, normalized(DDAK 면 의도 문장·아니면 원문), reason, source: llm\|fallback }` |
+| POST | `/api/search/suggest` | **AI 검색어 추천** — 입력 중인 검색어로 자연어 검색 문장 최대 3개(~25자, "~추천해줘/~찾아줘" 꼴, 서로 다른 축, 프로필 피부 타입 반영). `SEARCH_SUGGEST_SYSTEM` | `SearchSuggestBody` `{ query(1~100), profile? }` | `SearchSuggestResult` `{ suggestions: string[≤3], source }` |
+
+FE(`apps/studio/src/lib/liveApi.js` `routeSearch`/`suggestSearch`)는 실패 시 `lib/searchCatalog.js` 의 같은 규칙 휴리스틱(`heuristicRoute`/`fallbackSuggest`)으로 대신한다. 모의 스택(`apps/bff/e2e/mock-upstream.mjs`)은 시스템 프롬프트 표식 '검색 라우터'·'검색어 추천'으로 응답하고, 스모크 10.6 이 두 갈래·추천 3개·빈 검색어 400 을 확인한다.
+
 ## 2. Core — internal API (BFF 전용, 비공개)
 
 Base: `https://ddak-core.vercel.app` · 인증: **`Authorization: Bearer <CORE_SERVICE_TOKEN>`** (healthz·docs 제외)

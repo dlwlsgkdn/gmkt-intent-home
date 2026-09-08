@@ -93,6 +93,23 @@ export function saveKeywords(list) {
   writeJson(KEYWORDS_KEY, list)
 }
 
+/* ── 홈 검색창 최근 검색어 — 프로필(계정)별 {[accountId]: [{ q, at }]} 최신순, 최대 10개.
+   기기 전용(계정 동기화 기계 밖) — 검색어는 기기 사용자의 흔적이라 서버 행에 싣지 않는다 ── */
+const RECENT_SEARCH_KEY = 'ddak-recent-searches-v1'
+export const RECENT_SEARCH_LIMIT = 10
+
+export function loadRecentSearches(accountId) {
+  const all = readJson(RECENT_SEARCH_KEY, null)
+  const list = all && typeof all === 'object' ? all[accountId || 'default'] : null
+  return Array.isArray(list) ? list.filter((it) => it && typeof it.q === 'string' && it.q) : []
+}
+
+export function saveRecentSearches(accountId, list) {
+  const all = readJson(RECENT_SEARCH_KEY, null)
+  const base = all && typeof all === 'object' ? all : {}
+  writeJson(RECENT_SEARCH_KEY, { ...base, [accountId || 'default']: (list || []).slice(0, RECENT_SEARCH_LIMIT) })
+}
+
 /* ── 계정 ── */
 export function createAccount(partial = {}) {
   const explore = JSON.parse(JSON.stringify(DEFAULT_EXPLORE))

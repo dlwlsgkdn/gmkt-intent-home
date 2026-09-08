@@ -57,6 +57,8 @@ export {
   loadStarters,
   saveStarters,
   loadKeywords,
+  loadRecentSearches,
+  saveRecentSearches,
   saveKeywords,
   loadViewerDevice,
   saveViewerDevice,

@@ -10,6 +10,7 @@ import LivePlayer from './components/LivePlayer.jsx'
 import ExploreEditor from './components/ExploreEditor.jsx'
 import AdminView from './components/AdminView.jsx'
 import TaggingStudio from './components/TaggingStudio.jsx'
+import SearchResults from './components/SearchResults.jsx'
 
 /*
  * 앱 셸 — 라우팅과 토스트를 갖고, 화면들이 쓰는 api 객체를 조립한다.
@@ -46,6 +47,9 @@ function routeFromHash(hash) {
      않고(이어보기 재요청 없음), 다른 쓰레드로 가면 키가 바뀌어 새로 연다 */
   const thread = hash.match(/^#thread\/(\d{19})$/)
   if (thread) return { name: 'live', resumeThreadId: thread[1], runId: `t:${thread[1]}` }
+  // 검색 결과 페이지(SRP 목업) — 검색 라우터가 DDAK 아님으로 가른 검색어의 착지, 주소가 곧 검색어
+  const srp = hash.match(/^#srp\/(.+)$/)
+  if (srp) return { name: 'srp', query: decodeURIComponent(srp[1]) }
   return null
 }
 
@@ -308,6 +312,8 @@ export default function App() {
     playScenario: (id, resume) => openSynced(workspace.ensureScenarioSynced(id), () => setRoute({ name: 'player', id, resume })),
     /* 라이브 생성 체험(BFF) — 자유 검색 진입. runId로 리마운트해 "새로 생성"이 새 쓰레드를 만든다 */
     playLive: (query) => setRoute({ name: 'live', query, runId: Date.now() }),
+    /* 검색 결과 페이지 — 검색 라우터(useSearchEntry)가 SRP 로 가른 검색어. 해시 엔트리라 뒤로가기로 홈 복귀 */
+    openSrp: (query) => pushRoute(`#srp/${encodeURIComponent(query)}`, { name: 'srp', query }),
     resumeLive: (threadId) =>
       pushRoute(`#thread/${threadId}`, { name: 'live', resumeThreadId: threadId, runId: `t:${threadId}` }),
     /* 새 체험이 쓰레드를 받은 순간 — 주소를 그 쓰레드로 바꿔 링크가 곧 이어보기가 되게 한다.
@@ -415,7 +421,8 @@ export default function App() {
         <AdminView api={api} tab={route.tab || 'dashboard'} studioScenarioId={route.id} threadId={route.threadId} />
       )}
       {route.name === 'tagging' && <TaggingStudio api={api} />}
-      {route.name !== 'home' && route.name !== 'explore-editor' && route.name !== 'live' && route.name !== 'admin' && route.name !== 'tagging' && !current && <HomeView api={api} />}
+      {route.name === 'srp' && <SearchResults key={route.query} api={api} query={route.query} />}
+      {route.name !== 'home' && route.name !== 'explore-editor' && route.name !== 'live' && route.name !== 'admin' && route.name !== 'tagging' && route.name !== 'srp' && !current && <HomeView api={api} />}
 
       {toast && <div className="sb-toast">{toast}</div>}
     </>

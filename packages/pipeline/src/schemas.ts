@@ -304,3 +304,22 @@ export const PlanSearchSectionPartialGen = z.object({
   items: z.array(z.unknown()).optional(),
 })
 export type PlanSearchSectionPartialGen = z.infer<typeof PlanSearchSectionPartialGen>
+
+/* ── 홈 검색창 — 진입 분기(라우터)와 AI 검색어 추천 (짧은 구조화 호출, 스트리밍 없음) ── */
+export const SearchRouteGen = z.object({
+  ddak: z.boolean().describe('true = DDAK(뷰티 설문→맞춤 계획)으로 보낼 검색어, false = 일반 검색 결과(SRP)'),
+  reason: z.string().describe('판정 근거 한 줄 (운영 로그용)'),
+  normalized: z
+    .string()
+    .describe('DDAK 으로 보낼 때 설문 생성에 넘길 의도 문장 — 검색어를 자연어 한 문장으로 정리(없는 정보를 지어내지 않는다). SRP 면 검색어 그대로'),
+})
+export type SearchRouteGen = z.infer<typeof SearchRouteGen>
+
+export const SearchSuggestGen = z.object({
+  suggestions: z
+    .array(z.string())
+    .min(1)
+    .max(3)
+    .describe('DDAK 에 어울리는 자연어 검색어 3개 — 입력어를 품고 상황·피부·계절 중 하나를 덧붙인 한 문장, "~추천해줘" 꼴'),
+})
+export type SearchSuggestGen = z.infer<typeof SearchSuggestGen>

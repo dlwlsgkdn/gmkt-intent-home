@@ -50,6 +50,7 @@ export const EXPLORE_COMPONENTS = {
                 className="resize-none overflow-hidden clean-search__field--multiline"
                 value={value}
                 readOnly={!isPlayer}
+                onFocus={() => isPlayer && ctx.player.openSearch && ctx.player.openSearch()}
                 onChange={(e) => isPlayer && ctx.player.setQuery(e.target.value)}
                 onKeyDown={(e) => {
                   if (isPlayer && e.key === 'Enter' && !e.shiftKey) {
@@ -65,6 +66,8 @@ export const EXPLORE_COMPONENTS = {
                 className="clean-search__field--ellipsis"
                 value={value}
                 readOnly={!isPlayer}
+                /* 홈에서는 검색창을 누르는 순간 검색 화면(최근 검색어·자동완성·AI 추천)이 뜬다 — 입력은 그쪽에서 */
+                onFocus={() => isPlayer && ctx.player.openSearch && ctx.player.openSearch()}
                 onChange={(e) => isPlayer && ctx.player.setQuery(e.target.value)}
               />
             )}

@@ -21,11 +21,17 @@ import {
   PROMPT_VERSION,
   PlanProductsGen,
   PlanSkeletonGen,
+  SEARCH_ROUTE_SYSTEM,
+  SEARCH_SUGGEST_SYSTEM,
+  SearchRouteGen,
+  SearchSuggestGen,
   StructuredStreamParser,
   SurveyGen,
   buildIntentRequest,
   buildPlanProductsRequest,
   buildPlanSkeletonRequest,
+  buildSearchRouteRequest,
+  buildSearchSuggestRequest,
   buildSurveyRequest,
   renderSystemTemplate,
   type ConstraintLedger,
@@ -158,6 +164,25 @@ export class LlmService implements LlmPort {
       system: await this.resolveSystem('intent'),
       effort: 'low' as const,
       user: buildIntentRequest(intent),
+    })
+  }
+
+  /** 홈 검색창 진입 분기 — 검색어를 DDAK(설문→계획)/SRP 로 가른다. 작고 빠른 구조화 호출(스트리밍 없음).
+   * 실패 처리는 호출자(SearchController)가 휴리스틱으로 대신 답한다 */
+  async routeSearch(query: string, profile?: Profile): Promise<GenResult<SearchRouteGen>> {
+    return this.generate('검색 라우팅', SearchRouteGen, {
+      system: { text: SEARCH_ROUTE_SYSTEM, custom: false },
+      effort: 'low' as const,
+      user: buildSearchRouteRequest(query, profile),
+    })
+  }
+
+  /** 홈 검색창 AI 검색어 추천 — 입력 중인 검색어에 상황·피부·계절을 덧붙인 자연어 검색어 3개 */
+  async suggestSearch(query: string, profile?: Profile): Promise<GenResult<SearchSuggestGen>> {
+    return this.generate('검색어 추천', SearchSuggestGen, {
+      system: { text: SEARCH_SUGGEST_SYSTEM, custom: false },
+      effort: 'low' as const,
+      user: buildSearchSuggestRequest(query, profile),
     })
   }
 

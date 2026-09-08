@@ -144,6 +144,25 @@ export async function listLiveThreads({ cursor, limit = 30 } = {}) {
   return res.json()
 }
 
+/* 홈 검색창 — 진입 분기(DDAK 설문→계획 / 검색 결과 페이지)와 AI 검색어 추천 (API.md §1-2).
+   실패는 호출자가 휴리스틱(lib/searchCatalog heuristicRoute·fallbackSuggest)으로 대신한다 — 검색은 언제나 어디론가 가야 한다 */
+async function postJson(path, body) {
+  let res
+  try {
+    res = await fetch(`${BASE}${path}`, { method: 'POST', headers: headers(true), body: JSON.stringify(body) })
+  } catch {
+    throw networkError()
+  }
+  if (!res.ok) throw await toLiveError(res)
+  return res.json()
+}
+export function routeSearch(body) {
+  return postJson('/search/route', body)
+}
+export function suggestSearch(body) {
+  return postJson('/search/suggest', body)
+}
+
 /* 행동 기록(담기/완료 등) — fire-and-forget. 실패해도 체험을 막지 않는다 */
 export function recordLiveEvent(threadId, type, data) {
   fetch(`${BASE}/threads/${encodeURIComponent(threadId)}/events`, {

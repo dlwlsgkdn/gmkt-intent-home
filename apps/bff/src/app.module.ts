@@ -10,6 +10,7 @@ import { GraphEngineService } from './engine/graph-engine.service'
 import { PipelineDryRunService } from './engine/dry-run.service'
 import { PipelineFlowRunService } from './engine/flow-run.service'
 import { ThreadsController } from './threads/threads.controller'
+import { SearchController } from './search/search.controller'
 import { ThreadsService } from './threads/threads.service'
 
 @ApiTags('app')
@@ -36,7 +37,7 @@ export class AppController {
 }
 
 @Module({
-  controllers: [AppController, ThreadsController, AdminController],
+  controllers: [AppController, ThreadsController, SearchController, AdminController],
   providers: [
     CoreClientService,
     KnowledgeService,
