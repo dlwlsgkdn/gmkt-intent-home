@@ -132,8 +132,18 @@ npm error 404 Not Found - GET http://prm.gmarket.com/nexus/content/groups/npm-gr
 | `STUDIO_DIST` | 스튜디오 빌드 경로. 화면까지 같이 서빙할 때만 | 화면은 안 뜨고 API만 뜬다 |
 | `PORT` | 퓨전은 보통 **8080** (`.s2i/environment` 기본값). 로컬 기본은 8790 | — |
 
-헬스체크로 쓸 경로: `GET /api/tagging/summary` (Mongo까지 닿아야 200이므로 진짜 준비 상태를
-반영한다).
+헬스체크로 쓸 경로: **`GET /health`** (전역 접두사 `api` 밖에 둔 유일한 경로 — 퓨전 콘솔의
+Readiness Probe Path 기본값이 `/health` 라 거기 맞췄다).
+
+**`/api/tagging/summary` 를 프로브에 쓰지 말 것.** 그 경로는 Mongo 에 닿아야 200 이라, 존
+방화벽처럼 앱 밖의 이유로 Mongo 가 끊기면 프로브가 실패해 Pod 이 죽고 재시작을 반복한다.
+`/health` 는 프로세스 생존과 의존성 연결을 분리한다 — 상태 코드는 언제나 200 이고 Mongo
+연결 여부는 본문 `mongo` 필드로만 알린다:
+
+```json
+{"ok":true,"mongo":"connected"}      // 정상
+{"ok":true,"mongo":"disconnected"}   // Mongo 끊김 — 그래도 200 이라 Pod 을 죽이지 않는다
+```
 
 ## 6. 이 서비스가 인증이 없다는 점
 
