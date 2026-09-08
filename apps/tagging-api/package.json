@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "description": "태깅 검토 API — 사내망 Mongo(oliveyoung.products)를 읽고 검토 결과를 되쓴다",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "nest build",
     "start": "node dist/main.js",
@@ -15,6 +17,7 @@
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
     "dotenv": "^16.4.5",
+    "express": "^5.2.1",
     "mongodb": "^6.10.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
@@ -22,6 +25,7 @@
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
+    "@types/express": "^5.0.6",
     "@types/node": "^22.10.0",
     "typescript": "^5.7.2"
   }

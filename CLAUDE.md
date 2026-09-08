@@ -14,7 +14,7 @@ apps/tagging-api/  ← NestJS 서비스 — 사내망 Mongo(올리브영 상품)
 packages/schema/   ← @ddak/schema — 쓰레드 도메인·internal API zod 계약 (install 시 prepare로 dist 빌드)
 packages/pipeline/ ← @ddak/pipeline — LLM 파이프라인 이관 자산: 단계 카탈로그·프롬프트·생성 스키마·결정적 가드(그라운딩·병합·partial)·설문 와이어 조립(survey-wire — 질문 id 부여와 사진 질문 첫 자리 규칙을 legacy·그래프·dry-run이 공유)·LlmPort 계약·원장·지식 소스. 프레임워크(LangGraph)·프로바이더 중립 순수 로직만 — bff는 여기서 import. 설계·페이즈는 DESIGN-PIPELINE-LANGGRAPH.md
 api/               ← 스튜디오 서버리스 (Vercel 함수, 루트 고정) — state.js(동기화)·pdp.js(지마켓 PDP iframe 프록시)
-middleware.js      ← 스튜디오 엣지 미들웨어 (루트 고정) — /api/bff/* 를 BFF로 rewrite + BFF_SERVICE_TOKEN 주입 (FE는 bff URL을 직접 안 부름. 스튜디오 프로젝트 환경변수 BFF_URL·BFF_SERVICE_TOKEN 필요)
+middleware.js      ← 스튜디오 엣지 미들웨어 (루트 고정, **Vercel 전용**) — /api/bff/* 를 BFF로 rewrite + BFF_SERVICE_TOKEN 주입 (FE는 bff URL을 직접 안 부름. 스튜디오 프로젝트 환경변수 BFF_URL·BFF_SERVICE_TOKEN 필요). **퓨전(사내)에는 엣지가 없어 같은 rewrite를 apps/tagging-api/src/bff-proxy.ts 가 맡는다** — 스튜디오를 서빙하는 쪽이 프록시도 맡는다는 규칙이고, 둘 중 하나를 고치면 다른 쪽도 맞출 것
 legacy/            ← 옛 HTML 프로토타입 원본 (빌드 시 apps/studio/dist/legacy 로 복사됨)
 ```
 
