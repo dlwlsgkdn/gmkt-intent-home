@@ -120,6 +120,25 @@ npm error 404 Not Found - GET http://prm.gmarket.com/nexus/content/groups/npm-gr
 로컬에서 S2I 와 같은 순서를 재현해 확인한 결과: `npm run build` → `npm start` 로 스튜디오가
 `/` 에서 200 으로 뜨고 API 라우트가 응답한다.
 
+## 4-1. 한 저장소로 세 앱을 올린다 — Context Dir 은 비운다
+
+core·bff·tagging-api 는 같은 저장소·같은 빌더를 쓰고 **`NPM_RUN` 한 칸만 다르다**.
+
+| 앱 | `NPM_RUN` | Route | 비고 |
+|---|---|---|---|
+| tagging-api | (없음, 기본 `start`) | 필요 | 스튜디오 화면도 함께 서빙 |
+| core | `start:core` | 불필요 | BFF 만 부른다 |
+| bff | `start:bff` | 불필요 | tagging-api 가 클러스터 안에서 부른다 |
+
+**Context Dir 은 반드시 비워 둘 것(저장소 루트).** `apps/core` 같은 하위 경로를 넣으면
+루트에만 있는 것들이 빌드 컨텍스트에서 사라져 깨진다 — `workspaces` 선언(그래야
+`@ddak/schema`·`@ddak/pipeline` 이 레지스트리가 아니라 로컬로 풀린다), `.npmrc`(사내 미러),
+`.s2i/environment`, `package-lock.json`.
+
+그래서 루트 `npm run build` 는 **실행 진입점 셋을 모두** 만든다(schema → pipeline → core →
+bff → tagging-api → studio 순서, 실측 약 12초). 예전에는 studio·tagging-api 만 만들어서
+`NPM_RUN=start:core` 로 띄우면 빌드는 성공하고 팟이 `Cannot find module` 로 죽었다.
+
 ## 5. tagging-api 배포 시 반드시 넘길 환경변수
 
 | 변수 | 값 | 빠뜨리면 |
