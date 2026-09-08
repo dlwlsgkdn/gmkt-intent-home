@@ -49,7 +49,7 @@ function Highlight({ text, match }) {
   )
 }
 
-export default function SearchOverlay({ open, initialQuery = '', width = 390, profile = [], recents = [], onRemoveRecent, onSubmit, onClose }) {
+export default function SearchOverlay({ open, initialQuery = '', width = 390, profile = [], recents = [], routing = null, onRemoveRecent, onSubmit, onClose }) {
   const [text, setText] = useState(initialQuery)
   const [ai, setAi] = useState({ query: '', rows: [], loading: false })
   const inputRef = useRef(null)
@@ -63,13 +63,13 @@ export default function SearchOverlay({ open, initialQuery = '', width = 390, pr
   }, [open, initialQuery])
 
   useEffect(() => {
-    if (!open) return undefined
+    if (!open || routing) return undefined
     const onKey = (e) => {
       if (e.key === 'Escape') onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [open, onClose])
+  }, [open, routing, onClose])
 
   /* AI 추천 — 타자가 멈추고 450ms 뒤 한 번, 순번(seq)으로 늦게 도착한 옛 답은 버린다. 앞글자가 같은 입력은
      지난 추천을 잠시 유지해 행이 깜빡이지 않게 한다 */
@@ -106,16 +106,19 @@ export default function SearchOverlay({ open, initialQuery = '', width = 390, pr
   if (!open) return null
   const q = text.trim()
   const rows = q ? autocomplete(q, recents.map((r) => r.q)) : []
+  /* 제출 뒤에도 화면은 닫히지 않는다 — 판정(routing)이 끝나면 호출자가 목적지 화면으로 바로 넘긴다 */
   const submit = (value) => {
     const v = String(value || '').trim()
-    if (v) onSubmit(v)
+    if (!v || routing) return
+    setText(v)
+    onSubmit(v)
   }
 
   return createPortal(
     <div className="sb-search" role="dialog" aria-modal="true" aria-label="검색">
       <div className="sb-search__screen" style={{ width }}>
         <div className="sb-search__bar">
-          <button type="button" className="sb-search__back" aria-label="뒤로" onClick={onClose}>
+          <button type="button" className="sb-search__back" aria-label="뒤로" disabled={!!routing} onClick={onClose}>
             <BackIcon />
           </button>
           <form
@@ -134,6 +137,7 @@ export default function SearchOverlay({ open, initialQuery = '', width = 390, pr
               placeholder="어떤 뷰티 고민이 있으세요?"
               autoComplete="off"
               enterKeyHint="search"
+              readOnly={!!routing}
               onChange={(e) => setText(e.target.value)}
               /* 한글 조합 중 Enter 는 조합 확정이라 제출하지 않는다 — 조합이 끝난 Enter 만 검색 */
               onKeyDown={(e) => {
@@ -142,7 +146,7 @@ export default function SearchOverlay({ open, initialQuery = '', width = 390, pr
                 submit(text)
               }}
             />
-            {text ? (
+            {text && !routing ? (
               <button
                 type="button"
                 className="sb-search__clear"
@@ -158,7 +162,14 @@ export default function SearchOverlay({ open, initialQuery = '', width = 390, pr
           </form>
         </div>
         <div className="sb-search__list">
-          {!q ? (
+          {routing ? (
+            <div className="sb-search__routing" role="status" aria-live="polite">
+              <span className="sb-search__routing-spark" aria-hidden="true"><SparkIcon /></span>
+              <p className="sb-search__routing-title">「{routing}」 어떤 화면이 맞을지 살펴보고 있어요</p>
+              <p className="sb-search__routing-sub">뷰티 고민이면 맞춤 설문으로, 상품 조회면 검색 결과로 바로 이어드려요</p>
+              <span className="sb-search__routing-bar" aria-hidden="true" />
+            </div>
+          ) : !q ? (
             recents.length ? (
               recents.map((r) => (
                 <div key={r.q} className="sb-search__row sb-search__row--recent">

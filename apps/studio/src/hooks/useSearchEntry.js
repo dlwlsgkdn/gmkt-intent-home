@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { loadRecentSearches, saveRecentSearches } from '../lib/store.js'
 import { routeSearch } from '../lib/liveApi.js'
 import { heuristicRoute } from '../lib/searchCatalog.js'
@@ -18,6 +18,7 @@ export function useSearchEntry(api, { onDdak }) {
     setRecents(loadRecentSearches(accountId))
   }, [accountId])
   const [routing, setRouting] = useState(null)
+  const busyRef = useRef(false) // 판정 중 겹친 제출(Enter 연타·행 클릭)은 한 번만
 
   const profile = ((api.profile && api.profile.items) || []).map((it) => ({ label: String(it.label || ''), value: String(it.value || '') }))
 
@@ -32,9 +33,11 @@ export function useSearchEntry(api, { onDdak }) {
     saveRecentSearches(accountId, next)
   }
 
+  /* 제출 — 검색 화면은 판정이 끝날 때까지 열린 채 상태를 보이고, 목적지 화면으로 바로 넘어간다(홈으로 되돌아오지 않는다) */
   const runSearch = async (raw) => {
     const q = String(raw || '').trim()
-    if (!q) return
+    if (!q || busyRef.current) return null
+    busyRef.current = true
     remember(q)
     setRouting(q)
     let decision
@@ -43,9 +46,11 @@ export function useSearchEntry(api, { onDdak }) {
     } catch (e) {
       decision = { ...heuristicRoute(q), normalized: q, source: 'fallback' }
     }
+    busyRef.current = false
     setRouting(null)
     if (decision.ddak) onDdak(q, decision)
     else api.openSrp(q)
+    return decision
   }
 
   return { recents, removeRecent, runSearch, routing, profile }

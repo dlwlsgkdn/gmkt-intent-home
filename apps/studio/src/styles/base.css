@@ -103,6 +103,7 @@
      Figma 변수(color/text·border·bg·action)를 그대로 옮겼고 이름은 옛 dk 토큰을 유지해
      소비 규칙을 건드리지 않았다. 브랜드 보라 3단계는 새 토큰이다. */
   --dk-ink: #1a1a1a;        /* text/primary — 제목·본문·선택지 제목 */
+  --dk-heading: #333333;    /* text/heading — 검색 결과 탭 활성 라벨 (Figma Search 섹션) */
   --dk-heading: #333333;    /* text/heading — 설문 인트로 제목 */
   --dk-ink-2: #4a4a4a;      /* text/strong — 질문 라벨·보조 본문 */
   --dk-muted: #8a8a8a;      /* text/secondary — 설명·선택지 부제 */

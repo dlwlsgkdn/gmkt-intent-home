@@ -188,8 +188,10 @@ export default function HomeView({ api }) {
       const fields = [s.title, s.chip, s.query].map(norm).filter(Boolean)
       return fields.some((f) => f.includes(nq) || nq.includes(f))
     })
-    if (hit) setLiveChoice({ query: q, hit })
-    else api.playLive(q)
+    if (hit) {
+      setSearchOpen(false) // 검색 화면 위에 시트가 겹치지 않게 — 라이브 생성·SRP 는 화면 전환이라 따로 닫을 게 없다
+      setLiveChoice({ query: q, hit })
+    } else api.playLive(q)
   }
   /* 검색 제출은 라우터를 거친다 — DDAK(위 submitDdak) / 검색 결과 페이지. 최근 검색어 기록도 훅 몫 */
   const search = useSearchEntry(api, { onDdak: submitDdak })
@@ -272,15 +274,15 @@ export default function HomeView({ api }) {
         width={viewerW}
         profile={search.profile}
         recents={search.recents}
+        routing={search.routing}
         onRemoveRecent={search.removeRecent}
         onSubmit={(q) => {
-          setSearchOpen(false)
           setQuery(q)
-          search.runSearch(q)
+          search.runSearch(q) // 판정이 끝나면 라이브 생성·SRP 로 바로 넘어간다 — 검색 화면은 그때까지 열려 있다
         }}
         onClose={() => setSearchOpen(false)}
       />
-      {search.routing ? (
+      {search.routing && !searchOpen ? (
         <div className="sb-search-routing" role="status">✦ 「{search.routing}」 — 어떤 화면이 맞을지 살펴보고 있어요…</div>
       ) : null}
 
