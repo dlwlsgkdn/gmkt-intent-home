@@ -14,7 +14,9 @@ export class AppController {
   @Redirect('/docs', 302)
   root() {}
 
-  @Get('healthz')
+  /* 퓨전(OpenShift) 콘솔의 Readiness Probe Path 기본값이 /health 라 별칭을 함께 연다 —
+     세 앱(core·bff·tagging-api)이 같은 경로로 응답해야 배포하는 쪽이 칸마다 확인할 일이 없다. */
+  @Get(['healthz', 'health'])
   healthz() {
     return { ok: true, service: 'ddak-core', now: new Date().toISOString() }
   }

@@ -130,6 +130,11 @@ core·bff·tagging-api 는 같은 저장소·같은 빌더를 쓰고 **`NPM_RUN`
 | core | `start:core` | 불필요 | BFF 만 부른다 |
 | bff | `start:bff` | 불필요 | tagging-api 가 클러스터 안에서 부른다 |
 
+**Readiness Probe Path 는 세 앱 모두 `/health`** — 퓨전 콘솔 기본값이라 칸을 손댈 일이 없다.
+core·bff 는 `/healthz` 로도 같은 응답을 준다(별칭). 셋 다 의존성(Mongo·LLM)을 건드리지 않고
+상수만 돌려주므로, 앱 밖의 이유로 Mongo 가 끊겨도 프로브가 팟을 재시작 루프에 넣지 않는다 —
+연결 여부는 응답 본문(`mongo`·`llm`·`core` 필드)으로만 알린다.
+
 **Context Dir 은 반드시 비워 둘 것(저장소 루트).** `apps/core` 같은 하위 경로를 넣으면
 루트에만 있는 것들이 빌드 컨텍스트에서 사라져 깨진다 — `workspaces` 선언(그래야
 `@ddak/schema`·`@ddak/pipeline` 이 레지스트리가 아니라 로컬로 풀린다), `.npmrc`(사내 미러),
