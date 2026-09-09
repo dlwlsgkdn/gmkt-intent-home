@@ -3,6 +3,7 @@ import { RequestMethod } from '@nestjs/common'
 import { NestFactory } from '@nestjs/core'
 import { NestExpressApplication } from '@nestjs/platform-express'
 import { json, urlencoded } from 'express'
+import compression from 'compression'
 import { AppModule } from './app.module'
 import { bffProxy } from './bff-proxy'
 
@@ -14,6 +15,10 @@ async function bootstrap() {
      스튜디오를 직접 서빙하는 사내 배포에서는 이 프록시가 대신한다. BFF_URL 이 없으면 달지 않는다. */
   const proxy = bffProxy()
   if (proxy) app.use('/api/bff', proxy)
+  /* 부트스트랩 응답이 2.29MB 라 압축이 크게 듣는다(실측 506KB). BFF 프록시 뒤에 두는
+     이유: 프록시는 상류 응답을 그대로 흘려야 하고(SSE), 이미 압축된 것을 다시 건드리지
+     않는다. */
+  app.use(compression())
   /* 워크스페이스 상태 행은 시나리오 통째(stages·planCases)라 express 기본 100kb를 넘는다 */
   app.use(json({ limit: '8mb' }))
   app.use(urlencoded({ extended: true, limit: '1mb' }))
