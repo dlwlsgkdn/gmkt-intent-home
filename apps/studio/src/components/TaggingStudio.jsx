@@ -33,11 +33,17 @@ import {
 const EMPTY_UNIT = {
   id: null, brand: '', name: '', option: '', price: null, imageUrl: null, catalogTags: [],
   listings: [], ingredients: [], volumeMl: null,
-  copy: '', review: '', confidence: 0, confidenceLevel: null, rationale: '', decision: null,
+  copy: '', review: '', copySource: null, reviewSource: null,
+  confidence: 0, confidenceLevel: null, rationale: '', decision: null,
   note: '', tagRequest: {},
-  fields: Object.fromEntries(FIELD_DEFS.map((d) => [d.key, { selected: [], rep: null, status: 'unreviewed', origin: 'ai' }])),
-  aiFields: Object.fromEntries(FIELD_DEFS.map((d) => [d.key, { selected: [], rep: null, status: 'unreviewed', origin: 'ai' }])),
+  /* confidence·rationale까지 채워 둔다 — 확신도 바가 이제 remote 모드에서도 그려지므로,
+     이 자리표시자가 렌더되면(카탈로그 컬렉션이 비어 units 가 0건인 경우) "undefined%"가 뜬다. */
+  fields: Object.fromEntries(FIELD_DEFS.map((d) => [d.key, { selected: [], rep: null, status: 'unreviewed', origin: 'ai', confidence: 0, rationale: '' }])),
+  aiFields: Object.fromEntries(FIELD_DEFS.map((d) => [d.key, { selected: [], rep: null, status: 'unreviewed', origin: 'ai', confidence: 0, rationale: '' }])),
 }
+
+/* 몰 코드 → 사람이 읽는 이름. 리스팅 카드·미연결 카드·문구 출처가 같은 규칙을 쓴다. */
+const mallLabel = (mall) => (mall === 'gmarket' ? '지마켓' : '올리브영')
 
 const formatPrice = (price) => (typeof price === 'number' ? `${price.toLocaleString('ko-KR')}원` : '가격 정보 없음')
 
@@ -603,7 +609,7 @@ export default function TaggingStudio({ api, embedded = false }) {
                         <b>{u.name}</b>
                         <small>
                           <span className={`sb-tagging-mall sb-tagging-mall--${u.mall}`}>
-                            {u.mall === 'gmarket' ? '지마켓' : '올리브영'}
+                            {mallLabel(u.mall)}
                           </span>
                           {u.brand}
                         </small>
@@ -649,13 +655,13 @@ export default function TaggingStudio({ api, embedded = false }) {
             <dl>
               {unit.copy && (
                 <>
-                  <dt>상세페이지 주요 문구</dt>
+                  <dt>상세페이지 주요 문구 {unit.copySource && <em>{mallLabel(unit.copySource)} 리스팅</em>}</dt>
                   <dd>{unit.copy}</dd>
                 </>
               )}
               {unit.review && (
                 <>
-                  <dt>리뷰 요약</dt>
+                  <dt>리뷰 요약 {unit.reviewSource && <em>{mallLabel(unit.reviewSource)} 리스팅</em>}</dt>
                   <dd>{unit.review}</dd>
                 </>
               )}
@@ -665,7 +671,7 @@ export default function TaggingStudio({ api, embedded = false }) {
                 {unit.listings.map((l) => (
                   <div key={l.productId} className="sb-tagging-listing">
                     <span className={`sb-tagging-mall sb-tagging-mall--${l.mall}`}>
-                      {l.mall === 'gmarket' ? '지마켓' : '올리브영'}
+                      {mallLabel(l.mall)}
                     </span>
                     <b>{formatPrice(l.price)}</b>
                     {l.optionCount > 1 && <em>옵션 {l.optionCount}개</em>}

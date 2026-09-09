@@ -118,12 +118,20 @@ export function toUnlinkedCard(doc: any) {
   }
 }
 
-/* 문구·리뷰는 올리브영 리스팅에만 있다. 대표를 하나 골라 상단 줄에 쓴다. */
-const primaryListing = (cards: ReturnType<typeof toListingCard>[]) =>
-  cards.find((c) => c.mall === 'oliveyoung' && (c.copy || c.review)) ||
-  cards.find((c) => c.copy || c.review) ||
-  cards[0] ||
-  null
+/* 문구·리뷰는 올리브영 리스팅에만 있다. 대표를 하나 골라 상단 줄에 쓰되 **어느 리스팅에서
+   왔는지 함께 싣는다**(unit.copySource·reviewSource) — 검토자가 근거로 읽는 값이라 출처가
+   없으면 어느 변형(본품/기획세트) 얘기인지 알 수 없다.
+   후보가 여럿일 때는 product_id 로 정렬해 고른다. Mongo 반환 순서에 맡기면 같은 카탈로그가
+   새로고침마다 다른 문구를 보여줄 수 있다. */
+const primaryListing = (cards: ReturnType<typeof toListingCard>[]) => {
+  const byId = [...cards].sort((a, b) => String(a.productId).localeCompare(String(b.productId)))
+  return (
+    byId.find((c) => c.mall === 'oliveyoung' && (c.copy || c.review)) ||
+    byId.find((c) => c.copy || c.review) ||
+    byId[0] ||
+    null
+  )
+}
 
 export function toCatalogUnit(doc: any, listings: any[]) {
   const base = toUnit(doc)
@@ -153,6 +161,9 @@ export function toCatalogUnit(doc: any, listings: any[]) {
     url: null,
     copy: primary?.copy || '',
     review: primary?.review || '',
+    /* 상단 문구·리뷰의 출처 몰. 값이 없으면 null — 화면이 라벨 옆에 붙인다. */
+    copySource: primary?.copy ? primary.mall : null,
+    reviewSource: primary?.review ? primary.mall : null,
     ingredients: Array.isArray(doc.ingredients_from_spec) ? doc.ingredients_from_spec : [],
     volumeMl: typeof doc.volume_ml === 'number' ? doc.volume_ml : null,
     listings: cards,

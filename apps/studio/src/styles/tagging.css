@@ -825,3 +825,9 @@
 }
 .sb-tagging-unlinked b { display: block; font-weight: 400; }
 .sb-tagging-unlinked small { display: flex; gap: 6px; align-items: center; color: var(--sb-muted); }
+
+/* 상단 문구·리뷰의 출처 몰 — 어느 리스팅에서 온 값인지 라벨 옆에 작게 */
+.sb-tagging-pinfo dt em {
+  font-style: normal; font-weight: 400;
+  color: var(--sb-subtle); font-size: var(--sb-t-micro);
+}

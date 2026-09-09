@@ -393,3 +393,26 @@ test('joinListings — 묘비와 살아있는 카탈로그를 함께 가리키�
   assert.deepEqual(units[0].listings.map((l) => l.productId), ['A778'])
   assert.equal(unlinked.length, 0)
 })
+
+/* ── 대표 리스팅의 출처·결정성 (코드리뷰 지적) ────────────────────────── */
+
+test('toCatalogUnit — 상단 문구·리뷰에 출처 몰을 함께 싣는다', () => {
+  const u = toCatalogUnit(CAT, [GM, OY])
+  assert.equal(u.copySource, 'oliveyoung')
+  assert.equal(u.reviewSource, 'oliveyoung')
+})
+
+test('toCatalogUnit — 문구·리뷰가 없으면 출처도 null', () => {
+  const u = toCatalogUnit(CAT, [GM])
+  assert.equal(u.copy, '')
+  assert.equal(u.copySource, null)
+  assert.equal(u.reviewSource, null)
+})
+
+test('toCatalogUnit — 후보가 여럿이면 리스팅 순서가 아니라 product_id 로 정해진다', () => {
+  const a = { ...OY, product_id: 'A000000000001', product_info: { '제품 주요 사양': '먼저' } }
+  const b = { ...OY, product_id: 'A000000000002', product_info: { '제품 주요 사양': '나중' } }
+  /* 어느 순서로 들어와도 같은 리스팅이 뽑혀야 한다 — Mongo 반환 순서에 흔들리지 않게 */
+  assert.equal(toCatalogUnit(CAT, [a, b]).copy, '먼저')
+  assert.equal(toCatalogUnit(CAT, [b, a]).copy, '먼저')
+})

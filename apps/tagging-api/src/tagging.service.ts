@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common'
 import { MongoService } from './mongo.service'
 import { TaxonomyService } from './taxonomy.service'
-import { decisionToReview, joinListings, nowIso, toCatalogUnit, toDocPatch } from './mapping'
+import { decisionToReview, joinListings, nowIso, toDocPatch } from './mapping'
 
 /* 화면이 쓰는 필드만 가져온다. 투영이 없으면 11.53MB 를 통째로 끌어와 2.7초가 걸린다
    (실측) — toUnit 이 대부분 버리는데도. 투영 후 두 질의 병렬로 276ms. */
@@ -51,7 +51,10 @@ export class TaggingService {
   /* 대시보드 타일용 — 본문을 받지 않으려고 따로 둔다. */
   async summary() {
     const docs = await this.catalog()
-      .find({ merged_into: { $exists: false } }, { projection: { review_status: 1 } })
+      /* mapping.ts joinListings 의 `!d.merged_into` 와 같은 뜻이어야 한다 — Mongo 의
+         `field: null` 은 "없음"과 "null" 을 함께 잡는다. $exists:false 로 두면 빌더가
+         merged_into: null 을 쓴 문서에서 타일과 화면 건수가 갈린다. */
+      .find({ merged_into: null }, { projection: { review_status: 1 } })
       .toArray()
     const counts = { done: 0, unreviewed: 0, approved: 0, rejected: 0 }
     for (const doc of docs) {
@@ -69,26 +72,24 @@ export class TaggingService {
     return doc
   }
 
-  /* 되쓰기 뒤 화면에 돌려줄 단위를 만들 때도 묶인 리스팅을 다시 붙인다 —
-     응답 모양이 bootstrap 과 같아야 FE 가 한 규칙으로 읽는다. */
-  private async withListings(doc: any) {
-    const listings = await this.listings()
-      .find({ catalog_ids: doc.catalog_id, status: 'analyzed' }, { projection: projection(LISTING_FIELDS) })
-      .toArray()
-    return toCatalogUnit(doc, listings)
-  }
-
+  /* 쓰기 응답은 성공 여부만 돌려준다.
+     예전에는 되쓰기마다 단위를 다시 조립해 보냈는데, 그러려면 묶인 리스팅을 다시 읽어야
+     하고 products.catalog_ids 에는 인덱스가 없다(인덱스: _id_·product_id_1·status_1) —
+     칩 하나 토글할 때마다 1020건 컬렉션 스캔이 돌았다. 게다가 FE(postTagging)는 본문을
+     보지 않고 성공 여부만 쓴다. 쓰지도 않는 값을 위해 스캔하지 않는다.
+     화면에 되돌려 줄 단위가 필요해지면 그때 이 자리에서 조립하고 FE 도 함께 고칠 것 —
+     반쪽짜리(listings 없는) 단위를 돌려주면 bootstrap 과 모양이 갈려 더 나쁘다. */
   async saveUnit(catalogId: string, patch: unknown) {
     const doc = await this.findUnit(catalogId)
     const set = toDocPatch(patch, doc)
     await this.catalog().updateOne({ catalog_id: catalogId }, { $set: set })
-    return this.withListings({ ...doc, ...set })
+    return { ok: true }
   }
 
   async setDecision(catalogId: string, decision: unknown) {
     const doc = await this.findUnit(catalogId)
     const set = { ...decisionToReview(decision), updated_at: nowIso() }
     await this.catalog().updateOne({ catalog_id: catalogId }, { $set: set })
-    return this.withListings({ ...doc, ...set })
+    return { ok: true }
   }
 }
