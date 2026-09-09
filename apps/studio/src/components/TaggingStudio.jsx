@@ -112,6 +112,7 @@ function UnitThumb({ unit, className }) {
 
 export default function TaggingStudio({ api, embedded = false }) {
   const [units, setUnits] = useState([])
+  const [unlinked, setUnlinked] = useState([])
   const [source, setSource] = useState('loading') // 'loading' | 'remote' | 'local'
   const [taxonomyMeta, setTaxonomyMeta] = useState(null) // 원격 모드 전용 — { source, rev, updatedAt, cachedAt }
   const [selectedId, setSelectedId] = useState(null)
@@ -130,6 +131,7 @@ export default function TaggingStudio({ api, embedded = false }) {
       if (!alive) return
       if (boot) {
         setUnits(boot.units)
+        setUnlinked(Array.isArray(boot.unlinked) ? boot.unlinked : [])
         setTaxonomyMeta(boot.taxonomyMeta || null)
         setSource('remote')
       } else {
@@ -520,6 +522,16 @@ export default function TaggingStudio({ api, embedded = false }) {
           >
             미검토 <b>{counts.unreviewed}</b>
           </button>
+          {unlinked.length > 0 && (
+            <button
+              type="button"
+              className={'sb-tagging-pill sb-tagging-pill--unlinked' + (listFilter === 'unlinked' ? ' is-on' : '')}
+              onClick={() => setListFilter((prev) => (prev === 'unlinked' ? 'all' : 'unlinked'))}
+              title="카탈로그에 아직 묶이지 않은 몰 리스팅이에요. 묶는 일은 대시보드에서 합니다."
+            >
+              카탈로그 미연결 <b>{unlinked.length}</b>
+            </button>
+          )}
           <button
             type="button"
             className={'sb-tagging-pill sb-tagging-pill--fix' + (listFilter === 'fix' ? ' is-on' : '')}
@@ -558,27 +570,54 @@ export default function TaggingStudio({ api, embedded = false }) {
               작업 단위 <span className="sb-tagging-panel__dim">옵션 기준</span>
             </p>
             <div className="sb-tagging-units">
-              {listed.length === 0 && <p className="sb-tagging-empty">해당 상태의 작업이 없어요.</p>}
-              {listed.map((u) => {
-                const status = UNIT_STATUS[statusById.get(u.id)]
-                return (
-                  <button
-                    key={u.id}
-                    type="button"
-                    className={`sb-tagging-unit sb-tagging-unit--${status.cls}` + (u.id === unit.id ? ' is-sel' : '')}
-                    onClick={() => selectUnit(u.id)}
-                  >
-                    <span className="sb-tagging-unit__thumb">
-                      <UnitThumb unit={u} />
-                    </span>
-                    <span className="sb-tagging-unit__meta">
-                      <span className="sb-tagging-unit__name">{u.name}</span>
-                      <span className="sb-tagging-unit__opt">{u.brand} · {u.option}</span>
-                    </span>
-                    <span className={`sb-tagging-chip sb-tagging-chip--${status.cls}`}>{status.label}</span>
-                  </button>
-                )
-              })}
+              {listFilter === 'unlinked' ? (
+                <>
+                  <p className="sb-tagging-unlinked__note">
+                    카탈로그에 묶이지 않아 여기서는 태깅하지 않아요. 묶는 것은 대시보드의
+                    「카탈로그 연결」에서 합니다.
+                  </p>
+                  {unlinked.map((u) => (
+                    <div key={u.productId} className="sb-tagging-unlinked">
+                      {u.imageUrl
+                        ? <img src={u.imageUrl} alt="" loading="lazy" />
+                        : <span className="sb-tagging-unlinked__noimg">🧴</span>}
+                      <div>
+                        <b>{u.name}</b>
+                        <small>
+                          <span className={`sb-tagging-mall sb-tagging-mall--${u.mall}`}>
+                            {u.mall === 'gmarket' ? '지마켓' : '올리브영'}
+                          </span>
+                          {u.brand}
+                        </small>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <>
+                  {listed.length === 0 && <p className="sb-tagging-empty">해당 상태의 작업이 없어요.</p>}
+                  {listed.map((u) => {
+                    const status = UNIT_STATUS[statusById.get(u.id)]
+                    return (
+                      <button
+                        key={u.id}
+                        type="button"
+                        className={`sb-tagging-unit sb-tagging-unit--${status.cls}` + (u.id === unit.id ? ' is-sel' : '')}
+                        onClick={() => selectUnit(u.id)}
+                      >
+                        <span className="sb-tagging-unit__thumb">
+                          <UnitThumb unit={u} />
+                        </span>
+                        <span className="sb-tagging-unit__meta">
+                          <span className="sb-tagging-unit__name">{u.name}</span>
+                          <span className="sb-tagging-unit__opt">{u.brand} · {u.option}</span>
+                        </span>
+                        <span className={`sb-tagging-chip sb-tagging-chip--${status.cls}`}>{status.label}</span>
+                      </button>
+                    )
+                  })}
+                </>
+              )}
             </div>
           </div>
 

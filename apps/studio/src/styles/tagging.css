@@ -810,3 +810,18 @@
   font-size: var(--sb-t-micro); background: var(--sb-n-100); color: var(--sb-ink-2);
 }
 .sb-tagging-mall--gmarket { background: var(--sb-info-soft, var(--sb-n-100)); }
+
+/* 카탈로그에 안 묶인 리스팅 — 읽기 전용. 묶는 일은 Flask 대시보드 몫이다 */
+.sb-tagging-unlinked__note {
+  padding: 8px 10px; margin: 0 0 8px;
+  background: var(--sb-n-50); border-radius: var(--sb-r-sm);
+  color: var(--sb-muted); font-size: var(--sb-t-micro); line-height: 1.5;
+}
+.sb-tagging-unlinked { display: flex; gap: 8px; align-items: center; padding: 6px 4px; }
+.sb-tagging-unlinked img,
+.sb-tagging-unlinked__noimg {
+  width: 34px; height: 34px; border-radius: var(--sb-r-sm);
+  object-fit: cover; display: grid; place-items: center; background: var(--sb-n-100);
+}
+.sb-tagging-unlinked b { display: block; font-weight: 400; }
+.sb-tagging-unlinked small { display: flex; gap: 6px; align-items: center; color: var(--sb-muted); }
