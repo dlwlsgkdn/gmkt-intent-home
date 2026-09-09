@@ -330,10 +330,10 @@ test('toCatalogUnit — field_confidence 가 있으면 필드별로 싣는다', 
   assert.equal(u.fields.category.confidence, 70)
 })
 
-test('toCatalogUnit — field_confidence 에 없는 필드는 문서 단위 confidence 로 떨어진다', () => {
+test('toCatalogUnit — field_confidence 에 없는 필드는 문서 단위 confidence 로 떨어지고 근거는 비운다', () => {
   const u = toCatalogUnit(CAT, [])
   assert.equal(u.fields.condition.confidence, 90) // 문서 confidence='high'
-  assert.equal(u.fields.condition.rationale, '상품명에 선스틱이 명시됨')
+  assert.equal(u.fields.condition.rationale, '') // 문서 rationale은 다른 필드 얘기일 수 있어 채우지 않는다
 })
 
 test('toListingCard — 몰 배지는 source, 없으면 oliveyoung', () => {

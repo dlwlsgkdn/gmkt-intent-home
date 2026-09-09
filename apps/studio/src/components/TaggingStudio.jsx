@@ -5,6 +5,7 @@ import {
   TAG_LIMIT,
   UNIT_STATUS,
   fetchTaggingBootstrap,
+  freshUnit,
   loadTaggingReview,
   optionsFor,
   productEmoji,
@@ -88,18 +89,12 @@ const validationTargetKey = (unit, message) => {
   return null
 }
 
-const cloneSeedField = (field) => ({ ...field, selected: [...field.selected] })
-
+/* freshUnit(taggingCatalog.js)과 같은 초기화 규칙을 공유한다 — listings 합성 등을
+   여기서 다시 만들면 어긋나기 쉬워 그쪽 빌더에 위임한다. */
 const freshSeedUnit = (unitId) => {
   const seed = TAGGING_SEED.find((candidate) => candidate.id === unitId)
   if (!seed) return null
-  return {
-    ...seed,
-    fields: Object.fromEntries(Object.entries(seed.fields).map(([key, field]) => [key, cloneSeedField(field)])),
-    tagRequest: { ...(seed.tagRequest || {}) },
-    decision: null,
-    note: '',
-  }
+  return freshUnit(seed)
 }
 
 function UnitThumb({ unit, className }) {
@@ -199,6 +194,10 @@ export default function TaggingStudio({ api, embedded = false }) {
     if (listFilter === 'needs-review') return needsReviewUnit(u)
     return statusById.get(u.id) === listFilter
   })
+  /* 카탈로그 미연결 목록도 검색어를 받는다 — listed와 같은 정규화(브랜드+이름, 소문자). */
+  const filteredUnlinked = needle
+    ? unlinked.filter((u) => `${u.brand} ${u.name}`.toLowerCase().includes(needle))
+    : unlinked
   /* 현재 항목이 검수 완료되어 큐에서 빠지면 다음 검수 항목을 즉시 보여준다. */
   const unit = listed.find((u) => u.id === selectedId) || listed[0] || units.find((u) => u.id === selectedId) || units[0] || EMPTY_UNIT
   const { errs, warns } = useMemo(() => validateUnit(unit), [unit])
@@ -283,7 +282,15 @@ export default function TaggingStudio({ api, embedded = false }) {
       const fields = { ...current.fields }
       const tagRequest = { ...current.tagRequest }
       for (const restoreKey of keys) {
-        fields[restoreKey] = { ...origin[restoreKey], selected: [...origin[restoreKey].selected] }
+        /* confidence·rationale은 AI의 필드 평가라 되돌리기 대상이 아니다 — 현재 필드를
+           베이스로 값 관련 키(selected·rep·status·origin)만 원본으로 덮는다. */
+        fields[restoreKey] = {
+          ...current.fields[restoreKey],
+          selected: [...origin[restoreKey].selected],
+          rep: origin[restoreKey].rep,
+          status: origin[restoreKey].status,
+          origin: origin[restoreKey].origin,
+        }
         tagRequest[restoreKey] = false
       }
       return { ...current, fields, tagRequest, decision: null }
@@ -313,7 +320,15 @@ export default function TaggingStudio({ api, embedded = false }) {
     if (source === 'remote') {
       const restored = {
         ...unit,
-        fields: Object.fromEntries(FIELD_DEFS.map((d) => [d.key, { ...unit.aiFields[d.key], selected: [...unit.aiFields[d.key].selected] }])),
+        /* confidence·rationale은 aiFields에 없다(mapping.ts toUnit) — 현재 필드를 베이스로
+           값 관련 키만 aiFields로 덮어 AI 평가치를 지운 채로 되돌리지 않는다. */
+        fields: Object.fromEntries(FIELD_DEFS.map((d) => [d.key, {
+          ...unit.fields[d.key],
+          selected: [...unit.aiFields[d.key].selected],
+          rep: unit.aiFields[d.key].rep,
+          status: unit.aiFields[d.key].status,
+          origin: unit.aiFields[d.key].origin,
+        }])),
         tagRequest: {},
         note: '',
         decision: null,
@@ -576,7 +591,10 @@ export default function TaggingStudio({ api, embedded = false }) {
                     카탈로그에 묶이지 않아 여기서는 태깅하지 않아요. 묶는 것은 대시보드의
                     「카탈로그 연결」에서 합니다.
                   </p>
-                  {unlinked.map((u) => (
+                  {filteredUnlinked.length === 0 && (
+                    <p className="sb-tagging-empty">해당 검색어와 일치하는 미연결 상품이 없어요.</p>
+                  )}
+                  {filteredUnlinked.map((u) => (
                     <div key={u.productId} className="sb-tagging-unlinked">
                       {u.imageUrl
                         ? <img src={u.imageUrl} alt="" loading="lazy" />
@@ -796,13 +814,15 @@ export default function TaggingStudio({ api, embedded = false }) {
                   })}
                 </div>
                 <div className="sb-tagging-field__ft">
-                  <button
-                    type="button"
-                    className="sb-tagging-why"
-                    onClick={() => setOpenWhy((prev) => ({ ...prev, [def.key]: !prev[def.key] }))}
-                  >
-                    {openWhy[def.key] ? '근거 접기 ▴' : '선택 근거 ▾'}
-                  </button>
+                  {field.rationale && (
+                    <button
+                      type="button"
+                      className="sb-tagging-why"
+                      onClick={() => setOpenWhy((prev) => ({ ...prev, [def.key]: !prev[def.key] }))}
+                    >
+                      {openWhy[def.key] ? '근거 접기 ▴' : '선택 근거 ▾'}
+                    </button>
+                  )}
                   {field.status !== 'done' && (
                     <button type="button" className="sb-tagging-mini sb-tagging-mini--ok" onClick={() => markDone(def.key)}>
                       {field.status === 'fix' ? '수정 완료로 표시' : '확인 완료로 표시'}
@@ -822,7 +842,7 @@ export default function TaggingStudio({ api, embedded = false }) {
                     </button>
                   )}
                 </div>
-                {openWhy[def.key] && <p className="sb-tagging-rationale">{field.rationale}</p>}
+                {field.rationale && openWhy[def.key] && <p className="sb-tagging-rationale">{field.rationale}</p>}
               </section>
             )
           })}

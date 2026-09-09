@@ -137,7 +137,9 @@ export function toCatalogUnit(doc: any, listings: any[]) {
     fields[key] = {
       ...base.fields[key],
       confidence: fc ? (CONFIDENCE_PCT[fc.level] ?? 0) : docPct,
-      rationale: (fc && typeof fc.rationale === 'string' ? fc.rationale : doc.rationale) || '',
+      /* 필드별 field_confidence 가 없으면 문서 단위 confidence 로는 떨어지되(스펙 3-3),
+         rationale 은 문서 단위 값으로 채우지 않는다 — 그건 다른 필드 얘기일 수 있다. */
+      rationale: (fc && typeof fc.rationale === 'string' ? fc.rationale : '') || '',
     }
   }
 
