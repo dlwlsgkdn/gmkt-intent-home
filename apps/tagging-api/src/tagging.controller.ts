@@ -15,13 +15,13 @@ export class TaggingController {
     return this.tagging.summary()
   }
 
-  @Patch('units/:productId')
-  save(@Param('productId') productId: string, @Body() body: unknown) {
-    return this.tagging.saveUnit(productId, body)
+  @Patch('units/:catalogId')
+  save(@Param('catalogId') catalogId: string, @Body() body: unknown) {
+    return this.tagging.saveUnit(catalogId, body)
   }
 
-  @Post('units/:productId/review')
-  review(@Param('productId') productId: string, @Body() body: { decision?: unknown }) {
-    return this.tagging.setDecision(productId, body?.decision ?? null)
+  @Post('units/:catalogId/review')
+  review(@Param('catalogId') catalogId: string, @Body() body: { decision?: unknown }) {
+    return this.tagging.setDecision(catalogId, body?.decision ?? null)
   }
 }

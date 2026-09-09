@@ -376,8 +376,11 @@ const cloneFields = (fields) => Object.fromEntries(
   Object.entries(fields).map(([key, field]) => [key, { ...field, selected: [...field.selected] }])
 )
 
-const freshUnit = (seed) => ({
+export const freshUnit = (seed) => ({
   ...seed,
+  listings: seed.listings || [
+    { productId: seed.id, mall: 'gmarket', brand: seed.brand, price: seed.price, url: null, imageUrl: seed.imageUrl, optionCount: 1 },
+  ],
   fields: cloneFields(seed.fields),
   tagRequest: { ...(seed.tagRequest || {}) },
   decision: null,
