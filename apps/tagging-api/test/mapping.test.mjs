@@ -376,3 +376,20 @@ test('joinListings — 어느 카탈로그에도 안 묶인 리스팅은 unlinke
   assert.deepEqual(unlinked.map((u) => u.productId), ['A999'])
   assert.equal(unlinked[0].mall, 'oliveyoung')
 })
+
+test('joinListings — 묘비만 가리키는 리스팅은 unlinked 로 나온다 (살아있는 카탈로그가 하나도 없다)', () => {
+  const tomb = { catalog_id: 'c-000999', merged_into: 'c-000242', name: '흡수됨' }
+  const onlyTomb = { product_id: 'A777', catalog_ids: ['c-000999'], name: '묘비만 참조' }
+  const { units, unlinked } = joinListings([tomb], [onlyTomb])
+  assert.equal(units.length, 0)
+  assert.deepEqual(unlinked.map((u) => u.productId), ['A777'])
+})
+
+test('joinListings — 묘비와 살아있는 카탈로그를 함께 가리키면 살아있는 쪽 unit에 묶이고 unlinked엔 안 나온다', () => {
+  const tomb = { catalog_id: 'c-000999', merged_into: 'c-000242', name: '흡수됨' }
+  const both = { product_id: 'A778', catalog_ids: ['c-000999', 'c-000242'], name: '묘비+살아있음' }
+  const { units, unlinked } = joinListings([CAT, tomb], [both])
+  assert.equal(units.length, 1)
+  assert.deepEqual(units[0].listings.map((l) => l.productId), ['A778'])
+  assert.equal(unlinked.length, 0)
+})

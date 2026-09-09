@@ -160,11 +160,15 @@ export function toCatalogUnit(doc: any, listings: any[]) {
 /* 두 컬렉션을 한 번씩 읽어 메모리에서 맞춘다 — products.catalog_ids 에 인덱스가 없어
    카탈로그마다 질의하면 느리다(실측: 조인 7ms). */
 export function joinListings(catalogDocs: any[], productDocs: any[]) {
+  /* 묘비(merged_into)만 가리키는 리스팅은 "묶였다"고 칠 수 없다 — 살아 있는
+     카탈로그를 하나도 못 붙이면 검토자 눈에 안 보이게 사라진다(§4-4). */
+  const liveCatalogIds = new Set(catalogDocs.filter((d) => !d.merged_into).map((d) => d.catalog_id))
+
   const byCatalog = new Map<string, any[]>()
   const bound = new Set<string>()
   for (const p of productDocs) {
-    const ids = Array.isArray(p.catalog_ids) ? p.catalog_ids : []
-    if (ids.length) bound.add(p.product_id)
+    const ids: string[] = Array.isArray(p.catalog_ids) ? p.catalog_ids : []
+    if (ids.some((id) => liveCatalogIds.has(id))) bound.add(p.product_id)
     for (const id of ids) {
       const list = byCatalog.get(id)
       if (list) list.push(p)
