@@ -2,7 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import mapping from '../dist/mapping.js'
 
-const { toUnit, toDocPatch, sanitizeTaxonomyDoc, readCacheEnvelope } = mapping
+const { toUnit, toDocPatch, sanitizeTaxonomyDoc, readCacheEnvelope,
+        toCatalogUnit, toListingCard, toUnlinkedCard, joinListings } = mapping
 
 /* 실제 문서에서 추린 모양 — 필드 이름·중첩 구조를 바꾸지 말 것 */
 const DOC = {
@@ -266,4 +267,112 @@ test('readCacheEnvelope — cachedAt이 없거나 문자열이 아니면 무효�
   const { cachedAt, ...withoutCachedAt } = CACHE_ENVELOPE
   assert.equal(readCacheEnvelope(withoutCachedAt), null)
   assert.equal(readCacheEnvelope({ ...CACHE_ENVELOPE, cachedAt: 12345 }), null)
+})
+
+/* 실제 catalog 문서에서 추린 모양 — 필드 이름을 바꾸지 말 것 */
+const CAT = {
+  catalog_id: 'c-000242',
+  name: '가히 에어리 핏 선스틱',
+  brand: '68851',
+  brand_name: '가히',
+  image_url: 'https://image.oliveyoung.co.kr/x.jpg',
+  volume_ml: 50,
+  ingredients_from_spec: ['병풀(시카)', '판테놀'],
+  inferred_category: '선케어',
+  sub_type: '선스틱',
+  formulation: '스틱',
+  ingredient_tags: ['시카'],
+  body_part: '얼굴전체',
+  skin_types: ['모든피부'], skin_types_primary: '모든피부',
+  concerns: ['모공부각', '유분과다'], concerns_primary: '모공부각',
+  results: ['지속력'], results_primary: '지속력',
+  conditions: ['야외·땀'], conditions_primary: '야외·땀',
+  confidence: 'high',
+  rationale: '상품명에 선스틱이 명시됨',
+  field_confidence: {
+    category: { level: 'medium', rationale: '스킨케어 성분으로 추론' },
+    subtype: { level: 'high', rationale: "상품명에 '선스틱'이 명시됨" },
+  },
+  review_status: 'unreviewed',
+}
+
+const OY = {
+  product_id: 'A000000211648', catalog_ids: ['c-000242'],
+  price: 18200, url: 'https://www.oliveyoung.co.kr/p/1',
+  image_url: 'https://image.oliveyoung.co.kr/oy.jpg',
+  options: [{}, {}],
+  product_info: { '제품 주요 사양': '가벼운 마무리' },
+  review_stats: { count: 1204, avg_rating: 4.6 },
+}
+
+const GM = {
+  product_id: 'gm-4448101605', catalog_ids: ['c-000242'], source: 'gmarket',
+  price: 17900, brand: '68851', brand_name: '가히',
+  image_url: 'https://gdimg.gmarket.co.kr/1/still/280',
+}
+
+test('toCatalogUnit — id는 catalog_id, 7필드를 그대로 읽는다', () => {
+  const u = toCatalogUnit(CAT, [])
+  assert.equal(u.id, 'c-000242')
+  assert.deepEqual(u.fields.concern.selected, ['모공부각', '유분과다'])
+  assert.equal(u.fields.concern.rep, '모공부각')
+  assert.equal(u.fields.category.selected[0], '선케어')
+})
+
+test('toCatalogUnit — 브랜드는 brand_name 우선 (brand 가 숫자 id 인 문서가 있다)', () => {
+  assert.equal(toCatalogUnit(CAT, []).brand, '가히')
+})
+
+test('toCatalogUnit — field_confidence 가 있으면 필드별로 싣는다', () => {
+  const u = toCatalogUnit(CAT, [])
+  assert.equal(u.fields.subtype.confidence, 90)
+  assert.equal(u.fields.subtype.rationale, "상품명에 '선스틱'이 명시됨")
+  assert.equal(u.fields.category.confidence, 70)
+})
+
+test('toCatalogUnit — field_confidence 에 없는 필드는 문서 단위 confidence 로 떨어진다', () => {
+  const u = toCatalogUnit(CAT, [])
+  assert.equal(u.fields.condition.confidence, 90) // 문서 confidence='high'
+  assert.equal(u.fields.condition.rationale, '상품명에 선스틱이 명시됨')
+})
+
+test('toListingCard — 몰 배지는 source, 없으면 oliveyoung', () => {
+  assert.equal(toListingCard(OY).mall, 'oliveyoung')
+  assert.equal(toListingCard(GM).mall, 'gmarket')
+})
+
+test('toListingCard — 지마켓은 url 이 없어 null 이다 (PDP 버튼을 감추는 근거)', () => {
+  assert.equal(toListingCard(GM).url, null)
+  assert.equal(toListingCard(OY).url, 'https://www.oliveyoung.co.kr/p/1')
+})
+
+test('toListingCard — 리뷰·상세문구는 있는 리스팅에만', () => {
+  assert.match(toListingCard(OY).review, /리뷰 1,204건/)
+  assert.equal(toListingCard(OY).copy, '가벼운 마무리')
+  assert.equal(toListingCard(GM).review, '')
+  assert.equal(toListingCard(GM).copy, '')
+})
+
+test('toCatalogUnit — 대표 리스팅(올리브영 우선)의 문구를 상단에 올린다', () => {
+  const u = toCatalogUnit(CAT, [GM, OY])
+  assert.equal(u.copy, '가벼운 마무리')
+  assert.match(u.review, /리뷰 1,204건/)
+  assert.equal(u.listings.length, 2)
+})
+
+test('joinListings — catalog_id 로 묶고 merged_into 는 뺀다', () => {
+  const tomb = { catalog_id: 'c-000999', merged_into: 'c-000242', name: '흡수됨' }
+  const { units, unlinked } = joinListings([CAT, tomb], [OY, GM])
+  assert.equal(units.length, 1)
+  assert.equal(units[0].id, 'c-000242')
+  assert.equal(units[0].listings.length, 2)
+  assert.equal(unlinked.length, 0)
+})
+
+test('joinListings — 어느 카탈로그에도 안 묶인 리스팅은 unlinked 로만 나온다', () => {
+  const orphan = { product_id: 'A999', name: '미연결', image_url: null }
+  const { units, unlinked } = joinListings([CAT], [OY, orphan])
+  assert.equal(units.length, 1)
+  assert.deepEqual(unlinked.map((u) => u.productId), ['A999'])
+  assert.equal(unlinked[0].mall, 'oliveyoung')
 })

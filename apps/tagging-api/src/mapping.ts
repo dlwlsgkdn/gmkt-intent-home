@@ -87,6 +87,97 @@ export function toUnit(doc: any) {
   }
 }
 
+/* ── 카탈로그 단위 ──────────────────────────────────────────────────────
+ * 검토 단위는 카탈로그(몰 중립 상품 실체)이고, 몰 리스팅은 판단 근거로 붙는다.
+ * 카탈로그엔 가격·PDP·리뷰가 하나도 없다(실측 0/946) — 전부 리스팅에서 온다.
+ */
+
+const mallOf = (doc: any): string => doc.source || 'oliveyoung'
+
+export function toListingCard(doc: any) {
+  return {
+    productId: doc.product_id,
+    mall: mallOf(doc),
+    brand: doc.brand_name || doc.brand || doc.inferred_brand || '',
+    price: typeof doc.price === 'number' ? doc.price : null,
+    url: doc.url || null,
+    imageUrl: doc.image_url || null,
+    optionCount: Array.isArray(doc.options) ? doc.options.length : 0,
+    copy: doc.product_info?.['제품 주요 사양'] || doc.usage_method || '',
+    review: reviewText(doc),
+  }
+}
+
+export function toUnlinkedCard(doc: any) {
+  return {
+    productId: doc.product_id,
+    mall: mallOf(doc),
+    name: doc.name || '',
+    brand: doc.brand_name || doc.brand || doc.inferred_brand || '',
+    imageUrl: doc.image_url || null,
+  }
+}
+
+/* 문구·리뷰는 올리브영 리스팅에만 있다. 대표를 하나 골라 상단 줄에 쓴다. */
+const primaryListing = (cards: ReturnType<typeof toListingCard>[]) =>
+  cards.find((c) => c.mall === 'oliveyoung' && (c.copy || c.review)) ||
+  cards.find((c) => c.copy || c.review) ||
+  cards[0] ||
+  null
+
+export function toCatalogUnit(doc: any, listings: any[]) {
+  const base = toUnit(doc)
+  const cards = listings.map(toListingCard)
+  const primary = primaryListing(cards)
+  const docPct = CONFIDENCE_PCT[doc.confidence] ?? 0
+
+  const fields = {} as Record<FieldKey, Field & { confidence: number; rationale: string }>
+  for (const key of FIELD_KEYS) {
+    const fc = doc.field_confidence?.[key]
+    fields[key] = {
+      ...base.fields[key],
+      confidence: fc ? (CONFIDENCE_PCT[fc.level] ?? 0) : docPct,
+      rationale: (fc && typeof fc.rationale === 'string' ? fc.rationale : doc.rationale) || '',
+    }
+  }
+
+  return {
+    ...base,
+    fields,
+    id: doc.catalog_id,
+    brand: doc.brand_name || doc.brand || doc.inferred_brand || '',
+    option: cards.length ? `리스팅 ${cards.length}곳` : '리스팅 없음',
+    price: null,
+    url: null,
+    copy: primary?.copy || '',
+    review: primary?.review || '',
+    ingredients: Array.isArray(doc.ingredients_from_spec) ? doc.ingredients_from_spec : [],
+    volumeMl: typeof doc.volume_ml === 'number' ? doc.volume_ml : null,
+    listings: cards,
+  }
+}
+
+/* 두 컬렉션을 한 번씩 읽어 메모리에서 맞춘다 — products.catalog_ids 에 인덱스가 없어
+   카탈로그마다 질의하면 느리다(실측: 조인 7ms). */
+export function joinListings(catalogDocs: any[], productDocs: any[]) {
+  const byCatalog = new Map<string, any[]>()
+  const bound = new Set<string>()
+  for (const p of productDocs) {
+    const ids = Array.isArray(p.catalog_ids) ? p.catalog_ids : []
+    if (ids.length) bound.add(p.product_id)
+    for (const id of ids) {
+      const list = byCatalog.get(id)
+      if (list) list.push(p)
+      else byCatalog.set(id, [p])
+    }
+  }
+  const units = catalogDocs
+    .filter((d) => !d.merged_into) // 병합으로 흡수된 묘비 문서(실측 14건)
+    .map((d) => toCatalogUnit(d, byCatalog.get(d.catalog_id) || []))
+  const unlinked = productDocs.filter((p) => !bound.has(p.product_id)).map(toUnlinkedCard)
+  return { units, unlinked }
+}
+
 /* Python store.py의 _now()와 같은 형식이어야 한다 — 두 도구가 같은 필드를 쓴다. */
 export const nowIso = () => `${new Date().toISOString().slice(0, 19)}+00:00`
 
