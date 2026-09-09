@@ -73,7 +73,7 @@ export class TaggingService {
      응답 모양이 bootstrap 과 같아야 FE 가 한 규칙으로 읽는다. */
   private async withListings(doc: any) {
     const listings = await this.listings()
-      .find({ catalog_ids: doc.catalog_id }, { projection: projection(LISTING_FIELDS) })
+      .find({ catalog_ids: doc.catalog_id, status: 'analyzed' }, { projection: projection(LISTING_FIELDS) })
       .toArray()
     return toCatalogUnit(doc, listings)
   }
