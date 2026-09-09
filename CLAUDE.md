@@ -20,10 +20,20 @@ legacy/            ← 옛 HTML 프로토타입 원본 (빌드 시 apps/studio/d
 
 루트 package.json이 워크스페이스 루트(`apps/*`, `packages/*`) — 설치는 항상 **리포 루트에서 `npm install`** 한 번, 락파일도 루트 하나다.
 
-- **배포 (주)**: Vercel `ddak-scenario-studio`가 GitHub main 푸시마다 **원격 빌드·배포**. `https://ddak-scenario-studio.vercel.app` — vercel.json이 루트에서 워크스페이스 전체를 설치하고 apps/studio를 빌드해 outputDirectory `apps/studio/dist`를 서빙한다. API(`api/state.js`)도 같은 프로젝트라, **로컬 Node 없이 소스 푸시만으로 배포된다**
-- **배포 (GitHub Pages)**: `.github/workflows/pages.yml`이 main 푸시마다 빌드해 아티팩트로 배포. `https://dlwlsgkdn.github.io/gmkt-intent-home/` (구 `…/docs/` 주소는 아티팩트 안 리다이렉트 스텁이 받는다). 커밋된 빌드 산출물은 더 이상 없다 — 두 배포 모두 push만 하면 각자 최신으로 빌드된다
-- **빌드/배포 절차**: 소스 커밋 → 사용자가 `git push origin main` (Claude는 푸시 못 함) → Vercel·Pages가 각각 자동 빌드
-- **배포 확장 규칙**: 새 앱(core·bff)은 같은 리포를 연결한 **별도 Vercel 프로젝트**(Root Directory=`apps/<앱>`)로 배포한다. 무관 커밋 스킵은 대시보드가 아니라 `apps/<앱>/vercel.json`의 `ignoreCommand`(`git diff --quiet HEAD^ HEAD -- ':(top)apps/<앱>' ':(top)packages' ':(top)package-lock.json'`)로 리포에 커밋한다 — Root Directory만 대시보드 설정
+- **저장소는 사내 GitHub Enterprise 하나다**: `origin = https://github.gmarket.com/org-labs/eevee-labatory.git`.
+  **여기로 푸시해도 Vercel·GitHub Pages 는 돌지 않는다** — 그 둘은 이관 전 github.com 저장소에 걸려
+  있고 이 저장소와 연결이 없다. 배포는 퓨전(OpenShift)에서 BuildConfig 를 다시 돌려야 반영된다.
+- **배포 (사내 퓨전)**: 앱 셋이 같은 저장소·같은 빌더를 쓰고 `NPM_RUN` 한 칸만 다르다
+  (tagging-api = 없음/`start`, core = `start:core`, bff = `start:bff`). Context Dir 은 비운다 —
+  루트에만 있는 workspaces 선언·`.npmrc`(사내 미러)·`.s2i/environment`·락파일이 전부 필요하다.
+  자세한 건 [FUSION-MIGRATION.md](FUSION-MIGRATION.md).
+- **옛 배포 (이관 전 저장소 기준, 참고용)**: Vercel `ddak-scenario-studio` 가 main 푸시마다 원격
+  빌드했고(`https://ddak-scenario-studio.vercel.app`, `vercel.json` 이 루트에서 워크스페이스를 설치해
+  apps/studio 를 빌드), GitHub Pages 는 `.github/workflows/pages.yml` 로 배포했다
+  (`https://dlwlsgkdn.github.io/gmkt-intent-home/`). 설정 파일은 남아 있지만 이 저장소의 푸시로는
+  트리거되지 않는다.
+- **빌드/배포 절차**: 소스 커밋 → `git push origin main`(사내 저장소) → **퓨전 콘솔에서 해당 앱 빌드를 다시 실행**. 자동 트리거(웹훅)가 걸려 있지 않으면 푸시만으로는 아무것도 배포되지 않는다
+- **배포 확장 규칙 (옛 Vercel 기준, 참고용)**: 새 앱은 같은 리포를 연결한 별도 Vercel 프로젝트(Root Directory=`apps/<앱>`)로 배포했고, 무관 커밋 스킵은 `apps/<앱>/vercel.json`의 `ignoreCommand`로 리포에 커밋했다. **사내 퓨전에서는 이 규칙을 쓰지 않는다** — 앱마다 별도 애플리케이션을 만들고 BuildConfig의 `NPM_RUN`으로 실행 대상을 가른다(위 「배포 (사내 퓨전)」)
 
 ## 명령어
 
