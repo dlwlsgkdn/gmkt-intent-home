@@ -31,6 +31,7 @@ import {
    화면 자체는 아래 로딩 가드에서 갈린다 — 이 값이 그려지는 일은 없다. */
 const EMPTY_UNIT = {
   id: null, brand: '', name: '', option: '', price: null, imageUrl: null, catalogTags: [],
+  listings: [], ingredients: [], volumeMl: null,
   copy: '', review: '', confidence: 0, confidenceLevel: null, rationale: '', decision: null,
   note: '', tagRequest: {},
   fields: Object.fromEntries(FIELD_DEFS.map((d) => [d.key, { selected: [], rep: null, status: 'unreviewed', origin: 'ai' }])),
@@ -593,8 +594,22 @@ export default function TaggingStudio({ api, embedded = false }) {
               <dd>{unit.copy}</dd>
               <dt>리뷰 요약</dt>
               <dd>{unit.review}</dd>
-              <dt>가격</dt>
-              <dd>{formatPrice(unit.price)}</dd>
+              <dt>판매 중인 몰</dt>
+              <dd className="sb-tagging-listings">
+                {unit.listings.length === 0 && <span className="sb-tagging-listings__none">묶인 리스팅이 없어요.</span>}
+                {unit.listings.map((l) => (
+                  <div key={l.productId} className="sb-tagging-listing">
+                    <span className={`sb-tagging-mall sb-tagging-mall--${l.mall}`}>
+                      {l.mall === 'gmarket' ? '지마켓' : '올리브영'}
+                    </span>
+                    <b>{formatPrice(l.price)}</b>
+                    {l.optionCount > 1 && <em>옵션 {l.optionCount}개</em>}
+                    {l.url
+                      ? <a href={l.url} target="_blank" rel="noreferrer">상세페이지</a>
+                      : <span className="sb-tagging-listing__nolink">상세페이지 없음</span>}
+                  </div>
+                ))}
+              </dd>
               <dt>카탈로그 원본 태그</dt>
               <dd className="sb-tagging-pinfo__tags">
                 {unit.catalogTags.map((tag) => <code key={tag}>{tag}</code>)}
@@ -674,15 +689,13 @@ export default function TaggingStudio({ api, embedded = false }) {
                     </span>
                   </div>
                   <div className="sb-tagging-field__meta">
-                    {source !== 'remote' && (
-                      <span
-                        className={`sb-tagging-conf sb-tagging-conf--${confLevel(field.confidence)}`}
-                        title="AI 확신도"
-                      >
-                        <i style={{ width: `${field.confidence}%` }} />
-                        <b>{field.confidence}%</b>
-                      </span>
-                    )}
+                    <span
+                      className={`sb-tagging-conf sb-tagging-conf--${confLevel(field.confidence)}`}
+                      title="AI 확신도"
+                    >
+                      <i style={{ width: `${field.confidence}%` }} />
+                      <b>{field.confidence}%</b>
+                    </span>
                     <span className={`sb-tagging-chip sb-tagging-chip--${status.cls}`}>{status.label}</span>
                     <span className={'sb-tagging-origin' + (field.origin === 'human' ? ' sb-tagging-origin--human' : '')}>
                       {field.origin === 'ai' ? 'AI' : '담당자'}
@@ -764,7 +777,7 @@ export default function TaggingStudio({ api, embedded = false }) {
                     </button>
                   )}
                 </div>
-                {source !== 'remote' && openWhy[def.key] && <p className="sb-tagging-rationale">{field.rationale}</p>}
+                {openWhy[def.key] && <p className="sb-tagging-rationale">{field.rationale}</p>}
               </section>
             )
           })}
