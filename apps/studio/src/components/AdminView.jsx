@@ -532,7 +532,7 @@ export default function AdminView({ api, tab, studioScenarioId, threadId }) {
               <section className="sb-admin-trial-thread">
                 <div>
                   <span>저장된 지시서 시험</span>
-                  <h3>{detailPromptTrial.promptLabel} · 전체 평가 {detailPromptTrial.evaluation?.score ?? '—'}점</h3>
+                  <h3>{detailPromptTrial.promptLabel} · {detailPromptTrial.review?.score != null ? 'AI 수정안 ' + detailPromptTrial.review.score + ' / 100점' : '내 평가 ' + (detailPromptTrial.evaluation?.score ?? '—') + '점'}</h3>
                   <p>{detailPromptTrial.summary}</p>
                   {detailPromptTrial.evaluation?.comment && <blockquote>“{detailPromptTrial.evaluation.comment}”</blockquote>}
                 </div>

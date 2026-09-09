@@ -33,3 +33,26 @@ console.log('추가·삭제·순서·선택지·상품 변경 표시 검증 통�
 
 const summaryItems = [{ id: 'summary', type: 'surveySummary', props: {} }]
 assert.equal(comparePreviewItems(summaryItems, summaryItems, { baseline: { questions: [{ q: '고민', a: '건성' }] }, trial: { questions: [{ q: '고민', a: '들뜸' }] } }).trial.summary.type, 'changed')
+
+import { createPreviewScrollSync } from '../src/lib/promptFlow.js'
+const panes = { baseline: { scrollTop: 0, scrollHeight: 1000, clientHeight: 200 }, trial: { scrollTop: 0, scrollHeight: 1800, clientHeight: 200 } }
+const sync = createPreviewScrollSync((side) => panes[side])
+panes.baseline.scrollTop = 400
+sync.onScroll('baseline')
+assert.equal(panes.trial.scrollTop, 800)
+sync.onScroll('trial')
+assert.equal(panes.baseline.scrollTop, 400, 'mirrored event must not bounce back')
+sync.takeControl('trial')
+panes.trial.scrollTop = 1200
+sync.onScroll('trial')
+assert.equal(panes.baseline.scrollTop, 600, 'right side can drive left immediately')
+panes.trial.scrollTop = 1600
+sync.onScroll('trial')
+assert.equal(panes.baseline.scrollTop, 800, 'both reach their bottom')
+sync.reset()
+assert.equal(panes.baseline.scrollTop + panes.trial.scrollTop, 0)
+panes.baseline.scrollHeight = 200
+sync.takeControl('baseline')
+sync.onScroll('baseline')
+assert.equal(panes.trial.scrollTop, 0, 'non-scrolling pane must not create NaN')
+console.log('양방향 스크롤·서로 다른 높이·재진입·초기화 검증 통과')
