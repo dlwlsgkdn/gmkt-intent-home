@@ -590,10 +590,18 @@ export default function TaggingStudio({ api, embedded = false }) {
             <p className="sb-tagging-pinfo__name">{unit.name}</p>
             <p className="sb-tagging-pinfo__brand">{unit.brand} · {unit.option}</p>
             <dl>
-              <dt>상세페이지 주요 문구</dt>
-              <dd>{unit.copy}</dd>
-              <dt>리뷰 요약</dt>
-              <dd>{unit.review}</dd>
+              {unit.copy && (
+                <>
+                  <dt>상세페이지 주요 문구</dt>
+                  <dd>{unit.copy}</dd>
+                </>
+              )}
+              {unit.review && (
+                <>
+                  <dt>리뷰 요약</dt>
+                  <dd>{unit.review}</dd>
+                </>
+              )}
               <dt>판매 중인 몰</dt>
               <dd className="sb-tagging-listings">
                 {unit.listings.length === 0 && <span className="sb-tagging-listings__none">묶인 리스팅이 없어요.</span>}
