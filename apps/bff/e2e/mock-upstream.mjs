@@ -259,7 +259,7 @@ const server = http.createServer(async (req, res) => {
       const input = JSON.parse(user)
       const output = {
         summary: '설문에서 상황을 묻고 계획과 상품을 실전 팁으로 연결해요.', warnings: [],
-        review: { good: ['따라 할 순서가 분명해질 수 있어요.'], bad: ['설명이 길어질 수 있어요.'], risks: ['상품 사용법은 실제 안내와 맞는지 확인하세요.'] },
+        review: { scoreParts: { request: 34, clarity: 25, consistency: 27 }, good: ['따라 할 순서가 분명해질 수 있어요.'], bad: ['설명이 길어질 수 있어요.'], risks: ['상품 사용법은 실제 안내와 맞는지 확인하세요.'] },
         changes: input.prompts.map((prompt) => ({
           id: prompt.id,
           proposedText: input.instruction === '필수 자리 삭제 시험' ? prompt.text.replace(/\{\{[^{}]+\}\}/g, '') : (input.previousChanges?.find((change) => change.id === prompt.id)?.proposedText || prompt.text) + '\n추가 시험 규칙: ' + (input.refinements?.at(-1) || input.instruction),
