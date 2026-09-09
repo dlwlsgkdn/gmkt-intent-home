@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { renderItem } from '../lib/registry.jsx'
 import { livePlanItems, liveSurveyItems } from '../lib/livePage.js'
 import { previewAnswers } from '../lib/promptPreview.js'
-import { comparePreviewItems } from '../lib/promptFlow.js'
+import { comparePreviewItems, createPreviewScrollSync } from '../lib/promptFlow.js'
 
 const noop = () => {}
 const openUrl = (url) => {
@@ -11,6 +11,8 @@ const openUrl = (url) => {
 export default function PromptFlowPreview({ result, answers, onAnswer, intent, busy, status, onPrepare, onRun, ready, hasProposal }) {
   const [stage, setStage] = useState('survey')
   const panes = useRef({})
+  const scrollSync = useMemo(() => createPreviewScrollSync((side) => panes.current[side]), [])
+  useEffect(() => { scrollSync.reset() }, [scrollSync, stage, result?.snapshot])
   const [active, setActive] = useState({ baseline: 0, trial: 0 })
   const summaries = useMemo(() => Object.fromEntries(['baseline', 'trial'].map((side) => [side, { profile: result?.profile || [], questions: (result?.[side]?.survey?.questions || []).map((question) => ({ q: question.question, a: previewAnswers({ questions: [question] }, answers[side])[0]?.choices.join(', ') || '건너뜀' })) }])), [result, answers])
   const itemsBySide = useMemo(() => Object.fromEntries(['baseline', 'trial'].map((side) => {
@@ -20,6 +22,7 @@ export default function PromptFlowPreview({ result, answers, onAnswer, intent, b
   const changes = useMemo(() => hasProposal && result ? comparePreviewItems(itemsBySide.baseline, itemsBySide.trial, summaries) : { baseline: {}, trial: {} }, [itemsBySide, hasProposal, result, summaries])
   useEffect(() => { setActive({ baseline: 0, trial: 0 }) }, [changes])
   const followScroll = (side) => {
+    scrollSync.onScroll(side)
     const pane = panes.current[side]
     const nodes = [...pane.querySelectorAll('[data-preview-change]')]
     if (!nodes.length) return
@@ -28,6 +31,7 @@ export default function PromptFlowPreview({ result, answers, onAnswer, intent, b
     setActive((previous) => previous[side] === next ? previous : { ...previous, [side]: next })
   }
   const nextChange = (side) => {
+    scrollSync.takeControl(side)
     const nodes = [...panes.current[side].querySelectorAll('[data-preview-change]')]
     if (!nodes.length) return
     const index = (active[side] + 1) % nodes.length
@@ -58,8 +62,8 @@ export default function PromptFlowPreview({ result, answers, onAnswer, intent, b
       <nav className="sb-scenario-preview__steps" aria-label={`${before ? '변경 전' : '변경 후'} 화면 단계`}>
         {[['survey', '설문'], ['plan', '추천']].map(([value, label]) => <button type="button" key={value} className={stage === value ? 'is-on' : ''} aria-current={stage === value ? 'step' : undefined} disabled={busy || !survey || (value === 'plan' && !output?.plan)} onClick={() => setStage(value)}>{label}</button>)}
       </nav>
-      {result && hasProposal && <div className="sb-flow-diff-nav"><span>{changeCount ? '달라진 곳 ' + Math.min(active[side] + 1, changeCount) + ' / ' + changeCount : '이 화면은 같아요'}</span>{changeCount > 0 && <button type="button" className="sb-btn sb-btn--ghost sb-btn--tiny" onClick={() => nextChange(side)}>다음 변경 ↓</button>}<small>두 결과가 다른 곳을 표시해요. 오류 표시가 아니에요.</small></div>}
-      <div className="sb-scenario-preview__viewport" ref={(node) => { panes.current[side] = node }} onScroll={() => followScroll(side)}><div className="sb-phone sb-phone--player sb-scenario-preview__phone">
+      {result && hasProposal && <div className="sb-flow-diff-nav"><span>{changeCount ? '달라진 곳 ' + Math.min(active[side] + 1, changeCount) + ' / ' + changeCount : '이 화면은 같아요'}</span>{changeCount > 0 && <button type="button" className="sb-btn sb-btn--ghost sb-btn--tiny" onClick={() => nextChange(side)}>다음 변경 ↓</button>}<small>어느 쪽을 내려도 함께 움직여요.</small></div>}
+      <div className="sb-scenario-preview__viewport" ref={(node) => { panes.current[side] = node }} onWheel={() => scrollSync.takeControl(side)} onTouchStart={() => scrollSync.takeControl(side)} onPointerDown={() => scrollSync.takeControl(side)} onKeyDown={() => scrollSync.takeControl(side)} onScroll={() => followScroll(side)}><div className="sb-phone sb-phone--player sb-scenario-preview__phone">
         {!survey ? <div className="sb-scenario-preview__mirror-empty"><i aria-hidden="true">◐</i><p>바꾸고 싶은 점을 적고<br />고객 화면을 열어보세요.</p><button type="button" className="sb-btn sb-btn--ai" disabled={busy || !intent.trim()} onClick={onPrepare}>⇄ 고객 화면 열기</button></div> : <div className="sb-player__stack">{items.filter((item) => !item.parentId && item.type !== 'screenHeader').map((item) => <div key={item.id} className={"sb-player__item" + (changes[side][item.id] ? " sb-flow-diff" : "")} data-preview-change={changes[side][item.id] ? item.id : undefined}>{changes[side][item.id] && <div className="sb-flow-diff__badge"><span aria-hidden="true">↳ </span>{changes[side][item.id].label}</div>}{item.type === 'surveyPhoto' ? <p className="sb-admin__muted">사진 질문은 이번 시험에서 건너뛸게요.</p> : renderItem(item, { mode: 'player', player, profile, allItems: items, previewChanges: changes[side] })}</div>)}</div>}
       </div></div>
       <div className="sb-scenario-preview__foot">

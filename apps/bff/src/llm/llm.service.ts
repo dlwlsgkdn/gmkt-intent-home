@@ -6,6 +6,8 @@ import {
   AssistAdminPromptResult,
   AssistPromptFlowResult,
   PromptFlowChange,
+  PromptFlowReview,
+  PromptFlowScoreParts,
   type AssistPromptFlowBody,
   type AdminModelOption,
   type Answer,
@@ -238,14 +240,24 @@ export class LlmService implements LlmPort {
       '각 변경은 id, proposedText(수정된 전체 원문), reason(사용자에게 설명할 이유)를 담는다. id는 입력 목록에서만 고르고 중복시키지 않는다.',
       '각 원문의 {{PLACEHOLDER}}는 철자와 개수를 모두 보존한다. 출력 스키마·사실 검증·허용 상품 규칙은 유지한다. 구체적 팁을 위해 경험·수치·출처를 지어내지 않는다.',
       '새 지시와 충돌하는 기존 문장을 함께 고친다. 규칙을 맨 끝에 덧붙여 모순을 남기지 않는다.',
-      'summary는 2문장 이내, reason은 항목별 2문장 이내로 쉽게 쓴다. 초등학생도 읽게 전문 용어 대신 일상어를 쓴다. 예: 원장·가변부·그라운딩 대신 고객 정보·답변·확인한 근거. 실제 변경이 필요 없으면 changes를 비우고 이유를 summary에 쓴다.',
+      'summary는 무엇이 바뀌는지 60자 이내 한 문장으로, reason은 항목별 90자 이내 한 문장으로 쓴다. 초등학생도 읽게 전문 용어 대신 일상어를 쓴다. 예: 원장·가변부·그라운딩 대신 고객 정보·답변·확인한 근거. 실제 변경이 필요 없으면 changes를 비우고 이유를 summary에 쓴다.',
       'previousChanges가 있으면 직전 수정안에서 시작해 refinements를 순서대로 반영한다. 최신 추가 요청을 우선하고 이전에 합의한 개선은 유지한다. 결과 changes는 원래 prompts와 비교한 최종 전체 변경 목록이다. 직전 수정안의 변경을 누락시키지 않는다.',
-      'review는 이번 수정안 자체를 비판적으로 점검한 결과다. good은 기대되는 좋은 점, bad는 아직 부족한 점, risks는 적용할 때 생길 수 있는 문제와 확인 방법이다. 각 항목을 1~2개의 짧은 문장으로, 실제 수정 문구에 근거해 적는다. 빈 칭찬·추상적 경고·전문 용어는 쓰지 않는다.',
+      'review는 이번 수정안 자체를 비판적으로 점검한 결과다. good은 기대되는 좋은 점, bad는 아직 부족한 점, risks는 적용할 때 생길 수 있는 문제와 확인 방법이다. 각 배열에는 가장 중요한 내용 하나만, 55자 이내 한 문장으로 적는다. 실제 수정 문구에 근거해 적는다. 빈 칭찬·추상적 경고·전문 용어는 쓰지 않는다.',
+      'scoreParts는 수정안의 완성도를 요청 반영(request, 0~40), 쉬운 설명(clarity, 0~30), 앞뒤 일관성(consistency, 0~30)으로 평가한다. 관성적으로 높은 점수를 주지 않는다. 감점 이유를 bad나 risks에 짧게 쓴다. 요청한 일을 구현할 수 없거나 규칙이 충돌하면 해당 항목에서 감점한다. 이는 수정안 평가이며 실제 고객 결과의 품질·정확도·성공 확률 점수가 아니다.',
       '실제 고객 화면과 사용 효과를 평가한 것처럼 쓰지 않는다. 확인할 수 없는 효과는 예상임을 밝힌다. 부족한 점이나 위험을 못 찾으면 해당 배열을 비우며 억지로 만들어내지 않는다. warnings는 실행 구조상 불가능한 요청에만 쓰고 review와 중복시키지 않는다.',
     ].join('\n')
     const before = new Map(input.prompts.map((prompt) => [prompt.id, prompt.text]))
     const placeholders = (text: string) => [...text.matchAll(/\{\{[^{}\r\n]+\}\}/g)].map((match) => match[0]).sort().join('\n')
-    const { content } = await this.generate('전체 지시서 수정안 생성', AssistPromptFlowResult.extend({ changes: z.array(PromptFlowChange.omit({ baseText: true })).max(3) }), {
+    const { content } = await this.generate('전체 지시서 수정안 생성', AssistPromptFlowResult.extend({
+      summary: z.string().trim().min(1).max(60),
+      review: PromptFlowReview.omit({ score: true }).extend({
+        scoreParts: PromptFlowScoreParts,
+        good: z.array(z.string().trim().min(1).max(55)).max(1),
+        bad: z.array(z.string().trim().min(1).max(55)).max(1),
+        risks: z.array(z.string().trim().min(1).max(55)).max(1),
+      }),
+      changes: z.array(PromptFlowChange.omit({ baseText: true }).extend({ reason: z.string().trim().min(1).max(90) })).max(3),
+    }), {
       system: { text: system, custom: false }, effort: 'medium', user: JSON.stringify(input),
     })
     const seen = new Set<string>()
@@ -256,7 +268,7 @@ export class LlmService implements LlmPort {
       }
       seen.add(change.id)
     }
-    return { ...content, changes: content.changes.filter((change) => before.get(change.id) !== change.proposedText).map((change) => ({ ...change, baseText: before.get(change.id)! })) }
+    return { ...content, review: { ...content.review, score: Object.values(content.review.scoreParts).reduce((total, value) => total + value, 0) }, changes: content.changes.filter((change) => before.get(change.id) !== change.proposedText).map((change) => ({ ...change, baseText: before.get(change.id)! })) }
   }
 
   async generateSurvey(

@@ -536,6 +536,8 @@ try {
   ok(unchanged.prompts.every((p) => p.configured === flowWire.prompts.find((old) => old.id === p.id).configured), '시험안 생성은 운영값을 쓰지 않음')
   const calls = (await llmCalls()).filter((call) => call.type === 'flow-assist')
   ok(calls.length === 1 && JSON.parse(calls[0].user).focus.length === 2, '선택사항 여러 개와 전체 문맥을 한 호출에 전달')
+  ok(proposal.review?.score === 86 && proposal.review?.scoreParts?.request === 34, 'AI 점수는 세 평가 항목을 합산한 100점 척도')
+  ok(proposal.summary.length <= 60 && ['good','bad','risks'].every(key => proposal.review[key].length <= 1 && proposal.review[key].every(text => text.length <= 55)), '한 줄 요약과 항목별 짧은 점검')
   ok(proposal.review?.good?.length && proposal.review?.bad?.length && proposal.review?.risks?.length, '수정안에 좋은 점·아쉬운 점·주의할 점 포함')
   const refinementRes = await flowReq('prompt-flow/assist', { instruction: '실전 팁으로 쉽게 알려줘', prompts, previousChanges: proposal.changes, refinements: ['설명은 더 짧게 해줘'] })
   const refined = await refinementRes.json()
@@ -551,7 +553,7 @@ try {
     intent: '쿠션 추천', baseline: {}, trial: {}, evaluation: { score: 4, comment: '함께 좋아졌어요' },
   })
   const trialThread = await threadRes.json()
-  ok(trialThread.steps?.[0]?.payload?.data?.review?.risks?.length && trialThread.steps?.[0]?.payload?.data?.refinements?.length === 1, 'AI 점검과 추가 요청 이력 함께 저장')
+  ok(trialThread.steps?.[0]?.payload?.data?.review?.score === 86 && trialThread.steps?.[0]?.payload?.data?.review?.risks?.length && trialThread.steps?.[0]?.payload?.data?.refinements?.length === 1, 'AI 점검과 추가 요청 이력 함께 저장')
   ok(threadRes.status === 201 && trialThread.steps?.[0]?.payload?.data?.changes?.length === 3, '묶음과 기준선이 시험 쓰레드에 함께 저장')
   const applyBody = { changes: proposal.changes, prompts, summary: proposal.summary }
   await putSetting('llm-prompt-survey', prompts[0].text + '\n다른 운영자 수정')
