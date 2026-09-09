@@ -749,15 +749,13 @@ export default function TaggingStudio({ api, embedded = false }) {
                   })}
                 </div>
                 <div className="sb-tagging-field__ft">
-                  {source !== 'remote' && (
-                    <button
-                      type="button"
-                      className="sb-tagging-why"
-                      onClick={() => setOpenWhy((prev) => ({ ...prev, [def.key]: !prev[def.key] }))}
-                    >
-                      {openWhy[def.key] ? '근거 접기 ▴' : '선택 근거 ▾'}
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className="sb-tagging-why"
+                    onClick={() => setOpenWhy((prev) => ({ ...prev, [def.key]: !prev[def.key] }))}
+                  >
+                    {openWhy[def.key] ? '근거 접기 ▴' : '선택 근거 ▾'}
+                  </button>
                   {field.status !== 'done' && (
                     <button type="button" className="sb-tagging-mini sb-tagging-mini--ok" onClick={() => markDone(def.key)}>
                       {field.status === 'fix' ? '수정 완료로 표시' : '확인 완료로 표시'}
