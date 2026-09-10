@@ -25,10 +25,9 @@ export default function PromptFlowTrial({ wire, seed, onApplied, api }) {
   const [status, setStatus] = useState('')
   const [error, setError] = useState(null)
   const [applied, setApplied] = useState(false)
-  const [score, setScore] = useState(null)
   const [comment, setComment] = useState('')
   const [savedThread, setSavedThread] = useState(null)
-  const clearEvaluation = () => { setScore(null); setComment(''); setSavedThread(null); setApplied(false) }
+  const clearEvaluation = () => { setComment(''); setSavedThread(null); setApplied(false) }
   const clearTrial = () => { setResult(null); setAnswers({ baseline: {}, trial: {} }); clearEvaluation(); setError(null) }
   useEffect(() => {
     if (!seed?.text || !wire) return
@@ -131,7 +130,7 @@ export default function PromptFlowTrial({ wire, seed, onApplied, api }) {
     finally { setBusy(false); setStatus('') }
   }
   const save = async () => {
-    if (!canApply || score == null || busy || savedThread || applied) return
+    if (!canApply || busy || savedThread || applied) return
     setBusy(true); setError(null)
     try {
       const first = proposal.changes[0]
@@ -140,7 +139,7 @@ export default function PromptFlowTrial({ wire, seed, onApplied, api }) {
         summary: proposal.summary, warnings: proposal.warnings, baseText: first.baseText, proposedText: first.proposedText,
         changes: proposal.changes, prompts: proposal.prompts, focus, review: proposal.review, refinements: proposal.refinements,
         intent: result.intent, baseline: result.baseline, trial: result.trial,
-        evaluation: { score, comment: comment.trim() },
+        evaluation: { score: null, comment: comment.trim() },
       }))
       api.showToast('평가와 수정안을 저장했어요. 나중에 이어서 결정할 수 있어요.')
     } catch (e) { setError(e.message || '저장하지 못했어요.') }
@@ -168,10 +167,10 @@ export default function PromptFlowTrial({ wire, seed, onApplied, api }) {
         <small>여기서는 시험안만 만들어요. 직접 적용하기 전에는 고객 화면이 바뀌지 않아요.</small>
       </section>
       {proposal && <section className="sb-admin-card sb-prompt-trial__step sb-prompt-flow__proposal">
-        <header><div><h2>이렇게 바꿔볼게요</h2><p>{proposal.summary}</p></div></header>
-        {proposal.changes.map((change) => <div className="sb-prompt-flow__change" key={change.id}><b>{flowLabel(change.id)}</b><p>{change.reason}</p></div>)}
+        <header><div><h2>한 줄로 보면</h2><p>{proposal.summary}</p></div></header>
+        <p className="sb-prompt-flow__changed-parts">바꾼 곳: {proposal.changes.map((change) => flowLabel(change.id)).join(' · ') || '이번에는 그대로예요'}</p>
         <PromptFlowReview review={proposal.review} warnings={proposal.warnings} />
-        {proposal.changes.length > 0 && <details><summary>자세한 지시서 펼쳐보기 · 궁금할 때만 보세요</summary>{proposal.changes.map((change) => <div key={change.id}><b>{flowLabel(change.id)}</b><pre>{change.proposedText}</pre></div>)}</details>}
+        {proposal.changes.length > 0 && <details><summary>자세한 지시서 펼쳐보기 · 궁금할 때만 보세요</summary>{proposal.changes.map((change) => <div key={change.id}><b>{flowLabel(change.id)}</b><p>{change.reason}</p><pre>{change.proposedText}</pre></div>)}</details>}
         {!applied && <div className="sb-flow-refine">
           {!refining ? <button type="button" className="sb-btn sb-btn--ghost" disabled={busy} onClick={() => setRefining(true)}>마음에 안 들어요, 다시 수정할래요</button> : <>
             <label htmlFor="prompt-flow-refinement">어떤 점을 더 바꾸고 싶어요?</label>
@@ -198,7 +197,7 @@ export default function PromptFlowTrial({ wire, seed, onApplied, api }) {
       {canApply && <section className="sb-admin-card sb-prompt-trial__step">
         <header><div><h2>{applied ? '적용했어요!' : '원하던 모습에 가까워졌나요?'}</h2><p>{applied ? '새로 만드는 결과부터 이 수정안을 사용해요.' : '마음에 들면 함께 바꾼 내용을 한 번에 적용하세요.'}</p></div></header>
         {!applied && <><button type="button" className="sb-btn sb-btn--primary" disabled={busy} onClick={apply}>마음에 들어요, 이대로 적용하기</button><button type="button" className="sb-btn sb-btn--ghost" disabled={busy} onClick={() => setRefining(true)}>마음에 안 들어요, 다시 수정할래요</button></>}
-        {!applied && <details><summary>평가를 남기고 나중에 결정할래요</summary><div className="sb-prompt-trial__stars" role="group" aria-label="수정안 점수">{[1, 2, 3, 4, 5].map((value) => <button type="button" key={value} className={score >= value ? 'is-on' : ''} aria-pressed={score === value} aria-label={`${value}점`} disabled={busy || Boolean(savedThread)} onClick={() => setScore(value)}>★</button>)}</div><textarea aria-label="수정안 평가 메모" value={comment} maxLength={2000} disabled={busy || Boolean(savedThread)} onChange={(event) => setComment(event.target.value)} placeholder="어떤 점이 좋았나요? 더 바꾸고 싶은 점도 적어주세요." />{savedThread ? <button type="button" className="sb-btn sb-btn--ghost" onClick={() => api.openAdminThread(savedThread.id)}>저장한 시험 열기</button> : <button type="button" className="sb-btn sb-btn--ghost" disabled={score == null || busy} onClick={save}>평가와 시험 저장하기</button>}</details>}
+        {!applied && <details><summary>메모 남기고 나중에 결정할래요 (선택)</summary><textarea aria-label="수정안 평가 메모" value={comment} maxLength={2000} disabled={busy || Boolean(savedThread)} onChange={(event) => setComment(event.target.value)} placeholder="어떤 점이 좋았나요? 더 바꾸고 싶은 점도 적어주세요." />{savedThread ? <button type="button" className="sb-btn sb-btn--ghost" onClick={() => api.openAdminThread(savedThread.id)}>저장한 시험 열기</button> : <button type="button" className="sb-btn sb-btn--ghost" disabled={busy} onClick={save}>AI 평가와 시험 저장하기</button>}</details>}
       </section>}
     </div>
     <PromptFlowPreview result={result} answers={answers} onAnswer={changeAnswer} intent={intent} busy={busy} status={status} onPrepare={prepare} onRun={runPlans} ready={ready} hasProposal={Boolean(proposal?.changes.length)} />

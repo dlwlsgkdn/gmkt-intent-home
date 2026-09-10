@@ -161,7 +161,15 @@ export const PromptFlowChange = z.object({
   proposedText: z.string().min(1).max(20000),
   reason: z.string().trim().min(1).max(300),
 })
+export const PromptFlowScoreParts = z.object({
+  request: z.number().int().min(0).max(40),
+  clarity: z.number().int().min(0).max(30),
+  consistency: z.number().int().min(0).max(30),
+})
 export const PromptFlowReview = z.object({
+  // Optional for previously saved drafts without AI scores.
+  score: z.number().int().min(0).max(100).optional(),
+  scoreParts: PromptFlowScoreParts.optional(),
   good: z.array(z.string().trim().min(1).max(160)).max(3),
   bad: z.array(z.string().trim().min(1).max(160)).max(3),
   risks: z.array(z.string().trim().min(1).max(160)).max(3),

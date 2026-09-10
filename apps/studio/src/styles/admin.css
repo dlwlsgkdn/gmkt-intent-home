@@ -3743,3 +3743,23 @@
 .sb-flow-diff__badge { position: sticky; top: 0; z-index: 2; width: fit-content; max-width: 100%; padding: 5px 8px; margin-bottom: 8px; border-radius: var(--sb-r-xs); color: var(--sb-danger); background: var(--sb-danger-soft); font-size: var(--sb-t-caption); font-weight: 500; }
 .sb-prompt-flow .sb-flow-option-change { border: 2px solid var(--sb-danger); }
 .sb-flow-option-change__label { align-self: flex-start; padding: 3px 6px; border-radius: var(--sb-r-xs); color: var(--sb-danger); background: var(--sb-danger-soft); font-size: var(--sb-t-caption); font-weight: 400; }
+
+/* 점수와 한 줄 요약을 먼저 읽고, 자세한 내용은 필요할 때 펼친다. */
+.sb-flow-review__score { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; padding: 6px 0; }
+.sb-flow-review__score > div { flex: 1 1 220px; }
+.sb-flow-review__score h3 { margin: 0 0 8px; color: var(--sb-ink); font-size: var(--sb-t-readable); font-weight: 500; }
+.sb-flow-review__score p { margin: 0; color: var(--sb-ink-2); font-size: var(--sb-t-title); line-height: 1.6; }
+.sb-flow-review__score > strong { flex-shrink: 0; color: var(--sb-info); font-size: var(--sb-t-score); font-weight: 500; line-height: 1.15; }
+.sb-flow-review__score > strong small { color: var(--sb-ink-2); font-size: var(--sb-t-title); }
+.sb-prompt-flow .sb-flow-review__card { padding: 16px 18px; }
+.sb-prompt-flow .sb-flow-review__card h4 { margin-bottom: 6px; font-size: var(--sb-t-readable); }
+.sb-prompt-flow .sb-flow-review__card p { font-size: var(--sb-t-readable); line-height: 1.6; color: var(--sb-ink); }
+.sb-flow-review__criteria, .sb-flow-review__legacy { font-size: var(--sb-t-title); color: var(--sb-ink-2); }
+.sb-flow-review details summary { font-size: var(--sb-t-title); }
+.sb-flow-review details p { margin-top: 10px; }
+.sb-prompt-flow .sb-prompt-flow__proposal > header h2 { font-size: var(--sb-t-readable); }
+.sb-prompt-flow .sb-prompt-flow__proposal > header p { font-size: var(--sb-t-readable); font-weight: 400; line-height: 1.6; }
+.sb-prompt-flow .sb-prompt-flow__changed-parts { margin: 0; color: var(--sb-ink-2); font-size: var(--sb-t-title); }
+.sb-prompt-flow__proposal > details, .sb-prompt-flow__proposal > details summary { font-size: var(--sb-t-title); }
+.sb-prompt-flow .sb-prompt-flow__request textarea, .sb-prompt-flow .sb-flow-refine textarea { font-size: var(--sb-t-title); }
+.sb-scenario-preview__viewport { overscroll-behavior: contain; }

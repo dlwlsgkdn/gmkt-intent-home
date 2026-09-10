@@ -86,3 +86,33 @@ export function comparePreviewItems(beforeItems, afterItems, summaries = {}) {
   })
   return maps
 }
+
+// Mirror progress, not pixels: the two generated pages can have different heights.
+export function createPreviewScrollSync(getPane) {
+  const expected = {}
+  return {
+    takeControl(side) { delete expected[side] },
+    reset() {
+      for (const side of ['baseline', 'trial']) {
+        const pane = getPane(side)
+        if (pane) { pane.scrollTop = 0; expected[side] = 0 }
+      }
+    },
+    onScroll(side) {
+      const pane = getPane(side)
+      if (!pane) return
+      const mirrored = expected[side]
+      delete expected[side]
+      if (mirrored != null && Math.abs(pane.scrollTop - mirrored) <= 1) return
+      const other = side === 'baseline' ? 'trial' : 'baseline'
+      const target = getPane(other)
+      if (!target) return
+      const range = Math.max(0, pane.scrollHeight - pane.clientHeight)
+      const progress = range ? Math.max(0, Math.min(1, pane.scrollTop / range)) : 0
+      const next = progress * Math.max(0, target.scrollHeight - target.clientHeight)
+      if (Math.abs(target.scrollTop - next) <= 1) return
+      target.scrollTop = next
+      expected[other] = target.scrollTop
+    },
+  }
+}

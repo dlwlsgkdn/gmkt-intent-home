@@ -173,6 +173,8 @@
   --sb-t-small: 13px;
   --sb-t-body: 14px;
   --sb-t-title: 16px;
+  --sb-t-readable: 18px;
+  --sb-t-score: 40px;
 
   /* 본문 폰트 — DDAK 메인(clean-home)과 글자 그대로 동일한 스택.
      웹폰트는 로드하지 않는다: 원본 프로토타입부터 이 스택은 시스템 폴백
