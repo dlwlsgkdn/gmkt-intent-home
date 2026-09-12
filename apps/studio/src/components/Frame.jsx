@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { DEVICE_PRESETS } from '../lib/store.js'
+import { DEVICE_PRESETS, viewerDeviceOf } from '../lib/store.js'
 import Dropdown from './ui/Dropdown.jsx'
 
 /* 원본 clean-home 프레임: 배경 블롭 + 플로팅 액션바 */
@@ -31,12 +31,13 @@ export function FloatingBar({ onList }) {
   )
 }
 
-/* 좌상단 뷰어 기기(화면 폭) 선택 컨트롤 — 탐색/설문/계획 실행 화면 공통 */
+/* 좌상단 뷰어 기기 선택 컨트롤 — 탐색/설문/계획 실행 화면 공통. 실행 화면은 고른 기기의 껍데기(DeviceFrame)
+   안에 실기기 화면 크기(w×h)로 그려진다 */
 export function ViewerDeviceControl({ deviceKey, onChange }) {
   const [open, setOpen] = useState(false)
-  const device = DEVICE_PRESETS.find((d) => d.key === deviceKey) || DEVICE_PRESETS[0]
-  /* 지금 기기 폭을 CSS 변수로 알린다 — position:fixed인 플로팅 버튼이 가운데 놓인
-     기기 프레임의 오른쪽 아래에 붙으려면 프레임 폭을 알아야 한다 */
+  const device = viewerDeviceOf(deviceKey)
+  /* 지금 기기 폭을 CSS 변수로 알린다 — 플레인 모드(평가 모드·폰 창)에서 창에 fixed 된 플로팅 버튼이 가운데 놓인
+     프레임의 오른쪽 아래에 붙으려면 프레임 폭을 알아야 한다 (기기 프레임 안에서는 화면 폭이 곧 기준이라 16px 로 풀린다) */
   useEffect(() => {
     document.documentElement.style.setProperty('--sb-viewer-w', `${device.w}px`)
   }, [device.w])
@@ -47,8 +48,8 @@ export function ViewerDeviceControl({ deviceKey, onChange }) {
         onClose={() => setOpen(false)}
         menuClass="sb-viewer-ctl__menu"
         button={
-          <button type="button" className="sb-viewer-ctl__btn" onClick={() => setOpen((v) => !v)} title="화면 크기 선택">
-            {device.icon} {device.w}px
+          <button type="button" className="sb-viewer-ctl__btn" onClick={() => setOpen((v) => !v)} title="기기 선택 — 실기기 화면 크기의 프레임으로 본다">
+            {device.icon} {device.w}×{device.h}
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" /></svg>
           </button>
         }
@@ -61,7 +62,7 @@ export function ViewerDeviceControl({ deviceKey, onChange }) {
             onClick={() => { onChange(p.key); setOpen(false) }}
           >
             <strong>{p.icon} {p.label}</strong>
-            <small>화면 폭 {p.w}px{p.key === device.key ? ' · 사용 중' : ''}</small>
+            <small>화면 {p.w}×{p.h}{p.key === device.key ? ' · 사용 중' : ''}</small>
           </button>
         ))}
       </Dropdown>

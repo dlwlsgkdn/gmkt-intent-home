@@ -3,10 +3,12 @@ import { createPortal } from 'react-dom'
 import { timeAgo } from '../lib/timeAgo.js'
 import { autocomplete, fallbackSuggest } from '../lib/searchCatalog.js'
 import { suggestSearch } from '../lib/liveApi.js'
+import { overlayRoot } from '../lib/deviceScreen.js'
 
 /*
  * 홈 검색 화면 — Figma Search 1-2(최근 검색어) · 1-3(검색 입력: 자동완성 + AI 추천).
- * 검색창을 누르는 순간 프레임을 덮는 한 장의 화면으로 뜬다(body 포털 — 프레임 폭에 맞춰 가운데). 입력이 비면 최근
+ * 검색창을 누르는 순간 프레임을 덮는 한 장의 화면으로 뜬다(기기 프레임 화면으로 포털 — 없으면 body, 프레임 폭에 맞춰
+ * 가운데). 입력이 비면 최근
  * 검색어(시각 + ✕ 삭제), 글자가 있으면 자동완성 행(입력어 굵게 — 서버 없이 어휘 조합)과 그 아래 ✦ AI 추천 행
  * (BFF `/api/search/suggest`, 450ms 디바운스·세션 캐시, 실패 시 대체 문장). 제출은 어느 행이든 onSubmit(text) 한 곳 —
  * 두 갈래(DDAK/SRP) 분기는 호출자(useSearchEntry) 몫이다
@@ -217,6 +219,6 @@ export default function SearchOverlay({ open, initialQuery = '', width = 390, pr
         </div>
       </div>
     </div>,
-    document.body,
+    overlayRoot(),
   )
 }

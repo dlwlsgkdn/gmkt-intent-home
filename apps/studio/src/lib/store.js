@@ -12,6 +12,7 @@
 export {
   uid,
   DEVICE_PRESETS,
+  viewerDeviceOf,
   CHIP_COLORS,
   hexToRgba,
   STAGES,

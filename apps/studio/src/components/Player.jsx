@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { stepInfoOfItem } from '../lib/cart.js'
-import { STAGES, DEVICE_PRESETS, resolvePlanCase, uid, visibleProfileItems } from '../lib/store.js'
+import { STAGES, viewerDeviceOf, resolvePlanCase, uid, visibleProfileItems } from '../lib/store.js'
+import DeviceFrame from './DeviceFrame.jsx'
+import { screenScrollY, scrollScreenTo } from '../lib/deviceScreen.js'
 import { isQuestionType, renderItem } from '../lib/registry.jsx'
 import BottomSheet from './ui/BottomSheet.jsx'
 import { BgBlobs, FloatingBar, StudioFab, ViewerDeviceControl } from './Frame.jsx'
@@ -46,21 +48,22 @@ export default function Player({ api, scenario, resume }) {
   const stage = STAGES[stageIdx]
 
   /* 단계별 스크롤 기억 (세션 메모리, 저장 안 함):
-     처음 여는 단계는 맨 위에서, 다시 돌아온 단계는 떠날 때 위치에서 열린다 */
+     처음 여는 단계는 맨 위에서, 다시 돌아온 단계는 떠날 때 위치에서 열린다.
+     스크롤은 기기 프레임 화면 안에서 돈다(lib/deviceScreen.js — 프레임이 없으면 창) */
   const scrollMemRef = useRef({})
   const goStage = (idx) => {
     if (idx === stageIdx) return
-    scrollMemRef.current[stage.key] = window.scrollY
+    scrollMemRef.current[stage.key] = screenScrollY()
     setStageIdx(idx)
     setQStep(0)
   }
   useEffect(() => {
     const saved = scrollMemRef.current[STAGES[stageIdx].key]
     const y = saved != null ? saved : 0
-    window.scrollTo(0, y)
+    scrollScreenTo(y)
     if (y > 0) {
       // 이미지 로딩 등으로 페이지가 잠깐 짧을 때 클램프되는 것 보정
-      const t = setTimeout(() => window.scrollTo(0, y), 150)
+      const t = setTimeout(() => scrollScreenTo(y), 150)
       return () => clearTimeout(t)
     }
   }, [stageIdx])
@@ -117,8 +120,8 @@ export default function Player({ api, scenario, resume }) {
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stageIdx, answers, excludedProfile, cart, completed, matchedPlanCase?.id])
-  /* 실행 화면은 전역 뷰어 기기 폭의 모바일 프레임으로 고정 (좌상단 컨트롤로 조절) */
-  const viewer = DEVICE_PRESETS.find((d) => d.key === api.viewerDevice) || DEVICE_PRESETS.find((d) => d.key === 'iphone-15') || DEVICE_PRESETS[0]
+  /* 실행 화면은 전역 뷰어 기기의 실기기 껍데기·화면 크기로 고정 (좌상단 컨트롤로 조절) */
+  const viewer = viewerDeviceOf(api.viewerDevice)
 
   const next = () => goStage(Math.min(STAGES.length - 1, stageIdx + 1))
   const prev = () => goStage(Math.max(0, stageIdx - 1))
@@ -211,8 +214,7 @@ export default function Player({ api, scenario, resume }) {
 
   return (
     <>
-      <BgBlobs />
-      <FloatingBar onList={(origin) => setThreadOrigin((v) => (v ? null : origin || 'right'))} />
+      {/* 스튜디오 크롬 — 기기 프레임 밖(브라우저 창 고정) */}
       <StudioFab label="이 시나리오 편집" onClick={() => api.openBuilder(scenario.id)} />
       <ViewerDeviceControl deviceKey={api.viewerDevice} onChange={api.setViewerDevice} />
 
@@ -239,6 +241,10 @@ export default function Player({ api, scenario, resume }) {
         ))}
       </nav>
 
+      {/* 기기 프레임 — 실행 화면·플로팅 버튼·쓰레드 패널·상품 상세가 실기기 화면 크기 안에서 돈다 */}
+      <DeviceFrame device={viewer}>
+      <BgBlobs />
+      <FloatingBar onList={(origin) => setThreadOrigin((v) => (v ? null : origin || 'right'))} />
       <section className={'sb-player min-h-screen relative z-10' + (fillActive ? ' sb-player--fill' : '')}>
         <div className="sb-phone sb-phone--player" style={{ width: viewer.w }}>
         <div className="sb-player__stack">
@@ -295,10 +301,11 @@ export default function Player({ api, scenario, resume }) {
       {/* 쇼핑 쓰레드 히스토리 패널 — 햄버거 버튼 위치에서 등장 */}
       <ThreadPanel api={api} open={!!threadOrigin} origin={threadOrigin || 'right'} onClose={() => setThreadOrigin(null)} />
 
-      {/* 상품 상세보기 사이드 패널 — 외부몰 페이지 iframe (모바일은 전체화면) */}
+      {/* 상품 상세보기 사이드 패널 — 외부몰 페이지 iframe (기기 프레임·모바일은 전체화면) */}
       <ProductDetailPanel product={productDetail} onClose={() => setProductDetail(null)} />
+      </DeviceFrame>
 
-      {/* 키워드 설명 — 설문 날짜/사진 시트와 같은 바텀 시트 문법 */}
+      {/* 키워드 설명 — 설문 날짜/사진 시트와 같은 바텀 시트 문법 (기기 화면으로 포털) */}
       {keyword && (
         <BottomSheet title={keyword.word} onClose={() => setKeyword(null)}>
           <div className="sb-keyword-sheet">

@@ -22,3 +22,4 @@
 @import './styles/admin.css';            /* thread 관리 페이지 (#admin) — 게이트 · 목록 · 마크다운 문서 */
 @import './styles/tagging.css';          /* 상품 태깅 검토 스튜디오 — 진행 요약 · 태그 사전 · 검토 목록 */
 @import './styles/search.css';           /* 홈 검색 화면(최근 검색어·자동완성·AI 추천) · 검색 결과 페이지(SRP) 목업 */
+@import './styles/device.css';           /* 실행 화면 기기 프레임 — 실기기 껍데기(w×h)·화면 안 스크롤·세이프 에어리어 */

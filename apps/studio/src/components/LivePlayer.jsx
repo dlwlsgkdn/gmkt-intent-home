@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { enrichCartEntries, productLookupFromPlanPage, stepInfoOfItem } from '../lib/cart.js'
-import { DEVICE_PRESETS, STAGES } from '../lib/store.js'
+import { viewerDeviceOf, STAGES } from '../lib/store.js'
+import DeviceFrame from './DeviceFrame.jsx'
+import { scrollScreenTo } from '../lib/deviceScreen.js'
 import { isQuestionType, renderItem, resolveSampleFace } from '../lib/registry.jsx'
 import BottomSheet from './ui/BottomSheet.jsx'
 import { fetchLiveCapabilities, fetchLiveThread, recordLiveEvent, renderLiveLook, sendLiveFeedback, startLiveThread, streamLivePlan, streamLiveSurvey } from '../lib/liveApi.js'
@@ -315,7 +317,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
       step: 'plan',
       message: opts.feedback ? '피드백을 반영해 계획을 다시 세우고 있어요…' : '카탈로그와 웹을 살펴 계획을 세우고 있어요…',
     })
-    window.scrollTo(0, 0) // 스트리밍이 위에서부터 채워지므로 시작 시점에 올려 둔다
+    scrollScreenTo(0) // 스트리밍이 위에서부터 채워지므로 시작 시점에 올려 둔다
     streamLivePlan(threadId, {
       answers: wire,
       profile: profileWire(),
@@ -347,7 +349,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         setPartial(null)
         setLoading(null)
         setStageKey('plan')
-        window.scrollTo(0, 0)
+        scrollScreenTo(0)
       },
       onSection: (section, index, final = true) => {
         if (!active()) return
@@ -392,7 +394,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         setPartial(null)
         setLoading(null)
         setStageKey('plan')
-        window.scrollTo(0, 0)
+        scrollScreenTo(0)
       },
       onError: (e) => {
         if (!active()) return
@@ -779,7 +781,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   /* 스테퍼 표시는 생성 중엔 생성 대상 단계를 따른다 (계획 스트리밍 중엔 계획 강조) */
   const displayStageKey = loading ? (loading.step === 'plan' ? 'plan' : 'survey') : stageKey
   const stageIdx = STAGES.findIndex((s) => s.key === displayStageKey)
-  const viewer = DEVICE_PRESETS.find((d) => d.key === api.viewerDevice) || DEVICE_PRESETS[0]
+  const viewer = viewerDeviceOf(api.viewerDevice)
   const planStale = planPage && planKey !== JSON.stringify(answersWire())
 
   /* 피드백(평가) — 현재 단계의 상태와 미전송 여부. 저장은 명시적 버튼 한 번 = 제출 한 번 */
@@ -934,7 +936,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const goPlan = (opts = {}) => {
     if (planPage && !(planStale && opts.regenerate)) {
       setStageKey('plan')
-      window.scrollTo(0, 0)
+      scrollScreenTo(0)
       return
     }
     generatePlan()
@@ -946,7 +948,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     if (target.key === 'plan') goPlan()
     else {
       setStageKey('survey')
-      window.scrollTo(0, 0)
+      scrollScreenTo(0)
     }
   }
 
@@ -961,8 +963,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
 
   return (
     <>
-      <BgBlobs />
-      <FloatingBar onList={(origin) => setThreadOrigin((v) => (v ? null : origin || 'right'))} />
+      {/* 스튜디오 크롬 — 기기 프레임 밖(브라우저 창 고정) */}
       <ViewerDeviceControl deviceKey={api.viewerDevice} onChange={api.setViewerDevice} />
 
       {/* 단계 스테퍼 — 시나리오 플레이어와 같은 골격 */}
@@ -986,6 +987,11 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         ))}
       </nav>
 
+      {/* 기기 프레임 — 평가 모드는 말풍선 레일을 페이지 옆에 나란히 배치해야 하므로(창 스크롤 기준) 껍데기를 벗고
+         평면으로 본다(plain). DOM 은 같아서 페이지가 다시 마운트되지 않는다 */}
+      <DeviceFrame device={viewer} plain={fbMode && fbAvailable}>
+      <BgBlobs />
+      <FloatingBar onList={(origin) => setThreadOrigin((v) => (v ? null : origin || 'right'))} />
       <section className={'sb-player sb-player--live min-h-screen relative z-10' + (fillActive ? ' sb-player--fill' : '')}>
         <div className={'sb-live-annotate' + (fbMode && fbAvailable ? ' is-on' : '')}>
         <div className="sb-phone sb-phone--player" ref={phoneRef} style={{ width: viewer.w }}>
@@ -1172,6 +1178,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
 
       {/* 상품 상세보기 사이드 패널 — 외부몰 페이지 iframe (모바일은 전체화면) */}
       <ProductDetailPanel product={productDetail} onClose={() => setProductDetail(null)} />
+      </DeviceFrame>
 
       {/* 설문 재선택 확인 — 잠금 해제는 이 다이얼로그를 거쳐서만 */}
       {reselectConfirm && (

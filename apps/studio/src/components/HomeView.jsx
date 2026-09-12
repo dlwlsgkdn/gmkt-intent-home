@@ -4,7 +4,8 @@ import ExploreFrame from './ExploreFrame.jsx'
 import ThreadPanel from './ThreadPanel.jsx'
 import StarterPanel from './StarterPanel.jsx'
 import { TEMPLATES } from '../lib/templates.js'
-import { classifyImportPayload, createScenariosExport, hexToRgba, DEVICE_PRESETS } from '../lib/store.js'
+import { classifyImportPayload, createScenariosExport, hexToRgba, viewerDeviceOf } from '../lib/store.js'
+import DeviceFrame from './DeviceFrame.jsx'
 
 /* 홈 첫 화면을 이루는 탐색 컴포넌트 — 이 타입들이 스택 앞머리에 연속으로 있으면 히어로 블록으로 묶여
    화면 세로 중앙에 놓인다 (Figma Search 랜딩: 제목 · 검색창 · 추천 칩) */
@@ -195,7 +196,7 @@ export default function HomeView({ api }) {
   }
   /* 검색 제출은 라우터를 거친다 — DDAK(위 submitDdak) / 검색 결과 페이지. 최근 검색어 기록도 훅 몫 */
   const search = useSearchEntry(api, { onDdak: submitDdak })
-  const viewerW = (DEVICE_PRESETS.find((d) => d.key === api.viewerDevice) || DEVICE_PRESETS[0]).w
+  const viewer = viewerDeviceOf(api.viewerDevice) // 실행 화면을 감싸는 기기 — 화면 크기(w×h)·껍데기 종류
 
   /* 탐색 아이템에 공급하는 실행 컨텍스트 — 검색/칩/키워드만 실제 동작, 나머지는 목업 */
   const homePlayer = {
@@ -220,19 +221,19 @@ export default function HomeView({ api }) {
 
   return (
     <>
-      <BgBlobs />
-      <FloatingBar onList={(origin) => setThreadOrigin((v) => (v ? null : origin || 'right'))} />
+      {/* 스튜디오 크롬 — 기기 프레임 밖(브라우저 창 고정). 화면 안에는 DDAK 요소만 둔다 */}
       <StudioFab onClick={() => setDrawerOpen(true)} />
       <div className="sb-topleft">
         <ViewerDeviceControl deviceKey={api.viewerDevice} onChange={api.setViewerDevice} />
         <ProfileControl api={api} />
       </div>
 
+      {/* 기기 프레임 — 홈 화면·플로팅 버튼·쓰레드 패널·검색 화면이 실기기 화면 크기 안에서 돈다 */}
+      <DeviceFrame device={viewer}>
+      <BgBlobs />
+      <FloatingBar onList={(origin) => setThreadOrigin((v) => (v ? null : origin || 'right'))} />
       <section className="clean-home min-h-screen relative z-10">
-        <div
-          className="sb-phone"
-          style={{ width: (DEVICE_PRESETS.find((d) => d.key === api.viewerDevice) || DEVICE_PRESETS[0]).w }}
-        >
+        <div className="sb-phone" style={{ width: viewer.w }}>
         {exploreItems.length > 0 ? (
           /* 탐색 페이지 = 캔버스 아이템 스택 (빌더 탐색 탭에서 자유 배치·편집) */
           <div className="sb-player__stack sb-home-stack">
@@ -271,7 +272,7 @@ export default function HomeView({ api }) {
       <SearchOverlay
         open={searchOpen}
         initialQuery={query}
-        width={viewerW}
+        width={viewer.w}
         profile={search.profile}
         recents={search.recents}
         routing={search.routing}
@@ -285,6 +286,7 @@ export default function HomeView({ api }) {
       {search.routing && !searchOpen ? (
         <div className="sb-search-routing" role="status">✦ 「{search.routing}」 — 어떤 화면이 맞을지 살펴보고 있어요…</div>
       ) : null}
+      </DeviceFrame>
 
       {/* 시나리오 관리 드로어 */}
       {drawerOpen && (

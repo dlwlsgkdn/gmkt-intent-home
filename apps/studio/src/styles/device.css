@@ -1,0 +1,341 @@
+/* ═══════════ 기기 프레임 (components/DeviceFrame.jsx, 2026-09) ═══════════
+   실행 화면(홈·설문·계획·검색 결과)을 실제 스마트폰 껍데기 안에 그린다. 화면(.sb-device__screen)은 프리셋의
+   실기기 뷰포트(w×h) 그대로고, 스크롤은 안쪽 .sb-device__scroll 이 돈다. 껍데기 그림은 전부 CSS(이미지 없음).
+
+   구조: .sb-stage(가운데 정렬·창 맞춤) > .sb-device(축소 배율이 반영된 레이아웃 상자) > .sb-device__body(금속 테두리,
+   transform 축소) > .sb-device__glass(검은 전면 유리) > .sb-device__screen(화면 — contain: paint 라 fixed 자손의
+   컨테이닝 블록) > .sb-device__scroll(스크롤러 — DDAK 콘텐츠) + 상태 바·컷아웃·홈 인디케이터(기기 층).
+
+   모든 규칙은 .is-framed 아래에만 있다 — 플레인 모드(.is-plain: 평가 모드·640px 이하 창)에선 래퍼가 그냥 div 라
+   예전 평면 흐름(창 스크롤·창 기준 fixed)이 그대로 산다. 기기 색은 하드웨어 그림이라 토큰 대신 --dev-* 로컬 값. */
+
+.sb-stage.is-framed {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 84px 24px 28px; /* DeviceFrame.jsx STAGE_TOP/BOTTOM/X 와 같은 값 — 위는 고정 크롬 자리 */
+  box-sizing: border-box;
+}
+.is-framed .sb-device {
+  --sb-vh: var(--dev-h); /* 콘텐츠가 보는 "뷰포트 높이" — 플레인 모드엔 없어 100dvh 폴백 */
+  --dev-metal-1: #e9eaed;
+  --dev-metal-2: #b7bac0;
+  --dev-metal-3: #6f737a;
+  --dev-glass: #0a0b0e;
+  --dev-hole: #000;
+  --dev-shadow: 0 60px 120px -48px rgba(15, 23, 42, 0.6), 0 24px 48px -28px rgba(15, 23, 42, 0.45);
+  flex: none;
+  width: calc(var(--dev-outer-w) * var(--dev-fit));
+  height: calc(var(--dev-outer-h) * var(--dev-fit));
+}
+.is-framed .sb-device--android,
+.is-framed .sb-device--fold {
+  --dev-metal-1: #565962;
+  --dev-metal-2: #26282d;
+  --dev-metal-3: #15171b;
+}
+.is-framed .sb-device--android-ultra {
+  --dev-metal-1: #dcdde0;
+  --dev-metal-2: #9c9fa5;
+  --dev-metal-3: #5c5f65;
+}
+.is-framed .sb-device--tablet {
+  --dev-metal-1: #eeeef0;
+  --dev-metal-2: #c6c8cc;
+  --dev-metal-3: #93969c;
+}
+
+/* 몸체 — 금속 테두리. 창이 작으면 여기서 통째 축소된다(레이아웃 px 는 그대로) */
+.is-framed .sb-device__body {
+  position: relative;
+  width: var(--dev-outer-w);
+  height: var(--dev-outer-h);
+  box-sizing: border-box;
+  padding: var(--dev-band);
+  border-radius: var(--dev-body-r);
+  background: linear-gradient(155deg, var(--dev-metal-1) 0%, var(--dev-metal-2) 24%, var(--dev-metal-3) 52%, var(--dev-metal-2) 78%, var(--dev-metal-1) 100%);
+  box-shadow: var(--dev-shadow), inset 0 0 0 1px rgba(255, 255, 255, 0.45);
+  transform: scale(var(--dev-fit));
+  transform-origin: top left;
+}
+/* 전면 유리 — 화면 둘레의 검은 베젤 */
+.is-framed .sb-device__glass {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  padding: var(--dev-bezel-top) var(--dev-bezel-x) var(--dev-bezel-bottom);
+  border-radius: calc(var(--dev-body-r) - var(--dev-band));
+  background: var(--dev-glass);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+/* 화면 — 실기기 뷰포트. contain: paint 로 fixed 자손(플로팅 버튼·시트·패널·검색 화면)이 이 상자를 기준으로 붙는다 */
+.is-framed .sb-device__screen {
+  position: relative;
+  width: var(--dev-w);
+  height: var(--dev-h);
+  border-radius: var(--dev-screen-r);
+  overflow: clip;
+  contain: paint;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(246, 248, 250, 0.98)),
+    var(--beauty-paper, #fff);
+}
+/* 스크롤러 — DDAK 콘텐츠. 세이프 에어리어(상태 바·홈 인디케이터)만큼 안쪽에서 시작하고 스크롤바는 숨긴다 */
+.is-framed .sb-device__scroll {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  padding: var(--sb-safe-top) 0 var(--sb-safe-bottom);
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.is-framed .sb-device__scroll::-webkit-scrollbar { display: none; }
+.is-framed .sb-device__scroll > section { min-height: 100%; }
+
+/* ── 기기 층 (pointer-events: none) — 상태 바 · 컷아웃 · 홈 인디케이터 · 접힘선 ── */
+.sb-device__status,
+.sb-device__cutout,
+.sb-device__homebar,
+.sb-device__crease,
+.sb-device__btn,
+.sb-device__homebtn,
+.sb-device__speaker,
+.sb-device__cam,
+.sb-device__titlebar { display: none; }
+
+.is-framed .sb-device__status {
+  display: flex;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 590;
+  height: var(--sb-safe-top);
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 28px 0 34px;
+  box-sizing: border-box;
+  pointer-events: none;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Roboto, sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.2px;
+  line-height: 1;
+  color: var(--dk-ink);
+  /* 콘텐츠가 밑으로 스크롤돼도 시각·아이콘이 읽히게 — iOS 스크롤 엣지처럼 흐린 반투명 띠 */
+  background: linear-gradient(180deg, rgba(250, 250, 251, 0.92), rgba(250, 250, 251, 0.55));
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+.is-framed .sb-device__status-side { display: inline-flex; align-items: center; gap: 6px; }
+.is-framed .sb-device__ico { width: 17px; height: 12px; }
+.is-framed .sb-device__ico--battery { width: 27px; height: 13px; }
+.is-framed .sb-device__status--android {
+  padding: 0 20px 0 22px;
+  font-family: Roboto, 'Noto Sans KR', system-ui, sans-serif;
+  font-size: 14px;
+}
+.is-framed .sb-device__status--ipad { padding: 0 22px; font-size: 13px; }
+.is-framed .sb-device__status--ipad .sb-device__ico { width: 15px; height: 11px; }
+.is-framed .sb-device__status--ios-classic { padding: 0 8px; font-size: 12px; }
+.is-framed .sb-device__status--ios-classic .sb-device__ico { width: 14px; height: 10px; }
+.is-framed .sb-device__status--ios-classic .sb-device__ico--battery { width: 23px; height: 11px; }
+
+.is-framed .sb-device__cutout {
+  display: block;
+  position: absolute;
+  left: 50%;
+  z-index: 600;
+  transform: translateX(-50%);
+  background: var(--dev-hole);
+  pointer-events: none;
+}
+.is-framed .sb-device__cutout--island {
+  top: 11px;
+  width: 125px;
+  height: 37px;
+  border-radius: 20px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+.is-framed .sb-device__cutout--punch {
+  top: 12px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px rgba(78, 82, 92, 0.75), inset 0 0 3px 2px rgba(0, 0, 0, 0.9);
+}
+.is-framed .sb-device__homebar {
+  display: block;
+  position: absolute;
+  left: 50%;
+  z-index: 600;
+  transform: translateX(-50%);
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.82);
+  pointer-events: none;
+}
+.is-framed .sb-device__homebar--ios { bottom: 8px; width: 134px; height: 5px; }
+.is-framed .sb-device__homebar--android { bottom: 7px; width: 108px; height: 4px; opacity: 0.62; }
+.is-framed .sb-device__crease {
+  display: block;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  z-index: 585;
+  width: 3px;
+  transform: translateX(-50%);
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.45) 50%, rgba(0, 0, 0, 0.06));
+  pointer-events: none;
+}
+
+/* ── 몸체 부속 — 옆면 버튼 · 홈 버튼 · 스피커 · 카메라 (몸체 높이 기준 % 자리) ── */
+.is-framed .sb-device__btn {
+  display: block;
+  position: absolute;
+  width: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--dev-metal-3), var(--dev-metal-2) 50%, var(--dev-metal-3));
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
+}
+.is-framed .sb-device__btn--action { left: -3px; top: 17%; height: 30px; }
+.is-framed .sb-device__btn--vol-up { left: -3px; top: 24%; height: 62px; }
+.is-framed .sb-device__btn--vol-down { left: -3px; top: 33%; height: 62px; }
+.is-framed .sb-device__btn--power { right: -3px; top: 27%; height: 96px; }
+.is-framed .sb-device__btn--mute { left: -3px; top: 13%; height: 26px; }
+.is-framed .sb-device__btn--power-se { right: -3px; top: 13%; height: 40px; }
+.is-framed .sb-device__btn--vol { right: -3px; top: 16%; height: 78px; }
+.is-framed .sb-device__btn--power-a { right: -3px; top: 29%; height: 44px; }
+.is-framed .sb-device__btn--top { top: -3px; right: 10%; width: 48px; height: 4px; }
+.is-framed .sb-device__btn--vol-t { right: -3px; top: 7%; height: 64px; }
+
+.is-framed .sb-device__speaker {
+  display: block;
+  position: absolute;
+  left: 50%;
+  top: calc(var(--dev-bezel-top) / 2 - 3px);
+  width: 56px;
+  height: 6px;
+  transform: translateX(-50%);
+  border-radius: 3px;
+  background: #24252a;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+.is-framed .sb-device__cam {
+  display: block;
+  position: absolute;
+  left: calc(50% - 46px);
+  top: calc(var(--dev-bezel-top) / 2 - 5px);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 40%, #2b3140, #05060a 70%);
+  box-shadow: 0 0 0 1.5px #1c1d22;
+}
+.is-framed .sb-device--tablet .sb-device__cam {
+  left: 50%;
+  top: calc(var(--dev-bezel-top) / 2 - 4px);
+  width: 8px;
+  height: 8px;
+  transform: translateX(-50%);
+}
+.is-framed .sb-device__homebtn {
+  display: block;
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--dev-bezel-bottom) / 2 - 22px);
+  width: 44px;
+  height: 44px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, #1a1b20, #0c0d10 70%);
+  box-shadow: inset 0 0 0 2px #2c2e35, 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+/* ── 브라우저 창 (데스크톱 프리셋) — 신호등 점 + 주소 알약, 화면은 창 본문 ── */
+.is-framed .sb-device--browser .sb-device__body {
+  padding: 0;
+  background: #e8e9ec;
+  box-shadow: var(--dev-shadow), 0 0 0 1px rgba(15, 23, 42, 0.12);
+}
+.is-framed .sb-device--browser .sb-device__glass { background: transparent; box-shadow: none; }
+.is-framed .sb-device--browser .sb-device__screen { border-radius: 0 0 12px 12px; }
+.is-framed .sb-device__titlebar {
+  display: flex;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--dev-bezel-top);
+  align-items: center;
+  gap: 14px;
+  padding: 0 14px;
+  box-sizing: border-box;
+  border-radius: 12px 12px 0 0;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.1);
+  background: linear-gradient(#f4f4f6, #e6e7ea);
+}
+.is-framed .sb-device__dots { display: inline-flex; gap: 8px; }
+.is-framed .sb-device__dots i {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ff5f57;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+.is-framed .sb-device__dots i:nth-child(2) { background: #febc2e; }
+.is-framed .sb-device__dots i:nth-child(3) { background: #28c840; }
+.is-framed .sb-device__address {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 28px;
+  margin: 0 40px;
+  border-radius: var(--sb-r-xs);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+  font-family: var(--sb-font-sans);
+  font-size: var(--sb-t-small);
+  font-weight: 300;
+  color: var(--sb-ink-2);
+}
+.is-framed .sb-device__address svg { width: 11px; height: 13px; color: var(--sb-subtle); }
+
+/* ── 화면 안 DDAK 콘텐츠 — 창 기준이던 여백·높이·고정 위치를 화면 기준으로 ──
+   플레인 모드의 값(고정 크롬 자리 96px 위 여백, 100dvh 히어로, 창 우하단 플로팅 버튼)은 손대지 않는다 */
+.is-framed .sb-device__scroll .min-h-screen { min-height: 100%; }
+.is-framed .sb-phone { min-height: 0; border-inline: 0; }
+.is-framed .sb-player { padding: 4px 0 16px; }
+.is-framed .sb-player.sb-player--fill { min-height: 100%; padding-bottom: 16px; }
+.is-framed .sb-home-stack { padding: 14px 0 72px; }
+/* 첫 화면 히어로 — 화면 한 장(세이프 에어리어·스택 여백 제외)을 채우고, 검색창 중심은 화면 높이의 45% 근처
+   (home.css 플레인 공식과 같은 뜻 — 190/188 이 창 크롬 기준이라 화면 기준으로 다시 잡았다) */
+.is-framed .sb-home-hero {
+  min-height: calc(var(--sb-vh) - var(--sb-safe-top) - var(--sb-safe-bottom) - 66px);
+  padding-bottom: max(24px, calc(var(--sb-vh) * 0.55 - 171px));
+}
+/* 하단 내비(이전 단계·완료, sticky) — 홈 인디케이터 위에 서고 그 아래 띠는 내비 바닥색으로 덮는다 */
+.is-framed .sb-player__nav { padding-bottom: var(--sb-safe-bottom); }
+/* 플로팅 버튼 — 화면 우하단, 홈 인디케이터 위 (right 는 원식이 화면 폭에서 16px 로 풀린다).
+   바닥에 붙은 「다음」·하단 내비가 있으면 그 위로 올라간다 */
+.sb-stage.is-framed .sb-fabbar { bottom: calc(14px + var(--sb-safe-bottom)); }
+.sb-stage.is-framed:has(.sb-player--fill) .sb-fabbar,
+.sb-stage.is-framed:has(.sb-player__nav) .sb-fabbar { bottom: calc(84px + var(--sb-safe-bottom)); }
+/* 화면을 덮는 패널·검색 화면은 상태 바 아래에서 시작한다 */
+.is-framed .sb-search__screen,
+.is-framed .sb-thread-panel--right,
+.is-framed .sb-thread-panel--left,
+.is-framed .sb-product-detail__panel {
+  padding-top: var(--sb-safe-top);
+  box-sizing: border-box;
+}
+/* 상품 상세는 화면(폰 폭) 전체 — 창의 우측 사이드 패널은 화면보다 넓다 */
+.is-framed .sb-product-detail__panel { width: 100%; border-left: 0; }
+.is-framed .sb-search-routing { bottom: calc(20px + var(--sb-safe-bottom)); }

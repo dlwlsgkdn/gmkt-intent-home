@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { overlayRoot } from '../../lib/deviceScreen.js'
 
 /*
  * 바텀 시트 / 가운데 모달 공용 껍데기 — Figma [PP1K] 시트 한 벌 (2026-09):
@@ -9,8 +10,9 @@ import { createPortal } from 'react-dom'
  *  - variant 'center': 화면 가운데 카드(샘플 얼굴 "모델 얼굴 선택" 모달). radius 24, 패딩 20, 제목(16/21) 왼쪽 + ✕, 부제 12/17.
  *    align 'center' 면 확인 모달(삭제 확인 — 제목·설명 가운데, ✕ 없음, 버튼은 children)이다.
  *
- * body로 포털한다: 실행 화면(.sb-player)이 z-index 스택 문맥을 만들어서, 그 안에 두면
- * 아무리 z-index를 올려도 하단 플로팅 바 밑에 깔린다.
+ * 실행 화면(.sb-player)이 z-index 스택 문맥을 만들어서 그 안에 두면 아무리 z-index를 올려도 하단 플로팅 바 밑에
+ * 깔리므로 포털한다 — 대상은 기기 프레임의 화면(#sb-device-screen, contain: paint 라 fixed inset:0 이 화면을
+ * 딱 덮는다)이고 프레임이 없으면(스튜디오 캔버스 등) body 다 (lib/deviceScreen.js overlayRoot).
  * 쓰는 곳 — 설문 사진/날짜 질문(lib/registry/surveyComponents.jsx), 키워드 설명(Player·LivePlayer), 쇼핑 쓰레드 패널.
  */
 export default function BottomSheet({
@@ -55,6 +57,6 @@ export default function BottomSheet({
         {footer ? <div className="sb-sheet__footer">{footer}</div> : null}
       </div>
     </div>,
-    document.body
+    overlayRoot()
   )
 }

@@ -327,8 +327,8 @@
 .sb-thread-panel--right {
   top: 0;
   right: 0;
-  height: 100vh;
-  width: min(320px, 86vw);
+  height: 100%;
+  width: min(320px, 86%);
   border-left: 1px solid rgba(31, 41, 51, 0.1);
   box-shadow: -24px 0 60px -30px rgba(15, 23, 42, 0.18);
   animation: sb-thread-in-right 0.24s ease;
@@ -336,8 +336,8 @@
 .sb-thread-panel--left {
   top: 0;
   left: 0;
-  height: 100vh;
-  width: min(320px, 86vw);
+  height: 100%;
+  width: min(320px, 86%);
   border-right: 1px solid rgba(31, 41, 51, 0.1);
   box-shadow: 24px 0 60px -30px rgba(15, 23, 42, 0.18);
   animation: sb-thread-in-left 0.24s ease;
@@ -346,8 +346,8 @@
   left: 50%;
   bottom: 0;
   transform: translateX(-50%);
-  width: min(360px, 94vw);
-  height: 72vh;
+  width: min(360px, 94%);
+  height: 72%;
   border: 1px solid rgba(31, 41, 51, 0.1);
   border-bottom: none;
   border-radius: 24px 24px 0 0;

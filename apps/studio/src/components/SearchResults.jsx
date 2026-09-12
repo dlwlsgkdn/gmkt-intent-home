@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { BgBlobs, ViewerDeviceControl } from './Frame.jsx'
-import { DEVICE_PRESETS } from '../lib/store.js'
+import { viewerDeviceOf } from '../lib/store.js'
+import DeviceFrame from './DeviceFrame.jsx'
 import { SEARCH_CATALOG, autocomplete, searchProducts } from '../lib/searchCatalog.js'
 import SearchOverlay, { BackIcon, SearchIcon } from './SearchOverlay.jsx'
 import { useSearchEntry } from '../hooks/useSearchEntry.js'
@@ -87,7 +88,7 @@ function MediaCard({ item, live, onPick }) {
 }
 
 export default function SearchResults({ api, query }) {
-  const viewer = DEVICE_PRESETS.find((d) => d.key === api.viewerDevice) || DEVICE_PRESETS[0]
+  const viewer = viewerDeviceOf(api.viewerDevice)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchSeed, setSearchSeed] = useState(query) // 검색 화면을 열 때 필드에 실을 글 — ✕ 는 빈 채로 연다
   const [tab, setTab] = useState('전체')
@@ -129,8 +130,10 @@ export default function SearchResults({ api, query }) {
 
   return (
     <>
-      <BgBlobs />
+      {/* 스튜디오 크롬 — 기기 프레임 밖 */}
       <ViewerDeviceControl deviceKey={api.viewerDevice} onChange={api.setViewerDevice} />
+      <DeviceFrame device={viewer}>
+      <BgBlobs />
       <section className="sb-player sb-srp">
         <div className="sb-phone sb-phone--player" style={{ width: viewer.w }}>
           {/* 검색 바 — Figma: 뒤로 + 44px 알약 필드(돋보기 · 검색어 · ✕) */}
@@ -259,6 +262,7 @@ export default function SearchResults({ api, query }) {
       {search.routing && !searchOpen ? (
         <div className="sb-search-routing" role="status">✦ 「{search.routing}」 — 어떤 화면이 맞을지 살펴보고 있어요…</div>
       ) : null}
+      </DeviceFrame>
     </>
   )
 }
