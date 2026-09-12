@@ -1,6 +1,7 @@
 import React from 'react'
 import { splitList, splitOptions } from '../store.js'
 import BottomSheet from '../../components/ui/BottomSheet.jsx'
+import { detectFace } from '../makeupComposite.js'
 import { ScrollTrack, isInteractionView, kText, questionPosition } from './support.jsx'
 
 /* 선택지 목록 — "직접 입력" 선택지의 활성 상태만 지역 상태로 들고 있다.
@@ -211,7 +212,7 @@ const PHOTO_TEXT = {
 /* 사진 업로드 질문의 동선 (Figma [PP1K] 사진 업로드 플로우): 드롭존 → 선택 옵션 바텀시트(카메라 바로 촬영 ·
    앨범에서 사진 선택 · 샘플 얼굴 선택) → 카메라·앨범 = 파일 선택 / 샘플 얼굴 = 가운데 "모델 얼굴 선택" 모달(2×2).
    고르면 드롭존이 미리보기(200×200 둥근 사진 + "사진이 선택되었어요")로 바뀌고 점선은 회색으로 가라앉는다 */
-function PhotoPicker({ p, ctx, picked }) {
+function PhotoPicker({ p, ctx, picked, analysis = null, openSignal = 0, onPick }) {
   const [sheet, setSheet] = React.useState(null) // null | 'options' | 'samples'
   const fileRef = React.useRef(null)
   const captureRef = React.useRef(null)
@@ -222,9 +223,12 @@ function PhotoPicker({ p, ctx, picked }) {
   // 문구: 지정값 → 기본 문구 → '' 이면 숨김
   const raw = (key) => (p[key] === undefined ? PHOTO_TEXT[key] : p[key])
   const text = (key) => (raw(key) ? kText(raw(key), ctx, key) : null)
+  // 인식 실패 모달의 「다시 시도」가 선택 시트를 다시 연다 (신호 카운터 — 부모가 올리면 연다)
+  React.useEffect(() => { if (openSignal > 0) setSheet('options') }, [openSignal])
 
   const choose = (url) => {
     if (isPlayer) ctx.player.setAnswer(ctx.itemId, url)
+    if (onPick) onPick(url)
     setSheet(null)
   }
   const readFile = (e) => {
@@ -240,10 +244,23 @@ function PhotoPicker({ p, ctx, picked }) {
     <div className="sb-survey-photo">
       <button
         type="button"
-        className={'sb-photo-drop' + (picked ? ' is-filled' : '')}
-        onClick={() => { if (isPlayer) setSheet('options') }}
+        className={'sb-photo-drop' + (picked ? ' is-filled' : '') + (analysis ? ` is-${analysis}` : '')}
+        onClick={() => { if (isPlayer && analysis !== 'analyzing') setSheet('options') }}
       >
-        {picked && isPhotoImage(picked) ? (
+        {analysis === 'analyzing' || analysis === 'done' ? (
+          /* Figma "사진 분석 중" / "업로드 완료" — 80px 원형 사진 + 상태 문구 (분석 중 보라 · 등록 완료 초록) */
+          <>
+            <span className="sb-photo-drop__avatar" aria-hidden="true">
+              {isPhotoImage(picked) ? <img src={picked} alt="" draggable={false} /> : null}
+            </span>
+            <span className="sb-photo-drop__text" role="status" aria-live="polite">
+              <span className="sb-photo-drop__label">{analysis === 'done' ? '사진이 등록되었어요' : '사진을 분석하고 있어요'}</span>
+              <span className="sb-photo-drop__hint">
+                {analysis === 'done' ? '얼굴 분석이 완료되면 맞춤 플랜을 제안해 드릴게요' : '잠시만 기다려 주세요, 얼굴을 인식하고 있어요'}
+              </span>
+            </span>
+          </>
+        ) : picked && isPhotoImage(picked) ? (
           <>
             <img className="sb-photo-drop__preview" src={picked} alt={raw('pickedTitle') || '선택한 사진'} draggable={false} />
             {(raw('pickedTitle') || raw('pickedHint')) && (
@@ -438,13 +455,13 @@ const NAV_FIELDS = [
   { key: 'submitLabel', label: '마지막 질문일 때 버튼 문구', kind: 'text' },
 ]
 
-function QuestionShell({ p, ctx, children, answered = true, foot = null }) {
+function QuestionShell({ p, ctx, children, answered = true, foot = null, onNext = null, busy = false }) {
   const { index, total } = questionPosition(ctx)
   const isLast = index >= total - 1
   const fieldKey = isLast ? 'submitLabel' : 'nextLabel'
   const label = (isLast ? p.submitLabel : p.nextLabel) || NAV_DEFAULTS[fieldKey]
-  // 캔버스는 목업이라 항상 활성처럼 보이고, 실제 체험에서만 답을 골라야 넘어간다
-  const blocked = ctx.mode === 'player' && !answered
+  // 캔버스는 목업이라 항상 활성처럼 보이고, 실제 체험에서만 답을 골라야 넘어간다 (busy = 사진 분석 중 잠금)
+  const blocked = ctx.mode === 'player' && (!answered || busy)
   // 화면 꽉 채우기는 실행 화면에서만 — 캔버스는 문서 흐름 스택이라 뷰포트 높이가 의미 없다
   const fill = ctx.mode === 'player' && p.fillScreen !== false
   return (
@@ -469,12 +486,84 @@ function QuestionShell({ p, ctx, children, answered = true, foot = null }) {
         disabled={blocked}
         title={blocked ? '먼저 답을 골라주세요' : undefined}
         onClick={() => {
-          if (ctx.mode === 'player' && ctx.player.nextQuestion) ctx.player.nextQuestion()
+          if (ctx.mode !== 'player') return
+          // 질문이 「다음」을 가로챌 수 있다 — 사진 질문은 넘어가기 전에 얼굴 분석을 먼저 돌린다
+          if (onNext) onNext()
+          else if (ctx.player.nextQuestion) ctx.player.nextQuestion()
         }}
       >
         {kText(label, ctx, fieldKey)}
       </button>
     </div>
+  )
+}
+
+/* 사진 질문 한 화면 — Figma 설문 사진 업로드 플로우의 뒷부분: 사진 선택됨 미리보기 → 「다음」 → 사진 분석 중(다음 잠김)
+   → 사진이 등록되었어요(초록) → 다음 질문 / 얼굴이 잘 보이지 않아요(모달 · 다시 시도). 분석은 계획 단계의 가상 메이크업이
+   쓰는 얼굴 랜드마커(기기 안)로 얼굴이 잡히는지만 본다 — 검출기를 못 쓰면(모델 로드 실패) 그냥 통과시킨다 */
+const MIN_ANALYZE_MS = 900 // 분석 문구가 깜빡이고 끝나지 않게 최소로 보여 주는 시간
+const DONE_HOLD_MS = 700 // "등록되었어요"를 보여 준 뒤 다음 질문으로
+function PhotoQuestion({ p, ctx }) {
+  const isPlayer = ctx.mode === 'player'
+  // 플레이어에서는 "고른 값"만이 선택 상태다 — 설정된 photoUrl로 폴백하면 해제가 안 된다
+  const picked = resolveSampleFace(isPlayer ? ctx.player.answers[ctx.itemId] || '' : p.photoUrl)
+  const [analysis, setAnalysis] = React.useState(null) // null | 'analyzing' | 'done' | 'failed'
+  const [openSignal, setOpenSignal] = React.useState(0)
+  const runRef = React.useRef(0)
+  const advance = () => { if (isPlayer && ctx.player.nextQuestion) ctx.player.nextQuestion() }
+  const analyze = async () => {
+    if (!isPlayer || !picked) return
+    if (!isPhotoImage(picked)) { advance(); return } // 표식만 남은 답(이어보기·관리 미리보기)은 분석 없이
+    const run = ++runRef.current
+    setAnalysis('analyzing')
+    const started = Date.now()
+    const found = await detectFace(picked)
+    const wait = Math.max(0, MIN_ANALYZE_MS - (Date.now() - started))
+    if (wait) await new Promise((resolve) => setTimeout(resolve, wait))
+    if (run !== runRef.current) return
+    if (found === false) { setAnalysis('failed'); return }
+    setAnalysis('done')
+    setTimeout(() => { if (run === runRef.current) advance() }, DONE_HOLD_MS)
+  }
+  const retry = () => {
+    runRef.current += 1
+    setAnalysis(null)
+    if (isPlayer) ctx.player.setAnswer(ctx.itemId, '')
+    setOpenSignal((n) => n + 1)
+  }
+  return (
+    <QuestionShell
+      p={p}
+      ctx={ctx}
+      answered={!!picked}
+      busy={analysis === 'analyzing'}
+      onNext={analysis === 'done' ? advance : analyze}
+    >
+      <PhotoPicker
+        p={p}
+        ctx={ctx}
+        picked={picked}
+        analysis={analysis === 'failed' ? null : analysis}
+        openSignal={openSignal}
+        onPick={() => { runRef.current += 1; setAnalysis(null) }}
+      />
+      {analysis === 'failed' && (
+        /* Figma "얼굴 인식 실패 모달" — 빨간 ! 원 · 제목 · 안내 · 「다시 시도」(선택 시트를 다시 연다) */
+        <BottomSheet variant="center" align="center" closable={false} onClose={retry}>
+          <div className="sb-face-fail">
+            <span className="sb-face-fail__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 7.5v5.5M12 16.2v.3" />
+              </svg>
+            </span>
+            <p className="sb-face-fail__title">얼굴이 잘 보이지 않아요</p>
+            <p className="sb-face-fail__desc">정면에서 흔들리지 않게 눈, 코, 입이 잘 보이도록<br />다시 한번 올려주세요.</p>
+            <button type="button" className="sb-face-fail__btn" onClick={retry}>다시 시도</button>
+          </div>
+        </BottomSheet>
+      )}
+    </QuestionShell>
   )
 }
 
@@ -601,16 +690,7 @@ export const SURVEY_COMPONENTS = {
       { key: 'photoUrl', label: '선택 완료 미리보기 이미지 URL', kind: 'url' },
       ...NAV_FIELDS,
     ],
-    render: (p, ctx) => {
-      const isPlayer = ctx.mode === 'player'
-      // 플레이어에서는 "고른 값"만이 선택 상태다 — 설정된 photoUrl로 폴백하면 해제가 안 된다
-      const picked = resolveSampleFace(isPlayer ? ctx.player.answers[ctx.itemId] || '' : p.photoUrl)
-      return (
-        <QuestionShell p={p} ctx={ctx} answered={!!picked}>
-          <PhotoPicker p={p} ctx={ctx} picked={picked} />
-        </QuestionShell>
-      )
-    },
+    render: (p, ctx) => <PhotoQuestion p={p} ctx={ctx} />,
   },
 
   surveyDate: {

@@ -132,6 +132,13 @@
   --dk-mark: #fde8ef;       /* 중요 배지 면 (핑크) */
   --dk-mark-ink: #e0457b;   /* 중요 배지 글자 */
   --dk-red: #ef2b2a;        /* Red-500 — 달력 일요일 */
+  --dk-danger: #d93326;     /* 성분 비교표 '있음'·위험도 높음·품절 배지 (Figma 계획 4-1·5-4, 2026-09-12) */
+  --dk-danger-soft: rgba(217, 51, 38, 0.08); /* 비교 제품 배지 알약 면 */
+  --dk-amber: #f59e0b;      /* 위험도 중간 · 주의 성분 카드 제목 */
+  --dk-amber-soft: #fef5e7; /* 주의 성분 카드 면 */
+  --dk-thumb-2: #f1f1f1;    /* 상품 카드 썸네일 바닥 (Figma ProductCard — 시트·검색의 #f4f4f6 과 다르다) */
+  --dk-green: #4caf50;      /* 사진 등록 완료 (Figma 설문 "업로드 완료" 초록 점선·글자) */
+  --dk-red-soft: #ffebee;   /* 얼굴 인식 실패 모달의 아이콘 원 */
   --dk-underline: rgba(255, 255, 255, 0.45); /* 계획 타이틀 밑줄 바 — 보라 밴드 위 흰 바 */
   --dk-tip: #333333;        /* 안내 말풍선 */
   --dk-caution: #c08a2e;    /* 주의 성분 ⚠ */

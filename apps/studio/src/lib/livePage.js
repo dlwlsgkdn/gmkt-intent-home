@@ -94,10 +94,10 @@ export function livePlanItems(page, opts = {}) {
       type: 'planTitle',
       props: {
         query: opts.query || '', // 사용자 질의 — 비면 인용 줄이 숨는다
-        title: page.headline || '',
+        title: '', // Figma AIIntro 는 인용 한 줄뿐 — LLM 헤드라인은 아래 정리 문단의 제목 자리로 (2026-09-12)
         notice: 'AI가 만든 계획이에요. 내용이 사실과 다를 수 있으니 확인해 주세요.',
         noticeOpen: false,
-        highlight: true,
+        highlight: false,
       },
     },
   ]
@@ -110,7 +110,11 @@ export function livePlanItems(page, opts = {}) {
     props: { hiddenProfile: '', hiddenQuestions: '' },
   })
   if (page.summary) {
-    items.push({ id: 'live-plan-summary', type: 'textBlock', props: { kicker: '', title: '이렇게 정리했어요', body: page.summary } })
+    items.push({
+      id: 'live-plan-summary',
+      type: 'textBlock',
+      props: { kicker: '', title: page.headline || '이렇게 정리했어요', body: page.summary },
+    })
   }
   const sections = page.sections || []
   /* forEach가 아니라 인덱스 순회다 — 스트리밍 중 partial.sections는 도착한 인덱스에만 값이
@@ -236,9 +240,16 @@ export function livePlanItems(page, opts = {}) {
       if (section.reason) {
         items.push({ id: `${base}-reason`, type: 'textBlock', props: { kicker: '', title: '', body: section.reason } })
       }
-      items.push({ id: base, type: 'hscroll', props: { title: section.title, cardW: '260', items: '' } })
-      ;(section.items || []).forEach((c, j) => {
-        const common = { id: `${base}-c${j}`, parentId: base, slot: j, w: 260 } // Figma VideoCard 는 전폭 — 트랙에선 한 장 반이 보이는 폭
+      /* Figma [PP1K] 계획 2-2·4-1 의 VideoCard 는 단계 본문 안 전폭 카드 한 장이다 — 콘텐츠가 하나면 트랙 없이 최상위
+         전폭 카드로(섹션 id `base` 를 카드가 그대로 받아 피드백 말풍선 앵커·늦은 도착 페이드인 규칙이 섹션과 같다),
+         둘 이상이면 가로 트랙(한 장 반이 보이는 260 폭)으로 투영한다 */
+      const contents = section.items || []
+      const single = contents.length === 1
+      if (!single) items.push({ id: base, type: 'hscroll', stepSub, props: { title: section.title, cardW: '260', items: '' } })
+      contents.forEach((c, j) => {
+        const common = single
+          ? { id: base, stepSub }
+          : { id: `${base}-c${j}`, parentId: base, slot: j, w: 260 }
         if (c.type === 'video') {
           items.push({
             ...common,

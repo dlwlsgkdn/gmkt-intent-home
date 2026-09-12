@@ -109,6 +109,67 @@ function LiveSkeleton({ message }) {
   )
 }
 
+/* 계획 생성 대기 화면 — Figma [PP1K] 계획 "1. 로딩 & 진입" (1-1 AI 분석 중 · 1-2 지연, 2026-09-12). 첫 LLM 조각이 오기
+   전까지만 보이고 그 뒤엔 컴포넌트 단위 스트리밍이 이어받는다(1-3 "분석 완료" 화면은 스트리밍이 대신한다). 진행률 원은
+   시간 기반 근사(90% 상한 — 서버가 진행률을 주지 않는다), 단계 목록은 서버 status 문구(검색 중이면 상품 단계)로 가른다.
+   20초가 지나면 지연 안내와 「계속 기다리기 / 나중에 다시 시도」가 선다 */
+const ANALYZE_SLOW_MS = 20000
+function LiveAnalyzing({ message, onCancel }) {
+  const [elapsed, setElapsed] = useState(0)
+  const [keepWaiting, setKeepWaiting] = useState(false)
+  useEffect(() => {
+    const started = Date.now()
+    const timer = setInterval(() => setElapsed(Date.now() - started), 250)
+    return () => clearInterval(timer)
+  }, [])
+  const pct = Math.min(90, Math.round(100 * (1 - Math.exp(-elapsed / 9000))))
+  const slow = elapsed > ANALYZE_SLOW_MS && !keepWaiting
+  const searching = /검색/.test(message || '')
+  const steps = [
+    { label: '설문 답변 분석 완료', state: 'done' },
+    { label: searching ? '추천 상품·콘텐츠 찾는 중…' : '맞춤 루틴 구성 중…', state: 'active' },
+    { label: searching ? '맞춤 루틴 순서 정리 대기' : '추천 상품·콘텐츠 매칭 대기', state: 'pending' },
+  ]
+  return (
+    <div className="sb-live-analyze" role="status" aria-live="polite">
+      <div className="sb-live-analyze__ring" style={{ '--sb-pct': pct }} aria-label={`진행 ${pct}%`}>
+        <span>{pct}%</span>
+      </div>
+      <p className="sb-live-analyze__title">{slow ? '예상보다 시간이 걸리고 있어요' : '분석 중이에요...'}</p>
+      <p className="sb-live-analyze__desc">
+        {slow
+          ? '현재 분석 요청이 많아 계획 생성이 지연되고 있습니다. 잠시만 더 기다려주시겠어요?'
+          : '입력하신 정보를 바탕으로 맞춤 계획을 만들고 있어요'}
+      </p>
+      {slow && (
+        <div className="sb-live-analyze__actions">
+          <button type="button" className="sb-live-analyze__btn sb-live-analyze__btn--primary" onClick={() => setKeepWaiting(true)}>
+            계속 기다리기
+          </button>
+          <button type="button" className="sb-live-analyze__btn" onClick={onCancel}>나중에 다시 시도</button>
+        </div>
+      )}
+      <div className="sb-live-analyze__card">
+        <p className="sb-live-analyze__card-title">분석 진행 상황</p>
+        <ul className="sb-live-analyze__steps">
+          {steps.map((s) => (
+            <li key={s.label} className={'is-' + s.state}>
+              <span className="sb-live-analyze__dot" aria-hidden="true" />
+              {s.label}
+            </li>
+          ))}
+        </ul>
+      </div>
+      {message ? (
+        <p className="sb-live-status sb-live-analyze__msg">
+          <span className="sb-live-status__spark" aria-hidden="true">✦</span>
+          {message}
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
 /* 부분 스트리밍 꼬리 — 도착한 컴포넌트 아래에서 나머지 생성이 진행 중임을 보여준다.
    몇 개가 더 올지 모르므로 카드 흉내 없이 ✦ 진행 문구 한 줄만 둔다 (회색 자리 상자는 2026-09 제거 —
    다음에 올 컴포넌트의 크기를 모르는데 상자를 그리면 빈 카드처럼 보였다) */
@@ -760,7 +821,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         summary: (partial && partial.summary) || '',
         sections,
       }, { query: liveQuery, pendingSlots: pendingPreview, photo: livePhoto })
-      return headline ? items : items.filter((it) => it.id !== 'live-plan-title')
+      return items // 타이틀 밴드는 인용 “질의”(클라이언트 소유)뿐이라 헤드라인 도착을 기다리지 않는다 (2026-09-12)
     }
     if (loading.step === 'survey') {
       const intro = (partial && partial.intro) || ''
@@ -777,6 +838,19 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const partialTopItems = partialAllItems.filter((it) => !it.parentId)
   const partialItems =
     loading && loading.step === 'survey' ? pageQuestions(partialTopItems, qStep) : partialTopItems
+
+  /* 계획 생성의 첫 LLM 조각(제목·정리·섹션)이 왔는가 — 오기 전엔 Figma "AI 분석 중" 대기 화면, 온 뒤엔 스트리밍 렌더 */
+  const planContentStarted = !!(partial && (partial.headline || partial.summary || (partial.sections || []).some(Boolean)))
+  /* 대기 화면의 「나중에 다시 시도」 — 진행 중 스트림의 이벤트를 버리고 설문으로 되돌린다 (요청 자체는 끊지 못한다) */
+  const cancelPlan = () => {
+    planRunRef.current += 1
+    skeletonDoneRef.current = false
+    setPartial(null)
+    setLoading(null)
+    setStageKey('survey')
+    scrollScreenTo(0)
+    api.showToast('계획 생성을 멈췄어요. 답변을 확인하고 다시 시도해 주세요.')
+  }
 
   /* 스테퍼 표시는 생성 중엔 생성 대상 단계를 따른다 (계획 스트리밍 중엔 계획 강조) */
   const displayStageKey = loading ? (loading.step === 'plan' ? 'plan' : 'survey') : stageKey
@@ -998,7 +1072,19 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
           {error ? (
             <LiveError error={error} onRetry={retry} fallbacks={fallbacks} onPlayScenario={api.playScenario} />
           ) : loading ? (
-            partialItems.length === 0 ? (
+            loading.step === 'plan' && !planContentStarted ? (
+              /* Figma "AI 분석 중" — 화면 헤더(클라이언트 소유)만 위에 두고 진행률 원·단계 목록으로 기다린다 */
+              <>
+                <div className="sb-player__stack">
+                  {partialItems.filter((it) => it.id === 'live-plan-header').map((it) => (
+                    <div key={it.id} className="sb-player__item">
+                      {renderItem(it, { mode: 'player', player: playerApi, profile: api.profile, allItems: partialAllItems })}
+                    </div>
+                  ))}
+                </div>
+                <LiveAnalyzing message={loading.message} onCancel={cancelPlan} />
+              </>
+            ) : partialItems.length === 0 ? (
               <LiveSkeleton message={loading.message} />
             ) : (
               /* 컴포넌트 단위 스트리밍 — 도착한 컴포넌트부터 실제 렌더, 아래엔 진행 꼬리 */

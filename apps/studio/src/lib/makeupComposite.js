@@ -60,6 +60,29 @@ function loadLandmarker() {
   return landmarkerPromise
 }
 
+/** 설문 시점 얼굴 확인 (Figma 설문 "사진 분석 중 → 사진이 등록되었어요 / 얼굴이 잘 보이지 않아요") — 사진에서 얼굴
+    랜드마크가 잡히는지만 본다. true = 얼굴 있음, false = 못 찾음, null = 검출기를 못 써서 판단 불가.
+    합성과 같은 향상 계층이라 null 이면 호출자가 그냥 통과시킨다 (모델 12MB 첫 로드는 여기서 미리 데워 두는 셈 —
+    계획 단계의 가상 메이크업이 같은 랜드마커를 다시 쓴다) */
+export async function detectFace(src) {
+  const landmarker = await loadLandmarker()
+  if (!landmarker) return null
+  let img
+  try {
+    img = await loadImage(src)
+  } catch {
+    return null
+  }
+  try {
+    const result = landmarker.detect(img)
+    const landmarks = result?.faceLandmarks?.[0]
+    return !!(landmarks && landmarks.length >= 400)
+  } catch (e) {
+    console.warn('[makeup] 얼굴 확인 실패 — 사진을 그대로 받습니다:', e)
+    return null
+  }
+}
+
 function loadImage(src) {
   return new Promise((resolve, reject) => {
     const img = new Image()

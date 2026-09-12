@@ -46,30 +46,31 @@ export const TEMPLATES = [
         }),
       ],
       plan: [
-        make('screenHeader', { title: '계획 단계' }),
-        make('surveySummary', {}),
+        make('screenHeader', { title: 'AI 맞춤 계획' }),
+        // Figma AIIntro 순서 — 인용 제목 밴드 바로 아래 답변 칩 (플레이어가 두 아이템을 한 보라 밴드로 잇는다)
         make('planTitle', {}),
+        make('surveySummary', {}),
         make('planStep', {
           title: '피부결 정돈 — 수분 [[프라이머]]',
           subtitle: '유분은 T존에만, 광은 볼에만 남기는 [[프라이머]]부터 시작해요.',
           points: '제품 수를 줄이고 순서를 단순하게 잡습니다.\n코·눈가처럼 먼저 무너지는 부위 기준으로 고정력을 봅니다.',
         }),
         ...nest(
-          make('hscroll', { title: '이 단계에 맞는 상품', cardW: '200' }),
+          make('hscroll', { title: '', cardW: '170' }),
           [
-            make('productCard', {}, { w: 200 }),
+            make('productCard', {}, { w: 170 }),
             make('productCard', {
               name: '논코메도 모공 프라이머',
               price: '18,500',
               score: '88',
               imageUrl: './makeup-clone-assets/42072b0ad4be9333.avif',
-            }, { w: 200 }),
+            }, { w: 170 }),
             make('productCard', {
               name: '데일리 브라운 섀도우 팔레트',
               price: '15,200',
               score: '84',
               imageUrl: './makeup-clone-assets/d9b261330f3ffccf.avif',
-            }, { w: 200 }),
+            }, { w: 170 }),
           ]
         ),
         make('planStep', {
@@ -79,7 +80,7 @@ export const TEMPLATES = [
           points: '얼굴 20cm 거리에서 분사\nT존 위주로 한 번 더',
         }),
         ...nest(
-          make('hscroll', { title: '마무리 단계 추천', cardW: '200' }),
+          make('hscroll', { title: '', cardW: '170' }),
           [
             make('productCard', {
               name: '롱웨어 세팅 픽서 100ml',
@@ -88,16 +89,15 @@ export const TEMPLATES = [
               external: true,
               mall: '올리브영',
               imageUrl: './makeup-clone-assets/8e01e19fb7cf7c96.avif',
-            }, { w: 200 }),
+            }, { w: 170 }),
             make('productCard', {
               name: '무광 마무리 파우더 팩트',
               price: '21,000',
               score: '86',
               imageUrl: './makeup-clone-assets/42072b0ad4be9333.avif',
-            }, { w: 200 }),
+            }, { w: 170 }),
           ]
         ),
-        make('ctaBar', {}),
         make('feedbackCard', {}),
       ],
     }),
@@ -132,16 +132,16 @@ export const TEMPLATES = [
         }),
       ],
       plan: [
-        make('screenHeader', { title: '계획 단계' }),
+        make('screenHeader', { title: 'AI 맞춤 계획' }),
+        make('planTitle', { query: '', title: '마음이 전해지는 선물 플랜' }),
         make('surveySummary', {}),
-        make('planTitle', { kicker: 'Gift Plan', title: '마음이 전해지는 선물 플랜' }),
         make('planStep', {
           title: '향으로 기억되는 선물',
           subtitle: '취향을 크게 타지 않는 무난하면서도 고급스러운 향 카테고리부터 제안해요.',
           points: '시향 후기 확인\n선물 포장 옵션 체크',
         }),
         ...nest(
-          make('hscroll', { title: '선물하기 좋은 상품', cardW: '200' }),
+          make('hscroll', { title: '선물하기 좋은 상품', cardW: '170' }),
           [
             make('productCard', {
               name: '딥 모이스처 핸드크림 기프트 세트',
@@ -149,13 +149,13 @@ export const TEMPLATES = [
               score: '91',
               external: true,
               mall: '올리브영',
-            }, { w: 200 }),
+            }, { w: 170 }),
             make('productCard', {
               name: '퍼퓸 디퓨저 200ml 선물 박스',
               price: '28,900',
               score: '87',
               imageUrl: './makeup-clone-assets/d9b261330f3ffccf.avif',
-            }, { w: 200 }),
+            }, { w: 170 }),
           ]
         ),
         make('checklist', {

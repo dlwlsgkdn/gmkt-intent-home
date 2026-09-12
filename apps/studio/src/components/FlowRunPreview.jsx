@@ -88,7 +88,7 @@ export default function FlowRunPreview({
       { headline: page.headline || '', summary: page.summary || '', sections: page.sections || [] },
       { pendingSlots },
     )
-    return streaming && !page.headline ? items.filter((it) => it.id !== 'live-plan-title') : items
+    return items // 타이틀 밴드는 인용 “질의”뿐이라 헤드라인 도착과 무관하게 그린다 (2026-09-12)
   }, [page, stage, streaming, pendingSlots])
   const items = allItems.filter((it) => !it.parentId)
 

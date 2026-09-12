@@ -33,7 +33,7 @@ const NON_LLM_EDITABLE_FIELDS = new Set([
   'hidden', 'hiddenProfile', 'hiddenQuestions', // 노출 설정 — 사람이 칩 관리 UI로만 조절
 
   // Figma 기준으로 추가된 설정·자산 필드 — 사람이 인스펙터로만 정한다
-  'photoUrl', 'beforeImage', 'afterImage', 'split', 'state', 'current', 'total',
+  'photoUrl', 'beforeImage', 'afterImage', 'pickImage', 'altImage', 'soldOut', 'split', 'state', 'current', 'total',
   'customOption', 'noticeOpen', 'highlight', 'samples',
 ])
 

@@ -50,15 +50,6 @@ function ContentThumb({ p, ctx, video = false }) {
   return <img src={src} alt={p.title} draggable={false} referrerPolicy="no-referrer" onError={() => setFailed(true)} />
 }
 
-/* 몰 배지 색 — 지마켓/올리브영은 브랜드 색, 그 밖의 몰은 중립 */
-const MALL_TONE = {
-  'G마켓': 'gmarket',
-  '지마켓': 'gmarket',
-  'Gmarket': 'gmarket',
-  '올리브영': 'oliveyoung',
-  'OLIVE YOUNG': 'oliveyoung',
-}
-
 /* 매칭율 배지 + 계산 기준 팝오버 (Figma 5-1/5-2 "MATCH 태그 팝오버") — 배지를 누르면 아래에 260px 카드(제목 · 소개 ·
    항목별 막대 · 종합 점수)가 뜬다. 상품 카드 썸네일이 overflow hidden 이라 body 로 포털해 fixed 로 띄우고, 바깥 클릭·
    스크롤·Esc 로 닫는다. 항목 표(factors)와 근거 문장은 파이프라인 검증 게이트(@ddak/pipeline guards/match.ts)가
@@ -189,6 +180,9 @@ function MatchBadge({ p, ctx, score }) {
     </span>
   )
 }
+
+/* 옛 planTitle 기본 보조 제목 — Figma AIIntro 에는 없는 줄이라 이 문구 그대로면 안 그린다 (저장 데이터는 손대지 않는다) */
+const LEGACY_PLAN_TITLE = '딱 맞춤 계획입니다.'
 
 /* AI 안내 말풍선 — 계획 타이틀 옆 ⓘ 토글 (Figma "AI 안내 툴팁") */
 function AiNotice({ p, ctx }) {
@@ -337,7 +331,8 @@ export const PLAN_COMPONENTS = {
         .filter((q) => !hiddenQuestions.includes(String(q.q || '').trim()))
       const chips = [
         ...profile.map((it) => ({ label: it.label, value: it.value })),
-        ...questions.map((q) => ({ label: q.q, value: q.a })),
+        // 칩 라벨은 질문 번호("1. ")를 뗀 짧은 문구 — Figma SummaryChip 은 속성 이름 한 줄이다 (숨김 매칭은 원문 q.q 로)
+        ...questions.map((q) => ({ label: String(q.q || '').replace(/^\s*\d+\s*[.)]\s*/, ''), value: q.a })),
       ]
       // 원본 clean-survey-lock 컨테이너 위에 칩 줄만 — "설문 요약" 제목 라벨은 두지 않는다 (Figma AIIntro:
       // 인용 제목 밴드 바로 아래 답변 칩이 이어진다. 구 데이터의 title 은 무시)
@@ -363,35 +358,45 @@ export const PLAN_COMPONENTS = {
     label: '계획 타이틀',
     stage: 'plan',
     icon: '🧭',
-    hint: '"질의"에 대한 + 형광 강조 제목 + AI 안내 툴팁',
+    hint: '보라 밴드 위 흰 인용 “질의” (+ 선택 보조 제목·AI 안내 툴팁)',
     defaults: {
       query: '출근 전 10분 안에 안 무너지는 데일리 메이크업',
-      title: '딱 맞춤 계획입니다.',
+      title: '',
       notice: '설문 답변을 바탕으로 AI가 만든 계획이에요.\n내용이 사실과 다를 수 있으니 확인해 주세요.',
       noticeOpen: false,
-      highlight: true,
+      highlight: false,
     },
     fields: [
-      { key: 'query', label: '사용자 질의 (비우면 숨김)', kind: 'textarea' },
-      { key: 'title', label: '제목', kind: 'textarea' },
+      { key: 'query', label: '사용자 질의 (인용 제목 — 비우면 숨김)', kind: 'textarea' },
+      { key: 'title', label: '보조 제목 (비우면 인용만 — Figma 기본)', kind: 'textarea' },
       { key: 'notice', label: 'AI 안내 문구 (비우면 ⓘ 숨김)', kind: 'textarea' },
       { key: 'noticeOpen', label: 'AI 안내를 펼친 채로', kind: 'toggle' },
-      { key: 'highlight', label: '제목 밑줄 강조', kind: 'toggle', defaultValue: true },
+      { key: 'highlight', label: '보조 제목 밑줄 강조', kind: 'toggle' },
     ],
-    render: (p, ctx) => (
-      <div className="sb-static sb-plan-head">
-        {p.query ? (
-          <p className="sb-plan-head__query">
-            “{kText(p.query, ctx, 'query')}”에 대한
-          </p>
-        ) : null}
-        <h2 className="sb-plan-head__title">
-          <span className="sb-plan-head__text">{kText(p.title, ctx, 'title')}</span>
-          <AiNotice p={p} ctx={ctx} />
-        </h2>
-        {p.highlight === false ? null : <span className="sb-plan-head__mark" aria-hidden="true" />}
-      </div>
-    ),
+    render: (p, ctx) => {
+      /* Figma [PP1K] AIIntro (계획 2-2·3-1·4-1, 2026-09-12 대조): 밴드에는 인용 “질의” 한 줄(2줄 접기)뿐이다 —
+         옛 기본값의 "…에 대한 / 딱 맞춤 계획입니다." 보조 줄과 밑줄 바는 Figma 에 없다. 옛 저장분이 그 기본 문구를
+         그대로 들고 있어도 인용만 그리고, 저자가 직접 적은 보조 제목만 아래 줄로 남긴다 */
+      const title = p.title === LEGACY_PLAN_TITLE ? '' : String(p.title || '')
+      const notice = <AiNotice p={p} ctx={ctx} />
+      return (
+        <div className="sb-static sb-plan-head">
+          {p.query ? (
+            <p className="sb-plan-head__line sb-plan-head__query">
+              <span className="sb-plan-head__text">“{kText(p.query, ctx, 'query')}”</span>
+              {title ? null : notice}
+            </p>
+          ) : null}
+          {title || !p.query ? (
+            <h2 className="sb-plan-head__line sb-plan-head__title">
+              <span className="sb-plan-head__text">{kText(title, ctx, 'title')}</span>
+              {notice}
+            </h2>
+          ) : null}
+          {title && p.highlight ? <span className="sb-plan-head__mark" aria-hidden="true" /> : null}
+        </div>
+      )
+    },
   },
 
   planStep: {
@@ -469,12 +474,14 @@ export const PLAN_COMPONENTS = {
       mall: '',
       url: '',
       imageUrl: './makeup-clone-assets/8e01e19fb7cf7c96.avif',
+      soldOut: false,
     },
     fields: [
       { key: 'brand', label: '브랜드', kind: 'text' },
       { key: 'name', label: '상품명', kind: 'text' },
       { key: 'price', label: '가격 (원 제외)', kind: 'text' },
       { key: 'was', label: '정가 (원 제외)', kind: 'text' },
+      { key: 'soldOut', label: '품절 상태로 표시 (Figma 5-4 — 썸네일 흐림 + 품절 배지)', kind: 'toggle' },
       { key: 'score', label: '매칭율 (%) — 비우면 배지 없음', kind: 'text' },
       { key: 'matchFactors', label: '매칭율 항목 (한 줄에 라벨|점수|근거)', kind: 'textarea' },
       { key: 'tag', label: '점수 없을 때 배지 문구 (예: AI 추천)', kind: 'text' },
@@ -502,7 +509,7 @@ export const PLAN_COMPONENTS = {
       const isPlayer = ctx.mode === 'player'
       const score = String(p.score || '').trim() // 없으면 매칭율 배지를 그리지 않는다
       const mall = p.external ? p.mall || '외부몰' : p.mall || 'G마켓'
-      const tone = MALL_TONE[mall] || (p.external ? 'plain' : 'gmarket')
+      const soldOut = !!p.soldOut
       const cart = (isPlayer && ctx.player.cart) || []
       const added = cartHas(cart, p.name)
       const openDetail = () => {
@@ -511,7 +518,7 @@ export const PLAN_COMPONENTS = {
         ctx.player.openProduct({ name: p.name, mall, url: p.url, urlKind: p.urlKind })
       }
       return (
-        <div className="sb-product-card2">
+        <div className={'sb-product-card2' + (soldOut ? ' is-soldout' : '')}>
           <div
             className="sb-product-card2__thumb"
             role={isPlayer ? 'button' : undefined}
@@ -525,17 +532,24 @@ export const PLAN_COMPONENTS = {
               }
             }}
           >
-            {score ? (
+            {/* 품절(Figma 5-4)은 매칭율 배지 대신 가운데 빨간 「품절」 표식 — 썸네일은 흐려진다 */}
+            {soldOut ? (
+              <span className="sb-product-card2__soldout" aria-label="품절">품절</span>
+            ) : score ? (
               <MatchBadge p={p} ctx={ctx} score={score} />
             ) : p.tag ? (
               /* 점수 없는 태그 배지 — 매칭율이 없는 옛 라이브 페이지의 "AI 추천" 같은 문구만 같은 자리에 (Figma MatchTag 자리) */
               <span className="sb-match"><span className="sb-match__badge sb-match__badge--static">{kText(p.tag, ctx, 'tag')}</span></span>
             ) : null}
-            <span className={'sb-mall-badge sb-mall-badge--' + tone}>{mall}</span>
             <ProductThumb p={p} ctx={ctx} />
           </div>
           <div className="sb-product-card2__body">
-            {p.brand ? <p className="sb-product-card2__brand">{kText(p.brand, ctx, 'brand')}</p> : null}
+            {/* Figma ProductCard 머리줄 = 몰 이름(10px 회색) — 썸네일 위 몰 배지는 Figma 에 없어 뗐다(2026-09-12).
+                브랜드는 같은 줄에 가운뎃점으로 잇는다 */}
+            <p className="sb-product-card2__brand">
+              {mall}
+              {p.brand ? <> · {kText(p.brand, ctx, 'brand')}</> : null}
+            </p>
             <h4 className="sb-product-card2__name">{kText(p.name, ctx, 'name')}</h4>
             {p.summary ? (
               <ul className="sb-product-card2__summary">
@@ -554,7 +568,11 @@ export const PLAN_COMPONENTS = {
             {/* 외부몰 상품은 지마켓 장바구니에 못 담는다 — 회색으로 죽어 있던 "담기불가" 대신 같은 보라
                 버튼으로 상세보기(PDP 패널)를 연다. Figma 카드는 어느 상품이든 보라 CartButton이라 색은 같고
                 동작만 갈린다 */}
-            {p.external ? (
+            {soldOut ? (
+              <button type="button" className="sb-cart-btn is-soldout" disabled title="지금은 담을 수 없는 상품이에요">
+                품절
+              </button>
+            ) : p.external ? (
               <button
                 type="button"
                 className="sb-cart-btn"
@@ -696,67 +714,94 @@ export const PLAN_COMPONENTS = {
     label: '성분 비교표',
     stage: 'plan',
     icon: '⚖️',
-    hint: '추천 vs 대안 두 제품을 항목별로 나란히',
+    hint: '비교(기존) 제품 vs 추천 제품 — 성분별 있음/없음 + 위험도 (Figma 계획 C "면도 자극 케어")',
     defaults: {
       caption: '두 제품 성분을 나란히 비교했어요',
-      pickBadge: '추천',
-      pickName: '시카랩 판테놀 약산성 클렌징폼 150ml',
-      pickMeta: '클렌징 폼 · 150ml',
-      altBadge: '대안',
-      altName: '퓨어덤 마데카 딥클렌징 폼 120ml',
-      altMeta: '클렌징 폼 · 120ml',
-      rows: '약산성 5.5|pH|약산성 5.0\n무향|향|시트러스 향\n시카 · 판테놀|진정 성분|마데카소사이드\n없음|자극 성분|향료 1종\n부드러운 편|세정력|강한 편',
+      pickBadge: '추천 제품',
+      pickName: '약산성 시카 클렌징 폼 150ml',
+      pickMeta: '시카 클렌징폼',
+      pickImage: './makeup-clone-assets/42072b0ad4be9333.avif',
+      altBadge: '기존 제품',
+      altName: '올인원 워시',
+      altMeta: '올인원 워시',
+      altImage: './makeup-clone-assets/8e01e19fb7cf7c96.avif',
+      rows: '없음|SLS/SLES|있음|높음\n없음|인공향료|있음|중간\n없음|파라벤|있음|중간\n없음|에탄올|소량|낮음\n없음|트리클로산|없음|높음',
     },
     fields: [
       { key: 'caption', label: '머리 문구 (비우면 숨김)', kind: 'text' },
-      { key: 'pickBadge', label: '왼쪽 배지', kind: 'text' },
-      { key: 'pickName', label: '왼쪽 제품명', kind: 'text' },
-      { key: 'pickMeta', label: '왼쪽 부가 정보', kind: 'text' },
-      { key: 'altBadge', label: '오른쪽 배지', kind: 'text' },
-      { key: 'altName', label: '오른쪽 제품명', kind: 'text' },
-      { key: 'altMeta', label: '오른쪽 부가 정보', kind: 'text' },
-      { key: 'rows', label: '비교 행 (왼쪽|항목|오른쪽)', kind: 'table', list: true },
+      { key: 'pickBadge', label: '추천 제품 배지 (오른쪽 · 보라)', kind: 'text' },
+      { key: 'pickName', label: '추천 제품명', kind: 'text' },
+      { key: 'pickMeta', label: '추천 제품 짧은 이름 (표 머리)', kind: 'text' },
+      { key: 'pickImage', label: '추천 제품 이미지 URL (비우면 숨김)', kind: 'url' },
+      { key: 'altBadge', label: '비교 제품 배지 (왼쪽 · 빨강)', kind: 'text' },
+      { key: 'altName', label: '비교 제품명', kind: 'text' },
+      { key: 'altMeta', label: '비교 제품 짧은 이름 (표 머리)', kind: 'text' },
+      { key: 'altImage', label: '비교 제품 이미지 URL (비우면 숨김)', kind: 'url' },
+      { key: 'rows', label: '비교 행 (추천 제품 값|성분|비교 제품 값|위험도)', kind: 'table', list: true },
     ],
-    render: (p, ctx) => (
-      <div className="sb-compare">
-        {p.caption ? <div className="sb-compare__caption">{kText(p.caption, ctx, 'caption')}</div> : null}
-        <div className="sb-compare__body">
+    render: (p, ctx) => {
+      /* Figma [PP1K] 계획 4-1 (2026-09-12 대조): 머리 문구 → 두 제품 카드(bg/subtle, 배지 알약 + 이미지 + 이름 —
+         왼쪽 기존(빨강) · 오른쪽 추천(보라)) → 표(성분 | 기존 | 추천 | 위험도). 값 색은 뜻으로 갈린다:
+         추천 열은 늘 보라, 기존 열은 '있음'·'높음'만 빨강, 위험도는 높음 빨강 · 중간 주황 · 나머지 검정.
+         데이터 문법은 그대로다(pick = 추천, alt = 비교) — 화면 순서만 Figma 대로 기존 → 추천 */
+      const rows = parseTableRows(p.rows)
+      const hasRisk = rows.some((row) => String(row[3] || '').trim())
+      const altTone = (v) => (/있음|높음|많음|강함/.test(String(v || '')) ? ' is-danger' : '')
+      const riskTone = (v) => (/높음|위험/.test(String(v || '')) ? ' is-danger' : /중간|보통/.test(String(v || '')) ? ' is-warn' : '')
+      const product = (side, badgeKey, nameKey, imageKey) => (
+        <div className={'sb-compare__product sb-compare__product--' + side}>
+          <span className="sb-compare__tag">{kText(p[badgeKey], ctx, badgeKey)}</span>
+          {p[imageKey] ? (
+            <span className="sb-compare__img"><Img src={p[imageKey]} alt={p[nameKey]} /></span>
+          ) : null}
+          <p className="sb-compare__name">{kText(p[nameKey], ctx, nameKey)}</p>
+        </div>
+      )
+      return (
+        <div className="sb-compare">
+          {p.caption ? <p className="sb-compare__caption">{kText(p.caption, ctx, 'caption')}</p> : null}
           <div className="sb-compare__head">
-            <div className="sb-compare__product is-pick">
-              <span className="sb-compare__tag">{kText(p.pickBadge, ctx, 'pickBadge')}</span>
-              <p className="sb-compare__name">{kText(p.pickName, ctx, 'pickName')}</p>
-              {p.pickMeta ? <p className="sb-compare__meta">{kText(p.pickMeta, ctx, 'pickMeta')}</p> : null}
-            </div>
-            <span className="sb-compare__vs" aria-hidden="true">VS</span>
-            <div className="sb-compare__product">
-              <span className="sb-compare__tag">{kText(p.altBadge, ctx, 'altBadge')}</span>
-              <p className="sb-compare__name">{kText(p.altName, ctx, 'altName')}</p>
-              {p.altMeta ? <p className="sb-compare__meta">{kText(p.altMeta, ctx, 'altMeta')}</p> : null}
-            </div>
+            {product('alt', 'altBadge', 'altName', 'altImage')}
+            {product('pick', 'pickBadge', 'pickName', 'pickImage')}
           </div>
-          <div className="sb-compare__rows">
-            {parseTableRows(p.rows).map((row, i) => (
-              <div key={i} className="sb-compare__row">
-                <span className="sb-compare__cell">{kText(row[0] || '', ctx)}</span>
+          <div className="sb-compare__table" role="table">
+            <div className="sb-compare__row sb-compare__row--head" role="row">
+              <span className="sb-compare__key">성분</span>
+              <span className="sb-compare__cell sb-compare__cell--alt">
+                <b>{kText(p.altBadge, ctx, 'altBadge')}</b>
+                {p.altMeta ? <small>{kText(p.altMeta, ctx, 'altMeta')}</small> : null}
+              </span>
+              <span className="sb-compare__cell sb-compare__cell--pick">
+                <b>{kText(p.pickBadge, ctx, 'pickBadge')}</b>
+                {p.pickMeta ? <small>{kText(p.pickMeta, ctx, 'pickMeta')}</small> : null}
+              </span>
+              {hasRisk ? <span className="sb-compare__cell sb-compare__cell--risk">위험도</span> : null}
+            </div>
+            {rows.map((row, i) => (
+              <div key={i} className="sb-compare__row" role="row">
                 <span className="sb-compare__key">{kText(row[1] || '', ctx)}</span>
-                <span className="sb-compare__cell">{kText(row[2] || '', ctx)}</span>
+                <span className={'sb-compare__cell sb-compare__cell--alt' + altTone(row[2])}>{kText(row[2] || '', ctx)}</span>
+                <span className="sb-compare__cell sb-compare__cell--pick">{kText(row[0] || '', ctx)}</span>
+                {hasRisk ? (
+                  <span className={'sb-compare__cell sb-compare__cell--risk' + riskTone(row[3])}>{kText(row[3] || '', ctx)}</span>
+                ) : null}
               </div>
             ))}
           </div>
         </div>
-      </div>
-    ),
+      )
+    },
   },
 
   cautionIngredients: {
     label: '주의 성분 카드',
     stage: 'plan',
     icon: '⚠️',
-    hint: '민감 피부가 먼저 확인하면 좋은 성분 목록',
+    hint: '먼저 확인하면 좋은 성분 — 살구색 카드 안 흰 항목 카드 (Figma 계획 C)',
     defaults: {
       title: '주의해서 볼 성분',
-      desc: '민감 피부가 먼저 확인하면 좋은 성분이에요. 이번 두 제품 중 "퓨어덤 마데카 딥클렌징 폼"에 합성 향료가 들어 있어요.',
-      items: '멘톨|청량감↑ 그러나 붉은기·따가움 유발 가능\n고함량 알코올|수분 증발 · 장벽 약화 우려\n합성 향료|면도 직후 자극 가능',
+      desc: '',
+      items: 'SLS (Sodium Lauryl Sulfate)|강한 계면활성제로 피부 장벽을 손상시킬 수 있습니다. 면도 직후 사용 시 자극이 심해집니다.\n인공향료 (Fragrance)|알레르기 반응을 유발할 수 있으며, 민감해진 피부에 추가 자극을 줍니다.\n고함량 알코올 (Alcohol Denat.)|수분을 빼앗겨 건조함을 유발하고, 면도 상처 부위에 쓰라림을 줍니다.',
     },
     fields: [
       { key: 'title', label: '제목', kind: 'text' },
@@ -764,17 +809,15 @@ export const PLAN_COMPONENTS = {
       { key: 'items', label: '성분 (이름|설명)', kind: 'table', list: true },
     ],
     render: (p, ctx) => (
+      /* Figma [PP1K] 계획 4-1 CautionSection: 살구색(bg #FEF5E7) 카드 · 주황 제목 · 항목마다 흰 카드(이름 14 + 설명 12 회색) */
       <div className="sb-caution">
-        <p className="sb-caution__head">
-          <span className="sb-caution__mark" aria-hidden="true">⚠</span>
-          {kText(p.title, ctx, 'title')}
-        </p>
+        <p className="sb-caution__head">{kText(p.title, ctx, 'title')}</p>
         {p.desc ? <p className="sb-caution__desc">{kText(p.desc, ctx, 'desc')}</p> : null}
         <div className="sb-caution__rows">
           {parseTableRows(p.items).map((row, i) => (
             <div key={i} className="sb-caution__row">
               <span className="sb-caution__name">{kText(row[0] || '', ctx)}</span>
-              <span className="sb-caution__note">{kText(row.slice(1).join(' · '), ctx)}</span>
+              {row.length > 1 ? <span className="sb-caution__note">{kText(row.slice(1).join(' · '), ctx)}</span> : null}
             </div>
           ))}
         </div>

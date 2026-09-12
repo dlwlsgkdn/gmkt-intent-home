@@ -19,7 +19,7 @@ const NON_GENERATED_FIELDS = new Set([
   'source', 'channel', 'duration', 'scrollbar', 'options',
 
   // Figma 기준으로 추가된 설정·자산 필드 — 사람이 인스펙터로만 정한다
-  'photoUrl', 'beforeImage', 'afterImage', 'split', 'state', 'current', 'total',
+  'photoUrl', 'beforeImage', 'afterImage', 'pickImage', 'altImage', 'soldOut', 'split', 'state', 'current', 'total',
   'customOption', 'noticeOpen', 'highlight', 'samples',
 ])
 

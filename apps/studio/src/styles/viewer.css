@@ -565,6 +565,88 @@
   to { background-position: -200% 0; }
 }
 
+/* ── 계획 생성 대기 화면 — Figma [PP1K] 계획 1-1 "AI 분석 중" · 1-2 "AI 분석 지연" (2026-09-12) ──
+   진행률 원 120px(8px 보라 링 위 흰 원, 가운데 % 22px 보라) · 제목 18 · 설명 13 회색 · 진행 상황 카드(bg/subtle radius 12
+   패딩 16: 제목 14 500 + 점 목록 13 — 완료 보라 · 진행 회색 · 대기 연회색) · 지연 시 버튼 두 개(보라 48 / 회색 48) */
+.sb-live-analyze {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 44px 4px 24px;
+  text-align: center;
+}
+.sb-live-analyze__ring {
+  --sb-pct: 0;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 120px;
+  height: 120px;
+  margin-bottom: 16px;
+  border-radius: 50%;
+  background: conic-gradient(var(--dk-brand-2) calc(var(--sb-pct) * 1%), var(--dk-brand-soft) 0);
+  transition: background var(--sb-dur-slow) linear;
+}
+.sb-live-analyze__ring::before {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border-radius: 50%;
+  background: var(--dk-surface);
+}
+.sb-live-analyze__ring span {
+  position: relative;
+  font-family: var(--dk-font-display) !important;
+  font-size: 22px;
+  font-weight: 400;
+  color: var(--dk-brand);
+}
+.sb-live-analyze__title { margin: 0; font-size: 18px; font-weight: 400; line-height: 26px; color: var(--dk-ink); }
+.sb-live-analyze__desc { margin: 0; max-width: 300px; font-size: var(--sb-t-small); font-weight: 300; line-height: 18px; color: var(--dk-muted); word-break: keep-all; }
+.sb-live-analyze__actions { display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 16px; }
+.sb-live-analyze__btn {
+  width: 100%;
+  min-height: 48px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--dk-sunken);
+  font-size: var(--sb-t-body);
+  font-weight: 400;
+  color: var(--dk-ink-2);
+  cursor: pointer;
+}
+.sb-live-analyze__btn--primary { background: var(--dk-brand-2); color: #fff; }
+.sb-live-analyze__btn--primary:hover { background: var(--dk-brand-deep); }
+.sb-live-analyze__card {
+  width: 100%;
+  margin-top: 24px;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--dk-sunken);
+  text-align: left;
+}
+.sb-live-analyze__card-title { margin: 0 0 12px; font-size: var(--sb-t-body); font-weight: 500; line-height: 20px; color: var(--dk-ink); }
+.sb-live-analyze__steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.sb-live-analyze__steps li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--sb-t-small);
+  font-weight: 400;
+  line-height: 18px;
+  color: var(--dk-muted);
+}
+.sb-live-analyze__dot { flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%; background: var(--dk-line); }
+.sb-live-analyze__steps li.is-done { color: var(--dk-brand); }
+.sb-live-analyze__steps li.is-done .sb-live-analyze__dot { background: var(--dk-brand); }
+.sb-live-analyze__steps li.is-active .sb-live-analyze__dot { background: var(--dk-brand-added); animation: sb-live-spark 1.2s var(--sb-ease) infinite; }
+.sb-live-analyze__steps li.is-pending { color: var(--dk-subtle); }
+.sb-live-analyze__msg { margin-top: 12px; justify-content: center; font-size: var(--sb-t-caption); font-weight: 300; }
+:is(.sb-canvas-item__content, .sb-player__item, .sb-phone) .sb-live-analyze__title,
+:is(.sb-canvas-item__content, .sb-player__item, .sb-phone) .sb-live-analyze__btn--primary { font-family: var(--dk-font-display) !important; }
+
 /* 스트리밍 등장 — 새 컴포넌트가 딱 나타나지 않고 아래에서 떠오르며 페이드인.
    LivePlayer 부분 스트리밍 스택 전용: 아이템 id가 안정적이라 마운트 1회만 재생된다
    (모션 최소화 사용자는 base.css 전역 규칙이 걷어낸다) */
@@ -879,7 +961,13 @@
   color: #fff;
   text-align: center;
 }
+/* 인용 줄·보조 제목 줄 — AI 안내 ⓘ 점이 글 끝에 붙고 말풍선은 그 줄 아래에 뜬다 (Figma AIIntro 는 인용 한 줄뿐, 2026-09-12) */
+.sb-plan-head__line { position: relative; }
 .sb-plan-head__query {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 6px;
   margin: 0;
   font-size: 20px;
   font-weight: 400;
@@ -887,6 +975,7 @@
   line-height: 32px;
   word-break: keep-all;
 }
+.sb-plan-head__query .sb-ai-notice__dot { margin-top: 7px; }
 .sb-plan-head__title {
   position: relative;
   display: flex;
@@ -978,23 +1067,25 @@
   scrollbar-width: none;
 }
 .sb-summary__chips::-webkit-scrollbar { display: none; }
+/* 답변 칩 — Figma AIIntro SummaryChip (2026-09-12 대조): 흰 면 radius 8 · 패딩 9/12 · 라벨 12/17 text/muted · 값 14/20 500 보라 */
 .sb-summary__chip {
   display: inline-flex;
   flex: 0 0 auto;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
   max-width: 100%;
-  padding: 10px 12px;
-  border-radius: 4px;
+  padding: 9px 12px;
+  border-radius: 8px;
   background: var(--dk-surface);
 }
-.sb-summary__label { display: block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--sb-t-micro); font-weight: 300; color: var(--dk-ink); }
+.sb-summary__label { display: block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--sb-t-caption); font-weight: 400; line-height: 17px; color: var(--dk-muted-2); }
 .sb-summary__value {
-  font-size: var(--sb-t-caption);
+  font-size: var(--sb-t-body);
   font-weight: 500;
+  line-height: 20px;
   letter-spacing: -0.2px;
   color: var(--dk-brand-deep);
-  word-break: keep-all;
+  white-space: nowrap;
 }
 
 /* 계획 항목 — 제목 + 중요 배지 + 한 줄 요약 + 불릿 */
@@ -1032,19 +1123,19 @@
   line-height: 1.2;
   word-break: keep-all;
 }
-/* 중요 배지 — Figma AchievementBadge 18px · radius/sm · 핑크 */
+/* 중요 배지 — Figma StepHeader 의 코랄 알약(면 coral 10% · 글자 #FF3B5C · 20px, 2026-09-12 대조) */
 .sb-plan-step__badge {
   display: inline-flex;
   align-items: center;
   flex: 0 0 auto;
-  margin-top: 3px;
-  height: 18px;
-  padding: 0 6px;
-  border-radius: 4px;
-  background: var(--dk-mark);
+  margin-top: 2px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: var(--sb-r-pill);
+  background: var(--dk-coral-soft);
   font-size: var(--sb-t-micro);
   font-weight: 500;
-  color: var(--dk-mark-ink);
+  color: var(--dk-coral);
   white-space: nowrap;
 }
 .sb-plan-step__sub {
@@ -1104,9 +1195,29 @@
   aspect-ratio: 1; /* 가로:세로 1:1 고정 */
   min-height: 0;   /* flex 자식의 min-height:auto가 내용물 높이로 비율을 깨는 것을 막는다 */
   overflow: hidden;
-  border-radius: 8px;
-  background: var(--dk-thumb);
+  border-radius: 12px; /* Figma ProductCard 썸네일 radius 12 · 바닥 #F1F1F1 (2026-09-12 대조) */
+  background: var(--dk-thumb-2);
 }
+/* 품절 (Figma 5-4 "상품 품절 + 대체 안내") — 썸네일이 흐려지고 가운데 빨간 「품절」 표식, 매칭율 배지는 빠진다 */
+.sb-product-card2.is-soldout .sb-product-card2__thumb > img,
+.sb-product-card2.is-soldout .sb-product-card2__thumb > .sb-product-card2__mock { opacity: 0.35; }
+.sb-product-card2__soldout {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 5;
+  transform: translate(-50%, -50%);
+  padding: 6px 12px;
+  border-radius: 4px;
+  background: var(--dk-danger);
+  font-size: var(--sb-t-caption);
+  font-weight: 500;
+  line-height: 1;
+  color: #fff;
+  white-space: nowrap;
+}
+.sb-cart-btn.is-soldout,
+.sb-cart-btn.is-soldout:disabled { background: var(--dk-line); color: var(--dk-disabled); cursor: default; }
 /* 내용물을 absolute로 빼면 박스 높이 계산에서 빠져 aspect-ratio가 그대로 산다 */
 .sb-product-card2__thumb > img,
 .sb-product-card2__thumb > .sb-product-card2__mock {
@@ -1141,7 +1252,7 @@
 .sb-product-card2__pricebox { display: flex; flex-direction: column; gap: 1px; margin-top: 2px; }
 .sb-product-card2__price { display: flex; align-items: baseline; gap: 4px; }
 .sb-product-card2__price b { font-size: 18px; font-weight: 500; line-height: 23px; color: var(--dk-ink); } /* Figma text/display/lg */
-.sb-product-card2__price em { font-style: normal; font-size: var(--sb-t-caption); font-weight: 300; color: var(--dk-ink-2); }
+.sb-product-card2__price em { font-style: normal; font-size: var(--sb-t-caption); font-weight: 300; color: var(--dk-muted); }
 
 /* 매칭율 배지 (Figma MatchTag) — 클릭 팝오버 규칙은 파일 끝 '매칭율 팝오버' 블록 */
 .sb-match { position: absolute; top: 8px; left: 8px; z-index: 5; }
@@ -1164,23 +1275,7 @@
 .sb-match__label { font-size: var(--sb-t-micro); font-weight: 500; letter-spacing: 0.02em; color: rgba(255, 255, 255, 0.85); }
 .sb-match__score { font-size: var(--sb-t-micro); font-weight: 500; color: #fff; }
 
-/* 몰 배지 — 지마켓/올리브영은 브랜드 색, 그 밖은 중립 */
-.sb-mall-badge {
-  position: absolute;
-  top: 14px;
-  right: 12px;
-  z-index: 5;
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px;
-  border-radius: var(--sb-r-md);
-  font-size: 10px;
-  font-weight: 500;
-  white-space: nowrap;
-}
-.sb-mall-badge--gmarket { background: var(--dk-gmarket-soft); color: var(--dk-gmarket); }
-.sb-mall-badge--oliveyoung { background: var(--dk-oliveyoung-soft); color: var(--dk-oliveyoung); }
-.sb-mall-badge--plain { background: var(--dk-sunken); color: var(--dk-muted); }
+/* (썸네일 위 몰 배지는 2026-09-12 에 뗐다 — Figma ProductCard 는 몰 이름을 본문 머리줄(.sb-product-card2__brand)에 회색 글자로 둔다) */
 
 /* 담기 버튼 — 기본 / 담음 / 담기불가 */
 .sb-cart-btn {
@@ -1200,15 +1295,17 @@
 .sb-cart-btn:hover:not(:disabled):not(.is-added) { background: var(--dk-brand-deep); }
 .sb-cart-btn.is-added { background: var(--dk-brand-added); color: #fff; cursor: default; }
 
-/* 참고 콘텐츠 카드 (영상·게시글) — 썸네일 + 출처 · 매체 ↗ + 제목 */
+/* 참고 콘텐츠 카드 (영상·게시글) — Figma [PP1K] VideoCard (계획 2-2·4-1, 2026-09-12 대조): bg/subtle 면 radius 12 ·
+   썸네일 위(2:1) + 본문(패딩 16: 출처 12/17 secondary · 제목 14/20 Gumi). 폭과 무관하게 언제나 세로형 —
+   옛 "넓으면 썸네일 왼쪽" 가로 모드는 Figma 에 없어 뗐다 */
 .sb-content-card {
   display: flex;
   flex-direction: column;
   overflow: hidden;
   border: 0;
-  border-radius: 8px;
+  border-radius: 12px;
   background: var(--dk-sunken);
-  box-shadow: 0 1px 4px rgba(40, 30, 90, 0.06); /* Figma shadow/sm */
+  box-shadow: none;
   text-align: left;
 }
 .sb-content-card[role='link'] { cursor: pointer; }
@@ -1216,7 +1313,7 @@
 .sb-content-card__thumb {
   position: relative;
   width: 100%;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 2 / 1;
   background: var(--dk-thumb);
   overflow: hidden;
 }
@@ -1247,7 +1344,7 @@
   font-weight: 400;
   color: #fff;
 }
-.sb-content-card__meta { display: flex; flex-direction: column; gap: 4px; padding: 12px; }
+.sb-content-card__meta { display: flex; flex-direction: column; gap: 6px; padding: 16px; }
 .sb-content-card__source {
   display: flex;
   align-items: center;
@@ -1255,6 +1352,7 @@
   margin: 0;
   font-size: var(--sb-t-caption);
   font-weight: 400;
+  line-height: 17px;
   color: var(--dk-muted);
 }
 .sb-content-card__source span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1262,10 +1360,10 @@
 .sb-content-card__source b { margin-left: auto; font-size: 10px; font-weight: 400; color: var(--dk-muted); }
 .sb-content-card__title {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--sb-t-body);
   font-weight: 400;
   color: var(--dk-ink);
-  line-height: 1.35;
+  line-height: 20px;
   word-break: keep-all;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -1285,120 +1383,159 @@
   overflow: hidden;
 }
 
-/* 성분 비교표 — 추천 vs 대안 */
-.sb-compare {
-  overflow: hidden;
-  border: 1px solid var(--dk-line);
-  border-radius: 18px;
-  background: var(--dk-surface);
-}
+/* ── 성분 비교표 — Figma [PP1K] 계획 4-1 "면도 자극 케어" IngredientCompare (2026-09-12 대조) ──
+   머리 문구(14px 본문) → 두 제품 카드(bg/subtle radius 12 패딩 16: 배지 알약 + 이미지 80 + 이름 13/18 500 —
+   왼쪽 기존(빨강) · 오른쪽 추천(보라)) → 표(1px border/subtle radius 12: 머리 12/17 · 행 14/20 · 행 구분선) */
+.sb-compare { display: flex; flex-direction: column; gap: 12px; }
 .sb-compare__caption {
-  padding: 13px 16px;
-  background: var(--dk-sunken);
-  font-size: var(--sb-t-small);
+  margin: 0;
+  font-size: var(--sb-t-body);
   font-weight: 400;
+  line-height: 20px;
   color: var(--dk-ink);
   word-break: keep-all;
 }
-.sb-compare__body { padding: 14px 16px 16px; }
-.sb-compare__head { display: flex; align-items: stretch; gap: 6px; }
+.sb-compare__head {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--dk-sunken);
+}
 .sb-compare__product {
-  flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 9px 11px;
-  border: 1px solid var(--dk-line);
-  border-radius: var(--sb-r-sm);
-  background: var(--dk-sunken);
+  align-items: center;
+  gap: 10px;
+  text-align: center;
 }
-.sb-compare__product.is-pick { border-color: var(--dk-ink); }
-.sb-compare__tag { font-size: 8px; font-weight: 500; letter-spacing: 0.04em; color: var(--dk-muted); }
-.sb-compare__product.is-pick .sb-compare__tag { color: var(--dk-ink); }
-.sb-compare__name {
-  margin: 0;
-  font-size: var(--sb-t-caption);
-  font-weight: 400;
-  color: var(--dk-ink);
-  line-height: 1.35;
-  word-break: keep-all;
-}
-.sb-compare__meta { margin: 0; font-size: 10px; font-weight: 300; color: var(--dk-muted); }
-.sb-compare__vs {
-  flex: 0 0 auto;
-  align-self: center;
+.sb-compare__tag {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--dk-ink);
-  font-size: 8px;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: var(--sb-r-pill);
+  font-size: var(--sb-t-caption);
   font-weight: 500;
-  color: #fff;
+  line-height: 1;
+  white-space: nowrap;
 }
-.sb-compare__rows { margin-top: 10px; }
+.sb-compare__product--alt .sb-compare__tag { background: var(--dk-danger-soft); color: var(--dk-danger); }
+.sb-compare__product--pick .sb-compare__tag { background: var(--dk-brand-soft); color: var(--dk-brand-2); }
+.sb-compare__img {
+  display: block;
+  width: 80px;
+  height: 80px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--dk-thumb-2);
+}
+.sb-compare__img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sb-compare__name {
+  margin: 0;
+  font-size: var(--sb-t-small);
+  font-weight: 500;
+  line-height: 18px;
+  word-break: keep-all;
+}
+.sb-compare__product--alt .sb-compare__name { color: var(--dk-danger); }
+.sb-compare__product--pick .sb-compare__name { color: var(--dk-brand-2); }
+.sb-compare__table {
+  overflow: hidden;
+  border: 1px solid var(--dk-line-soft);
+  border-radius: 12px;
+  background: var(--dk-surface);
+}
 .sb-compare__row {
   display: grid;
-  grid-template-columns: 1fr 72px 1fr;
+  grid-template-columns: 1.3fr 1fr 1fr;
   align-items: center;
-  gap: 6px;
-  padding: 8px 0;
-  border-top: 1px solid var(--dk-line);
+  gap: 4px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--dk-line-soft);
 }
+.sb-compare__row:has(.sb-compare__cell--risk) { grid-template-columns: 1.3fr 1fr 1fr 0.8fr; }
 .sb-compare__row:first-child { border-top: 0; }
+.sb-compare__row--head { min-height: 52px; }
+.sb-compare__key {
+  font-size: var(--sb-t-body);
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--dk-ink);
+  word-break: keep-all;
+}
+.sb-compare__row--head .sb-compare__key { font-size: var(--sb-t-caption); font-weight: 400; line-height: 17px; color: var(--dk-ink-2); }
 .sb-compare__cell {
-  font-size: var(--sb-t-micro);
-  font-weight: 300;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  font-size: var(--sb-t-body);
+  font-weight: 400;
+  line-height: 20px;
   color: var(--dk-ink);
   text-align: center;
   word-break: keep-all;
 }
-.sb-compare__key { font-size: 9px; font-weight: 500; color: var(--dk-muted); text-align: center; word-break: keep-all; }
+.sb-compare__cell b { font-size: var(--sb-t-caption); font-weight: 500; line-height: 17px; }
+.sb-compare__cell small { font-size: 10px; font-weight: 400; line-height: 13px; }
+.sb-compare__row--head .sb-compare__cell--risk { font-size: var(--sb-t-caption); font-weight: 400; line-height: 17px; color: var(--dk-ink-2); }
+.sb-compare__cell--pick { color: var(--dk-brand-2); }
+.sb-compare__row--head .sb-compare__cell--alt { color: var(--dk-danger); }
+.sb-compare__cell.is-danger { color: var(--dk-danger); }
+.sb-compare__cell.is-warn { color: var(--dk-amber); }
 
-/* 주의 성분 카드 */
+/* ── 주의 성분 카드 — Figma 계획 4-1 CautionSection: 살구색 카드(radius 12 패딩 16) · 주황 제목 14 · 항목마다 흰 카드(radius 8
+   패딩 12: 이름 14/20 500 · 설명 12/17 text/muted) ── */
 .sb-caution {
-  padding: 16px 18px;
-  border: 1px solid var(--dk-line);
-  border-radius: 18px;
-  background: var(--dk-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--dk-amber-soft);
 }
 .sb-caution__head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
   margin: 0;
   font-size: var(--sb-t-body);
   font-weight: 500;
-  color: var(--dk-ink);
+  line-height: 20px;
+  color: var(--dk-amber);
 }
-.sb-caution__mark { color: var(--dk-caution); }
 .sb-caution__desc {
-  margin: 10px 0 0;
+  margin: -4px 0 0;
   font-size: var(--sb-t-caption);
   font-weight: 300;
-  color: var(--dk-muted);
-  line-height: 1.6;
+  color: var(--dk-ink-2);
+  line-height: 17px;
   word-break: keep-all;
 }
-.sb-caution__rows { margin-top: 12px; display: flex; flex-direction: column; gap: 9px; }
-.sb-caution__row { display: flex; align-items: baseline; gap: 10px; }
+.sb-caution__rows { display: flex; flex-direction: column; gap: 8px; }
+.sb-caution__row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--dk-surface);
+}
 .sb-caution__name {
-  flex: 0 0 80px;
-  font-size: var(--sb-t-micro);
+  font-size: var(--sb-t-body);
   font-weight: 500;
+  line-height: 20px;
   color: var(--dk-ink);
   word-break: keep-all;
 }
 .sb-caution__note {
-  flex: 1;
   min-width: 0;
-  font-size: var(--sb-t-micro);
-  font-weight: 300;
-  color: var(--dk-muted);
-  line-height: 1.5;
+  font-size: var(--sb-t-caption);
+  font-weight: 400;
+  line-height: 17px;
+  color: var(--dk-muted-2);
   word-break: keep-all;
 }
 
@@ -1408,14 +1545,14 @@
 .sb-ba__title { margin: 0; font-size: 20px; font-weight: 400; color: var(--dk-ink); line-height: 1.2; word-break: keep-all; }
 .sb-ba__desc {
   margin: 16px 0 0;
-  font-size: 13px;
+  font-size: var(--sb-t-body);
   font-weight: 300;
   color: var(--dk-ink);
-  line-height: 18px;
+  line-height: 20px;
   word-break: keep-all;
 }
-/* 고지 문구 — Figma 는 설명 문단의 둘째 문장이다. 그림 아래가 아니라 설명 바로 밑에 같은 크기로 잇는다 */
-.sb-ba__note { margin: 2px 0 0; font-size: 13px; font-weight: 300; color: var(--dk-muted); line-height: 18px; word-break: keep-all; }
+/* 고지 문구 — Figma 는 설명 문단의 둘째 문장이다(같은 14/20 · 같은 색, 3-1 풀스크롤 대조). 그림 아래가 아니라 설명 바로 밑에 잇는다 */
+.sb-ba__note { margin: 0; font-size: var(--sb-t-body); font-weight: 300; color: var(--dk-ink); line-height: 20px; word-break: keep-all; }
 .sb-ba__title + .sb-ba__note { margin-top: 16px; }
 .sb-ba > :first-child { margin-top: 0; }
 .sb-ba__photo {
@@ -1556,7 +1693,8 @@
 
 /* 도움 여부 카드 */
 /* 도움 여부 — Figma FeedbackSection: 배경 없는 섹션(패딩 16/20/24·gap 16), 질문 15px 가운데,
-   "👍 좋아요 / 👎 별로예요" 40px 알약(bg/subtle 면·패딩 10/20·gap 6·라벨 14/20) 두 개가 12px 간격 */
+   "👍 좋아요 / 👎 별로예요" 40px 알약(bg/subtle 면·패딩 10/20·gap 6·라벨 14/20) 두 개가 12px 간격.
+   위에는 8px 두께의 bg/subtle 띠(전폭 구분 띠 — 2-2 풀스크롤 y1496~1503)가 놓인다 (플레이어 규칙은 아래 계획 페이지 블록) */
 .sb-fbcard {
   display: flex;
   flex-direction: column;
@@ -1647,14 +1785,6 @@
   .sb-cta-bar { flex-direction: column; align-items: stretch; }
 }
 
-/* 콘텐츠 카드 가로 모드 — 참고 콘텐츠는 캐러셀 밖(전폭)에 놓이면 썸네일을 왼쪽으로 눕힌다.
-   상품 카드는 폭과 무관하게 언제나 세로형(썸네일 1:1 상단 + 이름·가격 + 담기)이라 제외한다 */
-@container (min-width: 341px) {
-  .sb-content-card { flex-direction: row; align-items: center; }
-  .sb-content-card__thumb { flex: 0 0 148px; width: 148px; aspect-ratio: 16 / 10; }
-  .sb-content-card__meta { flex: 1; min-width: 0; padding: 12px 14px; }
-}
-
 
 /* 단독으로 놓인 상품 카드의 폭 — 캐러셀 안 카드(레지스트리 defaultW 200px)와 같은 값으로
    고정한다. 본문(이름·가격·담기)은 높이가 고정인데 썸네일만 1:1로 따라 커져서, 폭이 다르면
@@ -1717,22 +1847,25 @@
   transform: none !important;
   gap: 0;
   padding: 0 !important;
-  width: 68px;
-  height: 68px;
-  border: 3px solid var(--dk-ring) !important;
+  /* Figma [PP1K] 계획 2-1 뷰포트·5-4 (2026-09-12 대조): 56px 검정 원 + 흰 ≡, 테두리 없음 — 옛 흰 면·파란 링(68px)은 이전 목업 파일 것 */
+  width: 56px;
+  height: 56px;
+  border: 0 !important;
   border-radius: 50%;
-  background: #fff !important;
-  box-shadow: 0 18px 44px rgba(31, 41, 51, 0.18) !important;
-  backdrop-filter: blur(24px);
+  background: var(--dk-ink) !important;
+  box-shadow: 0 8px 24px rgba(26, 26, 26, 0.24) !important;
+  backdrop-filter: none;
 }
 .sb-fabbar__btn {
   width: 100% !important;
   height: 100% !important;
   min-width: 0;
   border-radius: 50%;
-  color: var(--dk-ink);
+  color: #fff !important;
 }
-.sb-fabbar__btn svg { width: 22px; height: 22px; }
+.sb-fabbar__btn:hover,
+.sb-fabbar__btn:focus-visible { background: rgba(255, 255, 255, 0.12) !important; }
+.sb-fabbar__btn svg { width: 24px; height: 24px; }
 
 /* 화면 헤더 — AI 생성 표식과 플레이어 액션(평가·새로 생성) */
 .sb-screen-header__ai {
@@ -1802,6 +1935,7 @@
   .sb-fbcard__q,
   .sb-fbcard__label,
   .sb-checklist__title,
+  .sb-caution__head,
   .sb-ba__title,
   .sb-ba__save
 ),
@@ -1816,6 +1950,8 @@
 .sb-sheet .sb-cart-sheet__total,
 .sb-sheet .sb-cart-sheet__cta,
 .sb-sheet .sb-confirm__btn,
+.sb-sheet .sb-face-fail__title,
+.sb-sheet .sb-face-fail__btn,
 .sb-match__pop .sb-match__total b,
 .sb-thread__title,
 .sb-thread-card__title,
@@ -1841,6 +1977,7 @@
   .sb-content-card__title,
   .sb-fbcard__q,
   .sb-checklist__title,
+  .sb-caution__head,
   .sb-ba__title,
   .sb-ba__save
 ) *,
@@ -1864,11 +2001,31 @@
 .sb-notice__title { margin: 0 0 6px; font-size: var(--sb-t-body); font-weight: 400; color: var(--dk-ink); }
 .sb-notice__body { margin: 0; font-size: var(--sb-t-small); font-weight: 300; color: var(--dk-ink-2); line-height: 1.6; white-space: pre-wrap; word-break: keep-all; }
 /* 단계 사이 구분선 — 첫 단계 뒤의 단계마다 1px border/subtle + 24px 여백 (Figma Divider).
-   비포애프터(FaceSimulation)도 같은 구분선으로 단계와 갈린다 — Figma 는 FaceSimulation|Divider|Step1 */
-.sb-player__item:has(.sb-plan-step, .sb-ba) ~ .sb-player__item :is(.sb-plan-step, .sb-ba),
+   비포애프터(FaceSimulation)도 같은 구분선으로 단계와 갈린다 — Figma 는 FaceSimulation|Divider|Step1.
+   플레이어에서는 프레임 패딩만큼 밖으로 펴서 전폭 선으로 (2-2 풀스크롤 y1047 — 0~390 전체), 캔버스는 카드 안쪽 선 */
 .sb-canvas-item:has(.sb-plan-step, .sb-ba) ~ .sb-canvas-item :is(.sb-plan-step, .sb-ba) {
   padding-top: 24px;
   border-top: 1px solid var(--dk-line-soft);
+}
+.sb-player__item:has(.sb-plan-step, .sb-ba) ~ .sb-player__item :is(.sb-plan-step, .sb-ba) {
+  margin: 0 calc(-1 * var(--sb-phone-pad));
+  padding: 24px var(--sb-phone-pad) 0;
+  border-top: 1px solid var(--dk-line-soft);
+}
+/* 도움 여부 섹션 — 위 8px bg/subtle 구분 띠(전폭) + 질문까지 32px, 버튼은 흰 면 (Figma FeedbackSection 2026-09-12) */
+.sb-player__item .sb-fbcard {
+  position: relative;
+  margin: 2px calc(-1 * var(--sb-phone-pad)) 0;
+  padding: 40px 20px 24px;
+}
+.sb-player__item .sb-fbcard::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 8px;
+  background: var(--dk-sunken);
 }
 /* 플레이어 하단 내비 — 원본 검은 완료 버튼을 브랜드 보라·radius 8·52px 로, 고스트는 dk 테두리 */
 .sb-player .clean-plan-submit,
