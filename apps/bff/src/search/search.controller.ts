@@ -1,21 +1,38 @@
-import { Body, Controller, Logger, Post, UseGuards } from '@nestjs/common'
-import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger'
+import { Body, Controller, Get, Logger, Post, Query, UseGuards } from '@nestjs/common'
 import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiCreatedResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiQuery,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger'
+import {
+  HomePersonalizeBody,
+  HomePersonalizeResult,
+  PopularSearchesResult,
   SearchRouteBody,
   SearchRouteResult,
   SearchSuggestBody,
   SearchSuggestResult,
   type Profile,
 } from '@ddak/schema'
+import { heuristicHomeGreeting, heuristicHomeSuggestions } from '@ddak/pipeline'
 import { ServiceTokenGuard } from '../common/service-token.guard'
 import { ZodValidationPipe } from '../common/zod-validation.pipe'
 import { toOpenApi } from '../common/openapi'
 import { LlmService } from '../llm/llm.service'
+import { PopularSearchesService } from './popular-searches.service'
+import { WeatherService } from './weather.service'
 
 /*
- * 홈 검색창 API — 검색어 하나로 두 갈래를 가르는 라우터(DDAK 설문→계획 / 검색 결과 페이지)와 입력 중 AI 검색어 추천.
- * 둘 다 짧은 구조화 LLM 호출이며, LLM 이 막히거나 실패하면 휴리스틱으로 대신 답한다(source='fallback') —
- * 검색창은 언제나 답을 받아야 하고, SRP 에서 DDAK 로 넘어가는 버튼이 있어 오판이 복구되기 때문이다.
+ * 홈 검색창 API — 검색어 하나로 두 갈래를 가르는 라우터(DDAK 설문→계획 / 검색 결과 페이지)와 입력 중 AI 검색어 추천,
+ * 그리고 홈 첫 화면 재료(개인화 인사말·개인화 추천 검색어 / 인기 검색어).
+ * LLM 호출은 전부 짧은 구조화 호출(effort low)이며, LLM 이 막히거나 실패하면 휴리스틱으로 대신 답한다(source='fallback') —
+ * 검색창은 언제나 답을 받아야 하고, SRP 에서 DDAK 로 넘어가는 버튼이 있어 오판이 복구되기 때문이다. 홈 인사말도 같다:
+ * FE 가 기본 인사말을 먼저 보이고 이 응답을 페이드인으로 얹으므로 늦거나 없어도 화면이 비지 않는다.
  */
 
 /** LLM 없이도 검색어를 가르는 휴리스틱 — 고민·상황·요청형 표현이나 긴 문장은 DDAK, 짧은 상품 종류 단어는 SRP */
@@ -46,18 +63,23 @@ export function heuristicSuggest(query: string, profile?: Profile): string[] {
 export class SearchController {
   private readonly logger = new Logger(SearchController.name)
 
-  constructor(private readonly llm: LlmService) {}
+  constructor(
+    private readonly llm: LlmService,
+    private readonly weather: WeatherService,
+    private readonly popular: PopularSearchesService,
+  ) {}
 
   @Post('route')
   @ApiOperation({
     summary: '검색 진입 분기 — DDAK(설문→맞춤 계획) / 검색 결과 페이지(SRP)',
     description:
       '검색어를 LLM 이 두 갈래로 가른다. 뷰티 카테고리 안에서 설문·계획이 가치 있는 요청이면 ddak=true, 상품 종류·이름 조회나 ' +
-      '뷰티 밖이면 false. LLM 미설정·실패 시 휴리스틱(source=fallback)으로 답한다.',
+      '뷰티 밖이면 false. LLM 미설정·실패 시 휴리스틱(source=fallback)으로 답한다. 검색어가 인기 검색어 후보 표에 있으면 그 count 를 1 올린다.',
   })
   @ApiBody({ schema: toOpenApi(SearchRouteBody) })
   @ApiCreatedResponse({ schema: toOpenApi(SearchRouteResult) })
   async route(@Body(new ZodValidationPipe(SearchRouteBody)) body: SearchRouteBody): Promise<SearchRouteResult> {
+    this.popular.bump(body.query) // fire-and-forget — 후보 표에 있는 검색어만 반영된다
     try {
       const { content } = await this.llm.routeSearch(body.query, body.profile)
       return {
@@ -90,5 +112,51 @@ export class SearchController {
       this.logger.warn(`검색어 추천 LLM 실패 — 템플릿으로 대신: ${(e as Error).message}`)
       return { suggestions: heuristicSuggest(body.query, body.profile), source: 'fallback' }
     }
+  }
+
+  @Post('home')
+  @ApiOperation({
+    summary: '홈 개인화 — 인사말 + 개인화 추천 검색어(보라 칩)',
+    description:
+      '이름·프로필·기기 현지 시각·(허용된) 위치·최근 쇼핑 쓰레드 요약·최근 검색어로 홈 첫 화면 인사말 한 줄과 자연어 추천 검색어 3개를 만든다. ' +
+      '날씨는 BFF 가 Open-Meteo 에서 붙인다(없으면 서울 기준, 실패면 null). LLM 미설정·실패 시 같은 재료의 휴리스틱(source=fallback). ' +
+      'FE 는 기본 인사말을 먼저 보이고 이 응답을 페이드인으로 얹는다.',
+  })
+  @ApiBody({ schema: toOpenApi(HomePersonalizeBody) })
+  @ApiCreatedResponse({ schema: toOpenApi(HomePersonalizeResult) })
+  async home(@Body(new ZodValidationPipe(HomePersonalizeBody)) body: HomePersonalizeBody): Promise<HomePersonalizeResult> {
+    const weather = await this.weather.current(body.location)
+    const input = {
+      name: body.name,
+      profile: body.profile,
+      now: body.now,
+      weather,
+      threads: body.threads || [],
+      recentSearches: body.recentSearches || [],
+    }
+    try {
+      const { content } = await this.llm.personalizeHome(input)
+      const greeting = content.greeting.trim()
+      if (!greeting) throw new Error('empty greeting')
+      const suggestions = content.suggestions.map((s) => s.trim()).filter(Boolean).slice(0, 3)
+      return { greeting, suggestions: suggestions.length ? suggestions : heuristicHomeSuggestions(input), weather, source: 'llm' }
+    } catch (e) {
+      this.logger.warn(`홈 개인화 LLM 실패 — 휴리스틱으로 대신: ${(e as Error).message}`)
+      return { greeting: heuristicHomeGreeting(input), suggestions: heuristicHomeSuggestions(input), weather, source: 'fallback' }
+    }
+  }
+
+  @Get('popular')
+  @ApiOperation({
+    summary: '인기 검색어(파랑 칩) — 전체 사용자 후보 표를 인기순 내림차순으로 최대 n개',
+    description:
+      '원천은 core 설정 KV `search-popular`(`[{keyword,count}]`). 표가 없으면 @ddak/pipeline 시드로 답하며 같은 값을 KV 에 한 번 시딩한다(source=seed). ' +
+      '검색 제출이 후보 표의 검색어와 일치하면 count 가 1 오른다.',
+  })
+  @ApiQuery({ name: 'limit', required: false, type: 'integer', example: 3, description: '1~10, 기본 3' })
+  @ApiOkResponse({ schema: toOpenApi(PopularSearchesResult) })
+  popularSearches(@Query('limit') limit?: string): Promise<PopularSearchesResult> {
+    const n = Math.min(10, Math.max(1, Number(limit) || 3))
+    return this.popular.list(n)
   }
 }

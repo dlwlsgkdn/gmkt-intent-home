@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { stepInfoOfItem } from '../lib/cart.js'
+import { productLookupFromItems, stepInfoOfItem } from '../lib/cart.js'
 import { STAGES, viewerDeviceOf, resolvePlanCase, uid, visibleProfileItems } from '../lib/store.js'
 import DeviceFrame from './DeviceFrame.jsx'
 import { screenScrollY, scrollScreenTo } from '../lib/deviceScreen.js'
@@ -7,6 +7,7 @@ import { isQuestionType, renderItem } from '../lib/registry.jsx'
 import BottomSheet from './ui/BottomSheet.jsx'
 import { BgBlobs, FloatingBar, StudioFab, ViewerDeviceControl } from './Frame.jsx'
 import ThreadPanel from './ThreadPanel.jsx'
+import ThreadCartSheet from './ThreadCartSheet.jsx'
 import ProductDetailPanel from './ProductDetailPanel.jsx'
 
 function defaultAnswersFor(scenario) {
@@ -42,7 +43,8 @@ export default function Player({ api, scenario, resume }) {
   const [keyword, setKeyword] = useState(null) // 점선 밑줄 키워드 클릭 → 설명 모달
   const [productDetail, setProductDetail] = useState(null) // 상품 상세보기 사이드 패널 (null=닫힘)
   const [completed, setCompleted] = useState(() => (resumeThread ? resumeThread.status === 'completed' : false))
-  const [threadOrigin, setThreadOrigin] = useState(null) // 쓰레드 히스토리 패널 (null=닫힘)
+  const [threadOrigin, setThreadOrigin] = useState(null) // 쓰레드 히스토리 패널 (null=닫힘) — 담은 상품 시트의 링크로만 연다
+  const [cartSheet, setCartSheet] = useState(false) // 플로팅 버튼 → 현재 쓰레드의 담은 상품 시트
   const [qStep, setQStep] = useState(0) // 설문은 질문 하나씩 — 지금 보여줄 질문 인덱스
 
   const stage = STAGES[stageIdx]
@@ -73,6 +75,9 @@ export default function Player({ api, scenario, resume }) {
     () => resolvePlanCase(scenario, answers),
     [scenario, answers]
   )
+
+  /* 계획 단계 목록 — 담은 상품 시트의 파트(빈 파트 행 포함) 재료 */
+  const planSteps = useMemo(() => productLookupFromItems(matchedPlanCase?.items || []).steps, [matchedPlanCase])
 
   /* 숨김·컨테이너 자식 제외한 최상위만 배열 순서대로 스택 렌더 (자식은 컨테이너가 렌더) */
   const stageItems = stage.key === 'plan'
@@ -244,7 +249,8 @@ export default function Player({ api, scenario, resume }) {
       {/* 기기 프레임 — 실행 화면·플로팅 버튼·쓰레드 패널·상품 상세가 실기기 화면 크기 안에서 돈다 */}
       <DeviceFrame device={viewer}>
       <BgBlobs />
-      <FloatingBar onList={(origin) => setThreadOrigin((v) => (v ? null : origin || 'right'))} />
+      {/* 플로팅 버튼 — 체험 화면에서는 쓰레드 목록이 아니라 **지금 진행 중인 쓰레드**의 담은 상품 시트를 연다(2026-09). 목록은 시트 밑 링크로 */}
+      <FloatingBar label="현재 쇼핑 쓰레드" onList={() => setCartSheet(true)} />
       <section className={'sb-player min-h-screen relative z-10' + (fillActive ? ' sb-player--fill' : '')}>
         <div className="sb-phone sb-phone--player" style={{ width: viewer.w }}>
         <div className="sb-player__stack">
@@ -304,6 +310,25 @@ export default function Player({ api, scenario, resume }) {
       {/* 상품 상세보기 사이드 패널 — 외부몰 페이지 iframe (기기 프레임·모바일은 전체화면) */}
       <ProductDetailPanel product={productDetail} onClose={() => setProductDetail(null)} />
       </DeviceFrame>
+
+      {/* 현재 쓰레드의 담은 상품 시트 — 쇼핑 쓰레드 패널 카드가 여는 것과 같은 시트(Figma ThreadMoreSheet). 파트는 이 계획 케이스의
+         단계 목록, ⊖ 는 이 체험의 담기 상태에서 뺀다(기록은 recordThread 효과가 따라간다) */}
+      {cartSheet && (
+        <ThreadCartSheet
+          thread={{ title: scenario.title, cart }}
+          steps={planSteps}
+          onClose={() => setCartSheet(false)}
+          onRemove={(index) => setCart((prev) => prev.filter((_, i) => i !== index))}
+          onOpenPlan={() => {
+            setCartSheet(false)
+            goStage(STAGES.findIndex((s) => s.key === 'plan'))
+          }}
+          onOpenList={() => {
+            setCartSheet(false)
+            setThreadOrigin('right')
+          }}
+        />
+      )}
 
       {/* 키워드 설명 — 설문 날짜/사진 시트와 같은 바텀 시트 문법 (기기 화면으로 포털) */}
       {keyword && (

@@ -125,6 +125,22 @@ export function createAccount(partial = {}) {
   }
 }
 
+/* 추천 검색어 칩(2026-09 신설 탐색 컴포넌트 — 보라 개인화·파랑 인기) 을 기존 탐색 페이지에 **한 번만** 끼워 넣는다:
+   발행 칩 목록 바로 뒤(없으면 검색창 뒤, 그것도 없으면 맨 뒤). 저자가 나중에 지워도 되살아나지 않도록 explore.seeded 표식을
+   남긴다(표식은 계정 셸 행에 실려 동기화된다). normalizeItems 처럼 읽을 때마다 거치는 lazy 이관이라 별도 일괄 마이그레이션은 없다.
+   바뀐 게 없으면 같은 참조를 돌려준다 — 서버 행 채택 기준선이 정규화 뒤 값이라 미저장 상태를 만들지 않는다 */
+function seedRecommendChips(explore) {
+  const seeded = explore.seeded && typeof explore.seeded === 'object' ? explore.seeded : {}
+  if (seeded.recommendChips) return explore
+  const items = Array.isArray(explore.items) ? explore.items : []
+  if (items.some((it) => it && it.type === 'recommendChips')) return { ...explore, seeded: { ...seeded, recommendChips: true } }
+  const after = (type) => items.findIndex((it) => it && it.type === type && !it.parentId)
+  const anchor = after('scenarioChips') >= 0 ? after('scenarioChips') : after('searchBox')
+  const next = [...items]
+  next.splice(anchor >= 0 ? anchor + 1 : next.length, 0, { id: uid(), type: 'recommendChips', props: {} })
+  return { ...explore, items: next, seeded: { ...seeded, recommendChips: true } }
+}
+
 /* 계정 보정: 탐색 페이지에 아이템이 없으면 기존 설정으로부터 만들고,
    모든 시나리오를 현재 계획 케이스 모델로 이관한다.
    탐색 아이템도 normalizeItems를 통과시킨다 — 구 좌표 데이터의 순서 이관 관문. */
@@ -139,6 +155,7 @@ function normalizeAccount(raw) {
     const items = normalizeItems(account.explore.items)
     if (items !== account.explore.items) account.explore = { ...account.explore, items }
   }
+  account.explore = seedRecommendChips(account.explore)
   account.scenarios = Array.isArray(account.scenarios) ? account.scenarios.map(normalizeScenario) : []
   return account
 }

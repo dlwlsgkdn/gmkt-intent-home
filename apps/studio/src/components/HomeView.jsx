@@ -9,13 +9,14 @@ import DeviceFrame from './DeviceFrame.jsx'
 
 /* 홈 첫 화면을 이루는 탐색 컴포넌트 — 이 타입들이 스택 앞머리에 연속으로 있으면 히어로 블록으로 묶여
    화면 세로 중앙에 놓인다 (Figma Search 랜딩: 제목 · 검색창 · 추천 칩) */
-const HOME_HERO_TYPES = new Set(['greeting', 'searchBox', 'scenarioChips', 'tagRow'])
+const HOME_HERO_TYPES = new Set(['greeting', 'searchBox', 'scenarioChips', 'recommendChips', 'tagRow'])
 import { scenariosFromImport } from '../lib/scenarioOps.js'
 import { downloadJson, readFileText } from '../lib/jsonFile.js'
 import { renderItem } from '../lib/registry.jsx'
 import ScenarioGenerationDialog from './builder/ScenarioGenerationDialog.jsx'
 import SearchOverlay from './SearchOverlay.jsx'
 import { useSearchEntry } from '../hooks/useSearchEntry.js'
+import { useHomePersonalize } from '../hooks/useHomePersonalize.js'
 
 export default function HomeView({ api }) {
   const [query, setQuery] = useState('')
@@ -196,6 +197,9 @@ export default function HomeView({ api }) {
   }
   /* 검색 제출은 라우터를 거친다 — DDAK(위 submitDdak) / 검색 결과 페이지. 최근 검색어 기록도 훅 몫 */
   const search = useSearchEntry(api, { onDdak: submitDdak })
+  /* 홈 첫 화면 개인화 — 인사말(기본 문구 → 개인화 문구 페이드인)과 추천 검색어 칩(보라 = 내 쓰레드 기반 · 파랑 = 전체 인기).
+     탐색 아이템(greeting·recommendChips)이 ctx.home 으로 받아 그린다 */
+  const home = useHomePersonalize(api)
   const viewer = viewerDeviceOf(api.viewerDevice) // 실행 화면을 감싸는 기기 — 화면 크기(w×h)·껍데기 종류
 
   /* 탐색 아이템에 공급하는 실행 컨텍스트 — 검색/칩/키워드만 실제 동작, 나머지는 목업 */
@@ -203,6 +207,13 @@ export default function HomeView({ api }) {
     query,
     setQuery,
     submitQuery: () => search.runSearch(query),
+    /* 추천 검색어 칩 — 검색창에 넣고 바로 라우터를 거친다(DDAK 라이브 생성 / 검색 결과 페이지). 검색 화면은 열지 않는다 */
+    submitSearch: (text) => {
+      const q = String(text || '').trim()
+      if (!q) return
+      setQuery(q)
+      search.runSearch(q)
+    },
     openSearch: () => setSearchOpen(true), // 검색창 포커스 → 검색 화면 (Figma 1-2/1-3)
     answers: {},
     setAnswer: () => {},
@@ -241,14 +252,14 @@ export default function HomeView({ api }) {
               <div className="sb-home-hero">
                 {heroItems.map((it) => (
                   <div key={it.id} className="sb-player__item">
-                    {renderItem(it, { mode: 'player', player: homePlayer, profile: api.profile, chips, allItems: allExploreItems })}
+                    {renderItem(it, { mode: 'player', player: homePlayer, profile: api.profile, chips, home, allItems: allExploreItems })}
                   </div>
                 ))}
               </div>
             ) : null}
             {restItems.map((it) => (
               <div key={it.id} className="sb-player__item">
-                {renderItem(it, { mode: 'player', player: homePlayer, profile: api.profile, chips, allItems: allExploreItems })}
+                {renderItem(it, { mode: 'player', player: homePlayer, profile: api.profile, chips, home, allItems: allExploreItems })}
               </div>
             ))}
           </div>

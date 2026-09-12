@@ -17,6 +17,8 @@ import {
   type SurveyPageWire,
 } from '@ddak/schema'
 import {
+  HOME_PERSONALIZE_SYSTEM,
+  HomePersonalizeGen,
   IntentGen,
   LlmGenerationError,
   PROMPT_DEFS,
@@ -29,6 +31,7 @@ import {
   SearchSuggestGen,
   StructuredStreamParser,
   SurveyGen,
+  buildHomePersonalizeRequest,
   buildIntentRequest,
   buildPlanProductsRequest,
   buildPlanSkeletonRequest,
@@ -185,6 +188,14 @@ export class LlmService implements LlmPort {
       system: { text: SEARCH_SUGGEST_SYSTEM, custom: false },
       effort: 'low' as const,
       user: buildSearchSuggestRequest(query, profile),
+    })
+  }
+  /** 홈 개인화 — 인사말 + 개인화 추천 검색어(보라 칩). 작고 빠른 구조화 호출(스트리밍 없음). 실패 처리는 호출자(휴리스틱 대체) */
+  async personalizeHome(input: Parameters<typeof buildHomePersonalizeRequest>[0]): Promise<GenResult<HomePersonalizeGen>> {
+    return this.generate('홈 개인화', HomePersonalizeGen, {
+      system: { text: HOME_PERSONALIZE_SYSTEM, custom: false },
+      effort: 'low' as const,
+      user: buildHomePersonalizeRequest(input),
     })
   }
 

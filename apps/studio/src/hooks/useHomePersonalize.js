@@ -1,0 +1,169 @@
+import { useEffect, useMemo, useState } from 'react'
+import { fetchPopularSearches, personalizeHome } from '../lib/liveApi.js'
+import { loadRecentSearches } from '../lib/store.js'
+import {
+  POPULAR_SEARCH_SEED,
+  heuristicHomeGreeting,
+  heuristicHomeSuggestions,
+  homeSignature,
+  nowInfo,
+  rankPopularSearches,
+  readHomeCache,
+  threadDigests,
+  writeHomeCache,
+} from '../lib/homePersonalize.js'
+
+/*
+ * 홈 첫 화면 개인화 — 인사말 + 개인화 추천 검색어(보라 칩) + 인기 검색어(파랑 칩).
+ *
+ *  - 인사말·보라 칩: BFF `POST /api/search/home`(LLM 1회 — 이름·프로필·현지 시각·날씨·최근 쓰레드 요약·최근 검색어). 홈은
+ *    기본 인사말(탐색 아이템 문구)과 휴리스틱 칩을 먼저 그리고, 결과가 오면 크로스페이드로 바꾼다. 7초 안에 안 오면
+ *    같은 재료의 휴리스틱(lib/homePersonalize)으로 바꾸고, 늦게 온 결과는 화면을 또 흔들지 않고 캐시에만 남긴다.
+ *    결과는 세션 캐시(프로필·쓰레드 상태·날짜·시 단위 키) — 홈 복귀마다 LLM 을 다시 부르지 않고 인사말이 흔들리지 않는다.
+ *    위치는 브라우저가 **이미 허용한** 권한이 있을 때만 싣는다(권한 팝업을 띄우지 않는다 — 없으면 서울 날씨).
+ *  - 파랑 칩: BFF `GET /api/search/popular`(core KV 후보 표 인기순 상위 3) — 모듈 캐시 5분, 실패면 같은 시드 표.
+ */
+const LLM_WAIT_MS = 7000
+const POPULAR_CACHE_MS = 5 * 60_000
+let popularMem = null // { at, items, source }
+
+async function grantedLocation() {
+  try {
+    if (typeof navigator === 'undefined' || !navigator.geolocation || !navigator.permissions || !navigator.permissions.query) return null
+    const status = await navigator.permissions.query({ name: 'geolocation' })
+    if (status.state !== 'granted') return null
+    return await new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(null), 1200)
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          clearTimeout(timer)
+          resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude })
+        },
+        () => {
+          clearTimeout(timer)
+          resolve(null)
+        },
+        { maximumAge: 600000, timeout: 1000 },
+      )
+    })
+  } catch {
+    return null
+  }
+}
+
+const cleanList = (list, limit) =>
+  (Array.isArray(list) ? list : []).map((s) => String(s || '').replace(/\s+/g, ' ').trim()).filter(Boolean).slice(0, limit)
+
+export function useHomePersonalize(api) {
+  const accountId = api.activeAccountId || 'default'
+  const name = String((api.profile && api.profile.name) || '').trim()
+  const profile = useMemo(
+    () => ((api.profile && api.profile.items) || [])
+      .filter((it) => it && it.label && String(it.label).trim())
+      .map((it) => ({ label: String(it.label), value: String(it.value || '') })),
+    [api.profile],
+  )
+  const digests = useMemo(() => threadDigests(api.threads), [api.threads])
+  const signature = homeSignature({ accountId, name, profile, threads: digests, now: nowInfo() })
+
+  const [personal, setPersonal] = useState(() => {
+    const cached = readHomeCache(signature)
+    const input = { name, profile, now: nowInfo(), threads: digests }
+    return cached
+      ? { ...cached, ready: true, signature }
+      : { greeting: null, suggestions: heuristicHomeSuggestions(input), weather: null, source: null, ready: false, signature }
+  })
+
+  useEffect(() => {
+    const cached = readHomeCache(signature)
+    if (cached) {
+      setPersonal({ ...cached, ready: true, signature })
+      return undefined
+    }
+    let alive = true
+    let settled = false
+    const now = nowInfo()
+    const recentSearches = loadRecentSearches(accountId).map((r) => r.q).filter(Boolean).slice(0, 10)
+    const input = { name, profile, now, threads: digests, recentSearches }
+    setPersonal({ greeting: null, suggestions: heuristicHomeSuggestions(input), weather: null, source: null, ready: false, signature })
+    const settle = (result) => {
+      if (!alive || settled) return
+      settled = true
+      setPersonal({ ...result, ready: true, signature })
+    }
+    const fallback = (weather = null) => ({
+      greeting: heuristicHomeGreeting({ ...input, weather }),
+      suggestions: heuristicHomeSuggestions({ ...input, weather }),
+      weather,
+      source: 'fallback',
+    })
+    const timer = setTimeout(() => settle(fallback()), LLM_WAIT_MS)
+    ;(async () => {
+      const location = await grantedLocation()
+      try {
+        const res = await personalizeHome({
+          ...(name ? { name } : {}),
+          profile,
+          now,
+          ...(location ? { location } : {}),
+          threads: digests,
+          recentSearches,
+        })
+        const weather = res && res.weather ? res.weather : null
+        const result = {
+          greeting: String((res && res.greeting) || '').trim(),
+          suggestions: cleanList(res && res.suggestions, 3),
+          weather,
+          source: (res && res.source) || 'llm',
+        }
+        if (!result.greeting) throw new Error('empty greeting')
+        if (!result.suggestions.length) result.suggestions = heuristicHomeSuggestions({ ...input, weather })
+        writeHomeCache(signature, result) // 늦게 와서 화면에 못 실려도 다음 방문은 이 결과로 즉시
+        clearTimeout(timer)
+        settle(result)
+      } catch {
+        clearTimeout(timer)
+        settle(fallback())
+      }
+    })()
+    return () => {
+      alive = false
+      clearTimeout(timer)
+    }
+    // profile·digests 는 signature 에 녹아 있다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signature])
+
+  const [popular, setPopular] = useState(() =>
+    popularMem && Date.now() - popularMem.at < POPULAR_CACHE_MS
+      ? { items: popularMem.items, source: popularMem.source, ready: true }
+      : { items: rankPopularSearches(POPULAR_SEARCH_SEED, 3), source: 'seed', ready: false },
+  )
+  useEffect(() => {
+    if (popularMem && Date.now() - popularMem.at < POPULAR_CACHE_MS) {
+      setPopular({ items: popularMem.items, source: popularMem.source, ready: true })
+      return undefined
+    }
+    let alive = true
+    fetchPopularSearches(3)
+      .then((res) => {
+        const items = rankPopularSearches(res && res.items, 3)
+        if (!items.length) throw new Error('empty popular list')
+        popularMem = { at: Date.now(), items, source: (res && res.source) || 'kv' }
+        if (alive) setPopular({ items, source: popularMem.source, ready: true })
+      })
+      .catch(() => {
+        if (alive) setPopular((prev) => ({ ...prev, source: 'seed', ready: true }))
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  return {
+    greeting: { text: personal.greeting, ready: personal.ready, source: personal.source },
+    personal: { items: personal.suggestions, ready: personal.ready, source: personal.source },
+    popular,
+    weather: personal.weather,
+  }
+}

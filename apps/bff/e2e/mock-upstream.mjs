@@ -268,6 +268,19 @@ const server = http.createServer(async (req, res) => {
       }
       return streamAnthropic(res, JSON.stringify(output), { delayMs: 1, chunkSize: 2000 })
     }
+    if (system.includes('홈 인사')) {
+      llmCalls.push({ type: 'home-personalize', system, user })
+      const name = (/이름: (.*)/.exec(user)?.[1] ?? '').trim()
+      const weather = (/날씨: (.*)/.exec(user)?.[1] ?? '').trim()
+      const thread = (/^- 1\. ([^|]+)/m.exec(user)?.[1] ?? '').trim()
+      const head = name && name !== '(없음)' ? `${name}님, ` : ''
+      const mood = weather.startsWith('(') ? '' : '맑은 '
+      const tail = thread ? `「${thread}」 계획을 이어가 볼까요?` : '오늘의 뷰티 고민을 적어 보세요.'
+      return streamAnthropic(res, JSON.stringify({
+        greeting: `${head}${mood}오후예요. ${tail}`,
+        suggestions: [`${thread || '가을'} 다음 단계`, '복합성 가을 베이스', '환절기 수분 루틴'],
+      }), { delayMs: 1, chunkSize: 200 })
+    }
     if (system.includes('검색 라우터')) {
       llmCalls.push({ type: 'search-route', system, user })
       const q = (/검색어: (.*)/.exec(user)?.[1] ?? '').trim()
@@ -325,6 +338,11 @@ const server = http.createServer(async (req, res) => {
   // ── 모의 core internal API ──────────────────────────────────────
   res.setHeader('content-type', 'application/json')
   const send = (code, data) => { res.writeHead(code); res.end(JSON.stringify(data)) }
+
+  // ── 모의 날씨 (Open-Meteo current 블록) — BFF WEATHER_API_URL 이 여기를 가리킨다 ──
+  if (url.startsWith('/v1/weather') && req.method === 'GET') {
+    return send(200, { current: { time: '2026-09-13T15:00', temperature_2m: 24.5, relative_humidity_2m: 58, weather_code: 1 } })
+  }
 
   if (url === '/internal/threads' && req.method === 'POST') {
     const id = String(nextId++)

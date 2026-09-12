@@ -323,3 +323,16 @@ export const SearchSuggestGen = z.object({
     .describe('DDAK 에 어울리는 자연어 검색어 3개 — 입력어를 품고 상황·피부·계절 중 하나를 덧붙인 한 문장, "~추천해줘" 꼴'),
 })
 export type SearchSuggestGen = z.infer<typeof SearchSuggestGen>
+
+/* ── 홈 개인화 — 인사말 + 개인화 추천 검색어 (짧은 구조화 호출, 스트리밍 없음) ── */
+export const HomePersonalizeGen = z.object({
+  greeting: z
+    .string()
+    .describe('홈 첫 화면 인사말 — 이름·시간대·날씨·최근 쓰레드를 녹인 존댓말 1~2문장, 60자 안팎, 이모지 없음'),
+  suggestions: z
+    .array(z.string())
+    .min(1)
+    .max(3)
+    .describe('쓰레드·검색어·프로필에서 읽히는 관심사를 발전시킨 자연어 검색어 3개 — 8~16자 명사구, "~추천해줘" 없이'),
+})
+export type HomePersonalizeGen = z.infer<typeof HomePersonalizeGen>

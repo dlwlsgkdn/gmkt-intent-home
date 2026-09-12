@@ -163,6 +163,24 @@ export function suggestSearch(body) {
   return postJson('/search/suggest', body)
 }
 
+/* 홈 첫 화면 개인화 — 인사말 + 개인화 추천 검색어(보라 칩). 이름·프로필·기기 현지 시각·(허용된) 위치·최근 쓰레드 요약·최근 검색어를
+   보내면 BFF 가 날씨를 붙여 LLM 으로 만든다(API.md §1-2). 실패·지연은 호출자(hooks/useHomePersonalize)가 lib/homePersonalize 의
+   같은 규칙 휴리스틱으로 받는다 — 홈은 기본 인사말을 먼저 보이므로 이 호출이 화면을 막지 않는다 */
+export function personalizeHome(body) {
+  return postJson('/search/home', body)
+}
+/* 인기 검색어(파랑 칩) — 전체 사용자 후보 표(core KV) 상위 n. 실패는 호출자가 같은 시드 표로 대신한다 */
+export async function fetchPopularSearches(limit = 3) {
+  let res
+  try {
+    res = await fetch(`${BASE}/search/popular?limit=${encodeURIComponent(limit)}`, { headers: headers(false) })
+  } catch {
+    throw networkError()
+  }
+  if (!res.ok) throw await toLiveError(res)
+  return res.json()
+}
+
 /* 행동 기록(담기/완료 등) — fire-and-forget. 실패해도 체험을 막지 않는다 */
 export function recordLiveEvent(threadId, type, data) {
   fetch(`${BASE}/threads/${encodeURIComponent(threadId)}/events`, {

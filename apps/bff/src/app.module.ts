@@ -11,6 +11,8 @@ import { PipelineDryRunService } from './engine/dry-run.service'
 import { PipelineFlowRunService } from './engine/flow-run.service'
 import { ThreadsController } from './threads/threads.controller'
 import { SearchController } from './search/search.controller'
+import { PopularSearchesService } from './search/popular-searches.service'
+import { WeatherService } from './search/weather.service'
 import { ThreadsService } from './threads/threads.service'
 
 @ApiTags('app')
@@ -48,6 +50,8 @@ export class AppController {
     PipelineDryRunService,
     PipelineFlowRunService,
     ThreadsService,
+    WeatherService,
+    PopularSearchesService,
   ],
 })
 export class AppModule {}

@@ -61,6 +61,7 @@ const bff = spawn(process.execPath, [path.join(here, '..', 'dist', 'main.js')], 
     ANTHROPIC_API_KEY: 'mock-key',
     OPENAI_BASE_URL: MOCK, // 가상 메이크업 정밀 렌더 — 모의 이미지 편집 엔드포인트
     OPENAI_API_KEY: 'mock-image-key',
+    WEATHER_API_URL: MOCK + '/v1/weather', // 홈 인사말 날씨 — 모의 Open-Meteo
     LANGGRAPH_DATABASE_URL: '', // MemorySaver — interrupt/재개는 프로세스 내에서 검증
     BFF_SERVICE_TOKEN: '',
   },
@@ -496,6 +497,40 @@ try {
     ok(bad.status === 400, `빈 검색어는 400 (${bad.status})`)
     const calls = await llmCalls()
     ok(calls.some((c) => c.type === 'search-route') && calls.some((c) => c.type === 'search-suggest'), '라우터·추천 LLM 호출 기록')
+  }
+
+  // ── 10.6b 홈 개인화(인사말·보라 칩) + 인기 검색어(파랑 칩) ──
+  console.log('10.6b) 홈 개인화 인사말·인기 검색어')
+  {
+    const home = await fetch(BFF + '/api/search/home', {
+      method: 'POST', headers: plain,
+      body: JSON.stringify({
+        name: '유진', profile: [{ label: '피부타입', value: '복합성' }],
+        now: { iso: '2026-09-13T15:20:00+09:00', hour: 15, weekday: 0 },
+        threads: [{ title: '여름 쿠션 지속력', stage: 'plan', status: 'ongoing', live: true, cart: ['모의 쿠션'], answers: ['복합성', '지속력'] }],
+        recentSearches: ['여름 쿠션 지속력'],
+      }),
+    }).then((r) => r.json())
+    ok(home?.source === 'llm' && /유진님/.test(home?.greeting || ''), `개인화 인사말 LLM (${home?.greeting})`)
+    ok(home?.suggestions?.length === 3, `개인화 추천 검색어 3개 (${home?.suggestions?.length})`)
+    ok(home?.weather?.label === '대체로 맑음' && home?.weather?.tempC === 24.5, `날씨 조회·라벨 (${home?.weather?.label} ${home?.weather?.tempC})`)
+    const homeCall = (await llmCalls()).find((c) => c.type === 'home-personalize')
+    ok(!!homeCall && homeCall.user.includes('담은 상품: 모의 쿠션') && homeCall.user.includes('대체로 맑음'), '홈 인사 요청에 쓰레드 요약·날씨 포함')
+    const badHome = await fetch(BFF + '/api/search/home', { method: 'POST', headers: plain, body: JSON.stringify({ now: { iso: 'x', hour: 25, weekday: 0 } }) })
+    ok(badHome.status === 400, `시각 범위 밖은 400 (${badHome.status})`)
+
+    const pop = await fetch(BFF + '/api/search/popular?limit=3').then((r) => r.json())
+    ok(pop?.items?.length === 3 && pop.items[0].count >= pop.items[1].count && pop.items[1].count >= pop.items[2].count, `인기 검색어 상위 3 내림차순 (${pop?.items?.map((i) => i.keyword).join(', ')})`)
+    ok(pop?.source === 'seed' || pop?.source === 'kv', `원천 표식 (${pop?.source})`)
+    const top = pop.items[0]
+    await fetch(BFF + '/api/search/route', { method: 'POST', headers: plain, body: JSON.stringify({ query: top.keyword }) })
+    await new Promise((r) => setTimeout(r, 300))
+    const pop2 = await fetch(BFF + '/api/search/popular?limit=3').then((r) => r.json())
+    ok(pop2?.items?.[0]?.keyword === top.keyword && pop2.items[0].count === top.count + 1, `후보 표 검색어 제출 시 count+1 (${top.count} → ${pop2?.items?.[0]?.count})`)
+    const kv = await fetch(MOCK + '/internal/settings/search-popular').then((r) => r.json())
+    ok(Array.isArray(kv?.value) && kv.value.some((row) => row.keyword === top.keyword && row.count === top.count + 1), 'core KV search-popular 에 표 시딩·반영')
+    const popMax = await fetch(BFF + '/api/search/popular?limit=99').then((r) => r.json())
+    ok(popMax?.items?.length === 10, `limit 상한 10 (${popMax?.items?.length})`)
   }
 
   console.log('10.7) 설문 단계 실행·판정 (stage=survey)')

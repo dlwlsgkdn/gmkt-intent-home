@@ -85,6 +85,7 @@ export function exploreItemsFrom(config) {
     make('greeting', { text: merged.greeting }),
     make('searchBox', { placeholder: merged.searchPlaceholder, multiline: merged.searchOverflow === 'multiline' }),
     make('scenarioChips', {}),
+    make('recommendChips', {}), // 개인화(보라)·인기(파랑) 추천 검색어 — 내용은 홈이 채운다
     make('storyFeature', { ...stories[0] }),
     make('storyCard', { kicker: stories[1].kicker, title: stories[1].title, imageUrl: stories[1].imageUrl }),
     make('storyCard', { kicker: stories[2].kicker, title: stories[2].title, imageUrl: stories[2].imageUrl }),

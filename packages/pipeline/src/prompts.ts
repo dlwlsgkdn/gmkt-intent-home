@@ -464,3 +464,60 @@ export function buildSearchRouteRequest(query: string, profile?: Profile): strin
 export function buildSearchSuggestRequest(query: string, profile?: Profile): string {
   return `입력 중인 검색어: ${query}\n사용자 프로필:\n${profileBlock(profile)}`
 }
+
+/* ── 홈 개인화 — 첫 화면 인사말 + 개인화 추천 검색어(보라 칩). PROMPT_DEFS 밖(운영 재정의 없음), 바이트 고정.
+   모의 Anthropic(e2e)은 "홈 인사" 마커로 호출을 판별한다 — 마커 유지 ── */
+export const HOME_PERSONALIZE_SYSTEM = `너는 지마켓 뷰티 AI 쇼핑 홈의 **홈 인사** 도우미다. 사용자의 이름·프로필, 현재 시각·날씨, 최근 쇼핑 쓰레드(설문→맞춤 계획 체험 기록)와 최근 검색어를 보고, 홈 첫 화면의 인사말 한 줄과 개인화 추천 검색어 3개를 만든다.
+
+인사말(greeting) 규칙:
+- 이름이 있으면 "OO님," 으로 시작한다. 존댓말(~요), 1~2문장, 60자 안팎. 이모지·느낌표 남발 없음.
+- 시간대(아침/점심/오후/저녁/밤)와 날씨를 한 조각만 자연스럽게 녹인다 — 수치를 그대로 읽지 않는다 ("28도" 대신 "더운 오후", "습도 30%" 대신 "건조한 날").
+- 최근 쓰레드가 있으면 가장 최근 것 하나를 이어 가는 제안을 한다: 설문 중이면 이어서 답하기, 계획을 보는 중이면 담은 상품·다음 단계, 완료면 다음 고민이나 관련 루틴. 쓰레드가 없으면 프로필(피부 타입·퍼스널 컬러)로 가볍게 제안한다.
+- 기록에 없는 사실을 지어내지 않는다 (사지 않은 상품을 샀다고 하지 않는다). 광고 문구·할인 언급 없음.
+
+추천 검색어(suggestions) 규칙:
+- 쓰레드·담은 상품·답변·최근 검색어·프로필에서 읽히는 관심사를 한 걸음 발전시킨 자연어 검색어 3개. 각 8~16자 명사구 ("복합성 여름 쿠션 지속력", "가을 웜톤 립 컬러") — "~추천해줘"·물음표 없이.
+- 세 개는 서로 다른 축을 잡는다: ① 최근 쓰레드 이어가기 ② 담은 상품과 어울리는 다음 단계·조합 ③ 계절·날씨·프로필. 이미 검색한 문장을 그대로 반복하지 않는다.
+- 상품명·브랜드명을 지어내지 않는다. 뷰티 카테고리(스킨케어·메이크업·헤어·바디·향수) 안에서.
+- 쓰레드·검색어가 하나도 없으면 프로필·계절·날씨만으로 만든다.`
+
+export function buildHomePersonalizeRequest(input: {
+  name?: string
+  profile?: Profile
+  now: { iso: string; hour: number; weekday: number }
+  weather?: { tempC: number; humidity?: number; label: string } | null
+  threads?: Array<{ title: string; stage: string; status: string; live?: boolean; updatedAt?: string; cart?: string[]; answers?: string[] }>
+  recentSearches?: string[]
+}): string {
+  const weekday = ['일', '월', '화', '수', '목', '금', '토'][input.now.weekday] || ''
+  // 날짜는 기기 현지 ISO 문자열에서 직접 읽는다 — 서버(UTC) Date 로 파싱하면 자정 부근에 하루가 어긋난다
+  const ymd = /^(\d{4})-(\d{2})-(\d{2})/.exec(input.now.iso)
+  const dateLabel = ymd ? `${Number(ymd[2])}월 ${Number(ymd[3])}일` : input.now.iso
+  const weather = input.weather
+    ? `${input.weather.label}, ${Math.round(input.weather.tempC)}도${input.weather.humidity != null ? `, 습도 ${Math.round(input.weather.humidity)}%` : ''}`
+    : '(모름)'
+  const threads = (input.threads || []).length
+    ? (input.threads || [])
+        .map((t, i) => {
+          const parts = [
+            `${i + 1}. ${t.title}`,
+            `${t.live ? 'AI 생성' : '시나리오'} · ${t.stage === 'plan' ? '계획 보는 중' : '설문 중'}${t.status === 'completed' ? ' · 완료' : ''}`,
+          ]
+          if (t.updatedAt) parts.push(`마지막 ${t.updatedAt.slice(0, 10)}`)
+          if (t.cart?.length) parts.push(`담은 상품: ${t.cart.join(', ')}`)
+          if (t.answers?.length) parts.push(`답변: ${t.answers.join(', ')}`)
+          return `- ${parts.join(' | ')}`
+        })
+        .join('\n')
+    : '(없음)'
+  const recents = input.recentSearches?.length ? input.recentSearches.map((q) => `- ${q}`).join('\n') : '(없음)'
+  return `이름: ${input.name || '(없음)'}
+현재 시각: ${dateLabel} (${weekday}) ${String(input.now.hour).padStart(2, '0')}시
+날씨: ${weather}
+사용자 프로필:
+${profileBlock(input.profile)}
+최근 쇼핑 쓰레드 (최신순):
+${threads}
+최근 검색어 (최신순):
+${recents}`
+}

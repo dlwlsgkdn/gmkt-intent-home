@@ -11,6 +11,7 @@ import { composeMakeup, matchAspectTo, toPhotoDataUrl } from '../lib/makeupCompo
 import { loadLookRender, saveLookRender } from '../lib/lookCache.js'
 import { BgBlobs, FloatingBar, ViewerDeviceControl } from './Frame.jsx'
 import ThreadPanel from './ThreadPanel.jsx'
+import ThreadCartSheet from './ThreadCartSheet.jsx'
 import ProductDetailPanel from './ProductDetailPanel.jsx'
 import LiveFeedbackBubble, {
   buildLiveFeedbackPayload,
@@ -267,7 +268,8 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const [completed, setCompleted] = useState(false)
   const [keyword, setKeyword] = useState(null)
   const [productDetail, setProductDetail] = useState(null) // 상품 상세보기 사이드 패널 (null=닫힘)
-  const [threadOrigin, setThreadOrigin] = useState(null)
+  const [threadOrigin, setThreadOrigin] = useState(null) // 쓰레드 히스토리 패널 — 담은 상품 시트의 링크로만 연다
+  const [cartSheet, setCartSheet] = useState(false) // 플로팅 버튼 → 현재 쓰레드의 담은 상품 시트
   const [reselecting, setReselecting] = useState(false) // "설문 다시 선택" 확인 후 잠금 해제 상태 — 새 계획 생성 시 다시 잠김
   const [reselectConfirm, setReselectConfirm] = useState(false) // 재선택 확인 다이얼로그
   /* 피드백(평가) — 단계별 { review, components }. 서버에는 action 스텝(type='feedback')으로
@@ -1065,7 +1067,8 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
          평면으로 본다(plain). DOM 은 같아서 페이지가 다시 마운트되지 않는다 */}
       <DeviceFrame device={viewer} plain={fbMode && fbAvailable}>
       <BgBlobs />
-      <FloatingBar onList={(origin) => setThreadOrigin((v) => (v ? null : origin || 'right'))} />
+      {/* 플로팅 버튼 — 체험 화면에서는 쓰레드 목록이 아니라 **지금 진행 중인 쓰레드**의 담은 상품 시트를 연다(2026-09) */}
+      <FloatingBar label="현재 쇼핑 쓰레드" onList={() => setCartSheet(true)} />
       <section className={'sb-player sb-player--live min-h-screen relative z-10' + (fillActive ? ' sb-player--fill' : '')}>
         <div className={'sb-live-annotate' + (fbMode && fbAvailable ? ' is-on' : '')}>
         <div className="sb-phone sb-phone--player" ref={phoneRef} style={{ width: viewer.w }}>
@@ -1265,6 +1268,26 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
       {/* 상품 상세보기 사이드 패널 — 외부몰 페이지 iframe (모바일은 전체화면) */}
       <ProductDetailPanel product={productDetail} onClose={() => setProductDetail(null)} />
       </DeviceFrame>
+
+      {/* 현재 쓰레드의 담은 상품 시트 — 쇼핑 쓰레드 패널 카드가 여는 것과 같은 시트. 파트는 생성된 계획의 단계(guide) 목록, ⊖ 는 이 체험의
+         담기 상태에서 뺀다(기록은 recordThread 효과가 따라간다). 계획이 아직 없으면 CTA 는 시트만 닫는 「설문 이어서 답하기」 */}
+      {cartSheet && (
+        <ThreadCartSheet
+          thread={{ title: liveQuery || 'AI 실시간 생성', cart }}
+          steps={planPage ? productLookupFromPlanPage(planPage).steps : []}
+          ctaLabel={planPage ? '뷰티 맞춤 계획 보기' : '설문 이어서 답하기'}
+          onClose={() => setCartSheet(false)}
+          onRemove={(index) => setCart((prev) => prev.filter((_, i) => i !== index))}
+          onOpenPlan={() => {
+            setCartSheet(false)
+            if (planPage) goPlan()
+          }}
+          onOpenList={() => {
+            setCartSheet(false)
+            setThreadOrigin('right')
+          }}
+        />
+      )}
 
       {/* 설문 재선택 확인 — 잠금 해제는 이 다이얼로그를 거쳐서만 */}
       {reselectConfirm && (

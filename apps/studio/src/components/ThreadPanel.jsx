@@ -2,17 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { timeAgo } from '../lib/timeAgo.js'
 import { fetchLiveThread, listLiveThreads } from '../lib/liveApi.js'
 import BottomSheet from './ui/BottomSheet.jsx'
-import {
-  cartEntries,
-  cartNeedsEnrich,
-  cartTotal,
-  enrichCartEntries,
-  formatWon,
-  groupCartByStep,
-  parsePrice,
-  productLookupFromItems,
-  productLookupFromPlanPage,
-} from '../lib/cart.js'
+import ThreadCartSheet, { CartThumb } from './ThreadCartSheet.jsx'
+import { cartEntries, cartNeedsEnrich, enrichCartEntries, productLookupFromItems, productLookupFromPlanPage } from '../lib/cart.js'
 
 /* 옛 이름-만 담기 기록의 썸네일 보정 — 라이브 쓰레드는 서버 계획 페이지를 한 번 받아 상품 표를 만든다.
    모듈 캐시: threadId → null(받는 중) | Map(완료 — 실패면 빈 표라 다시 받지 않는다) */
@@ -68,11 +59,6 @@ const MoreIcon = () => (
     <circle cx="19" cy="12" r="1.8" />
   </svg>
 )
-const ChevronIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M9 6l6 6-6 6" />
-  </svg>
-)
 const TrashIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13M10 11v6M14 11v6" />
@@ -84,129 +70,6 @@ const LinkIcon = () => (
     <path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.5-1.5" />
   </svg>
 )
-const MinusIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-    <path d="M6 12h12" />
-  </svg>
-)
-
-/* 담은 상품 썸네일 — 상품 카드와 같은 재료(lib/cart.js 항목): 이미지가 있으면 잘라(cover) 채우고, 목업 이모지면
-   그 배경·이모지를, 둘 다 없으면(옛 이름-만 기록) 첫 글자를 보여준다 */
-function CartThumb({ entry, className }) {
-  const [failed, setFailed] = useState(false)
-  const name = String(entry.name || '').trim()
-  if (entry.imageUrl && !failed) {
-    return (
-      <span className={className + ' is-image'}>
-        <img src={entry.imageUrl} alt="" draggable={false} onError={() => setFailed(true)} />
-      </span>
-    )
-  }
-  if (entry.emoji) {
-    return (
-      <span className={className + ' is-emoji'} style={entry.gradient ? { background: entry.gradient } : undefined} aria-hidden="true">
-        {entry.emoji}
-      </span>
-    )
-  }
-  return <span className={className} aria-hidden="true">{name.charAt(0)}</span>
-}
-
-const MALL_TONE = { 'G마켓': 'gmarket', '지마켓': 'gmarket', '올리브영': 'oliveyoung' }
-const mallOf = (entry) => (entry.external ? entry.mall || '외부몰' : entry.mall || 'G마켓')
-
-/* 담은 상품 상세 시트 — Figma ThreadMoreSheet: 제목 + ✕ · 요약 행(파트 · 개수 | 합계) · 파트 카드(단계 제목 + 배지, 상품 행:
-   60px 썸네일 · [브랜드] 상품명 · 가격 · 몰 · 빼기 ⊖) · 푸터 「뷰티 맞춤 계획 보기」 */
-function CartSheet({ thread, steps = [], onClose, onRemove, onOpenPlan }) {
-  const entries = cartEntries(thread.cart)
-  const groups = groupCartByStep(thread.cart)
-  const total = cartTotal(thread.cart)
-  /* 파트 순서는 계획의 단계 목록을 따른다 — 담은 상품이 없는 단계도 빈 파트 행으로 보여 "어느 단계가 비었는지"가
-     한눈에 들어온다 (Figma ThreadPartCardMargin/EmptyPartRow). 단계 목록을 모르는 옛 기록은 담은 순서 그대로 */
-  const byStep = new Map(groups.map((group) => [group.step, group]))
-  const ordered = steps.map((s) => ({
-    step: s.title,
-    stepBadge: byStep.get(s.title)?.stepBadge || s.badge || '',
-    entries: byStep.get(s.title)?.entries || [],
-  }))
-  const leftovers = groups.filter((group) => !steps.some((s) => s.title === group.step))
-  const parts = [...ordered, ...leftovers]
-  const filled = parts.filter((part) => part.entries.length > 0).length
-  const summary = steps.length
-    ? `${filled}/${parts.length} 파트 · ${entries.length}개 담음`
-    : `${filled ? `${filled}파트 · ` : ''}${entries.length}개 담음`
-  return (
-    <BottomSheet
-      title={thread.title}
-      align="start"
-      closable
-      onClose={onClose}
-      footer={
-        <button type="button" className="sb-cart-sheet__cta" onClick={onOpenPlan}>뷰티 맞춤 계획 보기</button>
-      }
-    >
-      <div className="sb-cart-sheet__summary">
-        <span>{summary}</span>
-        {total != null && <strong className="sb-cart-sheet__total">{formatWon(total)}</strong>}
-      </div>
-      <div className="sb-cart-sheet__parts">
-        {parts.map((group) => (
-          <section key={group.step || '__rest'} className="sb-cart-part">
-            {group.entries.length === 0 ? (
-              /* 빈 파트 — 점선 썸네일 자리 + 단계 제목·배지 + 안내, 누르면 계획으로 (Figma EmptyPartRow) */
-              <button type="button" className="sb-cart-part__empty" onClick={onOpenPlan} title="계획에서 이 단계의 상품을 담기">
-                <span className="sb-cart-part__empty-thumb" aria-hidden="true"><PlusIcon /></span>
-                <span className="sb-cart-part__empty-info">
-                  <span className="sb-cart-part__head sb-cart-part__head--empty">
-                    <span className="sb-cart-part__title">{group.step || '담은 상품'}</span>
-                    {group.stepBadge ? <span className="sb-cart-part__badge">{group.stepBadge}</span> : null}
-                  </span>
-                  <span className="sb-cart-part__placeholder">상품을 추가해 보세요</span>
-                </span>
-                <span className="sb-cart-part__chevron" aria-hidden="true"><ChevronIcon /></span>
-              </button>
-            ) : (
-              <>
-                <div className="sb-cart-part__head">
-                  <h4 className="sb-cart-part__title">{group.step || '담은 상품'}</h4>
-                  {group.stepBadge ? <span className="sb-cart-part__badge">{group.stepBadge}</span> : null}
-                </div>
-                {group.entries.map((entry) => {
-                  const mall = mallOf(entry)
-                  const tone = MALL_TONE[mall] || (entry.external ? 'plain' : 'gmarket')
-                  const price = parsePrice(entry.price)
-                  return (
-                    <div key={entry.index} className="sb-cart-item">
-                      <CartThumb entry={entry} className="sb-cart-item__thumb" />
-                      <div className="sb-cart-item__info">
-                        <p className="sb-cart-item__name">
-                          {entry.brand ? <span className="sb-cart-item__brand">[{entry.brand}]</span> : null}
-                          {entry.name}
-                        </p>
-                        {price != null && <p className="sb-cart-item__meta">{formatWon(price)}</p>}
-                        <span className={'sb-cart-item__mall sb-cart-item__mall--' + tone}>{mall}</span>
-                      </div>
-                      <button
-                        type="button"
-                        className="sb-cart-item__remove"
-                        aria-label={`${entry.name} 빼기`}
-                        title="담은 상품에서 빼기"
-                        onClick={() => onRemove(entry.index)}
-                      >
-                        <MinusIcon />
-                      </button>
-                    </div>
-                  )
-                })}
-              </>
-            )}
-          </section>
-        ))}
-      </div>
-    </BottomSheet>
-  )
-}
-
 /* 삭제 확인 모달 — Figma "정말로 삭제하시겠습니까?" (가운데 카드 · 삭제할게요 / 아니오) */
 function ConfirmSheet({ title, message, confirmLabel, onConfirm, onClose }) {
   return (
@@ -628,7 +491,7 @@ export default function ThreadPanel({ api, open, origin = 'right', onClose }) {
         </BottomSheet>
       )}
       {sheet && sheet.kind === 'cart' && sheetThread && (
-        <CartSheet
+        <ThreadCartSheet
           thread={{ ...sheetThread, cart: enrichedCartOf(sheetThread) }}
           steps={(lookupFor(sheetThread) && lookupFor(sheetThread).steps) || []}
           onClose={() => setSheet(null)}

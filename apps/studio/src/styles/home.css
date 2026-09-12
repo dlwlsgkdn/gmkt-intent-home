@@ -931,3 +931,45 @@
   cursor: pointer;
 }
 .sb-thread__more-btn:hover { border-color: var(--dk-brand); color: var(--dk-brand); }
+
+/* ── 추천 검색어 칩 (2026-09) — 검색창 아래 두 톤(Figma Search 랜딩 ChipSection): 보라 = 내 쇼핑 쓰레드로 만든 개인화
+   자연어 검색어(자연어 칩 #F3F0FF/#7950F2), 파랑 = 전체 사용자 인기 검색어 `#키워드`(키워드 칩 #E3ECFF/#3E7CF8 — 위 기본 톤).
+   내용은 hooks/useHomePersonalize 가 채우고 바뀌면 크로스페이드(.sb-xfade)로 갈아끼운다 ── */
+.sb-recochips { width: 100%; }
+.clean-tag-row .suggestion-tag.sb-chip-reco--personal { background: var(--dk-brand-tint); color: var(--dk-brand); }
+.clean-tag-row .suggestion-tag.sb-chip-reco--personal:hover { background: var(--dk-brand-soft); color: var(--dk-brand-deep); }
+/* 캔버스 자리표시자 — 실제 문구는 홈에서 채워진다 */
+.clean-tag-row .suggestion-tag.sb-chip-reco--sample { opacity: 0.6; border: 1px dashed currentColor !important; background: transparent; cursor: default; }
+
+/* ── 크로스페이드 (components/ui/CrossFade.jsx) — 기본 인사말·휴리스틱 칩 위에 개인화 결과가 겹쳐 떠오른다: 층을 grid 한 칸에
+   포개 전환 중 높이는 큰 쪽을 따르고, 떠나는 층은 제자리에서 흐려진다 ── */
+.sb-xfade { display: grid; }
+.sb-xfade__layer { grid-area: 1 / 1; min-width: 0; }
+.sb-xfade__layer.is-leaving { pointer-events: none; animation: sb-xfade-out 0.45s var(--sb-ease) forwards; }
+.sb-xfade__layer.is-entering { animation: sb-xfade-in 0.7s var(--sb-ease) both; }
+@keyframes sb-xfade-out { to { opacity: 0; } }
+@keyframes sb-xfade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ── 담은 상품 시트 — 체험 화면 플로팅 버튼용 추가분(2026-09): 계획 단계·담은 상품이 아직 없을 때의 빈 상태와,
+   푸터 CTA 밑 「다른 쇼핑 쓰레드 보기」 링크 ── */
+.sb-cart-sheet__empty { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 40px 16px 36px; text-align: center; }
+.sb-cart-sheet__empty-title { margin: 0; font-size: 15px; font-weight: 400; line-height: 22px; color: var(--dk-ink); }
+.sb-cart-sheet__empty-hint { margin: 0; font-size: var(--sb-t-small); font-weight: 300; line-height: 18px; color: var(--dk-muted); word-break: keep-all; }
+.sb-cart-sheet__link {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px 0 6px; /* 밑 여백 — 기기 프레임의 홈 인디케이터 바로 위에 글자가 닿지 않게 */
+  border: 0;
+  background: none;
+  font-size: var(--sb-t-small);
+  font-weight: 400;
+  line-height: 18px;
+  color: var(--dk-muted);
+  text-align: center;
+  cursor: pointer;
+}
+.sb-cart-sheet__link:hover { color: var(--dk-brand-deep); }

@@ -1,6 +1,16 @@
 import React from 'react'
 import { splitTextList } from '../store.js'
 import { Img, kText } from './support.jsx'
+import CrossFade from '../../components/ui/CrossFade.jsx'
+
+/* 추천 검색어 칩 개수 선택지 (인스펙터 select — 값은 문자열로 저장) */
+const CHIP_COUNT_OPTIONS = [
+  { value: '0', label: '표시 안 함' },
+  { value: '1', label: '1개' },
+  { value: '2', label: '2개' },
+  { value: '3', label: '3개' },
+]
+const chipCount = (value) => Math.max(0, Math.min(3, Number(value == null || value === '' ? 3 : value) || 0))
 
 /* 탐색 단계 컴포넌트 — 홈 상단 인사·검색·칩·웹진 스토리 카드 */
 export const EXPLORE_COMPONENTS = {
@@ -8,14 +18,32 @@ export const EXPLORE_COMPONENTS = {
     label: '인사말 배너',
     stage: 'explore',
     icon: '💬',
-    hint: '홈 상단의 그라데이션 밑줄 인사 문구',
-    defaults: { text: '유진님, 오늘은 피부결이 먼저 보이는 베이스 루틴을 가볍게 정리해볼까요?' },
-    fields: [{ key: 'text', label: '인사말 문구', kind: 'textarea' }],
-    render: (p, ctx) => (
-      <div className="beauty-greeting sb-static">
-        <span>{kText(p.text, ctx, 'text')}</span>
-      </div>
-    ),
+    hint: '홈 상단 인사 문구 — 홈에서는 이 문구가 먼저 보이고, 현재 시각·날씨·쇼핑 쓰레드로 만든 개인화 인사가 페이드인으로 이어진다',
+    defaults: { text: '유진님, 오늘은 피부결이 먼저 보이는 베이스 루틴을 가볍게 정리해볼까요?', personalize: true },
+    fields: [
+      { key: 'text', label: '기본 인사말 문구 (개인화 인사가 오기 전까지 보임)', kind: 'textarea' },
+      { key: 'personalize', label: '개인화 인사말로 전환 (시각·날씨·쇼핑 쓰레드)', kind: 'toggle', defaultValue: true },
+    ],
+    /* 홈(player)에서는 기본 문구 → 개인화 문구를 크로스페이드로 잇는다(hooks/useHomePersonalize — ctx.home.greeting.text 가 오면 전환,
+       세션 캐시가 있으면 처음부터 개인화 문구). 캔버스는 기본 문구만(인라인 편집 대상) */
+    render: (p, ctx) => {
+      const live = ctx.mode === 'player' && ctx.home && p.personalize !== false ? ctx.home.greeting : null
+      const personal = live && live.text ? live.text : ''
+      if (ctx.mode !== 'player') {
+        return (
+          <div className="beauty-greeting sb-static">
+            <span>{kText(p.text, ctx, 'text')}</span>
+          </div>
+        )
+      }
+      return (
+        <div className={'beauty-greeting sb-static' + (personal ? ' is-personal' : '')}>
+          <CrossFade stamp={personal ? `live:${personal}` : 'base'}>
+            <span>{kText(personal || p.text, ctx, 'text')}</span>
+          </CrossFade>
+        </div>
+      )
+    },
   },
 
   searchBox: {
@@ -105,6 +133,76 @@ export const EXPLORE_COMPONENTS = {
         )}
       </div>
     ),
+  },
+
+  /* 추천 검색어 칩 — 검색창 아래 두 톤(Figma Search 랜딩 ChipSection): 보라 = 내 쇼핑 쓰레드 히스토리로 만든 개인화 자연어 검색어
+     (BFF `/api/search/home`, 실패면 휴리스틱 — 최근 쓰레드 제목·프로필), 파랑 = 전체 사용자 인기 검색어 후보 표 상위(`/api/search/popular`
+     — core KV, 실패면 시드 표) `#키워드`. 내용은 hooks/useHomePersonalize 가 ctx.home 으로 공급하고 바뀌면 크로스페이드로 갈아끼운다.
+     칩 클릭 = 검색 제출(라우터를 거쳐 DDAK 라이브 생성 / 검색 결과 페이지) */
+  recommendChips: {
+    label: '추천 검색어 칩',
+    stage: 'explore',
+    icon: '💡',
+    hint: '보라 = 내 쇼핑 쓰레드로 만든 개인화 검색어 · 파랑 = 전체 사용자 인기 검색어 (내용은 자동)',
+    defaults: { personalCount: '3', popularCount: '3' },
+    fields: [
+      { key: 'personalCount', label: '개인화 추천 검색어 (보라) 개수', kind: 'select', defaultValue: '3', options: CHIP_COUNT_OPTIONS },
+      { key: 'popularCount', label: '인기 검색어 (파랑) 개수', kind: 'select', defaultValue: '3', options: CHIP_COUNT_OPTIONS },
+    ],
+    render: (p, ctx) => {
+      const nPersonal = chipCount(p.personalCount)
+      const nPopular = chipCount(p.popularCount)
+      const home = ctx.mode === 'player' ? ctx.home : null
+      if (!home) {
+        // 캔버스·미리보기 자리표시자 — 실제 문구는 홈에서 쓰레드·인기 표로 채워진다
+        return (
+          <div className="clean-tag-row sb-static">
+            {Array.from({ length: nPersonal }, (_, i) => (
+              <span key={`p${i}`} className="suggestion-tag sb-chip-reco sb-chip-reco--personal sb-chip-reco--sample">내 쓰레드 기반 추천 {i + 1}</span>
+            ))}
+            {Array.from({ length: nPopular }, (_, i) => (
+              <span key={`h${i}`} className="suggestion-tag sb-chip-reco sb-chip-reco--popular sb-chip-reco--sample">#인기_검색어_{i + 1}</span>
+            ))}
+          </div>
+        )
+      }
+      const submit = (text) => {
+        if (ctx.player.submitSearch) ctx.player.submitSearch(text)
+        else ctx.player.setQuery(text)
+      }
+      const personal = ((home.personal && home.personal.items) || []).slice(0, nPersonal)
+      const popular = ((home.popular && home.popular.items) || []).slice(0, nPopular)
+      if (!personal.length && !popular.length) return null
+      const stamp = [...personal.map((t) => `p:${t}`), ...popular.map((row) => `h:${row.keyword}`)].join('|')
+      return (
+        <CrossFade className="sb-recochips sb-static" stamp={stamp}>
+          <div className="clean-tag-row sb-recochips__row">
+            {personal.map((text) => (
+              <button
+                key={`p:${text}`}
+                type="button"
+                className="suggestion-tag sb-chip-reco sb-chip-reco--personal"
+                title="내 쇼핑 쓰레드로 만든 추천 검색어"
+                onClick={() => submit(text)}
+              >
+                {text}
+              </button>
+            ))}
+            {popular.map((row) => (
+              <button
+                key={`h:${row.keyword}`}
+                type="button"
+                className="suggestion-tag sb-chip-reco sb-chip-reco--popular"
+                title={`인기 검색어 · 최근 ${Number(row.count || 0).toLocaleString('ko-KR')}회`}
+                onClick={() => submit(row.keyword)}
+              >
+                #{String(row.keyword).replace(/\s+/g, '_')}
+              </button>
+            ))}
+          </div>
+        </CrossFade>
+      )
+    },
   },
 
   tagRow: {

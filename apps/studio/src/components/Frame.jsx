@@ -12,15 +12,16 @@ export function BgBlobs() {
   )
 }
 
-/* 하단 플로팅 바 — 원본 구성(홈/마이/쓰레드 히스토리) 유지 */
-export function FloatingBar({ onList }) {
+/* 하단 플로팅 바 — 쇼핑 쓰레드 버튼 하나. 무엇을 여는지는 화면이 정한다(2026-09): 홈(검색 페이지)은 쓰레드 히스토리 패널,
+   설문·계획 체험 화면은 지금 진행 중인 쓰레드의 담은 상품 시트(ThreadCartSheet). label 이 접근성 이름·툴팁이다 */
+export function FloatingBar({ onList, label = '쇼핑 쓰레드 히스토리' }) {
   return (
     <nav className="clean-floating-actionbar sb-fabbar" aria-label="빠른 이동">
       <button
         type="button"
         className="clean-floating-actionbar__btn sb-fabbar__btn"
-        aria-label="쇼핑 쓰레드 히스토리"
-        title="쇼핑 쓰레드 히스토리"
+        aria-label={label}
+        title={label}
         /* 버튼이 기기 프레임 우하단에 고정이라 쓰레드 패널은 언제나 오른쪽에서 열린다
            (패널 자체는 left/center 등장도 지원 — ThreadPanel origin) */
         onClick={() => onList('right')}

@@ -39,6 +39,16 @@ export function cartTotal(cart) {
   return any ? sum : null
 }
 
+/* 단계 제목의 리치텍스트 마크업({{서식|텍스트}}·[[키워드]])을 걷어낸 표시용 문자열 — 담은 상품 시트의 파트 제목·묶음 키.
+   기록에는 저자가 적은 원문(마크업 포함)이 그대로 남으므로 읽는 쪽이 같은 규칙으로 걷어내야 옛 기록과 단계 목록이 한 묶음이 된다 */
+export function plainStepTitle(text) {
+  return String(text || '')
+    .replace(/\{\{[^|{}]*\|([^{}]*?)\}\}/g, '$1')
+    .replace(/\[\[([^\]]+)\]\]/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 /* 상품 카드가 속한 계획 단계 제목 — 카드(컨테이너 자식이면 그 컨테이너)보다 앞에 있는 가장 가까운
    planStep. 계획 페이지는 "단계 안내 → 그 단계의 상품 트랙" 순서라 이 규칙이 곧 소속이다 */
 export function stepInfoOfItem(items, itemId) {
