@@ -1233,6 +1233,7 @@
 .sb-product-card2__body {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto; /* 슬롯 높이를 채운다(가로 스크롤 카드 높이 통일 — canvas-content.css .sb-hscroll__slot) */
   gap: 4px;
   padding: 0 2px 2px;
 }
@@ -1249,7 +1250,7 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.sb-product-card2__pricebox { display: flex; flex-direction: column; gap: 1px; margin-top: 2px; }
+.sb-product-card2__pricebox { display: flex; flex-direction: column; gap: 1px; margin-top: auto; padding-top: 2px; } /* 카드가 늘어나면 가격·담기 버튼이 바닥에 붙는다 */
 .sb-product-card2__price { display: flex; align-items: baseline; gap: 4px; }
 .sb-product-card2__price b { font-size: 18px; font-weight: 500; line-height: 23px; color: var(--dk-ink); } /* Figma text/display/lg */
 .sb-product-card2__price em { font-style: normal; font-size: var(--sb-t-caption); font-weight: 300; color: var(--dk-muted); }

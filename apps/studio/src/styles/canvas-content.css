@@ -150,6 +150,14 @@
   /* 패널 전체가 아닌 슬롯의 실제 너비로 내부 카드의 반응형 레이아웃을 결정 */
   container-type: inline-size;
 }
+/* 가로 스크롤 안 카드 높이 통일 (2026-09) — 트랙(flex row)의 기본 stretch 로 슬롯은 이미 트랙 안에서
+   가장 높은 카드 높이로 늘어나지만, 안의 카드는 auto 높이라 바닥이 들쭉날쭉했다. 슬롯(캔버스에선 .sb-child
+   껍데기까지)을 세로 flex 로 두고 카드가 슬롯 높이를 채운다 — 카드 안의 바닥 정렬은 카드 규칙이 맡는다
+   (viewer.css .sb-product-card2: 가격·담기 버튼이 바닥). 저자가 h 를 지정한 슬롯은 그 높이 그대로다 */
+.sb-hscroll__slot,
+.sb-hscroll__slot > .sb-child { display: flex; flex-direction: column; }
+.sb-hscroll__slot > *,
+.sb-hscroll__slot > .sb-child > * { flex: 1 1 auto; }
 .sb-vscroll__slot { flex-shrink: 0; min-width: 0; max-width: 100%; }
 .sb-gridpanel__slot { min-width: 0; max-width: 100%; }
 .sb-carousel__slot { flex: 0 0 100%; scroll-snap-align: center; min-width: 0; max-width: 100%; }
