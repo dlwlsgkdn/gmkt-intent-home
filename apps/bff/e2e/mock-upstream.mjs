@@ -79,7 +79,8 @@ const SURVEY_PHOTO_JSON = JSON.stringify({
   ],
 })
 
-/* 사진을 받은 계획 — 첫 섹션이 가상 메이크업 결과(look)다 (화면이 올린 사진에 tone을 올린다) */
+/* 사진을 받은 계획 — 첫 섹션이 가상 메이크업 결과(look)다. 부위별 사양(spec)이 기기 합성·정밀 렌더의 한 원천이고
+   화면 포인트(points)는 BFF 가 note 에서 파생한다 (v23). 립 색은 일부러 형식이 깨진 값 — sanitizeLookSpec 이 tone 기본색으로 바꾸는지 본다 */
 const SKELETON_LOOK_JSON = JSON.stringify({
   headline: '모의 가상 메이크업 계획',
   summary: '코랄 톤으로 생기를 올리는 모의 요약입니다.',
@@ -89,7 +90,13 @@ const SKELETON_LOOK_JSON = JSON.stringify({
       title: '코랄 생기 데일리 룩',
       desc: '데일리를 고르셔서 과하지 않은 코랄로 잡았어요.',
       tone: 'coral',
-      points: ['립 — 코랄 틴트를 안쪽부터', '볼 — 같은 톤으로 얇게'],
+      spec: {
+        intensity: 'natural',
+        lip: { color: 'coral', finish: 'tint', technique: 'gradient', note: '코랄 틴트를 안쪽부터 번지듯' },
+        cheek: { color: '#FF8F6D', placement: 'apples', strength: 'light', note: '같은 톤으로 볼 앞쪽에 얇게' },
+        eye: { shadow: [], liner: 'none', lashes: 'natural', brow: 'natural', note: '섀도 없이 마스카라만' },
+        base: { finish: 'semi-matte', coverage: 'light', contour: false, highlight: false, note: '결만 정돈한 얇은 베이스' },
+      },
     },
     { kind: 'guide', title: '베이스 정돈', subtitle: '룩이 잘 얹히도록 결부터 고르는 준비', body: '결을 먼저 정리해요.' },
     { kind: 'products', title: '이 룩에 쓸 상품', reason: '코랄 톤 기준으로 고를 거예요.' },

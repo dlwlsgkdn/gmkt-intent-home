@@ -6,7 +6,10 @@
  * 재접속마다 유료 렌더를 다시 돌리는 사고가 났다. IndexedDB는 수백 MB급이라 **원본 화질
  * 그대로** 보관한다 (720px 축소 불필요 — 재접속 화질도 첫 렌더와 같다).
  *
- * 키 = threadId (스노우플레이크 — 문자열 정렬이 곧 시간순), 값 = { tone, image, at }.
+ * 키 = threadId (스노우플레이크 — 문자열 정렬이 곧 시간순), 값 = { tone, key, image, at }.
+ * key 는 렌더 입력의 서명(색조+사양+사진 지문) — 같은 쓰레드에서 사진이나 룩 사양이 바뀌면 옛 렌더를
+ * 다른 사진 위에 올리지 않기 위해서다(2026-09). 옛 행에는 key 가 없다(tone 만) — 호출자가 사양 없는
+ * 페이지에 한해 tone 일치로 받아들인다.
  * 모든 실패는 null/무시로 삼킨다 — 보관은 편의이고 체험을 막지 않는다 (프라이빗 모드 등).
  */
 
@@ -62,7 +65,7 @@ function migrateLegacy() {
         if (!raw) return
         const store = JSON.parse(raw) || {}
         for (const [threadId, v] of Object.entries(store)) {
-          if (v && v.image) await saveLookRender(threadId, v.tone, v.image)
+          if (v && v.image) await saveLookRender(threadId, v.image, { tone: v.tone })
         }
         localStorage.removeItem('ddak-live-look-v1')
       } catch {
@@ -73,7 +76,7 @@ function migrateLegacy() {
   return migrated
 }
 
-/** 보관된 렌더 조회 — { tone, image } 또는 null */
+/** 보관된 렌더 조회 — { tone, key?, image } 또는 null */
 export async function loadLookRender(threadId) {
   if (!threadId) return null
   await migrateLegacy()
@@ -81,10 +84,10 @@ export async function loadLookRender(threadId) {
   return row && row.image ? row : null
 }
 
-/** 렌더 저장 + 오래된 것 정리 (최근 KEEP개만) */
-export async function saveLookRender(threadId, tone, image) {
+/** 렌더 저장 + 오래된 것 정리 (최근 KEEP개만). meta = { tone, key } — key 는 렌더 입력 서명 */
+export async function saveLookRender(threadId, image, meta = {}) {
   if (!threadId || !image) return
-  await withStore('readwrite', (s) => s.put({ tone, image, at: Date.now() }, threadId))
+  await withStore('readwrite', (s) => s.put({ ...meta, image, at: Date.now() }, threadId))
   const keys = await withStore('readonly', (s) => s.getAllKeys())
   if (Array.isArray(keys) && keys.length > KEEP) {
     const stale = [...keys].sort().slice(0, keys.length - KEEP)

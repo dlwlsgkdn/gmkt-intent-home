@@ -90,8 +90,11 @@ SurveyPageWire = { intro, questions: [{ id, question, kind?: 'choice'|'photo', o
 // (데이터 URL을 스텝·프롬프트에 싣지 않기 위해서 — 계획 프롬프트는 "사진을 올렸다"만 안다)
 PlanPageWire   = { headline, summary, sections: [
                    { kind: 'guide',    title, subtitle?, body } |                      // 단계 안내 — 2~3개(다단계 계획), FE가 단계 번호를 붙인다. subtitle = 단계 목적 한 줄(v17부터 필수 생성, 옛 페이지 없음)
-                   { kind: 'look',     title, desc, tone, points?[0..4] } |            // 가상 메이크업 결과 — 사진 질문에 답한 쓰레드에서만. tone = coral|rose|red|peach|brown|plum
-                                                                                       // FE가 기기에 남은 사진을 BEFORE, 같은 사진에 tone을 올린 것을 AFTER로 비포/애프터 투영 (합성은 화면에서)
+                   { kind: 'look',     title, desc, tone, points?[0..4], spec? } |     // 가상 메이크업 결과 — 사진 질문에 답한 쓰레드에서만. tone = coral|rose|red|peach|brown|plum
+                                                                                       // spec(v23) = { intensity: natural|glam, lip{color #rrggbb, finish matte|velvet|glossy|tint, technique full|gradient|overlined, note},
+                                                                                       //   cheek{color, placement apples|cheekbones|drape, strength light|medium|strong, note}, eye{shadow[0..3], liner none|thin|winged, lashes natural|volume, brow natural|defined, note},
+                                                                                       //   base{finish matte|semi-matte|dewy, coverage light|medium|full, contour, highlight, note} } — 기기 합성과 정밀 렌더가 그대로 소비하는 한 원천.
+                                                                                       //   points 는 BFF 가 부위별 note 에서 파생("립 — …"). FE가 기기에 남은 사진을 BEFORE, 같은 사진에 사양대로 칠한 것을 AFTER로 비포/애프터 투영 (합성은 화면에서)
                    { kind: 'products', title, reason, products: CatalogProduct[] } |  // 카탈로그 id 검증 + 웹 상품 URL 검증 통과분만
                    { kind: 'contents', title, reason, items: PlanContentItem[] } |    // 참고 콘텐츠 — 웹 검색으로 확인한 게시글·영상 (URL 검증 통과분만)
                    { kind: 'steps',    title, steps[] } ] }
@@ -117,7 +120,8 @@ CatalogProduct = { id, name, brand, price, tags[], url?, urlKind?: 'pdp'|'search
 **가상 메이크업 정밀 렌더** (`POST /api/threads/:id/look-render`): 계획의 `look` 섹션은 기본적으로
 **기기 안에서** 그려진다(얼굴 랜드마크로 입술·볼에만 색을 얹는 캔버스 합성 — 사진이 서버로 오지
 않는다). 이 엔드포인트는 1단계 합성이 화면에 뜬 뒤 **FE가 이어서 자동으로** 부르는 2단계다: 사진(data URL)을 받아 외부 이미지 편집 모델(OpenAI images.edits — Anthropic API에는
-이미지 생성·편집이 없다)로 룩을 실제로 올려 돌려준다. 계약은 `LookRenderBody`/`LookRenderResult`,
+이미지 생성·편집이 없다)로 룩을 실제로 올려 돌려준다. 본문에 계획 look 섹션의 `spec` 을 실으면 편집 지시문을 고정 풀글램 템플릿이
+아니라 **그 사양에서 생성**한다(`buildLookRenderPrompt` — 립 hex·마감·기법, 치크 위치·발색, 눈, 베이스, 강도 문구. 사양 없는 옛 호출은 템플릿 유지). 계약은 `LookRenderBody`/`LookRenderResult`,
 포트는 `@ddak/pipeline` `ImageEditPort`(프로바이더 중립)다. **사진은 요청 본문에만 있고 스텝에는
 톤·모델·지연만 남는다.** 실패 본문은 SSE와 같은 문법(`{ code, message, retryable }`) —
 `image_not_configured`(OPENAI_API_KEY 없음, 503) / `image_refused`(4xx, 502) / `image_failed`(5xx·타임아웃, 502).

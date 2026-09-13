@@ -4,6 +4,7 @@
 //   → core 기록 → 피드백 재생성(재실행 경로·survey 멱등 스킵) → 설문 재요청 멱등 → legacy 회귀.
 // 실행: npm run build && npm run e2e:mock  (외부 네트워크·API 키 불필요)
 import { spawn } from 'node:child_process'
+import { PROMPT_VERSION } from '@ddak/pipeline'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
@@ -305,7 +306,10 @@ try {
   ok(planMPage?.sections?.[0]?.kind === 'look', `가상 메이크업 결과가 계획 맨 앞 (${planMPage?.sections?.[0]?.kind})`)
   const look = planMPage?.sections?.[0]
   ok(look?.tone === 'coral', `룩 색조 전달 (${look?.tone})`)
-  ok((look?.points ?? []).length === 2, `룩 포인트 유지 (${(look?.points ?? []).length})`)
+  ok(look?.spec?.lip?.finish === 'tint' && look?.spec?.intensity === 'natural', '룩 사양(spec)이 와이어에 실림')
+  ok(look?.spec?.lip?.color === '#f4553a', `깨진 립 색이 tone 기본색으로 정규화 (${look?.spec?.lip?.color})`)
+  ok(look?.spec?.cheek?.color === '#ff8f6d', `치크 색 소문자 정규화 (${look?.spec?.cheek?.color})`)
+  ok((look?.points ?? []).length === 4 && look.points[0] === '립 — 코랄 틴트를 안쪽부터 번지듯', `룩 포인트를 사양 note 에서 파생 (${(look?.points ?? []).length})`)
   ok(planMPage?.sections?.some((s) => s.kind === 'products'), 'look과 상품 섹션이 함께 병합')
   {
     const skCall = (await llmCalls()).filter((c) => c.type === 'skeleton').at(-1)
@@ -321,7 +325,7 @@ try {
   const renderRes = await fetch(`${BFF}/api/threads/${startM.threadId}/look-render`, {
     method: 'POST',
     headers: H,
-    body: JSON.stringify({ photo: tinyPhoto, tone: 'coral', title: '코랄 생기 데일리 룩', points: ['립 — 코랄 틴트'] }),
+    body: JSON.stringify({ photo: tinyPhoto, tone: 'coral', title: '코랄 생기 데일리 룩', points: look?.points, spec: look?.spec }),
   })
   const render = await renderRes.json()
   ok(renderRes.status === 201, `정밀 렌더 응답 201 (${renderRes.status})`)
@@ -331,8 +335,21 @@ try {
     const editCall = (await llmCalls()).filter((c) => c.type === 'image-edit').at(-1)
     ok(!!editCall, '이미지 편집 모델 호출됨')
     ok((editCall?.user || '').includes('same person'), '편집 지시문에 동일성 보존 지시 포함')
+    ok((editCall?.user || '').includes('#f4553a') && (editCall?.user || '').includes('Korean gradient lip'), '편집 지시문이 사양(립 hex·그라데이션)에서 생성됨')
+    ok((editCall?.user || '').includes('no eyeshadow') && !(editCall?.user || '').includes('full-glam'), '사양에 없는 섀도·풀글램 템플릿을 싣지 않는다')
     ok((editCall?.user || '').includes('coral'), '편집 지시문에 룩 색조 반영')
-    ok((editCall?.user || '').includes('opaque coral lipstick'), '편집 지시문 기본 강도 strong (진한 메이크업)')
+    ok((editCall?.user || '').includes('Overall intensity: medium'), '강도는 사양(intensity=natural)이 정한다')
+  }
+  {
+    // 사양 없는 옛 호출(v22 이전 페이지)은 풀글램 템플릿을 그대로 쓴다 — 호환 경로 회귀
+    const legacyRes = await fetch(`${BFF}/api/threads/${startM.threadId}/look-render`, {
+      method: 'POST',
+      headers: H,
+      body: JSON.stringify({ photo: tinyPhoto, tone: 'coral', title: '코랄 생기 데일리 룩', points: ['립 — 코랄 틴트'] }),
+    })
+    ok(legacyRes.status === 201, `사양 없는 정밀 렌더 응답 201 (${legacyRes.status})`)
+    const legacyCall = (await llmCalls()).filter((c) => c.type === 'image-edit').at(-1)
+    ok((legacyCall?.user || '').includes('opaque coral lipstick') && (legacyCall?.user || '').includes('full-glam'), '사양 없는 호출은 풀글램 템플릿 유지')
   }
   {
     const dumpM = await fetch(MOCK + `/internal/dump/${startM.threadId}`).then((r) => r.json())
@@ -579,7 +596,7 @@ try {
   const legacyM = engineMetrics?.engines?.find((e) => e.engine === 'legacy')
   ok(lg?.count >= 1, `전환 계기판 — langgraph 표본 (${lg?.count})`)
   ok(legacyM?.count >= 1, `전환 계기판 — legacy 표본 (${legacyM?.count})`)
-  ok(lg?.promptVersions?.includes('v22'), 'promptVersion 각인 (v22)')
+  ok(lg?.promptVersions?.includes(PROMPT_VERSION), `promptVersion 각인 (${PROMPT_VERSION})`)
 
   {
   console.log('11) 전체 지시서 요청·묶음 적용·충돌 보호')

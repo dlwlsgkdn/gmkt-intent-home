@@ -18,6 +18,63 @@ export const LOOK_TONES = ['coral', 'rose', 'red', 'peach', 'brown', 'plum'] as 
 export const LookTone = z.enum(LOOK_TONES)
 export type LookTone = z.infer<typeof LookTone>
 
+/* ── 가상 메이크업 룩 사양 (2026-09) ──────────────────────────────────────
+ * 색조(tone) 하나로는 "어떤 메이크업인지"가 렌더에 닿지 않았다 — 기기 합성은 톤별 립·볼 색 한 벌만
+ * 칠했고, 정밀 렌더는 고정 풀글램 템플릿 뒤에 한국어 포인트를 붙여 서로 모순됐다(틴트 그라데이션 vs
+ * "never a sheer tint"). 이 사양은 **뼈대 LLM 이 답변에서 정하고 두 렌더가 그대로 소비하는 한 원천**이다:
+ * 기기 합성(makeupComposite)은 hex·마감·기법·위치를 직접 칠하고, 정밀 렌더 프롬프트(buildLookRenderPrompt)는
+ * 이 값에서 영어 지시문을 생성한다. 부위마다 note 한 줄은 사용자에게 보이는 포인트 문구(한국어)라
+ * 화면의 points 는 여기서 파생한다(lookPointsOf). 옛 페이지에는 없으므로 와이어에서는 optional. */
+export const LOOK_INTENSITIES = ['natural', 'glam'] as const
+export const LookIntensity = z.enum(LOOK_INTENSITIES)
+export type LookIntensity = z.infer<typeof LookIntensity>
+
+export const HexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, '색은 #rrggbb 형식이어야 합니다')
+
+export const LOOK_LIP_FINISHES = ['matte', 'velvet', 'glossy', 'tint'] as const
+export const LOOK_LIP_TECHNIQUES = ['full', 'gradient', 'overlined'] as const
+export const LOOK_CHEEK_PLACEMENTS = ['apples', 'cheekbones', 'drape'] as const
+export const LOOK_STRENGTHS = ['light', 'medium', 'strong'] as const
+export const LOOK_LINERS = ['none', 'thin', 'winged'] as const
+export const LOOK_LASHES = ['natural', 'volume'] as const
+export const LOOK_BROWS = ['natural', 'defined'] as const
+export const LOOK_BASE_FINISHES = ['matte', 'semi-matte', 'dewy'] as const
+export const LOOK_COVERAGES = ['light', 'medium', 'full'] as const
+
+export const LookSpec = z.object({
+  /** 전체 강도 — natural(데일리·출근) | glam(파티·데이트·화보). 기기 합성의 불투명도 배율이자 정밀 렌더의 강도 문구 */
+  intensity: LookIntensity,
+  lip: z.object({
+    color: HexColor,
+    finish: z.enum(LOOK_LIP_FINISHES),
+    technique: z.enum(LOOK_LIP_TECHNIQUES),
+    /** 사용자에게 보이는 포인트 한 줄 (한국어) */
+    note: z.string(),
+  }),
+  cheek: z.object({
+    color: HexColor,
+    placement: z.enum(LOOK_CHEEK_PLACEMENTS),
+    strength: z.enum(LOOK_STRENGTHS),
+    note: z.string(),
+  }),
+  eye: z.object({
+    /** 섀도 색 0~3개 — 비면 섀도 없음. 순서: 눈두덩 바탕 → 눈꼬리·크리즈 → 눈앞머리 하이라이트 */
+    shadow: z.array(HexColor).max(3),
+    liner: z.enum(LOOK_LINERS),
+    lashes: z.enum(LOOK_LASHES),
+    brow: z.enum(LOOK_BROWS),
+    note: z.string(),
+  }),
+  base: z.object({
+    finish: z.enum(LOOK_BASE_FINISHES),
+    coverage: z.enum(LOOK_COVERAGES),
+    contour: z.boolean(),
+    highlight: z.boolean(),
+    note: z.string(),
+  }),
+})
+export type LookSpec = z.infer<typeof LookSpec>
+
 /* ── 요청 ────────────────────────────────────────────────────────────── */
 
 export const StartThreadBody = z
@@ -90,6 +147,8 @@ export const LookRenderBody = z.object({
   /** 룩 이름·포인트 — 편집 지시문의 재료 (없으면 톤만으로 만든다) */
   title: z.string().optional(),
   points: z.array(z.string()).max(4).optional(),
+  /** 룩 사양 — 있으면 편집 지시문을 고정 템플릿이 아니라 이 사양에서 생성한다 (계획 look 섹션의 spec 그대로) */
+  spec: LookSpec.optional(),
 })
 export type LookRenderBody = z.infer<typeof LookRenderBody>
 
@@ -205,14 +264,17 @@ export const PlanSectionWire = z.discriminatedUnion('kind', [
   /* 단계 안내 — 제목 · 서브타이틀(단계의 목적 한 줄, 뼈대 프롬프트가 채운다 — 옛 페이지는 없음) · 본문 */
   z.object({ kind: z.literal('guide'), title: z.string(), subtitle: z.string().optional(), body: z.string() }),
   /* 가상 메이크업 결과 — 사진 질문에 답한 쓰레드에서만 만들어진다. FE는 기기에 남은 사진을
-     BEFORE로, 같은 사진에 tone 프리셋을 올린 것을 AFTER로 비포/애프터 컴포넌트에 투영한다
-     (합성은 화면에서 — 서버는 어떤 룩인지만 정한다) */
+     BEFORE로, 같은 사진에 룩을 올린 것을 AFTER로 비포/애프터 컴포넌트에 투영한다
+     (합성은 화면에서 — 서버는 어떤 룩인지(tone + spec)만 정한다) */
   z.object({
     kind: z.literal('look'),
     title: z.string(),
     desc: z.string(),
     tone: LookTone,
+    /** 화면용 포인트 문구 — spec 이 있으면 부위별 note 에서 파생된 값(BFF `skeletonSectionWire`), 옛 페이지는 LLM 원문 */
     points: z.array(z.string()).max(4).optional(),
+    /** 룩 사양 — 기기 합성·정밀 렌더가 소비하는 한 원천 (v23 부터, 옛 페이지에는 없음) */
+    spec: LookSpec.optional(),
   }),
   z.object({
     kind: z.literal('products'),

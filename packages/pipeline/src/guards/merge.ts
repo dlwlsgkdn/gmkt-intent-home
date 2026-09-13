@@ -1,4 +1,5 @@
 import type { PlanSectionWire } from '@ddak/schema'
+import { skeletonSectionWire } from '../look'
 import type { PlanSkeletonSectionGen } from '../schemas'
 
 /*
@@ -262,7 +263,7 @@ export function composePlanSections(skeleton: PlanSkeletonSectionGen[], generate
       return
     }
     // 텍스트 섹션은 와이어 변환을 거친다 — look 은 사양 정규화 + 포인트 파생 (look.ts skeletonSectionWire, 스트리밍 조각과 같은 규칙)
-    sections.push(s as PlanSectionWire)
+    sections.push(skeletonSectionWire(s) as PlanSectionWire)
   })
   flush(skeleton.length)
   return { sections, pending }

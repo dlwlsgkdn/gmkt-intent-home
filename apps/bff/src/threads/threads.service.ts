@@ -28,6 +28,7 @@ import {
   groundContentsSection,
   groundProductsSection,
   isSlotKind,
+  skeletonSectionWire,
   mergePlanSections,
   parseDataUrl,
   planQualityOf,
@@ -211,8 +212,9 @@ export class ThreadsService {
           onElement: (element, index) => {
             const parsed = PlanSkeletonSectionGen.safeParse(element)
             if (!parsed.success) return
-            // 상품·콘텐츠 자리는 내보내지 않는다 — 검색 단계 결과가 이 인덱스를 차지한다
-            if (!isSlotKind(parsed.data.kind)) stream.onSection?.(parsed.data as PlanSectionWire, index, true)
+            // 상품·콘텐츠 자리는 내보내지 않는다(null) — 검색 단계 결과가 이 인덱스를 차지한다
+            const wire = skeletonSectionWire(parsed.data)
+            if (wire) stream.onSection?.(wire, index, true)
           },
           // 자라는 중인 섹션 — 제목이 나오기 시작하면 토큰 단위로 같은 index에 재전송한다
           onElementPartial: (element, index) => {
@@ -246,7 +248,7 @@ export class ThreadsService {
               pending.push(i)
               return null
             }
-            return s as PlanSectionWire
+            return skeletonSectionWire(s)
           })
           stream.onSkeleton(
             { headline: result.content.headline, summary: result.content.summary, sections: wireSections },
@@ -411,7 +413,8 @@ export class ThreadsService {
   async renderLook(threadId: string, body: LookRenderBody): Promise<LookRenderResult> {
     const photo = parseDataUrl(body.photo)
     if (!photo) throw new BadRequestException('photo는 data:image/*;base64 형식이어야 합니다')
-    const prompt = buildLookRenderPrompt({ tone: body.tone, title: body.title, points: body.points })
+    // 사양(spec)이 있으면 지시문을 사양에서 생성한다 — 계획 look 섹션의 값 그대로 (없는 옛 페이지는 풀글램 템플릿)
+    const prompt = buildLookRenderPrompt({ tone: body.tone, title: body.title, points: body.points, spec: body.spec })
     const result = await this.imageEdit.edit({
       imageBase64: photo.base64,
       mediaType: photo.mediaType,
@@ -421,7 +424,13 @@ export class ThreadsService {
     try {
       await this.recordEvent(threadId, {
         type: 'look-render',
-        data: { tone: body.tone, model: result.meta.model ?? null, latencyMs: result.meta.latencyMs ?? null },
+        data: {
+          tone: body.tone,
+          intensity: body.spec?.intensity ?? null,
+          spec: body.spec ?? null,
+          model: result.meta.model ?? null,
+          latencyMs: result.meta.latencyMs ?? null,
+        },
       })
     } catch (e) {
       this.logger.warn(`정밀 렌더 기록 실패: ${(e as Error).message}`)

@@ -16,6 +16,7 @@ import {
   groundProductsSection,
   isSlotKind,
   mergePlanSections,
+  skeletonSectionWire,
   planQualityOf,
   surveyStreamHandlers,
   type GroundingDrop,
@@ -192,8 +193,9 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
         onElement: (element, index) => {
           const parsed = PlanSkeletonSectionGen.safeParse(element)
           if (!parsed.success) return
-          // 상품·콘텐츠 자리는 내보내지 않는다 — 검색 단계 결과가 이 인덱스를 차지한다
-          if (!isSlotKind(parsed.data.kind)) coord.section(parsed.data as PlanSectionWire, index, true)
+          // 상품·콘텐츠 자리는 내보내지 않는다(null) — 검색 단계 결과가 이 인덱스를 차지한다
+          const wire = skeletonSectionWire(parsed.data)
+          if (wire) coord.section(wire, index, true)
         },
         // 자라는 중인 섹션 — 제목이 나오기 시작하면 토큰 단위로 같은 index에 재전송한다
         onElementPartial: (element, index) => {

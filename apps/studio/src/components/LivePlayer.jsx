@@ -567,10 +567,15 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   }, [threadId, surveyPage, answers])
 
   /* 가상 메이크업 합성 — 계획에 룩 섹션이 있고 사진이 있을 때만. 실패(모델 미로드·얼굴
-     미검출)는 null 유지 = tone 프리셋 렌더 그대로다 (향상 계층이라 체험을 막지 않는다) */
-  const lookTone = ((planPage && planPage.sections) || []).find((s) => s && s.kind === 'look')?.tone || ''
+     미검출)는 null 유지 = tone 프리셋 렌더 그대로다 (향상 계층이라 체험을 막지 않는다).
+     룩은 색조(tone)만이 아니라 **사양(spec — 강도·립·치크·눈·베이스)**까지 합성에 들어간다:
+     기기 합성과 정밀 렌더가 같은 사양을 소비해 두 단계의 룩이 같다(사양 없는 옛 페이지는 tone 기본 사양) */
+  const lookSection = ((planPage && planPage.sections) || []).find((s) => s && s.kind === 'look') || null
+  const lookTone = lookSection?.tone || ''
+  // 색조+사양을 값으로 묶은 서명 — planPage 참조는 스트리밍마다 바뀌므로 효과 의존성은 이 문자열이다
+  const lookSig = lookSection ? JSON.stringify({ tone: lookSection.tone, spec: lookSection.spec || null }) : ''
   useEffect(() => {
-    if (!lookTone || !livePhoto) {
+    if (!lookSig || !livePhoto) {
       setLookAfter(null)
       setLookStage('skeleton')
       return undefined
@@ -580,7 +585,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     preciseRef.current = false
     refineRef.current = null
     setLookStage('skeleton')
-    composeMakeup(livePhoto, lookTone).then((url) => {
+    composeMakeup(livePhoto, JSON.parse(lookSig)).then((url) => {
       // 정밀 렌더가 이미 적용됐으면 덮지 않는다 (기기 합성이 늦게 끝나는 경우)
       if (cancelled || preciseRef.current) return
       if (url) {
@@ -594,7 +599,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     return () => {
       cancelled = true
     }
-  }, [lookTone, livePhoto])
+  }, [lookSig, livePhoto])
 
   /* 워크스페이스 쓰레드 기록 — Player와 같은 upsert 흐름, live 마커로 구분한다.
      threadId(스노우플레이크)가 나온 뒤부터 단계 이동/답변/담기/완료마다 갱신 */
@@ -643,15 +648,20 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const planPageRef = useRef(planPage)
   planPageRef.current = planPage
   useEffect(() => {
-    if (!landmarkReady || !threadId || !livePhoto || !lookTone) return undefined
-    const key = `${threadId}:${lookTone}:${livePhoto.length}`
+    if (!landmarkReady || !threadId || !livePhoto || !lookSig) return undefined
+    const key = `${threadId}:${lookSig}:${livePhoto.length}`
     if (refineRef.current === key) return undefined
     refineRef.current = key
+    const hasSpec = !!JSON.parse(lookSig).spec
+    // 보관 키 = 색조+사양+사진 지문 — 같은 쓰레드에서 사진이나 사양이 바뀌면 옛 렌더를 다른 사진 위에 올리지 않는다
+    const cacheKey = `${lookSig}:${livePhoto.length}`
     let cancelled = false
     ;(async () => {
-      // 지난 결과가 있으면 그대로 — 같은 쓰레드·색조에 유료 호출을 반복하지 않는다 (IndexedDB)
+      // 지난 결과가 있으면 그대로 — 같은 입력에 유료 호출을 반복하지 않는다 (IndexedDB).
+      // key 없는 옛 보관분은 사양 없는 옛 페이지에 한해 색조 일치로 받아들인다
       const cached = await loadLookRender(threadId)
-      if (cached && cached.tone === lookTone && cached.image) {
+      const cacheHit = cached && cached.image && (cached.key ? cached.key === cacheKey : !hasSpec && cached.tone === lookTone)
+      if (cacheHit) {
         // 옛 보관분은 비율 보정 전 결과일 수 있다 — 원본 비율로 되맞춰 쓰고, 바뀌었으면 보관도 갱신
         const ref = await toPhotoDataUrl(livePhoto)
         const fitted = ref ? await matchAspectTo(cached.image, ref) : cached.image
@@ -659,7 +669,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         preciseRef.current = true
         setLookAfter(fitted)
         setLookStage('precise')
-        if (fitted !== cached.image) saveLookRender(threadId, lookTone, fitted)
+        if (fitted !== cached.image) saveLookRender(threadId, fitted, { tone: lookTone, key: cacheKey })
         return
       }
       const caps = await fetchLiveCapabilities()
@@ -676,6 +686,8 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
           tone: look.tone,
           title: look.title,
           points: look.points,
+          // 사양이 있으면 BFF 가 지시문을 사양에서 생성한다 — 기기 합성과 같은 룩
+          ...(look.spec ? { spec: look.spec } : {}),
         })
         // 편집 모델은 표준 규격(1024×1536 등)으로 돌려주며 원본을 살짝 늘린다 — 원본 비율로 되맞춰야
         // 슬라이더의 두 층이 정확히 겹친다 (matchAspectTo). 보관도 보정본으로
@@ -685,7 +697,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         setLookAfter(fitted)
         setLookStage('precise')
         // 다음 이어보기에서 재호출하지 않도록 원본 화질 그대로 보관한다 (IndexedDB — 실패해도 화면은 그대로)
-        saveLookRender(threadId, lookTone, fitted)
+        saveLookRender(threadId, fitted, { tone: lookTone, key: cacheKey })
       } catch (e) {
         if (cancelled || cancelledRef.current) return
         console.warn('[look] 정밀 렌더 실패 — 기기 합성을 유지합니다:', e.message)
@@ -696,7 +708,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [landmarkReady, threadId, livePhoto, lookTone])
+  }, [landmarkReady, threadId, livePhoto, lookSig])
 
   const playerApi = {
     query: liveQuery,

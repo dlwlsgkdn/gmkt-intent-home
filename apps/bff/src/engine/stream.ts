@@ -1,6 +1,7 @@
 import {
   GeneratedIndexAllocator,
   isSlotKind,
+  skeletonSectionWire,
   type PlanSkeletonGen,
 } from '@ddak/pipeline'
 import type { PlanSectionWire, SurveyQuestionWire } from '@ddak/schema'
@@ -69,7 +70,7 @@ export class PlanStreamCoordinator {
         pending.push(i)
         return null
       }
-      return s as PlanSectionWire
+      return skeletonSectionWire(s)
     })
     this.emit?.({
       event: 'skeleton',

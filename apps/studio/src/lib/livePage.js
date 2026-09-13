@@ -12,6 +12,20 @@ import { joinTextList } from './store.js'
  * 사진 원본은 기기에 남고 서버로는 이 표식만 간다 (데이터 URL은 스텝·프롬프트에 실을 것이 못 된다) */
 export const PHOTO_ANSWER = '사진 제출됨'
 
+/** 룩 사양 → 화면 포인트 문구 — @ddak/pipeline look.ts `lookPointsOf` 의 거울(부위 라벨 + note).
+ *  BFF 가 와이어 points 를 이 규칙으로 채워 보내므로 보통은 쓰이지 않고, 운영 콘솔 단계 단독 dry-run 처럼
+ *  뼈대 생성물을 FE 가 직접 투영할 때만 폴백으로 쓴다. 규칙을 바꾸면 양쪽을 같이 맞출 것 */
+const LOOK_PART_LABELS = { lip: '립', cheek: '치크', eye: '눈', base: '베이스' }
+export function lookPointsOf(spec) {
+  if (!spec) return []
+  return ['lip', 'cheek', 'eye', 'base']
+    .map((part) => {
+      const note = String((spec[part] && spec[part].note) || '').trim()
+      return note ? `${LOOK_PART_LABELS[part]} — ${note}` : ''
+    })
+    .filter(Boolean)
+}
+
 /** 답 값이 실제로 그릴 수 있는 이미지인지 — 이어보기·관리 페이지에서는 표식만 남는다 */
 export const isPhotoValue = (value) => /^(data:image\/|https?:\/\/|\.{0,2}\/)/.test(String(value || ''))
 
@@ -161,6 +175,8 @@ export function livePlanItems(page, opts = {}) {
             beforeImage: photo,
             afterImage: after,
             tone: opts.photoAfter ? '' : section.tone || '',
+            // 합성 전 CSS 프리셋 단계에서도 사양의 립 색을 쓴다 (tone 고정색 대신)
+            tint: (!opts.photoAfter && section.spec && section.spec.lip && section.spec.lip.color) || '',
             beforeLabel: '내 사진',
             afterLabel: stage === 'precise' ? 'AI 메이크업 · 정밀' : 'AI 메이크업',
             afterState: stage,
@@ -178,7 +194,8 @@ export function livePlanItems(page, opts = {}) {
           props: { title: section.title, body: section.desc || '' },
         })
       }
-      const points = (section.points || []).filter(Boolean)
+      // 포인트는 BFF 가 사양 note 에서 파생해 보낸다 — 없으면(FE 직접 투영) 같은 규칙으로 여기서 파생
+      const points = (section.points && section.points.length ? section.points : lookPointsOf(section.spec)).filter(Boolean)
       if (points.length) {
         items.push({
           id: `${base}-points`,

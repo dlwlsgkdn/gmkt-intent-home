@@ -255,6 +255,8 @@ function BeforeAfter({ p, ctx }) {
       <div
         className={'sb-ba__layer sb-ba__layer--after' + (p.tone ? ' sb-ba__layer--synth' : '')}
         data-tone={p.tone || undefined}
+        // 룩 사양의 립 색이 있으면 tone 고정색 대신 그 색으로 CSS 프리셋을 물들인다 (합성 전 단계)
+        style={p.tone && p.tint ? { '--sb-ba-tint': p.tint } : undefined}
       >
         {p.afterState !== 'skeleton' && <Img src={p.afterImage || p.beforeImage} alt={p.afterLabel || 'AFTER'} />}
       </div>
