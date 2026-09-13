@@ -31,7 +31,6 @@ import {
   mergePlanSections,
   parseDataUrl,
   planQualityOf,
-  slotIndexesOf,
   surveyStreamHandlers,
 } from '@ddak/pipeline'
 import { CoreClientService } from '../core-client.service'
@@ -173,12 +172,13 @@ export class ThreadsService {
     // 검색 스트림은 원소를 순차로 내보내므로 첫 방출 순서 = 완성 순서 — 도착 순 배정 규칙이 유지된다
     // 상품(5b)·콘텐츠(5c) 호출의 스트림 index 가 각자 0부터라 종류와 함께 키로 쓴다
     const slotByStream = new Map<string, number>()
-    const slotFor = (streamIndex: number, kind: string): number => {
-      const slotKind = kind === 'contents' ? 'contents' : 'products'
+    const slotFor = (streamIndex: number, section: PlanSectionWire): number => {
+      const slotKind = section.kind === 'contents' ? 'contents' : 'products'
       const key = `${slotKind}:${streamIndex}`
       let slot = slotByStream.get(key)
       if (slot === undefined) {
-        slot = (allocator as GeneratedIndexAllocator).next(slotKind)
+        // 제목·reason 으로 단계 묶음을 골라 자리를 받는다 (@ddak/pipeline merge.ts PlanPlacer — 최종 병합과 같은 배정)
+        slot = (allocator as GeneratedIndexAllocator).next(section)
         slotByStream.set(key, slot)
       }
       return slot
@@ -188,7 +188,7 @@ export class ThreadsService {
       if (!allocator || !stream?.onSection) return
       while (emitted < arrivedSections.length) {
         const { section, streamIndex } = arrivedSections[emitted]
-        stream.onSection(section, slotFor(streamIndex, section.kind), true)
+        stream.onSection(section, slotFor(streamIndex, section), true)
         emitted += 1
       }
     }
@@ -228,7 +228,7 @@ export class ThreadsService {
       .then((result) => {
         // 자리 인덱스는 스트림 조각이 아니라 최종 검증본 기준으로 확정한다 (조각 파싱 누락 보정)
         const skeletonSections = result.content.sections
-        allocator = new GeneratedIndexAllocator(slotIndexesOf(skeletonSections), skeletonSections.length)
+        allocator = new GeneratedIndexAllocator(skeletonSections)
         // 뼈대 조기 확정 알림 — 텍스트 완성본 + 아직 안 채워진 자리 인덱스. 대기열 플러시보다 먼저
         if (stream?.onSkeleton) {
           const pending: number[] = []
@@ -279,7 +279,7 @@ export class ThreadsService {
             gen.kind === 'contents'
               ? this.resolveContentsSection(gen, true)
               : this.resolveProductsSection(gen, index, true)
-          if (section) stream.onSection(section, slotFor(index, section.kind), false)
+          if (section) stream.onSection(section, slotFor(index, section), false)
         },
         onSearch: stream.onSearch,
       },
@@ -308,7 +308,7 @@ export class ThreadsService {
           const gen = completeSearchSection(element)
           if (!gen || gen.kind !== 'contents') return
           const section = this.resolveContentsSection(gen, true)
-          if (section) stream.onSection(section, slotFor(index, 'contents'), false)
+          if (section) stream.onSection(section, slotFor(index, section), false)
         },
         onSearch: stream.onSearch,
       },

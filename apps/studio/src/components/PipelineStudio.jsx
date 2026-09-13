@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { composePlanSections } from '../../../../packages/pipeline/src/guards/merge.ts'
 import {
   deleteAdminKnowledgeSource,
   dryRunStage,
@@ -644,8 +645,8 @@ export default function PipelineStudio({ api }) {
   }
 
   /* ── 실렌더 미리보기(FlowRunPreview) 재료 — 두 모드 공용: 스트리밍 중엔 부분 페이지,
-     끝나면 확정본. 단계 단독 모드의 계획은 뼈대+검색 결과를 스튜디오가 자리 규칙대로
-     합성한 병합 미리보기다 (검증 게이트 병합의 FE 근사 — 남는 검색 섹션은 끝에 붙는다) ── */
+     끝나면 확정본. 단계 단독 모드의 계획은 뼈대+검색 결과를 운영과 같은 배정기(@ddak/pipeline
+     composePlanSections)로 합성한 병합 미리보기다 — 자리 없는 검색 섹션은 그 단계 묶음 끝에 끼운다 ── */
   const surveyPreviewPage =
     flowRunning === 'survey'
       ? flowPartial
@@ -662,23 +663,12 @@ export default function PipelineStudio({ api }) {
       : null
   const stagePlanView = useMemo(() => {
     if (!skResult?.skeleton && !prodResult && !contResult) return null
-    // 상품(5b)·콘텐츠(5c) dry-run 결과를 자리 규칙대로 합친다 — 운영 병합(mergePlanSections)과 같은 종류별 순서 채우기
+    // 상품(5b)·콘텐츠(5c) dry-run 결과를 운영 병합과 같은 배정기(composePlanSections — 단계 묶음 의미 대조·순서 보존)로 합친다.
+    // 안 채워진 자리는 null + pending("상품 실행"·"참고 콘텐츠 실행"이 채운다), 자리 없는 섹션은 그 단계 묶음에 끼운다
     const search = [...(prodResult?.sections || []).filter((s) => !(contResult?.sections?.length && s.kind === 'contents')), ...(contResult?.sections || [])]
-    const takeKind = (kind) => {
-      const i = search.findIndex((s) => s.kind === kind)
-      return i >= 0 ? search.splice(i, 1)[0] : null
-    }
     if (!skResult?.skeleton) return { page: { headline: '', summary: '', sections: search }, pending: [] }
     const sk = skResult.skeleton
-    const pending = []
-    const sections = sk.sections.map((section, i) => {
-      if (section.kind !== 'products' && section.kind !== 'contents') return section
-      const filled = takeKind(section.kind)
-      if (filled) return filled
-      pending.push(i) // 아직 안 채운 자리 — "상품 실행"·"참고 콘텐츠 실행"이 채운다
-      return null
-    })
-    sections.push(...search)
+    const { sections, pending } = composePlanSections(sk.sections, search)
     return { page: { headline: sk.headline, summary: sk.summary, sections }, pending }
   }, [skResult, prodResult, contResult])
   const planPreview = pgTab === 'flow' ? flowPlanPreview : stagePlanView
