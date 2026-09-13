@@ -207,12 +207,13 @@ export default function HomeView({ api }) {
     query,
     setQuery,
     submitQuery: () => search.runSearch(query),
-    /* 추천 검색어 칩 — 검색창에 넣고 바로 라우터를 거친다(DDAK 라이브 생성 / 검색 결과 페이지). 검색 화면은 열지 않는다 */
-    submitSearch: (text) => {
+    /* 추천 검색어 칩 — 검색창에 넣고 칩 종류가 정한 목적지로 바로 간다(to: 'srp' 파랑 인기 키워드 = 검색 결과 페이지,
+       'ddak' 보라 개인화 자연어 = 맞춤 설문(발행 칩과 겹치면 선택 시트), 없으면 라우터 판정). 검색 화면은 열지 않는다 */
+    submitSearch: (text, to) => {
       const q = String(text || '').trim()
       if (!q) return
       setQuery(q)
-      search.runSearch(q)
+      search.runSearch(q, { to })
     },
     openSearch: () => setSearchOpen(true), // 검색창 포커스 → 검색 화면 (Figma 1-2/1-3)
     answers: {},

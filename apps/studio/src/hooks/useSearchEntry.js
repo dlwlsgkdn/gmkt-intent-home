@@ -33,10 +33,23 @@ export function useSearchEntry(api, { onDdak }) {
     saveRecentSearches(accountId, next)
   }
 
-  /* 제출 — 검색 화면은 판정이 끝날 때까지 열린 채 상태를 보이고, 목적지 화면으로 바로 넘어간다(홈으로 되돌아오지 않는다) */
-  const runSearch = async (raw) => {
+  /* 제출 — 검색 화면은 판정이 끝날 때까지 열린 채 상태를 보이고, 목적지 화면으로 바로 넘어간다(홈으로 되돌아오지 않는다).
+     to 가 있으면(추천 검색어 칩 — 파랑 인기 키워드 = 'srp', 보라 개인화 자연어 = 'ddak') 칩 종류가 곧 목적지라 라우터를 거치지 않는다:
+     LLM 판정 왕복(1~3초)도, 라우터 쪽 인기 count 반영도 없다 */
+  const runSearch = async (raw, { to } = {}) => {
     const q = String(raw || '').trim()
     if (!q || busyRef.current) return null
+    if (to === 'srp') {
+      remember(q)
+      api.openSrp(q)
+      return { ddak: false, normalized: q, reason: '인기 검색어 칩 — 검색 결과 페이지 직행', source: 'chip' }
+    }
+    if (to === 'ddak') {
+      remember(q)
+      const decision = { ddak: true, normalized: q, reason: '개인화 추천 칩 — 맞춤 설문 직행', source: 'chip' }
+      onDdak(q, decision)
+      return decision
+    }
     busyRef.current = true
     remember(q)
     setRouting(q)

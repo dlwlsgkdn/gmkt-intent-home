@@ -138,7 +138,7 @@ export const EXPLORE_COMPONENTS = {
   /* 추천 검색어 칩 — 검색창 아래 두 톤(Figma Search 랜딩 ChipSection): 보라 = 내 쇼핑 쓰레드 히스토리로 만든 개인화 자연어 검색어
      (BFF `/api/search/home`, 실패면 휴리스틱 — 최근 쓰레드 제목·프로필), 파랑 = 전체 사용자 인기 검색어 후보 표 상위(`/api/search/popular`
      — core KV, 실패면 시드 표) `#키워드`. 내용은 hooks/useHomePersonalize 가 ctx.home 으로 공급하고 바뀌면 크로스페이드로 갈아끼운다.
-     칩 클릭 = 검색 제출(라우터를 거쳐 DDAK 라이브 생성 / 검색 결과 페이지) */
+     칩 클릭 = 검색 제출 — 칩 종류가 곧 목적지다: 보라 = 맞춤 설문(DDAK) 직행, 파랑 = 검색 결과 페이지(SRP) 직행 (라우터 판정 없음) */
   recommendChips: {
     label: '추천 검색어 칩',
     stage: 'explore',
@@ -166,8 +166,8 @@ export const EXPLORE_COMPONENTS = {
           </div>
         )
       }
-      const submit = (text) => {
-        if (ctx.player.submitSearch) ctx.player.submitSearch(text)
+      const submit = (text, to) => {
+        if (ctx.player.submitSearch) ctx.player.submitSearch(text, to)
         else ctx.player.setQuery(text)
       }
       const personal = ((home.personal && home.personal.items) || []).slice(0, nPersonal)
@@ -182,8 +182,8 @@ export const EXPLORE_COMPONENTS = {
                 key={`p:${text}`}
                 type="button"
                 className="suggestion-tag sb-chip-reco sb-chip-reco--personal"
-                title="내 쇼핑 쓰레드로 만든 추천 검색어"
-                onClick={() => submit(text)}
+                title="내 쇼핑 쓰레드로 만든 추천 검색어 — 맞춤 설문으로 바로 시작"
+                onClick={() => submit(text, 'ddak')}
               >
                 {text}
               </button>
@@ -193,8 +193,8 @@ export const EXPLORE_COMPONENTS = {
                 key={`h:${row.keyword}`}
                 type="button"
                 className="suggestion-tag sb-chip-reco sb-chip-reco--popular"
-                title={`인기 검색어 · 최근 ${Number(row.count || 0).toLocaleString('ko-KR')}회`}
-                onClick={() => submit(row.keyword)}
+                title={`인기 검색어 · 최근 ${Number(row.count || 0).toLocaleString('ko-KR')}회 — 검색 결과 보기`}
+                onClick={() => submit(row.keyword, 'srp')}
               >
                 #{String(row.keyword).replace(/\s+/g, '_')}
               </button>

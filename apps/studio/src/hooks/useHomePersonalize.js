@@ -20,10 +20,12 @@ import {
  *    기본 인사말(탐색 아이템 문구)과 휴리스틱 칩을 먼저 그리고, 결과가 오면 크로스페이드로 바꾼다. 7초 안에 안 오면
  *    같은 재료의 휴리스틱(lib/homePersonalize)으로 바꾸고, 늦게 온 결과는 화면을 또 흔들지 않고 캐시에만 남긴다.
  *    결과는 세션 캐시(프로필·쓰레드 상태·날짜·시 단위 키) — 홈 복귀마다 LLM 을 다시 부르지 않고 인사말이 흔들리지 않는다.
+ *    서버 하이드레이션(remoteSync.hydrating) 중에는 부르지 않고, 시그니처 변화는 500ms 모아 마지막 값으로 한 번만 부른다.
  *    위치는 브라우저가 **이미 허용한** 권한이 있을 때만 싣는다(권한 팝업을 띄우지 않는다 — 없으면 서울 날씨).
  *  - 파랑 칩: BFF `GET /api/search/popular`(core KV 후보 표 인기순 상위 3) — 모듈 캐시 5분, 실패면 같은 시드 표.
  */
 const LLM_WAIT_MS = 7000
+const SETTLE_MS = 500 // 시그니처가 연달아 바뀔 때(체험 직후 기록 갱신 등) 마지막 값으로 한 번만 부른다
 const POPULAR_CACHE_MS = 5 * 60_000
 let popularMem = null // { at, items, source }
 
@@ -65,6 +67,9 @@ export function useHomePersonalize(api) {
   )
   const digests = useMemo(() => threadDigests(api.threads), [api.threads])
   const signature = homeSignature({ accountId, name, profile, threads: digests, now: nowInfo() })
+  /* 서버 하이드레이션 중(prod 프로필 첫 접속·프로필 전환)에는 프로필 이름·쓰레드가 순차로 채워지며 시그니처가 연달아 바뀐다 —
+     그때마다 LLM 을 부르면 3~4회 낭비에 인사말도 흔들린다. 끝난 뒤 최종 상태로 한 번만 부른다(그동안은 기본 인사말·휴리스틱 칩) */
+  const hydrating = !!(api.remoteSync && api.remoteSync.hydrating)
 
   const [personal, setPersonal] = useState(() => {
     const cached = readHomeCache(signature)
@@ -86,6 +91,7 @@ export function useHomePersonalize(api) {
     const recentSearches = loadRecentSearches(accountId).map((r) => r.q).filter(Boolean).slice(0, 10)
     const input = { name, profile, now, threads: digests, recentSearches }
     setPersonal({ greeting: null, suggestions: heuristicHomeSuggestions(input), weather: null, source: null, ready: false, signature })
+    if (hydrating) return undefined
     const settle = (result) => {
       if (!alive || settled) return
       settled = true
@@ -97,42 +103,46 @@ export function useHomePersonalize(api) {
       weather,
       source: 'fallback',
     })
-    const timer = setTimeout(() => settle(fallback()), LLM_WAIT_MS)
-    ;(async () => {
-      const location = await grantedLocation()
-      try {
-        const res = await personalizeHome({
-          ...(name ? { name } : {}),
-          profile,
-          now,
-          ...(location ? { location } : {}),
-          threads: digests,
-          recentSearches,
-        })
-        const weather = res && res.weather ? res.weather : null
-        const result = {
-          greeting: String((res && res.greeting) || '').trim(),
-          suggestions: cleanList(res && res.suggestions, 3),
-          weather,
-          source: (res && res.source) || 'llm',
+    let waitTimer = null
+    const settleTimer = setTimeout(() => {
+      waitTimer = setTimeout(() => settle(fallback()), LLM_WAIT_MS)
+      ;(async () => {
+        const location = await grantedLocation()
+        try {
+          const res = await personalizeHome({
+            ...(name ? { name } : {}),
+            profile,
+            now,
+            ...(location ? { location } : {}),
+            threads: digests,
+            recentSearches,
+          })
+          const weather = res && res.weather ? res.weather : null
+          const result = {
+            greeting: String((res && res.greeting) || '').trim(),
+            suggestions: cleanList(res && res.suggestions, 3),
+            weather,
+            source: (res && res.source) || 'llm',
+          }
+          if (!result.greeting) throw new Error('empty greeting')
+          if (!result.suggestions.length) result.suggestions = heuristicHomeSuggestions({ ...input, weather })
+          writeHomeCache(signature, result) // 늦게 와서 화면에 못 실려도 다음 방문은 이 결과로 즉시
+          clearTimeout(waitTimer)
+          settle(result)
+        } catch {
+          clearTimeout(waitTimer)
+          settle(fallback())
         }
-        if (!result.greeting) throw new Error('empty greeting')
-        if (!result.suggestions.length) result.suggestions = heuristicHomeSuggestions({ ...input, weather })
-        writeHomeCache(signature, result) // 늦게 와서 화면에 못 실려도 다음 방문은 이 결과로 즉시
-        clearTimeout(timer)
-        settle(result)
-      } catch {
-        clearTimeout(timer)
-        settle(fallback())
-      }
-    })()
+      })()
+    }, SETTLE_MS)
     return () => {
       alive = false
-      clearTimeout(timer)
+      clearTimeout(settleTimer)
+      if (waitTimer) clearTimeout(waitTimer)
     }
     // profile·digests 는 signature 에 녹아 있다
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signature])
+  }, [signature, hydrating])
 
   const [popular, setPopular] = useState(() =>
     popularMem && Date.now() - popularMem.at < POPULAR_CACHE_MS
