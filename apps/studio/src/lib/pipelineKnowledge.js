@@ -16,6 +16,7 @@ export const STRUCTURAL_ROUTES = {
   'trend-keywords': ['ledger'], // 원장 trendKeywords → 가변부(설문·계획)로 실린다
   'thread-feedback': ['ledger'], // 원장 recentFeedback (유일한 실데이터)
   'guard-blocklist': ['verify'], // 검증 게이트 정확 매칭 드롭
+  'guard-content-hosts': ['verify'], // 검증 게이트 콘텐츠 저신뢰 출처 드롭 (2026-09)
 }
 
 /** 주입 위치별 묶음 — 지식 카드의 그룹 머리 (AdminKnowledgeEntry.injection) */

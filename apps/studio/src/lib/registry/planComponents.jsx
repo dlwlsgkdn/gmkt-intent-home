@@ -560,10 +560,15 @@ export const PLAN_COMPONENTS = {
             ) : null}
             <div className="sb-product-card2__pricebox">
               {p.was ? <span className="sb-product-card2__was">{kText(p.was, ctx, 'was')}원</span> : null}
-              <span className="sb-product-card2__price">
-                <b>{kText(p.price, ctx, 'price')}</b>
-                <em>원</em>
-              </span>
+              {String(p.price || '').trim() ? (
+                <span className="sb-product-card2__price">
+                  <b>{kText(p.price, ctx, 'price')}</b>
+                  <em>원</em>
+                </span>
+              ) : (
+                /* 검색 결과에 판매가가 없던 웹 상품 — 0원 대신 확인 안내 (2026-09) */
+                <span className="sb-product-card2__price sb-product-card2__price--unknown">가격 확인 필요</span>
+              )}
             </div>
             {/* 외부몰 상품은 지마켓 장바구니에 못 담는다 — 회색으로 죽어 있던 "담기불가" 대신 같은 보라
                 버튼으로 상세보기(PDP 패널)를 연다. Figma 카드는 어느 상품이든 보라 CartButton이라 색은 같고
@@ -621,6 +626,7 @@ export const PLAN_COMPONENTS = {
       { key: 'channel', label: '채널 이름', kind: 'text' },
       { key: 'duration', label: '길이 (비우면 숨김)', kind: 'text' },
       { key: 'url', label: '영상 링크 URL', kind: 'url', placeholder: 'https://www.youtube.com/watch?v=...' },
+      { key: 'note', label: '고른 이유 한 줄 (라이브는 AI가 답변을 인용해 채움)', kind: 'text' },
       { key: 'imageUrl', label: '썸네일 URL (비우면 YouTube 자동)', kind: 'url' },
     ],
     render: (p, ctx) => (
@@ -652,6 +658,7 @@ export const PLAN_COMPONENTS = {
             <b aria-hidden="true">↗</b>
           </p>
           <p className="sb-content-card__title">{kText(p.title, ctx, 'title')}</p>
+          {p.note ? <p className="sb-content-card__note">{kText(p.note, ctx, 'note')}</p> : null}
         </div>
       </div>
     ),
@@ -677,6 +684,7 @@ export const PLAN_COMPONENTS = {
       { key: 'author', label: '작성자 · 매체명', kind: 'text' },
       { key: 'snippet', label: '본문 미리보기 (비우면 숨김)', kind: 'textarea' },
       { key: 'url', label: '게시글 링크 URL', kind: 'url', placeholder: 'https://blog.naver.com/...' },
+      { key: 'note', label: '고른 이유 한 줄 (라이브는 AI가 답변을 인용해 채움)', kind: 'text' },
       { key: 'imageUrl', label: '대표 이미지 URL', kind: 'url' },
     ],
     render: (p, ctx) => (
@@ -704,7 +712,8 @@ export const PLAN_COMPONENTS = {
             <b aria-hidden="true">↗</b>
           </p>
           <p className="sb-content-card__title">{kText(p.title, ctx, 'title')}</p>
-          {p.snippet ? <p className="sb-content-card__snippet">{kText(p.snippet, ctx, 'snippet')}</p> : null}
+          {p.note ? <p className="sb-content-card__note">{kText(p.note, ctx, 'note')}</p> : null}
+          {p.snippet && !p.note ? <p className="sb-content-card__snippet">{kText(p.snippet, ctx, 'snippet')}</p> : null}
         </div>
       </div>
     ),

@@ -14,6 +14,7 @@ import { SearchController } from './search/search.controller'
 import { PopularSearchesService } from './search/popular-searches.service'
 import { WeatherService } from './search/weather.service'
 import { ThreadsService } from './threads/threads.service'
+import { EnrichService } from './threads/enrich.service'
 
 @ApiTags('app')
 @Controller()
@@ -50,6 +51,7 @@ export class AppController {
     PipelineDryRunService,
     PipelineFlowRunService,
     ThreadsService,
+    EnrichService,
     WeatherService,
     PopularSearchesService,
   ],

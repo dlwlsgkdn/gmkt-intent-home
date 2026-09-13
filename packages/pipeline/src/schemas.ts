@@ -155,6 +155,9 @@ export const ContentItemGen = z.object({
   meta: z.string().describe('부가 정보 — 영상은 채널·조회수, 게시글은 작성자·시점. 못 확인했으면 빈 문자열'),
   snippet: z.string().describe('게시글 본문 미리보기 한두 문장 — 영상이거나 없으면 빈 문자열'),
   duration: z.string().describe('영상 길이 (예: 5:24) — 게시글이거나 모르면 빈 문자열'),
+  why: z
+    .string()
+    .describe('이 콘텐츠를 고른 이유 한 줄 — 사용자 답변을 인용해 어느 단계에 왜 도움이 되는지 ("복합성 피부라 T존·볼을 나눠 바르는 순서가 나온 영상이에요")'),
 })
 export type ContentItemGen = z.infer<typeof ContentItemGen>
 
@@ -205,9 +208,19 @@ export const PlanProductsGen = z.object({
     .array(PlanSearchSectionGen)
     .min(1)
     .max(5)
-    .describe('추천 상품 섹션 1~2개 + 참고 콘텐츠 섹션 0~1개'),
+    .describe('추천 상품 섹션 1~2개 (참고 콘텐츠는 별도 단계가 만든다 — 여기서는 만들지 않는다)'),
 })
 export type PlanProductsGen = z.infer<typeof PlanProductsGen>
+
+/** 계획 3단계(5c) — 참고 콘텐츠(웹 게시글·영상) 섹션만. 상품 검색과 분리해 웹 검색 예산을 따로 쓴다 (2026-09).
+ * 확인된 콘텐츠가 하나도 없으면 빈 배열 */
+export const PlanContentsGen = z.object({
+  sections: z
+    .array(ContentsSectionGen)
+    .max(2)
+    .describe('참고 콘텐츠 섹션 — 계획의 단계 순서대로 1~2개 (검색해도 확인된 콘텐츠가 없으면 빈 배열)'),
+})
+export type PlanContentsGen = z.infer<typeof PlanContentsGen>
 
 /*
  * 자동 채점(judge) — 실험 탭 실행 결과를 루브릭 4차원으로 심사하는 구조화 출력.

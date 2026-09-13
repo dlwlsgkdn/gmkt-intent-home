@@ -142,12 +142,34 @@ export type PlanMetaRow = z.infer<typeof PlanMetaRow>
 export const PlanMetasWire = z.object({ items: z.array(PlanMetaRow) })
 export type PlanMetasWire = z.infer<typeof PlanMetasWire>
 
+/** 계획 품질 KPI 평균 — llmMeta.quality(PlanQuality)를 가진 표본만 센다 (2026-09 이전 기록엔 없다) */
+export const AdminQualityMetric = z.object({
+  plans: z.number().int(),
+  avgProductsPerSection: z.number().nullable(),
+  /** 상품 1개짜리 상품 섹션 비율 (0~1) */
+  singleProductSectionRate: z.number().nullable(),
+  /** 웹 상품 중 PDP 주소 비율 (0~1) */
+  webPdpRate: z.number().nullable(),
+  productThumbnailRate: z.number().nullable(),
+  priceUnknownRate: z.number().nullable(),
+  /** 콘텐츠 섹션이 하나도 없는 계획 비율 (0~1) */
+  contentMissingRate: z.number().nullable(),
+  avgContentItems: z.number().nullable(),
+  contentThumbnailRate: z.number().nullable(),
+  avgDrops: z.number().nullable(),
+})
+export type AdminQualityMetric = z.infer<typeof AdminQualityMetric>
+
 export const AdminEngineMetric = z.object({
   engine: z.string(),
   count: z.number().int(),
   avgLatencyMs: z.number().nullable(),
   avgSkeletonMs: z.number().nullable(),
   avgProductsMs: z.number().nullable(),
+  /** 참고 콘텐츠 단계(5c) 평균 소요 — 분리 이전 기록엔 없다 */
+  avgContentsMs: z.number().nullable().optional(),
+  /** 계획 품질 KPI — quality 요약을 가진 표본이 없으면 null */
+  quality: AdminQualityMetric.nullable().optional(),
   /** 캐시 읽기 토큰 > 0 인 실행 비율 (프롬프트 캐시 적중 신호) */
   cacheHitRate: z.number().nullable(),
   promptVersions: z.array(z.string()),

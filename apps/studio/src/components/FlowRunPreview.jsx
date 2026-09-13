@@ -496,8 +496,11 @@ export default function FlowRunPreview({
               >
                 <summary>
                   생성 제약 근거 (원장) — 사실 {(overall.ledger.facts || []).length}
-                  {overall.ledger.budgetKrw != null
-                    ? ` · 예산 ${overall.ledger.budgetKrw.toLocaleString('ko-KR')}원 이하`
+                  {overall.ledger.budgetKrw != null || overall.ledger.budgetMinKrw != null
+                    ? ` · 예산 ${[
+                        overall.ledger.budgetMinKrw != null ? `${overall.ledger.budgetMinKrw.toLocaleString('ko-KR')}원 이상` : '',
+                        overall.ledger.budgetKrw != null ? `${overall.ledger.budgetKrw.toLocaleString('ko-KR')}원 이하` : '',
+                      ].filter(Boolean).join(' · ')}`
                     : ''}
                   {(overall.ledger.avoid || []).length ? ` · 기피 ${overall.ledger.avoid.length}` : ''}
                 </summary>

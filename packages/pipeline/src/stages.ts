@@ -15,7 +15,8 @@ export type PipelineStageId =
   | 'survey' // 3 변동 설문 생성
   | 'candidates' // 4 근거 수집
   | 'plan-skeleton' // 5a 계획 구성 — 뼈대
-  | 'plan-products' // 5b 계획 구성 — 상품·콘텐츠 (현재 4단계 웹 검색을 병행 수행)
+  | 'plan-products' // 5b 계획 구성 — 상품 (현재 4단계 웹 검색을 병행 수행)
+  | 'plan-contents' // 5c 계획 구성 — 참고 콘텐츠 (웹 검색 별도 예산, 2026-09 분리)
   | 'verify' // 6 검증 게이트
   | 'record' // 7 쓰레드 기록
 
@@ -91,12 +92,22 @@ export const PIPELINE_STAGES: PipelineStageDef[] = [
   {
     id: 'plan-products',
     no: '5b',
-    label: '계획 구성 — 상품·콘텐츠',
+    label: '계획 구성 — 상품',
     kind: 'llm',
     promptId: 'plan-products',
     effort: 'high',
     status: 'active',
-    note: '웹 검색 병행으로 상품 섹션 + 참고 콘텐츠 섹션. 5a의 자리를 채운다.',
+    note: '웹 검색(3~4회) 병행으로 추천 상품 섹션 1~2개. 5a의 상품 자리를 채운다. 참고 콘텐츠는 5c가 따로 만든다(2026-09 분리 — 한 호출에 몰아 두면 검색 예산을 상품이 다 써 콘텐츠가 33% 누락됐다).',
+  },
+  {
+    id: 'plan-contents',
+    no: '5c',
+    label: '계획 구성 — 참고 콘텐츠',
+    kind: 'llm',
+    promptId: 'plan-contents',
+    effort: 'medium',
+    status: 'active',
+    note: '웹 검색(영상·게시글 각 1회 이상) 으로 참고 콘텐츠 섹션 1~2개 — 항목마다 고른 이유(why)를 답변 인용으로 단다. 5a·5b와 병렬, 5a의 콘텐츠 자리를 채운다.',
   },
   {
     id: 'verify',

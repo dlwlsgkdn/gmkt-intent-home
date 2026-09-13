@@ -1370,6 +1370,21 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+/* 콘텐츠를 고른 이유 한 줄(5c why) — 답변 인용, 보라 12px (2026-09) */
+.sb-content-card__note {
+  margin: 0;
+  font-size: var(--sb-t-caption);
+  font-weight: 300;
+  line-height: 17px;
+  color: var(--dk-brand-deep);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: keep-all;
+}
+/* 판매가 미확인 웹 상품 — 0원 대신 회색 안내 (2026-09) */
+.sb-product-card2__price--unknown { font-size: var(--sb-t-caption); font-weight: 300; line-height: 23px; color: var(--dk-muted); }
 .sb-content-card__snippet {
   margin: 2px 0 0;
   font-size: var(--sb-t-micro);

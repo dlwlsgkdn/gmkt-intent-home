@@ -3,8 +3,8 @@ import React, { useMemo } from 'react'
 /*
  * 생성 파이프라인 흐름 다이어그램 (운영 콘솔 "파이프라인" 탭 히어로 — PipelineStudio가 배선).
  * PIPELINE_STAGES 와이어(전략 문서 0~7)를 실제 실행 토폴로지로 **위→아래 세로**로 그린다:
- *   0 ↓ 1 ↓ 2 ↓ 3 ↓ ⏸ 답변 대기 ↓ ( 5a ∥ 4·5b ) ↓ 6 ↓ 7
- * 병렬 블록만 좌우 두 레인으로 갈라지고, 분기·합류 버스는 가로선이다.
+ *   0 ↓ 1 ↓ 2 ↓ 3 ↓ ⏸ 답변 대기 ↓ ( 5a ∥ 4·5b ∥ 5c ) ↓ 6 ↓ 7
+ * 병렬 블록만 세 레인(뼈대 · 근거+상품 · 참고 콘텐츠)으로 갈라지고, 분기·합류 버스는 가로선이다.
  * 노드 클릭 = 단계 레이어 모달(설명·최근 실행·시스템 프롬프트 열람·수정 — PipelineStudio 소유).
  * 플레이그라운드 실행(running) 동안 그 경로의 연결선에 대시가 흐르고 실행 중인 LLM 노드가
  * 맥동한다. 결과가 도착하면 노드에 ✓ 지연·검증 통과/드롭 요약이 남는다. 표현 전용.
@@ -26,7 +26,8 @@ export const SHORT_LABEL = {
   survey: '필요한 질문 만들기',
   candidates: '상품 후보 찾기',
   'plan-skeleton': '추천 구성 만들기',
-  'plan-products': '상품·콘텐츠 채우기',
+  'plan-products': '상품 채우기',
+  'plan-contents': '참고 콘텐츠 채우기',
   verify: '오류·위험 확인',
   record: '결과 저장하기',
 }
@@ -36,6 +37,7 @@ const RUN_PATHS = {
   survey: { links: ['l01', 'l12', 'l23'], path: ['objective', 'intent', 'ledger'] },
   'plan-skeleton': { links: ['gate', 'lt-in'], path: ['survey', 'ledger'] },
   'plan-products': { links: ['gate', 'lb-in', 'l45'], path: ['survey', 'ledger', 'candidates', 'verify'] },
+  'plan-contents': { links: ['gate', 'lc-in'], path: ['survey', 'ledger', 'verify'] },
 }
 
 /** LLM 실행 메타 한 줄 (모델 · 지연 · 토큰 · 검색) — 플레이그라운드 결과 머리에도 쓴다 */
@@ -180,7 +182,7 @@ export default function PipelineFlow({
           >
             <span className="sb-flow__gate-label">⏸ 고객 답변 기다리기</span>
           </span>
-          {/* 5 병렬 — 왼쪽: 뼈대(조기 확정 스트리밍), 오른쪽: 근거 수집(예정) + 상품·콘텐츠(웹 검색 병행) */}
+          {/* 5 병렬 — 왼쪽: 뼈대(조기 확정 스트리밍), 가운데: 근거 수집(예정) + 상품(웹 검색 병행), 오른쪽: 참고 콘텐츠(웹 검색 별도 예산, 2026-09 분리) */}
           <div className="sb-flow__par">
             <div className="sb-flow__lane">
               {link('lt-in', 'sb-flow__link--stub')}
@@ -193,6 +195,11 @@ export default function PipelineFlow({
               {link('l45')}
               {node('plan-products')}
               {link('lb-out', 'sb-flow__link--stub')}
+            </div>
+            <div className="sb-flow__lane">
+              {link('lc-in', 'sb-flow__link--stub')}
+              {node('plan-contents')}
+              {link('lc-out', 'sb-flow__link--grow')}
             </div>
           </div>
           {link('l56')}

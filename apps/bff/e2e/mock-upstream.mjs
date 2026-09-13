@@ -143,8 +143,9 @@ const PRODUCTS_JSON = JSON.stringify({
         },
       ],
       webProducts: [
+        // 이름에 프로모션 대괄호·브랜드 중복 — 검증 게이트가 "모의 세미매트 쿠션"으로 정규화한다 (2026-09)
         {
-          name: '모의 세미매트 쿠션',
+          name: '[9월 올영픽/기획] 모의브랜드 모의 세미매트 쿠션',
           brand: '모의브랜드',
           price: 19900,
           mall: '올리브영',
@@ -168,11 +169,12 @@ const PRODUCTS_JSON = JSON.stringify({
           imageUrl: '',
           tags: ['진정'],
         },
-        // PDP 를 못 찾은 상품 — 몰 검색 결과 주소 + urlKind=search (게이트가 검색 페이지 주소를 이 표식으로만 통과시킨다)
+        // PDP 를 못 찾은 상품 — 몰 검색 결과 주소 + urlKind=search (게이트가 검색 페이지 주소를 이 표식으로만 통과시킨다).
+        // 판매가도 못 찾아 0 — 게이트가 priceUnknown 으로 표시한다
         {
           name: '모의 픽서 미스트',
           brand: '모의브랜드',
-          price: 12000,
+          price: 0,
           mall: '지마켓',
           url: 'https://browse.gmarket.co.kr/search?keyword=%EB%AA%A8%EC%9D%98%20%ED%94%BD%EC%84%9C%20%EB%AF%B8%EC%8A%A4%ED%8A%B8',
           urlKind: 'search',
@@ -183,6 +185,24 @@ const PRODUCTS_JSON = JSON.stringify({
             notes: { skin: '지성 피부에 산뜻한 미스트예요', concern: '지속력 고민에 직접 닿는 픽서예요', preference: '한 번 뿌리는 간단한 사용감이에요' },
           },
         },
+      ],
+    },
+  ],
+})
+
+/* 5c 참고 콘텐츠 단계 — 상품 호출과 분리된 모의 응답. 2020년 글(stale-content)·같은 출처 3개째(duplicate-source)는 게이트가 드롭한다 */
+const CONTENTS_JSON = JSON.stringify({
+  sections: [
+    {
+      kind: 'contents',
+      title: '준비 단계 참고 — 쿠션 바르는 법',
+      reason: '지성 피부 지속력 답변에 맞춘 사용법 영상과 비교 글이에요.',
+      items: [
+        { type: 'video', source: '유튜브', title: '모의 쿠션 사용법 영상', url: 'https://www.youtube.com/watch?v=mock0001', imageUrl: '', meta: '2025년 5월 · 모의채널', snippet: '', duration: '4:10', why: '지성 피부에 얇게 여러 겹 올리는 순서가 나온 영상이에요' },
+        { type: 'article', source: '모의 블로그', title: '지성 쿠션 비교 후기', url: 'https://blog.example.com/cushion-compare', imageUrl: '', meta: '2025년 2월 작성', snippet: '세미매트 쿠션 세 가지를 비교했어요', duration: '', why: '지속력 고민에 맞춘 비교 글이에요' },
+        { type: 'article', source: '모의 블로그', title: '오래된 쿠션 글', url: 'https://blog.example.com/old-cushion', imageUrl: '', meta: '2020년 8월 작성', snippet: '', duration: '', why: '옛 글' },
+        { type: 'article', source: '모의 블로그', title: '같은 출처 두 번째 글', url: 'https://blog.example.com/second', imageUrl: '', meta: '2025년 6월', snippet: '', duration: '', why: '같은 블로그 두 번째' },
+        { type: 'article', source: '모의 블로그', title: '같은 출처 세 번째 글', url: 'https://blog.example.com/third', imageUrl: '', meta: '2025년 7월', snippet: '', duration: '', why: '같은 블로그 세 번째 — 게이트가 드롭' },
       ],
     },
   ],
@@ -311,6 +331,10 @@ const server = http.createServer(async (req, res) => {
         warnings: [],
       })
       return streamAnthropic(res, output, { delayMs: 2, chunkSize: 40 })
+    }
+    if (system.includes('참고 콘텐츠 수집')) {
+      llmCalls.push({ type: 'contents', system, user })
+      return streamAnthropic(res, CONTENTS_JSON, { delayMs: 6, chunkSize: 40 })
     }
     if (system.includes('productIds')) {
       llmCalls.push({ type: 'products', system, user })

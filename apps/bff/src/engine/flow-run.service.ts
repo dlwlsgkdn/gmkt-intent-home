@@ -5,6 +5,7 @@ import type { AdminFlowRunBody, Answer, LlmMeta, PlanPageWire, Profile, SurveyPa
 import {
   LlmGenerationError,
   buildIntentRequest,
+  buildPlanContentsRequest,
   buildPlanProductsRequest,
   buildPlanSkeletonRequest,
   buildSurveyRequest,
@@ -17,6 +18,7 @@ import { CoreClientService } from '../core-client.service'
 import { KnowledgeService } from '../llm/knowledge.service'
 import { LlmService } from '../llm/llm.service'
 import type { DryRunPromptTrace } from './dry-run.service'
+import { EnrichService } from '../threads/enrich.service'
 import { buildThreadGraph, type ThreadGraph } from './graph'
 import { PlanStreamCoordinator, type GraphStreamChunk } from './stream'
 import type { ThreadGraphStateType } from './state'
@@ -51,6 +53,7 @@ const NODE_STAGE: Record<string, string> = {
   's2-ledger-update': 'ledger',
   's5a-skeleton': 'plan-skeleton',
   's5b-products': 'plan-products',
+  's5c-contents': 'plan-contents',
   's6-verify': 'verify',
   's7-record': 'record',
 }
@@ -62,9 +65,10 @@ const SUCCESSORS: Record<string, string[]> = {
   's2-ledger': ['s3-survey'],
   's3-survey': [],
   'await-answers': ['s2-ledger-update'],
-  's2-ledger-update': ['s5a-skeleton', 's5b-products'],
+  's2-ledger-update': ['s5a-skeleton', 's5b-products', 's5c-contents'],
   's5a-skeleton': [],
   's5b-products': [],
+  's5c-contents': [],
   's6-verify': ['s7-record'],
   's7-record': [],
 }
@@ -176,6 +180,20 @@ class FlowStageEmitter {
               )
             : null,
       },
+      's5c-contents': {
+        id: 'plan-contents',
+        user: () =>
+          this.acc.survey && this.acc.answers
+            ? buildPlanContentsRequest(
+                this.acc.intent,
+                this.acc.survey,
+                this.acc.answers,
+                this.acc.profile ?? undefined,
+                undefined,
+                this.acc.ledger,
+              )
+            : null,
+      },
     }
     const def = build[node]
     if (!def) return undefined
@@ -240,8 +258,8 @@ class FlowStageEmitter {
       this.events.onStage?.({ id: NODE_STAGE[node] ?? node, phase: 'done', ...this.doneDetail(node, patch) })
     }
     for (const next of SUCCESSORS[node] ?? []) await this.start(next)
-    // 병렬 합류 — 5a·5b 둘 다 끝나야 verify가 시작된다
-    if (this.done.has('s5a-skeleton') && this.done.has('s5b-products')) await this.start('s6-verify')
+    // 병렬 합류 — 5a·5b·5c 셋 다 끝나야 verify가 시작된다
+    if (this.done.has('s5a-skeleton') && this.done.has('s5b-products') && this.done.has('s5c-contents')) await this.start('s6-verify')
   }
 
   private doneDetail(node: string, patch: StatePatch): Omit<FlowStageWireEvent, 'id' | 'phase'> {
@@ -279,7 +297,11 @@ class FlowStageEmitter {
       case 's5b-products':
         return patch.productsFailed
           ? { summary: `실패 — 상품 없이 진행: ${patch.productsFailed}` }
-          : { meta: patch.productsMeta ?? undefined, summary: `검색 섹션 ${patch.searchSections?.length ?? 0}` }
+          : { meta: patch.productsMeta ?? undefined, summary: `상품 섹션 ${patch.searchSections?.length ?? 0}` }
+      case 's5c-contents':
+        return patch.contentsFailed
+          ? { summary: `실패 — 콘텐츠 없이 진행: ${patch.contentsFailed}` }
+          : { meta: patch.contentsMeta ?? undefined, summary: `콘텐츠 섹션 ${patch.contentSections?.length ?? 0}` }
       case 's6-verify':
         return {
           pass: patch.page?.sections.length ?? 0,
@@ -303,6 +325,7 @@ export class PipelineFlowRunService {
     private readonly llm: LlmService,
     private readonly knowledge: KnowledgeService,
     private readonly core: CoreClientService,
+    private readonly enrich: EnrichService,
   ) {}
 
   /** 플로우 전용 그래프 — core 기록은 실제(그래프 persistAll이 실패를 삼켜 core 미연결에도
@@ -311,7 +334,7 @@ export class PipelineFlowRunService {
    * 폴백을 탄다 — 진실 원천은 언제나 core 스텝) */
   private getGraph(): ThreadGraph {
     if (!this.graph) {
-      this.graph = buildThreadGraph({ llm: this.llm, core: this.core, knowledge: this.knowledge }, new MemorySaver())
+      this.graph = buildThreadGraph({ llm: this.llm, core: this.core, knowledge: this.knowledge, enrich: this.enrich }, new MemorySaver())
     }
     return this.graph
   }

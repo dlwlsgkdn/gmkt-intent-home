@@ -49,7 +49,7 @@ const PROFILE_PRESET = [
 ]
 
 /** 플로우 실행 로그 타임라인 표시 순서 — 'gate'는 다이어그램 밖 interrupt 표식 */
-const FLOW_LOG_ORDER = ['objective', 'intent', 'ledger', 'survey', 'gate', 'plan-skeleton', 'plan-products', 'verify', 'record']
+const FLOW_LOG_ORDER = ['objective', 'intent', 'ledger', 'survey', 'gate', 'plan-skeleton', 'plan-products', 'plan-contents', 'verify', 'record']
 
 /** 그래프 상태(ThreadGraphState) 패널의 채널 카탈로그 — bff engine/state.ts 선언 순서.
  * sum = 한 줄 요약(없으면 기본 표시), 값 원문은 JSON 펼침으로 본다 */
@@ -114,7 +114,8 @@ const FLOW_INCOMING = {
   'plan-skeleton': ['lt-in'],
   candidates: ['lb-in'],
   'plan-products': ['lb-in', 'l45'],
-  verify: ['lt-out', 'lb-out', 'l56'],
+  'plan-contents': ['lc-in'],
+  verify: ['lt-out', 'lb-out', 'lc-out', 'l56'],
   record: ['l67'],
 }
 
@@ -202,6 +203,7 @@ export default function PipelineStudio({ api }) {
   const [pgAnswers, setPgAnswers] = useState({}) // { [questionId]: string[] }
   const [skResult, setSkResult] = useState(null) // { skeleton, ledger, meta, prompt? }
   const [prodResult, setProdResult] = useState(null) // { sections, dropLog, ledger, meta, prompt? }
+  const [contResult, setContResult] = useState(null) // 5c 참고 콘텐츠 dry-run — { sections, dropLog, ledger, meta, prompt? }
 
   /* 전체 플로우 실행 (flow-run) — 실제 그래프의 단계 수명·프롬프트가 실시간으로 쌓인다 */
   const [flowRunning, setFlowRunning] = useState(null) // 'survey' | 'plan' | null
@@ -439,6 +441,7 @@ export default function PipelineStudio({ api }) {
         setPgAnswers({})
         setSkResult(null)
         setProdResult(null)
+        setContResult(null)
         setFlowRunPlan(null)
         setFlowPlanPage(null)
         setFlowPendingSlots([])
@@ -447,6 +450,9 @@ export default function PipelineStudio({ api }) {
         flowSkeletonRef.current = false
       } else if (stageId === 'plan-skeleton') {
         setSkResult(result)
+        setPreviewStage('plan')
+      } else if (stageId === 'plan-contents') {
+        setContResult(result)
         setPreviewStage('plan')
       } else {
         setProdResult(result)
@@ -555,6 +561,7 @@ export default function PipelineStudio({ api }) {
     setPgAnswers({})
     setSkResult(null)
     setProdResult(null)
+    setContResult(null)
     setFlowPartial(null)
     setFlowPlanPage(null)
     setFlowPendingSlots([])
@@ -654,8 +661,9 @@ export default function PipelineStudio({ api }) {
         }
       : null
   const stagePlanView = useMemo(() => {
-    if (!skResult?.skeleton && !prodResult) return null
-    const search = [...(prodResult?.sections || [])]
+    if (!skResult?.skeleton && !prodResult && !contResult) return null
+    // 상품(5b)·콘텐츠(5c) dry-run 결과를 자리 규칙대로 합친다 — 운영 병합(mergePlanSections)과 같은 종류별 순서 채우기
+    const search = [...(prodResult?.sections || []).filter((s) => !(contResult?.sections?.length && s.kind === 'contents')), ...(contResult?.sections || [])]
     const takeKind = (kind) => {
       const i = search.findIndex((s) => s.kind === kind)
       return i >= 0 ? search.splice(i, 1)[0] : null
@@ -667,12 +675,12 @@ export default function PipelineStudio({ api }) {
       if (section.kind !== 'products' && section.kind !== 'contents') return section
       const filled = takeKind(section.kind)
       if (filled) return filled
-      pending.push(i) // 아직 안 채운 자리 — "상품·콘텐츠 실행"이 채운다
+      pending.push(i) // 아직 안 채운 자리 — "상품 실행"·"참고 콘텐츠 실행"이 채운다
       return null
     })
     sections.push(...search)
     return { page: { headline: sk.headline, summary: sk.summary, sections }, pending }
-  }, [skResult, prodResult])
+  }, [skResult, prodResult, contResult])
   const planPreview = pgTab === 'flow' ? flowPlanPreview : stagePlanView
   const shownStage = previewStage === 'plan' && (planPreview || flowRunning === 'plan') ? 'plan' : 'survey'
 
@@ -764,7 +772,16 @@ export default function PipelineStudio({ api }) {
         title={planReady ? undefined : '답변을 하나 이상 선택하세요'}
         onClick={() => runStage('plan-products')}
       >
-        {running === 'plan-products' ? '실행 중…' : '✦ 상품·콘텐츠 실행 (4+5b→6)'}
+        {running === 'plan-products' ? '실행 중…' : '✦ 상품 실행 (4+5b→6)'}
+      </button>
+      <button
+        type="button"
+        className="sb-btn sb-btn--ai sb-btn--tiny"
+        disabled={!planReady || flowBusy}
+        title={planReady ? undefined : '답변을 하나 이상 선택하세요'}
+        onClick={() => runStage('plan-contents')}
+      >
+        {running === 'plan-contents' ? '실행 중…' : '✦ 참고 콘텐츠 실행 (5c→6)'}
       </button>
     </>
   )
@@ -810,13 +827,13 @@ export default function PipelineStudio({ api }) {
             label: '계획 페이지',
             chip: '뼈대+검색 병합 (스튜디오 합성)',
             lines: [
-              [metaLine(skResult?.meta), metaLine(prodResult?.meta)].filter(Boolean).join(' ∥ ') || null,
-              prodResult
-                ? `검증 게이트 — 섹션 ${(prodResult.sections || []).length}개 통과 · ${(prodResult.dropLog || []).length}건 드롭`
-                : '상품·콘텐츠 미실행 — 자리가 비어 있어요',
+              [metaLine(skResult?.meta), metaLine(prodResult?.meta), metaLine(contResult?.meta)].filter(Boolean).join(' ∥ ') || null,
+              prodResult || contResult
+                ? `검증 게이트 — 상품 ${(prodResult?.sections || []).length}·콘텐츠 ${(contResult?.sections || []).length} 섹션 통과 · ${(prodResult?.dropLog || []).length + (contResult?.dropLog || []).length}건 드롭`
+                : '상품·참고 콘텐츠 미실행 — 자리가 비어 있어요',
             ].filter(Boolean),
             ledger: previewLedger,
-            dropLog: prodResult?.dropLog || [],
+            dropLog: [...(prodResult?.dropLog || []), ...(contResult?.dropLog || [])],
             foot: stageRunButtons,
           }
         : {
@@ -847,6 +864,13 @@ export default function PipelineStudio({ api }) {
       map['plan-products'] = { meta: prodResult.meta, custom: prodResult.promptCustom, prompt: prodResult.prompt }
       map.verify = { pass: (prodResult.sections || []).length, drops: (prodResult.dropLog || []).length }
     }
+    if (contResult) {
+      map['plan-contents'] = { meta: contResult.meta, custom: contResult.promptCustom, prompt: contResult.prompt }
+      map.verify = {
+        pass: (map.verify?.pass || 0) + (contResult.sections || []).length,
+        drops: (map.verify?.drops || 0) + (contResult.dropLog || []).length,
+      }
+    }
     for (const [id, s] of Object.entries(flowRunStages)) {
       if (id === 'gate') continue
       map[id] = {
@@ -858,7 +882,7 @@ export default function PipelineStudio({ api }) {
       }
     }
     return map
-  }, [svResult, skResult, prodResult, flowRunStages])
+  }, [svResult, skResult, prodResult, contResult, flowRunStages])
 
   /* 플로우 실행 중 다이어그램 라이브 표시 — 켜진 노드와 그 유입 연결선 */
   const flowLiveInfo = useMemo(() => {

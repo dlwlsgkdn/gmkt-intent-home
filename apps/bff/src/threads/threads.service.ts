@@ -24,17 +24,20 @@ import {
   buildLookRenderPrompt,
   buildSurveyPage,
   completeSearchSection,
+  consolidateSmallProductSections,
   groundContentsSection,
   groundProductsSection,
   isSlotKind,
   mergePlanSections,
   parseDataUrl,
+  planQualityOf,
   slotIndexesOf,
   surveyStreamHandlers,
 } from '@ddak/pipeline'
 import { CoreClientService } from '../core-client.service'
 import { LlmService } from '../llm/llm.service'
 import { ImageEditService } from '../image/image-edit.service'
+import { EnrichService } from './enrich.service'
 import { EngineFlagService } from '../engine/engine-flag.service'
 import { GraphEngineService } from '../engine/graph-engine.service'
 import { SEQ, combineMeta, intentOf } from './thread-io'
@@ -76,6 +79,7 @@ export class ThreadsService {
     private readonly imageEdit: ImageEditService,
     private readonly engineFlag: EngineFlagService,
     private readonly graphEngine: GraphEngineService,
+    private readonly enrich: EnrichService,
   ) {}
 
   /** 쓰레드 시작 — 생성 + 탐색 스텝(의도·프로필) 기록 */
@@ -167,12 +171,15 @@ export class ThreadsService {
     const arrivedSections: { section: PlanSectionWire; streamIndex: number }[] = [] // 그라운딩 통과분 (도착 순)
     // 검색 스트림 원소 index → 자리 index. 첫 방출(대개 partial)에 배정하고 재전송·최종본이 같은 자리를 쓴다.
     // 검색 스트림은 원소를 순차로 내보내므로 첫 방출 순서 = 완성 순서 — 도착 순 배정 규칙이 유지된다
-    const slotByStream = new Map<number, number>()
+    // 상품(5b)·콘텐츠(5c) 호출의 스트림 index 가 각자 0부터라 종류와 함께 키로 쓴다
+    const slotByStream = new Map<string, number>()
     const slotFor = (streamIndex: number, kind: string): number => {
-      let slot = slotByStream.get(streamIndex)
+      const slotKind = kind === 'contents' ? 'contents' : 'products'
+      const key = `${slotKind}:${streamIndex}`
+      let slot = slotByStream.get(key)
       if (slot === undefined) {
-        slot = (allocator as GeneratedIndexAllocator).next(kind === 'contents' ? 'contents' : 'products')
-        slotByStream.set(streamIndex, slot)
+        slot = (allocator as GeneratedIndexAllocator).next(slotKind)
+        slotByStream.set(key, slot)
       }
       return slot
     }
@@ -279,25 +286,73 @@ export class ThreadsService {
       revision,
     )
 
-    const [skeletonSettled, searchSettled] = await Promise.allSettled([skeletonPromise, searchPromise])
+    // 5c 참고 콘텐츠 — 상품 검색과 분리된 웹 검색 예산으로 병렬 (2026-09). 자리 배정은 종류별 큐라 상품과 섞이지 않는다
+    const contentsPromise = this.llm.generatePlanContents(
+      intent,
+      survey,
+      answers,
+      profile,
+      stream && {
+        arrayKey: 'sections',
+        onElement: (element, index) => {
+          const parsed = PlanSearchSectionGen.safeParse(element)
+          if (!parsed.success || parsed.data.kind !== 'contents') return
+          const section = this.resolveContentsSection(parsed.data)
+          if (section) {
+            arrivedSections.push({ section, streamIndex: index })
+            flushGenerated()
+          }
+        },
+        onElementPartial: (element, index) => {
+          if (!allocator || !stream.onSection) return
+          const gen = completeSearchSection(element)
+          if (!gen || gen.kind !== 'contents') return
+          const section = this.resolveContentsSection(gen, true)
+          if (section) stream.onSection(section, slotFor(index, 'contents'), false)
+        },
+        onSearch: stream.onSearch,
+      },
+      revision,
+    )
+
+    const [skeletonSettled, searchSettled, contentsSettled] = await Promise.allSettled([skeletonPromise, searchPromise, contentsPromise])
     if (skeletonSettled.status === 'rejected') throw skeletonSettled.reason
     const skeleton = skeletonSettled.value
 
-    // 검색 단계 실패는 계획 전체를 죽이지 않는다 — 상품·콘텐츠 없는 계획을 정직하게 반환하고 로그만 남긴다
+    // 검색·콘텐츠 단계 실패는 계획 전체를 죽이지 않는다 — 없는 채로 정직하게 반환하고 로그만 남긴다
     let generatedSections: PlanSectionWire[] = []
     let productsMeta: LlmMeta | null = null
+    let contentsMeta: LlmMeta | null = null
+    let contentSections: PlanSectionWire[] = []
+    if (contentsSettled.status === 'fulfilled') {
+      contentsMeta = contentsSettled.value.meta
+      await this.enrich.enrichContents(contentsSettled.value.content.sections)
+      contentSections = contentsSettled.value.content.sections
+        .map((s) => this.resolveContentsSection(s))
+        .filter((s): s is PlanSectionWire => s !== null)
+    } else {
+      this.logger.warn(
+        `계획 참고 콘텐츠 단계 실패 — 콘텐츠 없이 계획 반환: ${(contentsSettled.reason as Error)?.message ?? contentsSettled.reason}`,
+      )
+    }
     if (searchSettled.status === 'fulfilled') {
       productsMeta = searchSettled.value.meta
-      generatedSections = searchSettled.value.content.sections
+      const raw = searchSettled.value.content.sections
+      await this.enrich.enrichProducts(raw.filter((s) => s.kind === 'products'))
+      generatedSections = raw
+        // 5c 가 콘텐츠를 만들었으면 상품 호출(옛 재정의 프롬프트)이 덧붙인 콘텐츠 섹션은 버린다
+        .filter((s) => !(contentSections.length && s.kind === 'contents'))
         .map((s, i) => (s.kind === 'contents' ? this.resolveContentsSection(s) : this.resolveProductsSection(s, i)))
         .filter((s): s is PlanSectionWire => s !== null)
     } else {
       this.logger.warn(
-        `계획 검색 단계 실패 — 상품·콘텐츠 없이 계획 반환: ${(searchSettled.reason as Error)?.message ?? searchSettled.reason}`,
+        `계획 검색 단계 실패 — 상품 없이 계획 반환: ${(searchSettled.reason as Error)?.message ?? searchSettled.reason}`,
       )
     }
 
-    const sections = mergePlanSections(skeleton.content.sections, generatedSections)
+    const sections = consolidateSmallProductSections(
+      mergePlanSections(skeleton.content.sections, [...generatedSections, ...contentSections]),
+    )
     if (!sections.length) {
       sections.push({ kind: 'guide', title: '준비된 안내', body: skeleton.content.summary })
     }
@@ -312,7 +367,7 @@ export class ThreadsService {
       this.core.upsertStep(threadId, SEQ.plan, {
         stage: 'plan',
         payload: { page },
-        llmMeta: combineMeta(skeleton.meta, productsMeta, 'legacy'),
+        llmMeta: combineMeta(skeleton.meta, productsMeta, 'legacy', { contents: contentsMeta, quality: planQualityOf(page) }),
       }),
       this.core.updateThread(threadId, { status: 'planning' }),
     )

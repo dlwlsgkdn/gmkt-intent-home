@@ -32,6 +32,25 @@ export const ThreadSource = z.object({
 export type ThreadSource = z.infer<typeof ThreadSource>
 
 /** LLM 호출 메타 — 비용·품질 대시보드의 원천. core는 내용을 해석하지 않는다(jsonb 저장만) */
+/** 계획 품질 요약 — 기록 시점(7단계)에 최종 페이지·드롭 로그에서 결정적으로 센다. 전환 판정 계기판의 품질 KPI 원천
+ * (섹션당 상품 수·1개짜리 섹션·PDP 비율·썸네일 비율·가격 미확인·콘텐츠 누락·드롭). @ddak/pipeline planQualityOf */
+export const PlanQuality = z.object({
+  sections: z.number().int(),
+  productSections: z.number().int(),
+  singleProductSections: z.number().int(),
+  products: z.number().int(),
+  webProducts: z.number().int(),
+  /** 웹 상품 중 상세 페이지(PDP) 주소를 가진 수 (나머지는 몰 검색 링크) */
+  pdpProducts: z.number().int(),
+  productThumbnails: z.number().int(),
+  priceUnknown: z.number().int(),
+  contentSections: z.number().int(),
+  contentItems: z.number().int(),
+  contentThumbnails: z.number().int(),
+  drops: z.number().int(),
+})
+export type PlanQuality = z.infer<typeof PlanQuality>
+
 export const LlmMeta = z.looseObject({
   model: z.string().optional(),
   promptVersion: z.string().optional(),
@@ -46,6 +65,18 @@ export const LlmMeta = z.looseObject({
     .optional(),
   latencyMs: z.number().optional(),
   fallback: z.boolean().optional(),
+  /** 실행 엔진 각인 (legacy|langgraph) — 전환 판정 계기판의 비교 축 */
+  engine: z.string().optional(),
+  /** 계획 생성의 단계별 소요 — 뼈대(5a) ∥ 상품(5b) ∥ 참고 콘텐츠(5c) */
+  phases: z
+    .object({
+      skeletonMs: z.number().nullable().optional(),
+      productsMs: z.number().nullable().optional(),
+      contentsMs: z.number().nullable().optional(),
+    })
+    .optional(),
+  /** 계획 품질 요약 (plan 스텝 전용) */
+  quality: PlanQuality.optional(),
 })
 export type LlmMeta = z.infer<typeof LlmMeta>
 

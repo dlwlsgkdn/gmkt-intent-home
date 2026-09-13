@@ -68,3 +68,26 @@ export function mergePlanSections(
   for (const s of generated) if (leftovers.has(s)) sections.push(s)
   return sections
 }
+
+/** 상품이 min개 미만인 상품 섹션은 가장 가까운(앞 우선) 다른 상품 섹션에 합친다 — 카드 한 장짜리 가로 트랙을 없앤다
+ * (2026-09 운영 기록: 상품 섹션의 23%가 1개짜리). 합칠 다른 상품 섹션이 없으면 그대로 둔다. 이름이 겹치는 상품은 한 번만 */
+export function consolidateSmallProductSections(sections: PlanSectionWire[], min = 2): PlanSectionWire[] {
+  const productIdx = sections.map((s, i) => (s.kind === 'products' ? i : -1)).filter((i) => i >= 0)
+  if (productIdx.length < 2) return sections
+  const out = [...sections]
+  const removed = new Set<number>()
+  for (const i of productIdx) {
+    const s = out[i]
+    if (s.kind !== 'products' || s.products.length >= min) continue
+    const target = productIdx
+      .filter((j) => j !== i && !removed.has(j))
+      .sort((a, b) => Math.abs(a - i) - Math.abs(b - i) || a - b)[0]
+    if (target === undefined) continue
+    const t = out[target]
+    if (t.kind !== 'products') continue
+    const names = new Set(t.products.map((p) => p.name))
+    out[target] = { ...t, products: [...t.products, ...s.products.filter((p) => !names.has(p.name))] }
+    removed.add(i)
+  }
+  return removed.size ? out.filter((_, i) => !removed.has(i)) : sections
+}

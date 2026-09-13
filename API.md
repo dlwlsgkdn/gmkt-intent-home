@@ -186,6 +186,14 @@ Base: `/api/admin/*` (스튜디오 프록시 `/api/bff/admin/*` 경유) · 인�
 
 FE(`apps/studio/src/lib/liveApi.js` `routeSearch`/`suggestSearch`)는 실패 시 `lib/searchCatalog.js` 의 같은 규칙 휴리스틱(`heuristicRoute`/`fallbackSuggest`)으로 대신한다. 홈 첫 화면(`personalizeHome`/`fetchPopularSearches` — `hooks/useHomePersonalize.js`)은 실패·지연을 `lib/homePersonalize.js`(pipeline `home.ts` 의 거울 — 휴리스틱 인사말·추천 검색어·같은 시드 표)로 받고, 결과를 세션 캐시(프로필·쓰레드 상태·날짜·시 단위 키)에 둔다. 모의 스택(`apps/bff/e2e/mock-upstream.mjs`)은 시스템 프롬프트 표식 '검색 라우터'·'검색어 추천'·'홈 인사'로 응답하고 `/v1/weather` 가 모의 Open-Meteo 다(스모크가 `WEATHER_API_URL` 로 가리킨다). 스모크 10.6 이 두 갈래·추천 3개·빈 검색어 400 을, 10.6b 가 개인화 인사말(쓰레드 요약·날씨 포함)·인기 검색어 내림차순·후보 표 count+1·KV 시딩·limit 상한을 확인한다.
 
+## 1-3. 계획 생성 — 상품·콘텐츠 분리와 품질 요약 (2026-09)
+
+계획 생성은 세 LLM 호출의 병렬이다: **5a 뼈대**(`plan-skeleton`) ∥ **5b 상품**(`plan-products`, 웹 검색 최대 4회 — 상품 섹션만) ∥ **5c 참고 콘텐츠**(`plan-contents`, 웹 검색 최대 3회 — 영상·게시글 섹션만, 항목마다 `why`). 셋 다 끝나면 6 검증 게이트가 그라운딩·병합(`mergePlanSections` → `consolidateSmallProductSections`)하고 7 기록이 `llmMeta` 에 `phases{skeletonMs,productsMs,contentsMs}`·합산 `usage.webSearchRequests`·**`quality`**(`PlanQuality` — 섹션·상품·웹 상품·PDP·썸네일·가격 미확인·콘텐츠 섹션/항목/썸네일·드롭 수)를 남긴다. 5b 나 5c 가 실패해도 계획은 살아 있고(없는 채로 반환), 옛 재정의 프롬프트가 5b 에서 콘텐츠를 만들어도 5c 결과가 있으면 그쪽을 쓴다.
+
+와이어 변화: `CatalogProduct.priceUnknown?`(판매가 미확인 — price 0), `PlanContentItem.why?`. 검증 게이트 드롭 코드 추가: `catalog-low-match`·`catalog-overflow`·`already-in-cart`·`stale-content`·`low-trust-source`·`duplicate-source`·`duplicate-recent`. 원장(`ledger`)에 `budgetMinKrw`(예산 하한 — 드롭 기준 아님)·`recentRecommended`·`recentContentUrls`(같은 사용자 최근 3개 쓰레드) 추가.
+
+admin: 프롬프트 카탈로그에 `plan-contents` 추가, 지식 목록에 guard 행 `guard-content-hosts`(콘텐츠 저신뢰 출처 도메인, 줄바꿈 구분·접미 일치) 추가, dry-run `stageId` 에 `plan-contents` 추가(응답은 `sections`·`dropLog`), `GET /api/admin/engine-metrics` 엔진별 `avgContentsMs`·`quality`(비율 0~1·평균, quality 요약이 있는 표본만). 썸네일 보강(`EnrichService`, og:image)은 BFF 환경변수 `ENRICH_FETCH=0` 으로 끌 수 있다(오프라인 e2e).
+
 ## 2. Core — internal API (BFF 전용, 비공개)
 
 Base: `https://ddak-core.vercel.app` · 인증: **`Authorization: Bearer <CORE_SERVICE_TOKEN>`** (healthz·docs 제외)

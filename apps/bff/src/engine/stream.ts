@@ -33,7 +33,7 @@ export type ChunkWriter = (chunk: GraphStreamChunk) => void
 export class PlanStreamCoordinator {
   private emit: ChunkWriter | null = null
   private allocator: GeneratedIndexAllocator | null = null
-  private readonly slotByStream = new Map<number, number>()
+  private readonly slotByStream = new Map<string, number>()
   private readonly arrived: { section: PlanSectionWire; streamIndex: number }[] = []
   private emitted = 0
 
@@ -85,11 +85,14 @@ export class PlanStreamCoordinator {
     this.section(section, this.slotFor(streamIndex, section.kind), false)
   }
 
+  /** 자리 배정 — 상품(5b)·콘텐츠(5c) 호출의 스트림 index 가 각자 0부터라 종류와 함께 키로 쓴다 */
   private slotFor(streamIndex: number, kind: string): number {
-    let slot = this.slotByStream.get(streamIndex)
+    const slotKind = kind === 'contents' ? 'contents' : 'products'
+    const key = `${slotKind}:${streamIndex}`
+    let slot = this.slotByStream.get(key)
     if (slot === undefined) {
-      slot = (this.allocator as GeneratedIndexAllocator).next(kind === 'contents' ? 'contents' : 'products')
-      this.slotByStream.set(streamIndex, slot)
+      slot = (this.allocator as GeneratedIndexAllocator).next(slotKind)
+      this.slotByStream.set(key, slot)
     }
     return slot
   }

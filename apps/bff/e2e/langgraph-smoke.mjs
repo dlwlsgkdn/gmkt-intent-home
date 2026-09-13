@@ -64,6 +64,7 @@ const bff = spawn(process.execPath, [path.join(here, '..', 'dist', 'main.js')], 
     WEATHER_API_URL: MOCK + '/v1/weather', // 홈 인사말 날씨 — 모의 Open-Meteo
     LANGGRAPH_DATABASE_URL: '', // MemorySaver — interrupt/재개는 프로세스 내에서 검증
     BFF_SERVICE_TOKEN: '',
+    ENRICH_FETCH: '0', // 썸네일 og:image 보강은 실 네트워크 — 오프라인 스모크에서는 끈다
   },
   stdio: 'ignore',
 })
@@ -124,7 +125,21 @@ try {
   const planPage = last(plan, 'result')?.data?.page
   ok(!!planPage, 'result 계획 수신')
   ok(planPage?.headline === '모의 여름 쿠션 계획', `headline (${planPage?.headline})`)
-  ok(planPage?.sections?.length === 3, `섹션 3개 병합 (${planPage?.sections?.length})`)
+  ok(planPage?.sections?.length === 4, `섹션 4개 병합 — 뼈대 3 + 5c 콘텐츠(자리 없어 끝에) (${planPage?.sections?.length})`)
+  {
+    const contSection = planPage?.sections?.find((s) => s.kind === 'contents')
+    ok(contSection?.items?.length === 3, `참고 콘텐츠 3개 — 2020년 글(stale)·같은 출처 3개째(duplicate-source) 드롭 (${contSection?.items?.length})`)
+    ok(contSection?.items?.[0]?.why === '지성 피부에 얇게 여러 겹 올리는 순서가 나온 영상이에요', '콘텐츠 항목의 고른 이유(why) 전달')
+    const detail = await fetch(BFF + `/api/admin/threads/${tid}`, { headers: H }).then((r) => r.json())
+    const planStep = detail?.steps?.find((s) => s.stage === 'plan')
+    const codes = (planStep?.payload?.dropLog || []).map((d) => d.code)
+    ok(codes.includes('stale-content') && codes.includes('duplicate-source'), `콘텐츠 게이트 드롭 로그 기록 (${codes.join(',')})`)
+    ok((planStep?.payload?.dropLog || []).some((d) => d.code === 'blocklist' && d.message.includes('모의브랜드 모의 세미매트 쿠션') && !d.message.includes('[')),
+      '웹 상품 이름 정규화 — 대괄호 프로모션·브랜드 중복을 뗀 뒤 블록리스트 대조')
+    const q = planStep?.llmMeta?.quality
+    ok(q && q.productSections === 1 && q.contentSections === 1 && q.contentItems === 3 && q.priceUnknown === 1, `llmMeta.quality 품질 요약 기록 (${JSON.stringify(q)})`)
+    ok(typeof planStep?.llmMeta?.phases?.contentsMs === 'number' && planStep?.llmMeta?.usage?.webSearchRequests == null, '메타 결합 — 5c 소요(phases.contentsMs)')
+  }
   const prodSection = planPage?.sections?.find((s) => s.kind === 'products')
   ok(
     prodSection?.products?.length === 2,
@@ -140,6 +155,8 @@ try {
     ok(planPage?.sections?.find((s) => s.kind === 'guide')?.subtitle === '유분만 덜어내고 결은 남기는 준비', '단계 안내 서브타이틀 전달')
   }
   ok(prodSection?.products?.[0]?.urlKind === 'search' && prodSection?.products?.[0]?.mall === '지마켓', '검색 링크 상품(urlKind=search)이 게이트를 통과')
+  ok(prodSection?.products?.[0]?.priceUnknown === true && prodSection?.products?.[0]?.price === 0, '판매가 0 → priceUnknown 표식')
+  ok(prodSection?.products?.[0]?.match?.factors?.find((f) => f.key === 'price')?.note?.includes('확인하지 못했'), '가격 미확인 상품의 가격 적합 근거')
   ok(prodSection?.products?.[0]?.match?.factors?.find((f) => f.key === 'evidence')?.score === 25, '검색 링크 상품의 근거 신뢰 25점')
   ok(prodSection?.products?.[1]?.id === 'p-012', '카탈로그 p-012 가 뒤에 붙는다')
   const sk = last(plan, 'skeleton')?.data
@@ -152,6 +169,7 @@ try {
   ok(calls.filter((c) => c.type === 'survey').length === 1, `LLM survey 호출 1회 (${calls.filter((c) => c.type === 'survey').length})`)
   ok(calls.filter((c) => c.type === 'skeleton').length === 1, 'LLM skeleton 호출 1회')
   ok(calls.filter((c) => c.type === 'products').length === 1, 'LLM products 호출 1회')
+  ok(calls.filter((c) => c.type === 'contents').length === 1, 'LLM contents(5c) 호출 1회 — 상품과 분리')
 
   // ── 4. core 기록 확인 (record 노드) ──
   console.log('4) core 스텝 기록')
@@ -244,7 +262,7 @@ try {
   const svB = await sse(`/api/threads/${startB.threadId}/survey`, {}, plain)
   ok(last(svB, 'result')?.data?.page?.questions?.length === 3, 'legacy 설문 생성 정상')
   const planB = await sse(`/api/threads/${startB.threadId}/plan`, { answers: [{ questionId: 'q1', choices: ['건성'] }] }, plain)
-  ok(last(planB, 'result')?.data?.page?.sections?.length === 3, 'legacy 계획 생성 정상')
+  ok(last(planB, 'result')?.data?.page?.sections?.length === 4, `legacy 계획 생성 정상 — 5c 콘텐츠 포함 (${last(planB, 'result')?.data?.page?.sections?.length})`)
 
   // ── 8.5 가상 메이크업 저니 — 사진 질문 스캐폴드 + 가상 메이크업 결과(look) 섹션 ──
   console.log('8.5) 가상 메이크업 저니 (graph)')
@@ -328,9 +346,11 @@ try {
   // ── 9. 파이프라인 스튜디오 API (페이즈 4) ──
   console.log('9) 파이프라인 스튜디오 API')
   const pipe = await fetch(BFF + '/api/admin/pipeline').then((r) => r.json())
-  ok(pipe?.stages?.length === 9, `단계 카탈로그 9개 (${pipe?.stages?.length})`)
+  ok(pipe?.stages?.length === 10, `단계 카탈로그 10개 — 5c 참고 콘텐츠 포함 (${pipe?.stages?.length})`)
   ok(pipe?.stages?.some((s) => s.no === '5a') && pipe?.stages?.some((s) => s.no === '5b'), '병렬 5a/5b 표기')
   ok(pipe?.knowledge?.some((k) => k.id === 'guard-blocklist' && k.value), '블록리스트 KV가 지식 목록에 노출')
+  ok(pipe?.knowledge?.some((k) => k.id === 'guard-content-hosts' && k.injection === 'guard'), '콘텐츠 저신뢰 출처 KV 행 노출')
+  ok(pipe?.stages?.some((st) => st.id === 'plan-contents' && st.promptId === 'plan-contents'), '5c 참고 콘텐츠 단계가 카탈로그에 등록')
   const promptWire = await fetch(BFF + '/api/admin/prompts').then((r) => r.json())
   const productPrompt = promptWire?.prompts?.find((p) => p.id === 'plan-products')
   const assistRes = await fetch(BFF + '/api/admin/prompts/plan-products/assist', {
@@ -409,14 +429,14 @@ try {
   )
   const fr2Result = last(fr2, 'result')?.data
   ok(!last(fr2, 'error'), '플로우 계획 구간 오류 없음')
-  ok(fr2Result?.page?.sections?.length === 3, `플로우 최종 병합 페이지 (${fr2Result?.page?.sections?.length}섹션)`)
+  ok(fr2Result?.page?.sections?.length === 4, `플로우 최종 병합 페이지 (${fr2Result?.page?.sections?.length}섹션)`)
   ok((fr2Result?.dropLog ?? []).some((d) => d.code === 'blocklist'), '플로우 dropLog에 검증 게이트 기록')
   const fr2Stages = fr2.filter((e) => e.event === 'stage').map((e) => e.data)
   ok(stageOf(fr2Stages, 'plan-skeleton', 'start')?.prompt?.promptId === 'plan-skeleton', 'stage 이벤트 — 뼈대 시작 프롬프트')
   ok(stageOf(fr2Stages, 'plan-products', 'start')?.prompt?.user?.includes('지성'), 'stage 이벤트 — 상품 가변부에 답변 반영')
   ok(stageOf(fr2Stages, 'plan-skeleton', 'done') && stageOf(fr2Stages, 'plan-products', 'done'), 'stage 이벤트 — 병렬 5a·5b done')
   const verifyStage = stageOf(fr2Stages, 'verify', 'done')
-  ok(verifyStage?.pass === 3 && verifyStage?.drops >= 1, `stage 이벤트 — 검증 게이트 통과 ${verifyStage?.pass}·드롭 ${verifyStage?.drops}`)
+  ok(verifyStage?.pass === 4 && verifyStage?.drops >= 1, `stage 이벤트 — 검증 게이트 통과 ${verifyStage?.pass}·드롭 ${verifyStage?.drops}`)
   ok(
     (stageOf(fr2Stages, 'record', 'done')?.summary ?? '').includes('admin 프로필(ops-playground)'),
     'stage 이벤트 — admin 프로필 쓰레드로 기록',
@@ -450,7 +470,7 @@ try {
   ok((promo?.answers || []).length >= 1, '답변 스냅샷 포함')
   const runEvents = await sse(`/api/admin/eval/cases/${promo.id}/run`, { label: '기본 설정' }, plain)
   const run = last(runEvents, 'result')?.data?.run
-  ok(run?.page?.sections?.length === 3, `케이스 실행 — 병합 페이지 (${run?.page?.sections?.length})`)
+  ok(run?.page?.sections?.length === 4, `케이스 실행 — 병합 페이지 (${run?.page?.sections?.length})`)
   ok(run?.config?.engine === 'dry-run' && run?.config?.label === '기본 설정', '실행 config 스냅샷')
   ok((run?.dropLog || []).some((d) => d.code === 'blocklist'), '실행 dropLog에 검증 게이트 기록')
   ok(run?.meta?.phases?.skeletonMs != null, '실행 meta phases 결합')
@@ -554,7 +574,7 @@ try {
   const legacyM = engineMetrics?.engines?.find((e) => e.engine === 'legacy')
   ok(lg?.count >= 1, `전환 계기판 — langgraph 표본 (${lg?.count})`)
   ok(legacyM?.count >= 1, `전환 계기판 — legacy 표본 (${legacyM?.count})`)
-  ok(lg?.promptVersions?.includes('v21'), 'promptVersion 각인 (v21)')
+  ok(lg?.promptVersions?.includes('v22'), 'promptVersion 각인 (v22)')
 
   {
   console.log('11) 전체 지시서 요청·묶음 적용·충돌 보호')

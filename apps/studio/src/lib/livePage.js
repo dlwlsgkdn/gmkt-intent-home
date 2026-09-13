@@ -215,7 +215,8 @@ export function livePlanItems(page, opts = {}) {
           props: {
             brand: product.brand || '',
             name: product.name,
-            price: Number(product.price || 0).toLocaleString('ko-KR'),
+            // 판매가를 못 확인한 웹 상품(priceUnknown·0원)은 가격을 비운다 — 카드가 "가격 확인 필요"로 보인다 (2026-09)
+            price: product.priceUnknown || !(Number(product.price) > 0) ? '' : Number(product.price).toLocaleString('ko-KR'),
             was: '',
             // 매칭율 — 검증 게이트(@ddak/pipeline guards/match.ts)가 상품마다 계산해 페이지에 남긴 값. 항목 표(factors)와
             // 계산식(basis)이 배지 팝오버 재료다. 옛 페이지(match 없음)는 예전처럼 "AI 추천" 문구 배지로 남는다
@@ -261,6 +262,7 @@ export function livePlanItems(page, opts = {}) {
               duration: c.duration || '',
               url: c.url || '', // 카드 클릭 = 새 탭 (registry videoCard의 openExternal)
               imageUrl: c.imageUrl || '', // 없으면 유튜브 URL 자동 썸네일 → 폴백 이미지
+              note: c.why || '', // 5c 콘텐츠 단계가 답변을 인용해 적은 "왜 이 콘텐츠인지" (옛 페이지엔 없음)
             },
           })
         } else {
@@ -274,6 +276,7 @@ export function livePlanItems(page, opts = {}) {
               author: c.meta || '',
               url: c.url || '',
               imageUrl: c.imageUrl || '',
+              note: c.why || '',
             },
           })
         }

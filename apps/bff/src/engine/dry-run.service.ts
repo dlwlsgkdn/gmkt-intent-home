@@ -1,11 +1,13 @@
 import { BadRequestException, Injectable } from '@nestjs/common'
 import type { AdminDryRunBody, LlmMeta, PlanSectionWire, SurveyPageWire } from '@ddak/schema'
 import {
+  PlanContentsGen,
   PlanProductsGen,
   PlanSkeletonGen,
   STAGE_BY_ID,
   SurveyGen,
   assembleLedger,
+  buildPlanContentsRequest,
   buildPlanProductsRequest,
   buildPlanSkeletonRequest,
   buildSurveyPage,
@@ -22,6 +24,7 @@ import {
 } from '@ddak/pipeline'
 import { KnowledgeService } from '../llm/knowledge.service'
 import { LlmService } from '../llm/llm.service'
+import { EnrichService } from '../threads/enrich.service'
 
 /*
  * 파이프라인 플레이그라운드 dry-run (DESIGN-PIPELINE-LANGGRAPH.md 페이즈 4) — LLM 단계 하나를
@@ -57,9 +60,9 @@ export type DryRunResult = {
   survey?: SurveyPageWire
   /** stageId=plan-skeleton — LLM 원본 (자리 포함) */
   skeleton?: PlanSkeletonGen
-  /** stageId=plan-products — 검증 게이트 통과분 (6단계까지 적용된 wire 섹션) */
+  /** stageId=plan-products·plan-contents — 검증 게이트 통과분 (6단계까지 적용된 wire 섹션) */
   sections?: PlanSectionWire[]
-  /** stageId=plan-products — 드롭 사유 (검증 게이트 품질 로그) */
+  /** stageId=plan-products·plan-contents — 드롭 사유 (검증 게이트 품질 로그) */
   dropLog?: GroundingDrop[]
 }
 
@@ -68,6 +71,7 @@ export class PipelineDryRunService {
   constructor(
     private readonly llm: LlmService,
     private readonly knowledge: KnowledgeService,
+    private readonly enrich: EnrichService,
   ) {}
 
   private async systemFor(promptId: PromptDefId, override?: string): Promise<ResolvedSystem> {
@@ -133,7 +137,43 @@ export class PipelineDryRunService {
       }
     }
 
-    const guard: GuardContext = { blocklist: await this.knowledge.blocklist(), ledger }
+    const guard: GuardContext = {
+      blocklist: await this.knowledge.blocklist(),
+      contentBlockHosts: await this.knowledge.contentBlockHosts(),
+      ledger,
+    }
+    if (body.stageId === 'plan-contents') {
+      const contentsSystem = await this.systemFor('plan-contents', body.promptOverride)
+      const contentsUser = buildPlanContentsRequest(body.intent, body.survey, body.answers, body.profile, undefined, ledger)
+      const contents = await this.llm.generate('계획 참고 콘텐츠 생성(dry-run)', PlanContentsGen, {
+        system: contentsSystem,
+        effort: this.effortOf('plan-contents', 'medium'),
+        user: contentsUser,
+        webSearch: true,
+        webSearchMaxUses: 3,
+        stream: events.onStatus
+          ? { arrayKey: 'sections', onSearch: (query) => events.onStatus?.(`웹에서 "${query}" 검색 중…`) }
+          : undefined,
+      })
+      await this.enrich.enrichContents(contents.content.sections)
+      const contentsDrops: GroundingDrop[] = []
+      const contentSections = contents.content.sections
+        .map((s) => {
+          const { section, drops } = groundContentsSection(s, guard)
+          contentsDrops.push(...drops)
+          return section
+        })
+        .filter((s): s is PlanSectionWire => s !== null)
+      return {
+        stageId: body.stageId,
+        ledger,
+        promptCustom: contentsSystem.custom,
+        prompt: { promptId: 'plan-contents', system: contentsSystem.text, custom: contentsSystem.custom, user: contentsUser },
+        meta: contents.meta,
+        sections: contentSections,
+        dropLog: contentsDrops,
+      }
+    }
     const system = await this.systemFor('plan-products', body.promptOverride)
     const user = buildPlanProductsRequest(body.intent, body.survey, body.answers, body.profile, undefined, ledger)
     const { content, meta } = await this.llm.generate('계획 상품 생성(dry-run)', PlanProductsGen, {
@@ -145,6 +185,7 @@ export class PipelineDryRunService {
         ? { arrayKey: 'sections', onSearch: (query) => events.onStatus?.(`웹에서 "${query}" 검색 중…`) }
         : undefined,
     })
+    await this.enrich.enrichProducts(content.sections.filter((s) => s.kind === 'products'))
     // 6단계 검증 게이트까지 그대로 적용 — 운영에서 살아남을 결과와 드롭 사유를 함께 보여준다
     const dropLog: GroundingDrop[] = []
     const sections = content.sections

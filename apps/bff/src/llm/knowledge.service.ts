@@ -1,13 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { ThreadStageFeedback } from '@ddak/schema'
+import type { PlanPageWire } from '@ddak/schema'
 import {
   CUSTOM_KNOWLEDGE_SETTING_KEY,
   GUARD_BLOCKLIST_SETTING_KEY,
+  GUARD_CONTENT_HOSTS_SETTING_KEY,
   knowledgeSettingKey,
   customKnowledgeSettingKey,
   parseCustomSources,
   type CustomKnowledgeSource,
   type SystemKnowledge,
+  type SelectionSignal,
 } from '@ddak/pipeline'
 import { CoreClientService } from '../core-client.service'
 
@@ -21,6 +24,9 @@ import { CoreClientService } from '../core-client.service'
 
 const CACHE_MS = 30_000
 /** 사용자 피드백 압축 상한 — 가변부는 짧게 (전략 문서 p.3) */
+/** 추천 이력을 모을 최근 쓰레드 수 · 항목 상한 */
+const RECENT_THREADS = 3
+const RECENT_ITEMS = 20
 const FEEDBACK_LINES = 3
 const FEEDBACK_SCAN_LIMIT = 100
 
@@ -91,6 +97,63 @@ export class KnowledgeService {
   /** 상품 블록리스트 — 검증 게이트 정확 매칭용 (줄바꿈·쉼표 구분) */
   async blocklist(): Promise<string[]> {
     return splitList(await this.kv(GUARD_BLOCKLIST_SETTING_KEY))
+  }
+
+  /** 콘텐츠 저신뢰 출처 도메인 — 검증 게이트 low-trust-source 드롭용 (줄바꿈·쉼표 구분, 접미 일치) */
+  async contentBlockHosts(): Promise<string[]> {
+    return splitList(await this.kv(GUARD_CONTENT_HOSTS_SETTING_KEY))
+  }
+
+  /** 이 사용자의 최근 쓰레드(현재 제외, 최대 3개)에서 — 이미 추천한 상품 라벨·보여준 콘텐츠 URL·담기/빼기 신호를 모은다.
+   * 원장(recentRecommended·recentContentUrls·selectionSignals)으로 굳어 프롬프트 가변부와 검증 게이트가 같은 값을 본다
+   * (2026-09: 같은 사용자에게 같은 카탈로그 상품이 6번 반복 추천되던 것). 조회 실패는 빈 값 — 계획을 막지 않는다 */
+  async recentSelectionsFor(
+    userId: string,
+    excludeThreadId: string,
+  ): Promise<{ recentRecommended: string[]; recentContentUrls: string[]; selectionSignals: SelectionSignal[] }> {
+    try {
+      const page = await this.core.listThreads(userId, undefined, RECENT_THREADS + 1)
+      const ids = (page.items ?? [])
+        .map((t) => t.id)
+        .filter((id) => id !== excludeThreadId)
+        .slice(0, RECENT_THREADS)
+      const threads = await Promise.all(ids.map((id) => this.core.getThread(id).catch(() => null)))
+      const recommended: string[] = []
+      const urls: string[] = []
+      const signals: SelectionSignal[] = []
+      for (const thread of threads) {
+        if (!thread) continue
+        for (const step of thread.steps) {
+          if (step.stage === 'plan') {
+            const plan = (step.payload as { page?: PlanPageWire } | null)?.page
+            for (const section of plan?.sections ?? []) {
+              if (section.kind === 'products') {
+                for (const product of section.products) {
+                  const label = `${product.brand ?? ''} ${product.name}`.trim()
+                  if (label && !recommended.includes(label)) recommended.push(label)
+                }
+              } else if (section.kind === 'contents') {
+                for (const item of section.items) if (item.url && !urls.includes(item.url)) urls.push(item.url)
+              }
+            }
+          } else if (step.stage === 'action') {
+            const payload = step.payload as { type?: string; data?: { name?: unknown } } | null
+            const name = payload?.data?.name
+            if (typeof name === 'string' && name && (payload?.type === 'cartAdd' || payload?.type === 'cartRemove')) {
+              signals.push({ name, action: payload.type })
+            }
+          }
+        }
+      }
+      return {
+        recentRecommended: recommended.slice(0, RECENT_ITEMS),
+        recentContentUrls: urls.slice(0, RECENT_ITEMS),
+        selectionSignals: signals,
+      }
+    } catch (e) {
+      this.logger.warn(`최근 쓰레드 조회 실패 — 추천 이력 없이 진행: ${(e as Error).message}`)
+      return { recentRecommended: [], recentContentUrls: [], selectionSignals: [] }
+    }
   }
 
   /** 이 사용자의 직전 쓰레드 피드백 한 줄 압축 — 현재 쓰레드는 제외(그건 revision이 싣는다).

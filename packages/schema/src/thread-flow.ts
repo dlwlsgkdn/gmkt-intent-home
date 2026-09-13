@@ -168,6 +168,8 @@ export const CatalogProduct = z.object({
   name: z.string(),
   brand: z.string(),
   price: z.number().int(),
+  /** 판매가 미확인 — 검색 결과에 가격이 없어 0으로 실린 웹 상품 (FE 카드가 "가격 확인 필요"로 보인다, 2026-09) */
+  priceUnknown: z.boolean().optional(),
   tags: z.array(z.string()),
   /** 매칭율 — 그라운딩 가드(@ddak/pipeline scoreProductMatch)가 붙인다. 옛 페이지에는 없다 */
   match: ProductMatch.optional(),
@@ -194,6 +196,8 @@ export const PlanContentItem = z.object({
   meta: z.string().optional(),
   snippet: z.string().optional(),
   duration: z.string().optional(),
+  /** 이 콘텐츠를 고른 이유 한 줄 — 답변을 인용 (5c 콘텐츠 단계가 채운다, 옛 페이지에는 없다) */
+  why: z.string().optional(),
 })
 export type PlanContentItem = z.infer<typeof PlanContentItem>
 

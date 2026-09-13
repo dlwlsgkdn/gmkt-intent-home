@@ -78,6 +78,7 @@ import { DEFAULT_MODEL, LLM_MODEL_SETTING_KEY, LlmService, MODEL_OPTIONS, prompt
 import {
   CUSTOM_KNOWLEDGE_SETTING_KEY,
   GUARD_BLOCKLIST_SETTING_KEY,
+  GUARD_CONTENT_HOSTS_SETTING_KEY,
   JudgeGen,
   JudgeSurveyGen,
   KNOWLEDGE_SOURCES,
@@ -93,7 +94,9 @@ import {
   judgeRubricEntries,
   judgeSurveyRubricEntries,
   knowledgeSettingKey,
+  consolidateSmallProductSections,
   mergePlanSections,
+  planQualityOf,
   normalizePlaceholderToken,
   parseCustomSources,
   serializeCustomSources,
@@ -644,6 +647,20 @@ export class AdminController {
       custom: false,
       heading: null,
     })
+    const contentHostsSetting = await this.core.getSetting(GUARD_CONTENT_HOSTS_SETTING_KEY)
+    knowledge.push({
+      id: GUARD_CONTENT_HOSTS_SETTING_KEY,
+      label: '콘텐츠 저신뢰 출처',
+      backing: 'kv',
+      injection: 'guard',
+      placeholder: null,
+      note: '검증 게이트(6단계) 참고 콘텐츠 드롭 — 제품 목록만 나열하는 SEO 어필리에이트 블로그처럼 믿기 어려운 출처의 도메인을 줄바꿈으로 (접미 일치, 예: example.com). 같은 출처 3개째·3년 넘은 콘텐츠는 목록 없이도 드롭된다.',
+      editable: true,
+      value:
+        typeof contentHostsSetting?.value === 'string' && contentHostsSetting.value.trim() ? contentHostsSetting.value : null,
+      custom: false,
+      heading: null,
+    })
     // 운영자가 추가한 지식 — 붙박이 뒤에 붙는다 (주입은 언제나 시스템 자리표시자)
     for (const source of await this.customSources()) {
       const setting = await this.core.getSetting(customKnowledgeSettingKey(source.id))
@@ -696,6 +713,8 @@ export class AdminController {
     this.llm.invalidatePromptCache() // 시스템 자리표시자 지식이 바뀌면 렌더된 프롬프트도 갱신돼야 한다
     const label = id === GUARD_BLOCKLIST_SETTING_KEY
       ? '상품 블록리스트'
+      : id === GUARD_CONTENT_HOSTS_SETTING_KEY
+      ? '콘텐츠 저신뢰 출처'
       : KNOWLEDGE_SOURCES.find((source) => source.id === id)?.label
         || (await this.customSources()).find((source) => source.id === id)?.label
         || id
@@ -715,6 +734,7 @@ export class AdminController {
   /** 지식 id → 값 저장 키. 붙박이 KV·블록리스트·운영자 추가분만 편집 대상(core 파생은 null) */
   private async knowledgeValueKey(id: string): Promise<string | null> {
     if (id === GUARD_BLOCKLIST_SETTING_KEY) return GUARD_BLOCKLIST_SETTING_KEY
+    if (id === GUARD_CONTENT_HOSTS_SETTING_KEY) return GUARD_CONTENT_HOSTS_SETTING_KEY
     const builtin = KNOWLEDGE_SOURCES.find((s) => s.id === id && s.backing === 'kv')
     if (builtin) return knowledgeSettingKey(builtin.id)
     const custom = (await this.customSources()).find((s) => s.id === id)
@@ -1029,13 +1049,27 @@ export class AdminController {
         },
         { onStatus: (message) => sseSend(res, 'status', { message }) },
       )
-      const sections = mergePlanSections(skeleton.skeleton!.sections, products.sections ?? [])
+      // 5c 참고 콘텐츠 — 상품과 분리된 검색 예산 (운영 그래프와 같은 구성, 2026-09)
+      const contents = await this.dryRunService.run(
+        {
+          stageId: 'plan-contents',
+          intent: evalCase.intent,
+          profile: evalCase.profile ?? undefined,
+          survey: evalCase.survey,
+          answers: evalCase.answers,
+          promptOverride: body.promptOverride,
+        },
+        { onStatus: (message) => sseSend(res, 'status', { message }) },
+      )
+      const sections = consolidateSmallProductSections(
+        mergePlanSections(skeleton.skeleton!.sections, [...(products.sections ?? []), ...(contents.sections ?? [])]),
+      )
       const page: PlanPageWire = {
         headline: skeleton.skeleton!.headline,
         summary: skeleton.skeleton!.summary,
         sections,
       }
-      const meta = combineMeta(skeleton.meta, products.meta, 'dry-run')
+      const meta = combineMeta(skeleton.meta, products.meta, 'dry-run', { contents: contents.meta, quality: planQualityOf(page, [...(products.dropLog ?? []), ...(contents.dropLog ?? [])]) })
       const run = await this.core.createEvalRun(id, {
         config: {
           engine: 'dry-run',
@@ -1166,19 +1200,26 @@ export class AdminController {
     @Query('limit', new DefaultValuePipe(200), ParseIntPipe) limit: number,
   ): Promise<AdminEngineMetricsWire> {
     const { items } = await this.core.listPlanMetas(limit)
-    const buckets = new Map<string, { latencies: number[]; skeletons: number[]; products: number[]; cacheHits: number; cacheKnown: number; versions: Set<string> }>()
+    type Quality = {
+      sections: number; productSections: number; singleProductSections: number; products: number; webProducts: number
+      pdpProducts: number; productThumbnails: number; priceUnknown: number; contentSections: number; contentItems: number
+      contentThumbnails: number; drops: number
+    }
+    const buckets = new Map<string, { latencies: number[]; skeletons: number[]; products: number[]; contents: number[]; cacheHits: number; cacheKnown: number; versions: Set<string>; qualities: Quality[] }>()
     for (const row of items) {
-      const meta = row.llmMeta as (Record<string, unknown> & { usage?: { cacheReadTokens?: number }; phases?: { skeletonMs?: number | null; productsMs?: number | null } }) | null
+      const meta = row.llmMeta as (Record<string, unknown> & { usage?: { cacheReadTokens?: number }; phases?: { skeletonMs?: number | null; productsMs?: number | null; contentsMs?: number | null }; quality?: Quality }) | null
       if (!meta) continue
       const engine = typeof meta.engine === 'string' ? meta.engine : 'legacy'
       let bucket = buckets.get(engine)
       if (!bucket) {
-        bucket = { latencies: [], skeletons: [], products: [], cacheHits: 0, cacheKnown: 0, versions: new Set() }
+        bucket = { latencies: [], skeletons: [], products: [], contents: [], cacheHits: 0, cacheKnown: 0, versions: new Set(), qualities: [] }
         buckets.set(engine, bucket)
       }
       if (typeof meta.latencyMs === 'number') bucket.latencies.push(meta.latencyMs)
       if (typeof meta.phases?.skeletonMs === 'number') bucket.skeletons.push(meta.phases.skeletonMs)
       if (typeof meta.phases?.productsMs === 'number') bucket.products.push(meta.phases.productsMs)
+      if (typeof meta.phases?.contentsMs === 'number') bucket.contents.push(meta.phases.contentsMs)
+      if (meta.quality && typeof meta.quality.products === 'number') bucket.qualities.push(meta.quality)
       if (meta.usage && meta.usage.cacheReadTokens !== undefined) {
         bucket.cacheKnown += 1
         if ((meta.usage.cacheReadTokens ?? 0) > 0) bucket.cacheHits += 1
@@ -1186,6 +1227,28 @@ export class AdminController {
       if (typeof meta.promptVersion === 'string') bucket.versions.add(meta.promptVersion)
     }
     const avg = (arr: number[]) => (arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null)
+    /* 품질 KPI — 비율은 분모가 0이면 null (2026-09 분석에서 손으로 세던 지표: 섹션당 상품 수·1개짜리 섹션·PDP·썸네일·가격 미확인·콘텐츠 누락·드롭) */
+    const ratio = (num: number, den: number) => (den ? Math.round((num / den) * 100) / 100 : null)
+    const qualityOf = (qs: Quality[]) => {
+      if (!qs.length) return null
+      const sum = (pick: (q: Quality) => number) => qs.reduce((a, q) => a + pick(q), 0)
+      const productSections = sum((q) => q.productSections)
+      const products = sum((q) => q.products)
+      const webProducts = sum((q) => q.webProducts)
+      const contentItems = sum((q) => q.contentItems)
+      return {
+        plans: qs.length,
+        avgProductsPerSection: productSections ? Math.round((products / productSections) * 10) / 10 : null,
+        singleProductSectionRate: ratio(sum((q) => q.singleProductSections), productSections),
+        webPdpRate: ratio(sum((q) => q.pdpProducts), webProducts),
+        productThumbnailRate: ratio(sum((q) => q.productThumbnails), products),
+        priceUnknownRate: ratio(sum((q) => q.priceUnknown), products),
+        contentMissingRate: ratio(qs.filter((q) => q.contentSections === 0).length, qs.length),
+        avgContentItems: Math.round((contentItems / qs.length) * 10) / 10,
+        contentThumbnailRate: ratio(sum((q) => q.contentThumbnails), contentItems),
+        avgDrops: Math.round((sum((q) => q.drops) / qs.length) * 10) / 10,
+      }
+    }
     return {
       sampled: items.length,
       engines: [...buckets.entries()].map(([engine, b]) => ({
@@ -1194,8 +1257,10 @@ export class AdminController {
         avgLatencyMs: avg(b.latencies),
         avgSkeletonMs: avg(b.skeletons),
         avgProductsMs: avg(b.products),
+        avgContentsMs: avg(b.contents),
         cacheHitRate: b.cacheKnown ? Math.round((b.cacheHits / b.cacheKnown) * 100) / 100 : null,
         promptVersions: [...b.versions].sort(),
+        quality: qualityOf(b.qualities),
       })),
     }
   }

@@ -734,7 +734,8 @@
 
 .sb-pipe-layout {
   display: grid;
-  grid-template-columns: minmax(280px, 340px) 420px minmax(0, 1fr);
+  /* 흐름 컬럼 600px — 5단계 병렬 블록이 세 레인(170px × 3 + 간격 20 × 2 = 550)이라 카드 패딩까지 담는다 (2026-09 5c 추가) */
+  grid-template-columns: minmax(280px, 340px) 600px minmax(0, 1fr);
   grid-template-areas: 'knowledge flow side';
   gap: 20px;
   align-items: start;
@@ -1826,9 +1827,11 @@
 .sb-flow-wrap {
   overflow-x: auto;
   display: flex;
-  justify-content: center;
+  /* 가운데 정렬은 자식 margin 으로 — justify-content:center 는 내용이 더 넓을 때 왼쪽이 스크롤로 닿지 않게 잘린다 */
+  justify-content: flex-start;
   padding: 10px 0 4px;
 }
+.sb-flow-wrap > .sb-flow { margin: 0 auto; }
 .sb-flow {
   display: flex;
   flex-direction: column;
@@ -2302,6 +2305,19 @@
 .sb-exp-bar__fill--products {
   background: var(--sb-ai);
 }
+.sb-exp-bar__fill--contents { background: var(--sb-warn); }
+/* 품질 KPI (전환 판정 계기판) — 3열 라벨/값 표 */
+.sb-exp-quality {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px 10px;
+  margin: 10px 0 0;
+  padding: 10px 0 0;
+  border-top: 1px dashed var(--sb-n-200);
+}
+.sb-exp-quality > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sb-exp-quality dt { font-size: var(--sb-t-micro); color: var(--sb-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sb-exp-quality dd { margin: 0; font-size: var(--sb-t-small); font-weight: 500; color: var(--sb-ink); font-variant-numeric: tabular-nums; }
 .sb-exp-bar__fill--cache {
   background: var(--sb-success, var(--sb-info));
 }
