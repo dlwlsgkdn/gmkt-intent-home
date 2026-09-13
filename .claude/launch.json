@@ -25,6 +25,15 @@
       "autoPort": true
     },
     {
+      "name": "scenario-studio-mockbff",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "PATH=\"$HOME/.nvm/versions/node/v24.5.0/bin:/opt/homebrew/bin:$PATH\" VITE_BFF_PROXY=\"${VITE_BFF_PROXY:-http://localhost:8799}\" exec node node_modules/vite/bin/vite.js apps/studio --port 5177 --strictPort"
+      ],
+      "port": 5177
+    },
+    {
       "name": "pages-static",
       "runtimeExecutable": "node",
       "runtimeArgs": [

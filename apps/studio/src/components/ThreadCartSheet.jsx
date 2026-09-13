@@ -52,9 +52,49 @@ export function CartThumb({ entry, className }) {
 const MALL_TONE = { 'G마켓': 'gmarket', '지마켓': 'gmarket', '올리브영': 'oliveyoung' }
 const mallOf = (entry) => (entry.external ? entry.mall || '외부몰' : entry.mall || 'G마켓')
 
+/* 빈 파트 행 한 벌 — 세 상태 (2026-09): 담을 것이 있음(플러스 자리·「상품을 추가해 보세요」·쉐브론, 누르면 계획으로 = Figma
+   EmptyPartRow) · 찾는 중(라이브 조기 확정 뒤 그 단계의 자리에 검색 결과 대기 — ✦ 맥동, 누르면 계획으로) · 추천 상품 없음(상품이
+   하나도 안 실린 단계 — 플러스·쉐브론 없이 누를 곳도 없다). 담을 수 없는 단계까지 플러스 행으로 그리면 고를 상품이 있는 것처럼 보인다 */
+function EmptyPartRow({ group, mode, onOpenPlan }) {
+  const head = (
+    <span className="sb-cart-part__head sb-cart-part__head--empty">
+      <span className="sb-cart-part__title">{group.step || '담은 상품'}</span>
+      {group.stepBadge ? <span className="sb-cart-part__badge">{group.stepBadge}</span> : null}
+    </span>
+  )
+  if (mode === 'none') {
+    return (
+      <div className="sb-cart-part__empty is-none">
+        <span className="sb-cart-part__empty-thumb" aria-hidden="true" />
+        <span className="sb-cart-part__empty-info">
+          {head}
+          <span className="sb-cart-part__placeholder">이 단계엔 추천 상품이 없어요</span>
+        </span>
+      </div>
+    )
+  }
+  const pending = mode === 'pending'
+  return (
+    <button
+      type="button"
+      className={'sb-cart-part__empty' + (pending ? ' is-pending' : '')}
+      onClick={onOpenPlan}
+      title={pending ? '계획에서 진행 상황 보기' : '계획에서 이 단계의 상품을 담기'}
+    >
+      <span className="sb-cart-part__empty-thumb" aria-hidden="true">{pending ? '✦' : <PlusIcon />}</span>
+      <span className="sb-cart-part__empty-info">
+        {head}
+        <span className="sb-cart-part__placeholder">{pending ? '상품을 찾고 있어요…' : '상품을 추가해 보세요'}</span>
+      </span>
+      <span className="sb-cart-part__chevron" aria-hidden="true"><ChevronIcon /></span>
+    </button>
+  )
+}
+
 export default function ThreadCartSheet({
   thread,
   steps = [],
+  pending = false, // 라이브 계획을 아직 만드는 중(단계 목록 전) 또는 자리가 아직 안 찼음 — 「추천 상품 없음」으로 단정하지 않는다
   onClose,
   onRemove,
   onOpenPlan,
@@ -68,22 +108,45 @@ export default function ThreadCartSheet({
      한눈에 들어온다 (Figma ThreadPartCardMargin/EmptyPartRow). 단계 목록을 모르는 옛 기록은 담은 순서 그대로 */
   /* 묶음 키·표시는 마크업을 걷어낸 제목으로 — 저자가 단계 제목에 [[키워드]] 밑줄을 넣어도 시트에는 원문 기호가 보이지 않는다 */
   const byStep = new Map(groups.map((group) => [plainStepTitle(group.step), group]))
-  const ordered = steps.map((s) => {
+  /* 같은 제목의 단계는 한 파트로 합친다(상품 수 합산) — 키가 겹치면 파트가 두 번 서고 React 키도 충돌한다 */
+  const ordered = []
+  const seen = new Map()
+  for (const s of steps) {
     const key = plainStepTitle(s.title)
-    return {
+    if (!key) continue
+    const known = typeof s.products === 'number'
+    if (seen.has(key)) {
+      const part = seen.get(key)
+      if (known) part.products = (part.products ?? 0) + s.products
+      part.pending = part.pending || !!s.pending
+      continue
+    }
+    const part = {
       step: key,
       stepBadge: byStep.get(key)?.stepBadge || s.badge || '',
       entries: byStep.get(key)?.entries || [],
+      products: known ? s.products : null, // null = 상품 수를 모르는 옛 재료 → 담을 수 있다고 본다
+      pending: !!s.pending,
     }
-  })
+    seen.set(key, part)
+    ordered.push(part)
+  }
   const leftovers = groups
-    .filter((group) => !steps.some((s) => plainStepTitle(s.title) === plainStepTitle(group.step)))
-    .map((group) => ({ ...group, step: plainStepTitle(group.step) }))
+    .filter((group) => !seen.has(plainStepTitle(group.step)))
+    .map((group) => ({ ...group, step: plainStepTitle(group.step), products: null, pending: false }))
   const parts = [...ordered, ...leftovers]
+  /* 빈 파트의 상태 — 찾는 중이면 pending, 실린 상품이 0개로 확인되면 none, 그 밖은 담을 수 있는 pick */
+  const emptyMode = (part) => (part.pending ? 'pending' : part.products === 0 ? 'none' : 'pick')
   const filled = parts.filter((part) => part.entries.length > 0).length
-  const summary = steps.length
-    ? `${filled}/${parts.length} 파트 · ${entries.length}개 담음`
-    : `${filled ? `${filled}파트 · ` : ''}${entries.length}개 담음`
+  /* 담을 수 있는 파트 — 추천 상품이 없다고 확인된 단계는 "k/n 파트"의 분모에서 뺀다 */
+  const fillable = parts.filter((part) => part.entries.length > 0 || emptyMode(part) !== 'none').length
+  /* 계획은 있는데 어느 단계에도 추천 상품이 없고 담은 것도 없다 — 파트 목록 대신 정직한 빈 상태 */
+  const nothingToPick = steps.length > 0 && !pending && entries.length === 0 && fillable === 0
+  const summary = nothingToPick
+    ? '추천 상품 없음'
+    : steps.length
+      ? `${filled}/${fillable} 파트 · ${entries.length}개 담음`
+      : `${filled ? `${filled}파트 · ` : ''}${entries.length}개 담음`
   return (
     <BottomSheet
       title={thread.title}
@@ -104,28 +167,31 @@ export default function ThreadCartSheet({
         {total != null && <strong className="sb-cart-sheet__total">{formatWon(total)}</strong>}
       </div>
       {parts.length === 0 ? (
-        /* 계획 단계도 담은 상품도 아직 없다 (설문 중인 체험) */
+        pending ? (
+          /* 계획을 만드는 중 — 단계 목록이 아직 없다 */
+          <div className="sb-cart-sheet__empty">
+            <p className="sb-cart-sheet__empty-title">맞춤 계획을 만들고 있어요</p>
+            <p className="sb-cart-sheet__empty-hint">계획이 완성되면 단계별 추천 상품을 여기서 담을 수 있어요.</p>
+          </div>
+        ) : (
+          /* 계획 단계도 담은 상품도 아직 없다 (설문 중인 체험) */
+          <div className="sb-cart-sheet__empty">
+            <p className="sb-cart-sheet__empty-title">아직 담은 상품이 없어요</p>
+            <p className="sb-cart-sheet__empty-hint">맞춤 계획에서 상품을 담으면 단계별로 여기에 모여요.</p>
+          </div>
+        )
+      ) : nothingToPick ? (
+        /* 추천 상품이 전부 빠진 계획(검증 게이트 드롭 등) — 고를 상품이 있는 것처럼 빈 파트 행을 늘어놓지 않는다 */
         <div className="sb-cart-sheet__empty">
-          <p className="sb-cart-sheet__empty-title">아직 담은 상품이 없어요</p>
-          <p className="sb-cart-sheet__empty-hint">맞춤 계획에서 상품을 담으면 단계별로 여기에 모여요.</p>
+          <p className="sb-cart-sheet__empty-title">이 계획에는 담을 상품이 없어요</p>
+          <p className="sb-cart-sheet__empty-hint">추천 상품이 하나도 실리지 않은 계획이에요. 단계 안내는 계획 화면에서 볼 수 있어요.</p>
         </div>
       ) : (
       <div className="sb-cart-sheet__parts">
         {parts.map((group) => (
           <section key={group.step || '__rest'} className="sb-cart-part">
             {group.entries.length === 0 ? (
-              /* 빈 파트 — 점선 썸네일 자리 + 단계 제목·배지 + 안내, 누르면 계획으로 (Figma EmptyPartRow) */
-              <button type="button" className="sb-cart-part__empty" onClick={onOpenPlan} title="계획에서 이 단계의 상품을 담기">
-                <span className="sb-cart-part__empty-thumb" aria-hidden="true"><PlusIcon /></span>
-                <span className="sb-cart-part__empty-info">
-                  <span className="sb-cart-part__head sb-cart-part__head--empty">
-                    <span className="sb-cart-part__title">{group.step || '담은 상품'}</span>
-                    {group.stepBadge ? <span className="sb-cart-part__badge">{group.stepBadge}</span> : null}
-                  </span>
-                  <span className="sb-cart-part__placeholder">상품을 추가해 보세요</span>
-                </span>
-                <span className="sb-cart-part__chevron" aria-hidden="true"><ChevronIcon /></span>
-              </button>
+              <EmptyPartRow group={group} mode={emptyMode(group)} onOpenPlan={onOpenPlan} />
             ) : (
               <>
                 <div className="sb-cart-part__head">

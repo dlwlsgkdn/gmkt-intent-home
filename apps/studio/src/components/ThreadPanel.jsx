@@ -17,7 +17,10 @@ function scenarioLookup(scenario, planCaseId) {
     ...(chosen ? chosen.items || [] : []),
     ...cases.filter((c) => c !== chosen).flatMap((c) => c.items || []),
   ]
-  return productLookupFromItems(items)
+  const lookup = productLookupFromItems(items)
+  /* 파트(단계) 목록은 체험한 케이스의 것만 — 다른 케이스의 단계까지 이으면 같은 제목이 겹치고 그 체험에 없는 단계가 선다 */
+  lookup.steps = chosen ? productLookupFromItems(chosen.items || []).steps : []
+  return lookup
 }
 
 /* 원본(gmarket-advanced-clean-home)의 "마지막 페이즈" 라벨을 스튜디오 단계에 맞게 매핑 */

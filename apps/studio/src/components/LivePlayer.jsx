@@ -1269,13 +1269,16 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
       <ProductDetailPanel product={productDetail} onClose={() => setProductDetail(null)} />
       </DeviceFrame>
 
-      {/* 현재 쓰레드의 담은 상품 시트 — 쇼핑 쓰레드 패널 카드가 여는 것과 같은 시트. 파트는 생성된 계획의 단계(guide) 목록, ⊖ 는 이 체험의
-         담기 상태에서 뺀다(기록은 recordThread 효과가 따라간다). 계획이 아직 없으면 CTA 는 시트만 닫는 「설문 이어서 답하기」 */}
+      {/* 현재 쓰레드의 담은 상품 시트 — 쇼핑 쓰레드 패널 카드가 여는 것과 같은 시트. 파트는 생성된 계획의 단계(guide) 목록(단계마다
+         실린 상품 수·아직 안 찬 자리(pendingSlots) 표식을 함께 실어 시트가 「추가해 보세요/찾는 중/추천 상품 없음」을 가른다),
+         ⊖ 는 이 체험의 담기 상태에서 뺀다(기록은 recordThread 효과가 따라간다). 계획이 아직 없으면 CTA 는 시트만 닫는
+         「설문 이어서 답하기」, 계획을 만드는 중이면 「계획 화면으로 돌아가기」 */}
       {cartSheet && (
         <ThreadCartSheet
           thread={{ title: liveQuery || 'AI 실시간 생성', cart }}
-          steps={planPage ? productLookupFromPlanPage(planPage).steps : []}
-          ctaLabel={planPage ? '뷰티 맞춤 계획 보기' : '설문 이어서 답하기'}
+          steps={planPage ? productLookupFromPlanPage(planPage, { pendingSlots }).steps : []}
+          pending={pendingSlots.length > 0 || !!(loading && loading.step === 'plan')}
+          ctaLabel={planPage ? '뷰티 맞춤 계획 보기' : loading && loading.step === 'plan' ? '계획 화면으로 돌아가기' : '설문 이어서 답하기'}
           onClose={() => setCartSheet(false)}
           onRemove={(index) => setCart((prev) => prev.filter((_, i) => i !== index))}
           onOpenPlan={() => {
