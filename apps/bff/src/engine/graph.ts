@@ -25,6 +25,7 @@ import {
 import type { CoreClientService } from '../core-client.service'
 import type { KnowledgeService } from '../llm/knowledge.service'
 import type { LlmService } from '../llm/llm.service'
+import { LLM_STAGE_RETRY_DELAY_MS, retryLlmStage } from '../llm/retry'
 import type { EnrichService } from '../threads/enrich.service'
 import { SEQ, combineMeta } from '../threads/thread-io'
 import { ThreadGraphState, type ThreadGraphStateType } from './state'
@@ -177,7 +178,8 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
     const revision: PlanRevisionContext | undefined = state.feedback
       ? { feedback: state.feedback, prevPlan: state.prevPlan ?? null }
       : undefined
-    const result = await deps.llm.generatePlanSkeleton(
+    // 뼈대는 실패하면 계획 전체가 죽는 유일한 호출 — SDK 재시도 뒤에도 일시 오류면 잠깐 쉬고 한 번 더 (llm/retry.ts)
+    const result = await retryLlmStage(() => deps.llm.generatePlanSkeleton(
       state.intent,
       state.survey as SurveyPageWire,
       state.answers as Answer[],
@@ -208,7 +210,12 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
       },
       revision,
       state.ledger,
-    )
+    ), {
+      onRetry: (e, attempt) => {
+        logger.warn(`계획 뼈대 생성 실패 — ${LLM_STAGE_RETRY_DELAY_MS}ms 뒤 재시도 ${attempt}회: ${e.message}`)
+        coord?.status('일시적인 오류가 있어 계획 뼈대를 다시 만들고 있어요…')
+      },
+    })
     // 자리 인덱스는 스트림 조각이 아니라 최종 검증본 기준으로 확정한다 (조각 파싱 누락 보정)
     coord?.skeletonReady(result.content)
     return { skeleton: result.content, skeletonMeta: result.meta }

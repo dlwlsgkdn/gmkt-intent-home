@@ -147,6 +147,7 @@ export class ThreadsController {
           onSkeleton: (page, pending) => sseSend(res, 'skeleton', { page, pending }),
           onSection: (section, index, final) => sseSend(res, 'section', { index, section, final }),
           onSearch: (query) => sseSend(res, 'status', { message: `웹에서 "${query}" 검색 중…` }),
+          onStatus: (message) => sseSend(res, 'status', { message }),
         },
         body.feedback,
         engine,

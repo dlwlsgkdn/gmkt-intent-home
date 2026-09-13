@@ -8,8 +8,9 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
-const MOCK_PORT = 19799
-const BFF_PORT = 18788
+// 포트는 환경변수로 바꿀 수 있다 — 같은 머신에서 스모크 두 벌이 동시에 돌면(세션 두 개) 모의 서버를 공유해 호출 횟수가 2배로 집계된다
+const MOCK_PORT = Number(process.env.SMOKE_MOCK_PORT ?? 19799)
+const BFF_PORT = Number(process.env.SMOKE_BFF_PORT ?? 18788)
 const MOCK = `http://localhost:${MOCK_PORT}`
 const BFF = `http://localhost:${BFF_PORT}`
 const H = { 'content-type': 'application/json', 'x-ddak-engine': 'langgraph' }
@@ -629,6 +630,31 @@ try {
   ok((await flowReq('prompt-flow', applyBody, 'PUT')).status === 200, '동일 묶음 재시도 허용')
   const noAnswers = await sse('/api/admin/pipeline/dry-run', { stageId: 'plan-skeleton', intent: '쿠션 추천', survey: { ...drResult.survey, questions: [{ id: 'p1', kind: 'photo', question: '사진을 올려주세요', options: [], multi: false }] }, answers: [] }, plain)
   ok(Boolean(last(noAnswers, 'result')?.data?.skeleton), '사진만 있는 설문도 건너뛰고 계획까지 진행')
+  }
+
+  // ── 11. 계획 뼈대 재시도 — 실제 그래프(flow-run)에서 뼈대 호출만 529 를 4번 연속 받으면
+  //    SDK 자동 재시도(maxRetries 3 = 4번 시도)가 다 실패하고, bff llm/retry.ts 가 2초 뒤 한 번 더 불러 5번째에 성공한다.
+  //    상품·콘텐츠 호출은 건드리지 않는다(only: 'skeleton')
+  console.log('11) 계획 뼈대 재시도')
+  {
+    const before = await llmCalls()
+    const rs = await sse('/api/admin/pipeline/flow-run', { phase: 'survey', intent: '재시도 플로우 확인' }, plain)
+    const rsResult = last(rs, 'result')?.data
+    ok(Boolean(rsResult?.flowId), '재시도 플로우 — 설문 구간')
+    await fetch(MOCK + '/internal/mock/llm-fail', { method: 'PUT', headers: plain, body: JSON.stringify({ count: 4, status: 529, only: 'skeleton' }) })
+    const rp = await sse(
+      '/api/admin/pipeline/flow-run',
+      { phase: 'plan', flowId: rsResult.flowId, intent: '재시도 플로우 확인', survey: rsResult.survey, answers: [{ questionId: 'q1', choices: ['지성'] }] },
+      plain,
+    )
+    const failState = await fetch(MOCK + '/internal/mock/llm-fail').then((r) => r.json())
+    ok(!last(rp, 'error') && (last(rp, 'result')?.data?.page?.sections?.length ?? 0) >= 3, `뼈대 529 4연속 뒤 재시도로 계획 완성 (${last(rp, 'result')?.data?.page?.sections?.length}섹션)`)
+    ok(failState.failed === 4 && failState.count === 0, `모의 실패 4회 소진 (failed ${failState.failed}, 남음 ${failState.count})`)
+    ok(rp.some((e) => e.event === 'status' && /다시 만들고/.test(e.data?.message ?? '')), '재시도 안내 status 이벤트')
+    const after = await llmCalls()
+    const delta = (type) => after.filter((c) => c.type === type).length - before.filter((c) => c.type === type).length
+    ok(delta('skeleton') === 1 && delta('products') === 1 && delta('contents') === 1, `성공 호출만 기록 — skeleton ${delta('skeleton')}·products ${delta('products')}·contents ${delta('contents')}`)
+    ok(stageOf(rp.filter((e) => e.event === 'stage').map((e) => e.data), 'plan-skeleton', 'done'), '재시도 뒤 뼈대 stage done')
   }
 } finally {
   shutdown()

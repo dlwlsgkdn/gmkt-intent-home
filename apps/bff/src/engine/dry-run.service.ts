@@ -24,6 +24,7 @@ import {
 } from '@ddak/pipeline'
 import { KnowledgeService } from '../llm/knowledge.service'
 import { LlmService } from '../llm/llm.service'
+import { retryLlmStage } from '../llm/retry'
 import { EnrichService } from '../threads/enrich.service'
 
 /*
@@ -122,11 +123,12 @@ export class PipelineDryRunService {
     if (body.stageId === 'plan-skeleton') {
       const system = await this.systemFor('plan-skeleton', body.promptOverride)
       const user = buildPlanSkeletonRequest(body.intent, body.survey, body.answers, body.profile, undefined, ledger)
-      const { content, meta } = await this.llm.generate('계획 뼈대 생성(dry-run)', PlanSkeletonGen, {
+      // 그래프·legacy 와 같은 재시도 규칙 (llm/retry.ts) — 플레이그라운드도 같은 견고함으로
+      const { content, meta } = await retryLlmStage(() => this.llm.generate('계획 뼈대 생성(dry-run)', PlanSkeletonGen, {
         system,
         effort: this.effortOf('plan-skeleton', 'medium'),
         user,
-      })
+      }), { onRetry: () => events.onStatus?.('일시적인 오류가 있어 계획 뼈대를 다시 만들고 있어요…') })
       return {
         stageId: body.stageId,
         ledger,

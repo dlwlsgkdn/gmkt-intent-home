@@ -19,6 +19,7 @@ export type GraphStreamChunk =
   | { event: 'skeleton'; data: { page: PlanSkeletonPageWire; pending: number[] } }
   | { event: 'section'; data: { index: number; section: PlanSectionWire; final: boolean } }
   | { event: 'search'; data: { query: string } }
+  | { event: 'status'; data: { message: string } }
 
 export type ChunkWriter = (chunk: GraphStreamChunk) => void
 
@@ -51,6 +52,11 @@ export class PlanStreamCoordinator {
 
   search(query: string) {
     this.emit?.({ event: 'search', data: { query } })
+  }
+
+  /** 진행 안내 한 줄 — 뼈대 재시도처럼 FE 대기 화면(✦ status 줄)에 보여줄 상태 */
+  status(message: string) {
+    this.emit?.({ event: 'status', data: { message } })
   }
 
   /** 뼈대 최종 검증본 도착 — 자리 인덱스 확정 + 조기 확정 알림 + 대기열 플러시 */

@@ -35,6 +35,7 @@ import {
 } from '@ddak/pipeline'
 import { CoreClientService } from '../core-client.service'
 import { LlmService } from '../llm/llm.service'
+import { LLM_STAGE_RETRY_DELAY_MS, retryLlmStage } from '../llm/retry'
 import { ImageEditService } from '../image/image-edit.service'
 import { EnrichService } from './enrich.service'
 import { EngineFlagService } from '../engine/engine-flag.service'
@@ -66,6 +67,8 @@ export type PlanStreamHandlers = {
    * 이 올 때까지 그 자리를 pending(재생성 게이트)으로 유지한다 */
   onSection?: (section: PlanSectionWire, index: number, final: boolean) => void
   onSearch?: (query: string) => void
+  /** 진행 안내 한 줄 (뼈대 재시도 등) — 컨트롤러가 SSE status 로 보낸다 */
+  onStatus?: (message: string) => void
 }
 
 @Injectable()
@@ -193,7 +196,8 @@ export class ThreadsService {
       }
     }
 
-    const skeletonPromise = this.llm
+    // 뼈대는 실패하면 계획 전체가 죽는 유일한 호출 — SDK 재시도 뒤에도 일시 오류면 잠깐 쉬고 한 번 더 (llm/retry.ts)
+    const skeletonPromise = retryLlmStage(() => this.llm
       .generatePlanSkeleton(
         intent,
         survey,
@@ -224,7 +228,12 @@ export class ThreadsService {
           },
         },
         revision,
-      )
+      ), {
+        onRetry: (e, attempt) => {
+          this.logger.warn(`계획 뼈대 생성 실패 — ${LLM_STAGE_RETRY_DELAY_MS}ms 뒤 재시도 ${attempt}회: ${e.message}`)
+          stream?.onStatus?.('일시적인 오류가 있어 계획 뼈대를 다시 만들고 있어요…')
+        },
+      })
       .then((result) => {
         // 자리 인덱스는 스트림 조각이 아니라 최종 검증본 기준으로 확정한다 (조각 파싱 누락 보정)
         const skeletonSections = result.content.sections

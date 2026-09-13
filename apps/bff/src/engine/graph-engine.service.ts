@@ -168,6 +168,9 @@ export class GraphEngineService {
       case 'search':
         stream.onSearch?.(chunk.data.query)
         break
+      case 'status':
+        stream.onStatus?.(chunk.data.message)
+        break
     }
   }
 }

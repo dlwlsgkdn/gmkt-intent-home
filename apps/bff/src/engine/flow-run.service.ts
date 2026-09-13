@@ -230,6 +230,8 @@ class FlowStageEmitter {
       })
     } else if (chunk.event === 'search') {
       this.events.onStatus?.(`웹에서 "${chunk.data.query}" 검색 중…`)
+    } else if (chunk.event === 'status') {
+      this.events.onStatus?.(chunk.data.message)
     }
   }
 

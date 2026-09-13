@@ -11,6 +11,12 @@ const evalCases = new Map() // id -> case row
 const evalRuns = new Map() // id -> run row
 let nextId = 2195943212345678900n
 export const llmCalls = [] // { type, system, user } — e2e가 프롬프트 주입을 검증한다
+/* 모의 LLM 실패 주입 — `PUT /internal/mock/llm-fail {count, status, only}`: 다음 count 번의 /v1/messages 를 status(기본 529)로
+   거절한다. only 는 계획 단계 종류('skeleton'|'products'|'contents')로 좁혀 병렬 호출 중 한 갈래만 실패시킨다.
+   e2e 가 SDK 자동 재시도 + 필수 단계 재시도(bff llm/retry.ts)를 검증하는 자리 */
+const llmFail = { count: 0, status: 529, only: null, failed: 0 }
+const planTypeOf = (system) =>
+  system.includes('참고 콘텐츠 수집') ? 'contents' : system.includes('productIds') ? 'products' : system.includes('뼈대') ? 'skeleton' : null
 
 const SURVEY_JSON = JSON.stringify({
   intro: '모의 인트로입니다. 여름 쿠션을 찾아볼게요.',
@@ -269,6 +275,14 @@ const server = http.createServer(async (req, res) => {
   // ── 모의 Anthropic ──────────────────────────────────────────────
   if (url === '/v1/messages' && req.method === 'POST') {
     const system = (body.system ?? []).map((b) => b.text ?? '').join('\n')
+    if (llmFail.count > 0 && (!llmFail.only || planTypeOf(system) === llmFail.only)) {
+      llmFail.count -= 1
+      llmFail.failed += 1
+      res.setHeader('content-type', 'application/json')
+      res.writeHead(llmFail.status)
+      res.end(JSON.stringify({ type: 'error', error: { type: 'overloaded_error', message: 'Overloaded (mock llm-fail)' } }))
+      return
+    }
     const user = (body.messages ?? [])
       .map((m) => (typeof m.content === 'string' ? m.content : ''))
       .join('\n')
@@ -493,6 +507,14 @@ const server = http.createServer(async (req, res) => {
     return send(200, { items })
   }
   if (url === '/internal/llm-calls' && req.method === 'GET') return send(200, llmCalls)
+  if (url === '/internal/mock/llm-fail' && req.method === 'PUT') {
+    llmFail.count = Number(body.count ?? 0)
+    llmFail.status = Number(body.status ?? 529)
+    llmFail.only = body.only ?? null
+    llmFail.failed = 0
+    return send(200, llmFail)
+  }
+  if (url === '/internal/mock/llm-fail' && req.method === 'GET') return send(200, llmFail)
   if ((m = url.match(/^\/internal\/dump\/(\d+)$/)) && req.method === 'GET') {
     const t = threads.get(m[1])
     return send(200, t ? { thread: t.thread, steps: [...t.steps.values()] } : null)

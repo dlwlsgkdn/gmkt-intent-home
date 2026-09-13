@@ -152,7 +152,8 @@ export class LlmService implements LlmPort {
   private requireClient(): Anthropic {
     if (this.client === undefined) {
       try {
-        this.client = new Anthropic()
+        // 429·5xx(529 overloaded)·연결 오류는 SDK 가 지수 백오프로 재시도한다 — 기본 2회를 3회로 (필수 단계는 llm/retry.ts 가 한 번 더)
+        this.client = new Anthropic({ maxRetries: 3 })
       } catch {
         this.client = null
       }
