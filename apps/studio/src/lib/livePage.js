@@ -8,6 +8,10 @@
 
 import { joinTextList } from './store.js'
 
+/** 계획 섹션 i 의 투영 아이템 id — 섹션 종류와 무관하게 인덱스로 결정된다(스트리밍 중 같은 index 재도착 = 같은 엘리먼트).
+ * lib/cart.js 가 단계(guide) 목록에 같은 id 를 실어, 담은 상품 시트의 파트 → 계획 단계 앵커 스크롤이 이 id 로 래퍼를 찾는다 */
+export const livePlanSectionId = (index) => `live-plan-s${index}`
+
 /** 사진 질문의 와이어 답 — @ddak/schema PHOTO_ANSWER와 같은 문자열이어야 한다.
  * 사진 원본은 기기에 남고 서버로는 이 표식만 간다 (데이터 URL은 스텝·프롬프트에 실을 것이 못 된다) */
 export const PHOTO_ANSWER = '사진 제출됨'
@@ -184,7 +188,7 @@ export function livePlanItems(page, opts = {}) {
       }
       continue
     }
-    const base = `live-plan-s${i}`
+    const base = livePlanSectionId(i)
     if (section.kind === 'look') {
       /* 가상 메이크업 결과 — 올린 사진을 BEFORE로, 같은 사진에 룩 톤을 올린 것을 AFTER로.
          사진이 없으면(이어보기로 기기 보관분이 없거나 관리 페이지 미리보기) 합성할 재료가

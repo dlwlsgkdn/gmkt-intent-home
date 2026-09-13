@@ -7,6 +7,8 @@
  * 두 형태가 같은 배열에 섞여 있어도 되므로 읽는 쪽은 언제나 cartEntry()/cartEntries()를 거친다.
  * 워크스페이스 쓰레드 기록(account:<id>:threads 행)과 라이브 cartAdd 이벤트 payload 가 같은 형태를 싣는다.
  */
+import { livePlanSectionId } from './livePage.js'
+
 export function cartEntry(entry) {
   if (entry && typeof entry === 'object') return entry
   return { name: String(entry || '') }
@@ -102,11 +104,13 @@ export function groupCartByStep(cart) {
    상품 카드 아이템에서, 라이브 쓰레드는 서버에 남은 계획 페이지(와이어)에서 표를 만든다 */
 const normName = (text) => String(text || '').trim().replace(/\s+/g, ' ')
 
-/* 계획 단계 목록 항목 — 담은 상품 시트의 파트 재료 { title, badge, products, pending? }:
-   products = 그 단계에 실제로 실린 상품 카드 수(담을 것이 있는지), pending = 라이브 조기 확정 뒤 그 단계의 상품·콘텐츠
-   자리에 아직 검색 결과가 안 옴. 시트는 이 둘로 「상품을 추가해 보세요」(담을 것이 있음)·「찾는 중」·「추천 상품 없음」을
-   가른다 — 상품이 전부 검증 게이트에 걸려 빠진 계획에서도 고를 상품이 있는 것처럼 보이던 것(2026-09) */
-const stepEntry = (title, badge) => ({ title, badge, products: 0 })
+/* 계획 단계 목록 항목 — 담은 상품 시트의 파트 재료 { id, title, badge, products, pending? }:
+   id = 그 단계 아이템의 id(시나리오는 planStep 아이템 id, 라이브는 guide 섹션의 투영 id) — 시트의 파트를 누르면 체험 화면이
+   이 id 의 래퍼(data-item-id)로 앵커 스크롤한다(2026-09), products = 그 단계에 실제로 실린 상품 카드 수(담을 것이 있는지),
+   pending = 라이브 조기 확정 뒤 그 단계의 상품·콘텐츠 자리에 아직 검색 결과가 안 옴. 시트는 이 둘로 「상품을 추가해 보세요」
+   (담을 것이 있음)·「찾는 중」·「추천 상품 없음」을 가른다 — 상품이 전부 검증 게이트에 걸려 빠진 계획에서도 고를 상품이
+   있는 것처럼 보이던 것(2026-09) */
+const stepEntry = (id, title, badge) => ({ id, title, badge, products: 0 })
 
 export function productLookupFromItems(items) {
   const map = new Map()
@@ -120,7 +124,7 @@ export function productLookupFromItems(items) {
   top.forEach((it, i) => {
     if (it.type === 'planStep') {
       const title = String(it.props?.title || '').trim()
-      current = title ? stepEntry(title, String(it.props?.badge || '').trim()) : null
+      current = title ? stepEntry(it.id, title, String(it.props?.badge || '').trim()) : null
       if (current) map.steps.push(current)
     }
     ownerAt[i] = current
@@ -157,7 +161,7 @@ export function productLookupFromPlanPage(page, opts = {}) {
     }
     if (section.kind === 'guide') {
       const title = String(section.title || '').trim()
-      current = title ? stepEntry(title, '') : null
+      current = title ? stepEntry(livePlanSectionId(i), title, '') : null
       if (current) map.steps.push(current)
       continue
     }

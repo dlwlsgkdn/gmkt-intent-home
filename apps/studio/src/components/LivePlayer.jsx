@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { enrichCartEntries, productLookupFromPlanPage, stepInfoOfItem } from '../lib/cart.js'
 import { viewerDeviceOf, STAGES } from '../lib/store.js'
 import DeviceFrame from './DeviceFrame.jsx'
-import { scrollScreenTo } from '../lib/deviceScreen.js'
+import { itemEl, scrollScreenTo, scrollScreenToEl } from '../lib/deviceScreen.js'
 import { isQuestionType, renderItem, resolveSampleFace } from '../lib/registry.jsx'
 import BottomSheet from './ui/BottomSheet.jsx'
 import { fetchLiveCapabilities, fetchLiveThread, recordLiveEvent, renderLiveLook, sendLiveFeedback, startLiveThread, streamLivePlan, streamLiveSurvey } from '../lib/liveApi.js'
@@ -1041,6 +1041,26 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     }
   }
 
+  /* 담은 상품 시트의 파트 → 계획의 그 단계로 앵커 스크롤 (Player 와 같은 규칙, 2026-09). 계획 화면이면 바로, 설문 화면에서
+     눌렀으면 이미 만든 계획을 여는 goPlan(LLM 재호출 없음) 뒤 렌더가 끝난 시점(효과)에 스크롤한다 */
+  const anchorRef = useRef(null)
+  useEffect(() => {
+    const anchor = anchorRef.current
+    if (!anchor || stageKey !== 'plan' || loading) return
+    anchorRef.current = null
+    scrollScreenToEl(itemEl(phoneRef.current, anchor))
+  }, [stageKey, loading])
+  const openStepFromSheet = (part) => {
+    setCartSheet(false)
+    if (!planPage) return
+    if (stageKey === 'plan' && !loading) {
+      scrollScreenToEl(itemEl(phoneRef.current, part.id))
+      return
+    }
+    anchorRef.current = part.id
+    goPlan()
+  }
+
   const retry = () => {
     if (!error) return
     if (error.step === 'start') api.playLive(liveQuery)
@@ -1109,7 +1129,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
                   {partialItems.map((it) => (
                     /* sb-live-item-enter — 마운트 1회 페이드인. id가 안정적이라(같은 index
                        재도착 = 같은 엘리먼트) 텍스트가 자라는 재렌더에는 다시 재생되지 않는다 */
-                    <div key={it.id} className={'sb-player__item sb-live-item-enter' + (it.stepSub ? ' sb-player__item--stepsub' : '')}>
+                    <div key={it.id} className={'sb-player__item sb-live-item-enter' + (it.stepSub ? ' sb-player__item--stepsub' : '')} data-item-id={it.id}>
                       {/* 아직 안 채워진 자리 — 확정 렌더와 같이 로딩 카드로 그린다 (레지스트리 밖 타입) */}
                       {it.type === 'livePending' ? (
                         <LivePendingSlot message={pendingMessage} />
@@ -1146,7 +1166,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
                   /* 검색 결과가 아직 안 채운 자리 — 레지스트리 밖 타입이라 여기서 직접 그린다 */
                   if (it.type === 'livePending') {
                     return (
-                      <div key={it.id} className={'sb-player__item' + (it.stepSub ? ' sb-player__item--stepsub' : '')}>
+                      <div key={it.id} className={'sb-player__item' + (it.stepSub ? ' sb-player__item--stepsub' : '')} data-item-id={it.id}>
                         <LivePendingSlot message={pendingMessage} />
                       </div>
                     )
@@ -1158,6 +1178,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
                     <div
                       key={it.id}
                       ref={(el) => { fbAnchorRefs.current[it.id] = el }}
+                      data-item-id={it.id}
                       className={
                         'sb-player__item'
                         + (it.stepSub ? ' sb-player__item--stepsub' : '')
@@ -1294,6 +1315,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
           ctaLabel={planPage ? '뷰티 맞춤 계획 보기' : loading && loading.step === 'plan' ? '계획 화면으로 돌아가기' : '설문 이어서 답하기'}
           onClose={() => setCartSheet(false)}
           onRemove={(index) => setCart((prev) => prev.filter((_, i) => i !== index))}
+          onOpenStep={planPage ? openStepFromSheet : undefined}
           onOpenPlan={() => {
             setCartSheet(false)
             if (planPage) goPlan()

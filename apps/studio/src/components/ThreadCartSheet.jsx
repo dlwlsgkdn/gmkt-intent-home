@@ -9,6 +9,9 @@ import { cartEntries, cartTotal, formatWon, groupCartByStep, parsePrice, plainSt
  * 쓰는 곳 — 쇼핑 쓰레드 패널의 카드(담은 상품 요약 클릭, ThreadPanel)와 설문·계획 체험 화면의 플로팅 버튼(지금 진행 중인 쓰레드 —
  * Player·LivePlayer, 2026-09). 후자는 담기 상태가 화면 로컬이라 onRemove 가 그 상태를 고치고, 계획이 아직 없으면 ctaLabel 로
  * 「설문 이어서 답하기」를 단다. onOpenList 를 주면 푸터 밑에 「다른 쇼핑 쓰레드 보기」 링크가 선다(체험 화면에서 목록으로 가는 길).
+ * onOpenStep(part) 을 주면 **파트가 곧 계획의 그 단계로 가는 링크**다(2026-09) — 파트 머리(담은 상품이 있는 파트)와 빈 파트 행
+ * (추천 상품 없음까지) 어느 것을 눌러도 시트가 닫히고 체험 화면이 그 단계(part.id = 단계 아이템 id)로 앵커 스크롤한다.
+ * 안 주면(홈 쓰레드 패널) 빈 파트 행만 onOpenPlan(이어보기)으로 가고 추천 상품 없음 행은 누를 곳이 없다.
  * 스타일은 styles/home.css `.sb-cart-*`.
  */
 const PlusIcon = () => (
@@ -54,37 +57,41 @@ const mallOf = (entry) => (entry.external ? entry.mall || '외부몰' : entry.ma
 
 /* 빈 파트 행 한 벌 — 세 상태 (2026-09): 담을 것이 있음(플러스 자리·「상품을 추가해 보세요」·쉐브론, 누르면 계획으로 = Figma
    EmptyPartRow) · 찾는 중(라이브 조기 확정 뒤 그 단계의 자리에 검색 결과 대기 — ✦ 맥동, 누르면 계획으로) · 추천 상품 없음(상품이
-   하나도 안 실린 단계 — 플러스·쉐브론 없이 누를 곳도 없다). 담을 수 없는 단계까지 플러스 행으로 그리면 고를 상품이 있는 것처럼 보인다 */
-function EmptyPartRow({ group, mode, onOpenPlan }) {
+   하나도 안 실린 단계 — 플러스 없이 자리만). 담을 수 없는 단계까지 플러스 행으로 그리면 고를 상품이 있는 것처럼 보인다.
+   linked(파트가 계획 단계 링크)면 추천 상품 없음 행도 쉐브론을 달고 누르면 그 단계로 간다 — 안내는 계획 화면에서 읽을 수 있으니.
+   아니면 예전처럼 누를 곳이 없다 */
+function EmptyPartRow({ group, mode, onOpen, linked }) {
   const head = (
     <span className="sb-cart-part__head sb-cart-part__head--empty">
       <span className="sb-cart-part__title">{group.step || '담은 상품'}</span>
       {group.stepBadge ? <span className="sb-cart-part__badge">{group.stepBadge}</span> : null}
     </span>
   )
-  if (mode === 'none') {
+  const none = mode === 'none'
+  const pending = mode === 'pending'
+  const placeholder = pending ? '상품을 찾고 있어요…' : none ? '이 단계엔 추천 상품이 없어요' : '상품을 추가해 보세요'
+  if (none && !linked) {
     return (
       <div className="sb-cart-part__empty is-none">
         <span className="sb-cart-part__empty-thumb" aria-hidden="true" />
         <span className="sb-cart-part__empty-info">
           {head}
-          <span className="sb-cart-part__placeholder">이 단계엔 추천 상품이 없어요</span>
+          <span className="sb-cart-part__placeholder">{placeholder}</span>
         </span>
       </div>
     )
   }
-  const pending = mode === 'pending'
   return (
     <button
       type="button"
-      className={'sb-cart-part__empty' + (pending ? ' is-pending' : '')}
-      onClick={onOpenPlan}
-      title={pending ? '계획에서 진행 상황 보기' : '계획에서 이 단계의 상품을 담기'}
+      className={'sb-cart-part__empty' + (pending ? ' is-pending' : '') + (none ? ' is-none is-link' : '')}
+      onClick={onOpen}
+      title={linked ? '계획에서 이 단계 보기' : pending ? '계획에서 진행 상황 보기' : '계획에서 이 단계의 상품을 담기'}
     >
-      <span className="sb-cart-part__empty-thumb" aria-hidden="true">{pending ? '✦' : <PlusIcon />}</span>
+      <span className="sb-cart-part__empty-thumb" aria-hidden="true">{pending ? '✦' : none ? null : <PlusIcon />}</span>
       <span className="sb-cart-part__empty-info">
         {head}
-        <span className="sb-cart-part__placeholder">{pending ? '상품을 찾고 있어요…' : '상품을 추가해 보세요'}</span>
+        <span className="sb-cart-part__placeholder">{placeholder}</span>
       </span>
       <span className="sb-cart-part__chevron" aria-hidden="true"><ChevronIcon /></span>
     </button>
@@ -100,6 +107,7 @@ export default function ThreadCartSheet({
   onOpenPlan,
   ctaLabel = '뷰티 맞춤 계획 보기',
   onOpenList,
+  onOpenStep, // (part) => void — 파트 클릭 = 계획의 그 단계로 (체험 화면). 없으면 파트는 링크가 아니다
 }) {
   const entries = cartEntries(thread.cart)
   const groups = groupCartByStep(thread.cart)
@@ -122,6 +130,7 @@ export default function ThreadCartSheet({
       continue
     }
     const part = {
+      id: s.id || null, // 단계 아이템 id — onOpenStep 앵커 (옛 재료·담은 순서만 아는 묶음은 없다)
       step: key,
       stepBadge: byStep.get(key)?.stepBadge || s.badge || '',
       entries: byStep.get(key)?.entries || [],
@@ -137,6 +146,9 @@ export default function ThreadCartSheet({
   const parts = [...ordered, ...leftovers]
   /* 빈 파트의 상태 — 찾는 중이면 pending, 실린 상품이 0개로 확인되면 none, 그 밖은 담을 수 있는 pick */
   const emptyMode = (part) => (part.pending ? 'pending' : part.products === 0 ? 'none' : 'pick')
+  /* 파트 → 계획 단계 링크 (onOpenStep 이 있고 단계 아이템 id 를 아는 파트만). 없으면 빈 파트 행은 예전처럼 계획으로(onOpenPlan) */
+  const linked = typeof onOpenStep === 'function'
+  const openPart = (part) => (linked && part.id ? () => onOpenStep(part) : onOpenPlan)
   const filled = parts.filter((part) => part.entries.length > 0).length
   /* 담을 수 있는 파트 — 추천 상품이 없다고 확인된 단계는 "k/n 파트"의 분모에서 뺀다 */
   const fillable = parts.filter((part) => part.entries.length > 0 || emptyMode(part) !== 'none').length
@@ -191,13 +203,22 @@ export default function ThreadCartSheet({
         {parts.map((group) => (
           <section key={group.step || '__rest'} className="sb-cart-part">
             {group.entries.length === 0 ? (
-              <EmptyPartRow group={group} mode={emptyMode(group)} onOpenPlan={onOpenPlan} />
+              <EmptyPartRow group={group} mode={emptyMode(group)} onOpen={openPart(group)} linked={linked && !!group.id} />
             ) : (
               <>
-                <div className="sb-cart-part__head">
-                  <h4 className="sb-cart-part__title">{group.step || '담은 상품'}</h4>
-                  {group.stepBadge ? <span className="sb-cart-part__badge">{group.stepBadge}</span> : null}
-                </div>
+                {linked && group.id ? (
+                  /* 파트 머리 = 계획의 그 단계로 가는 버튼 (button 안이라 제목은 h4 대신 span) */
+                  <button type="button" className="sb-cart-part__head sb-cart-part__head--link" onClick={openPart(group)} title="계획에서 이 단계 보기">
+                    <span className="sb-cart-part__title">{group.step || '담은 상품'}</span>
+                    {group.stepBadge ? <span className="sb-cart-part__badge">{group.stepBadge}</span> : null}
+                    <span className="sb-cart-part__chevron" aria-hidden="true"><ChevronIcon /></span>
+                  </button>
+                ) : (
+                  <div className="sb-cart-part__head">
+                    <h4 className="sb-cart-part__title">{group.step || '담은 상품'}</h4>
+                    {group.stepBadge ? <span className="sb-cart-part__badge">{group.stepBadge}</span> : null}
+                  </div>
+                )}
                 {group.entries.map((entry) => {
                   const mall = mallOf(entry)
                   const tone = MALL_TONE[mall] || (entry.external ? 'plain' : 'gmarket')

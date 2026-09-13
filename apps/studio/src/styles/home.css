@@ -852,6 +852,24 @@
 .sb-cart-part__empty.is-none { cursor: default; }
 .sb-cart-part__empty.is-none:hover { background: none; }
 .sb-cart-part__empty.is-none .sb-cart-part__empty-thumb { background: transparent; }
+/* 파트 → 계획 단계 링크 (체험 화면의 시트, 2026-09): 파트 머리가 버튼이 되고 오른쪽 끝에 쉐브론, 추천 상품 없음 행도 누를 수 있다
+   — 누르면 시트가 닫히고 계획이 그 단계로 앵커 스크롤한다 */
+.sb-cart-part__head--link {
+  width: 100%;
+  border: 0;
+  border-radius: 8px 8px 0 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--sb-dur) var(--sb-ease);
+}
+.sb-cart-part__head--link:hover { background: var(--dk-brand-soft); }
+.sb-cart-part__head--link .sb-cart-part__chevron { margin-left: auto; width: 18px; height: 18px; }
+.sb-cart-part__head--link .sb-cart-part__chevron svg { width: 18px; height: 18px; }
+.sb-cart-part__empty.is-none.is-link { cursor: pointer; }
+.sb-cart-part__empty.is-none.is-link:hover { background: var(--dk-brand-soft); }
 .sb-cart-sheet__cta {
   width: 100%;
   height: 40px;

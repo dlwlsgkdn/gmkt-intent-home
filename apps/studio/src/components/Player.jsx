@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { productLookupFromItems, stepInfoOfItem } from '../lib/cart.js'
 import { STAGES, viewerDeviceOf, resolvePlanCase, uid, visibleProfileItems } from '../lib/store.js'
 import DeviceFrame from './DeviceFrame.jsx'
-import { screenScrollY, scrollScreenTo } from '../lib/deviceScreen.js'
+import { itemEl, screenScrollY, scrollScreenTo, scrollScreenToEl } from '../lib/deviceScreen.js'
 import { isQuestionType, renderItem } from '../lib/registry.jsx'
 import BottomSheet from './ui/BottomSheet.jsx'
 import { BgBlobs, FloatingBar, StudioFab, ViewerDeviceControl } from './Frame.jsx'
@@ -53,6 +53,8 @@ export default function Player({ api, scenario, resume }) {
      처음 여는 단계는 맨 위에서, 다시 돌아온 단계는 떠날 때 위치에서 열린다.
      스크롤은 기기 프레임 화면 안에서 돈다(lib/deviceScreen.js — 프레임이 없으면 창) */
   const scrollMemRef = useRef({})
+  const phoneRef = useRef(null) // 실행 화면 스택 루트 — 앵커 스크롤이 아이템 래퍼(data-item-id)를 찾는 범위
+  const anchorRef = useRef(null) // 담은 상품 시트의 파트 클릭으로 계획에 넘어올 때 갈 단계 아이템 id (단계 효과가 소비)
   const goStage = (idx) => {
     if (idx === stageIdx) return
     scrollMemRef.current[stage.key] = screenScrollY()
@@ -60,6 +62,12 @@ export default function Player({ api, scenario, resume }) {
     setQStep(0)
   }
   useEffect(() => {
+    /* 시트의 파트 클릭으로 넘어온 단계면 기억한 위치 대신 그 단계로 — 렌더가 끝난 시점이라 래퍼가 있다 */
+    const anchor = anchorRef.current
+    if (anchor) {
+      anchorRef.current = null
+      if (scrollScreenToEl(itemEl(phoneRef.current, anchor))) return
+    }
     const saved = scrollMemRef.current[STAGES[stageIdx].key]
     const y = saved != null ? saved : 0
     scrollScreenTo(y)
@@ -69,6 +77,18 @@ export default function Player({ api, scenario, resume }) {
       return () => clearTimeout(t)
     }
   }, [stageIdx])
+  /* 담은 상품 시트의 파트 → 계획의 그 단계로 앵커 스크롤 (2026-09). 계획 화면이면 바로, 다른 단계면 계획으로 넘어간 뒤
+     단계 효과가 기억한 위치 대신 그 단계로 스크롤한다 */
+  const openStepFromSheet = (part) => {
+    setCartSheet(false)
+    const planIdx = STAGES.findIndex((s) => s.key === 'plan')
+    if (stageIdx === planIdx) {
+      scrollScreenToEl(itemEl(phoneRef.current, part.id))
+      return
+    }
+    anchorRef.current = part.id
+    goStage(planIdx)
+  }
   /* 설문 답 조합으로 위에서부터 첫 번째 일치 계획 케이스를 선택한다.
      일치 항목이 없으면 isFallback 기본 계획 케이스가 선택된다. */
   const matchedPlanCase = useMemo(
@@ -252,7 +272,7 @@ export default function Player({ api, scenario, resume }) {
       {/* 플로팅 버튼 — 체험 화면에서는 쓰레드 목록이 아니라 **지금 진행 중인 쓰레드**의 담은 상품 시트를 연다(2026-09). 목록은 시트 밑 링크로 */}
       <FloatingBar label="현재 쇼핑 쓰레드" onList={() => setCartSheet(true)} />
       <section className={'sb-player min-h-screen relative z-10' + (fillActive ? ' sb-player--fill' : '')}>
-        <div className="sb-phone sb-phone--player" style={{ width: viewer.w }}>
+        <div className="sb-phone sb-phone--player" ref={phoneRef} style={{ width: viewer.w }}>
         <div className="sb-player__stack">
           {visibleItems.length === 0 && (
             <div className="sb-player__empty">
@@ -261,7 +281,7 @@ export default function Player({ api, scenario, resume }) {
             </div>
           )}
           {visibleItems.map((it) => (
-            <div key={it.id} className="sb-player__item">
+            <div key={it.id} className="sb-player__item" data-item-id={it.id}>
               {renderItem(it, { mode: 'player', player: playerApi, profile: api.profile, allItems: stageItems })}
             </div>
           ))}
@@ -318,6 +338,7 @@ export default function Player({ api, scenario, resume }) {
           thread={{ title: scenario.title, cart }}
           steps={planSteps}
           onClose={() => setCartSheet(false)}
+          onOpenStep={openStepFromSheet}
           onRemove={(index) => setCart((prev) => prev.filter((_, i) => i !== index))}
           onOpenPlan={() => {
             setCartSheet(false)
