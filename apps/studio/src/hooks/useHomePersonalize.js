@@ -5,6 +5,7 @@ import {
   POPULAR_SEARCH_SEED,
   heuristicHomeGreeting,
   heuristicHomeSuggestions,
+  heuristicHomeThreadIndex,
   homeSignature,
   nowInfo,
   rankPopularSearches,
@@ -16,7 +17,8 @@ import {
 /*
  * 홈 첫 화면 개인화 — 인사말 + 개인화 추천 검색어(보라 칩) + 인기 검색어(파랑 칩).
  *
- *  - 인사말·보라 칩: BFF `POST /api/search/home`(LLM 1회 — 이름·프로필·현지 시각·날씨·최근 쓰레드 요약·최근 검색어). 홈은
+ *  - 인사말·보라 칩: BFF `POST /api/search/home`(LLM 1회 — 이름·프로필·현지 시각·날씨·최근 쓰레드 요약·최근 검색어). 인사말은 **상태 인사**
+ *    (검색어 제안 없음)이고 최근 쓰레드를 가리키는 「」 부분은 threadIndex → 쓰레드 id 로 옮겨 홈이 탭 대상(이어보기)으로 만든다. 홈은
  *    기본 인사말(탐색 아이템 문구)과 휴리스틱 칩을 먼저 그리고, 결과가 오면 크로스페이드로 바꾼다. 7초 안에 안 오면
  *    같은 재료의 휴리스틱(lib/homePersonalize)으로 바꾸고, 늦게 온 결과는 화면을 또 흔들지 않고 캐시에만 남긴다.
  *    결과는 세션 캐시(프로필·쓰레드 상태·날짜·시 단위 키) — 홈 복귀마다 LLM 을 다시 부르지 않고 인사말이 흔들리지 않는다.
@@ -66,6 +68,7 @@ export function useHomePersonalize(api) {
     [api.profile],
   )
   const digests = useMemo(() => threadDigests(api.threads), [api.threads])
+  const threadIds = useMemo(() => (Array.isArray(api.threads) ? api.threads : []).slice(0, 10).map((t) => t.id), [api.threads])
   const signature = homeSignature({ accountId, name, profile, threads: digests, now: nowInfo() })
   /* 서버 하이드레이션 중(prod 프로필 첫 접속·프로필 전환)에는 프로필 이름·쓰레드가 순차로 채워지며 시그니처가 연달아 바뀐다 —
      그때마다 LLM 을 부르면 3~4회 낭비에 인사말도 흔들린다. 끝난 뒤 최종 상태로 한 번만 부른다(그동안은 기본 인사말·휴리스틱 칩) */
@@ -99,6 +102,7 @@ export function useHomePersonalize(api) {
     }
     const fallback = (weather = null) => ({
       greeting: heuristicHomeGreeting({ ...input, weather }),
+      threadIndex: heuristicHomeThreadIndex(input),
       suggestions: heuristicHomeSuggestions({ ...input, weather }),
       weather,
       source: 'fallback',
@@ -118,8 +122,10 @@ export function useHomePersonalize(api) {
             recentSearches,
           })
           const weather = res && res.weather ? res.weather : null
+          const idx = res && Number.isInteger(res.threadIndex) && res.threadIndex >= 1 && res.threadIndex <= digests.length ? res.threadIndex : null
           const result = {
             greeting: String((res && res.greeting) || '').trim(),
+            threadIndex: idx,
             suggestions: cleanList(res && res.suggestions, 3),
             weather,
             source: (res && res.source) || 'llm',
@@ -170,9 +176,12 @@ export function useHomePersonalize(api) {
     }
   }, [])
 
+  /* 인사말이 가리키는 쓰레드 — 응답의 번호를 지금 기록의 id 로 옮긴다(시그니처에 쓰레드 순서가 녹아 있어 캐시 결과도 같은 순서) */
+  const threadId = Number.isInteger(personal.threadIndex) && personal.threadIndex >= 1 ? threadIds[personal.threadIndex - 1] || null : null
   return {
-    greeting: { text: personal.greeting, ready: personal.ready, source: personal.source },
-    personal: { items: personal.suggestions, ready: personal.ready, source: personal.source },
+    greeting: { text: personal.greeting, threadId, ready: personal.ready, source: personal.source },
+    /* basis — 보라 칩의 근거: 쓰레드가 있으면 '내 쓰레드에서 이어서', 없으면 프로필·계절만으로 만든 것 */
+    personal: { items: personal.suggestions, ready: personal.ready, source: personal.source, basis: digests.length ? 'threads' : 'profile' },
     popular,
     weather: personal.weather,
   }

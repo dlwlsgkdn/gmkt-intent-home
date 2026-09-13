@@ -200,6 +200,18 @@ export default function HomeView({ api }) {
   /* 홈 첫 화면 개인화 — 인사말(기본 문구 → 개인화 문구 페이드인)과 추천 검색어 칩(보라 = 내 쓰레드 기반 · 파랑 = 전체 인기).
      탐색 아이템(greeting·recommendChips)이 ctx.home 으로 받아 그린다 */
   const home = useHomePersonalize(api)
+  /* 인사말의 「쓰레드」 탭 — 쇼핑 쓰레드 패널의 이어보기와 같은 규칙: 라이브는 서버 기록 복원, 시나리오 체험은 그 시나리오를 마지막 단계부터 */
+  const resumeThread = (id) => {
+    const t = (api.threads || []).find((thread) => thread.id === id)
+    if (!t) {
+      api.showToast('이 쓰레드를 찾을 수 없어요.')
+      return
+    }
+    if (t.live) api.resumeLive(t.id)
+    else if (api.scenarios.some((s) => s.id === t.scenarioId)) api.playScenario(t.scenarioId, { threadId: t.id, stage: t.stage })
+    else api.showToast('이 쓰레드의 시나리오를 찾을 수 없어요. (삭제되었거나 공유 체험이에요)')
+  }
+  const homeCtx = { ...home, resumeThread }
   const viewer = viewerDeviceOf(api.viewerDevice) // 실행 화면을 감싸는 기기 — 화면 크기(w×h)·껍데기 종류
 
   /* 탐색 아이템에 공급하는 실행 컨텍스트 — 검색/칩/키워드만 실제 동작, 나머지는 목업 */
@@ -253,14 +265,14 @@ export default function HomeView({ api }) {
               <div className="sb-home-hero">
                 {heroItems.map((it) => (
                   <div key={it.id} className="sb-player__item">
-                    {renderItem(it, { mode: 'player', player: homePlayer, profile: api.profile, chips, home, allItems: allExploreItems })}
+                    {renderItem(it, { mode: 'player', player: homePlayer, profile: api.profile, chips, home: homeCtx, allItems: allExploreItems })}
                   </div>
                 ))}
               </div>
             ) : null}
             {restItems.map((it) => (
               <div key={it.id} className="sb-player__item">
-                {renderItem(it, { mode: 'player', player: homePlayer, profile: api.profile, chips, home, allItems: allExploreItems })}
+                {renderItem(it, { mode: 'player', player: homePlayer, profile: api.profile, chips, home: homeCtx, allItems: allExploreItems })}
               </div>
             ))}
           </div>

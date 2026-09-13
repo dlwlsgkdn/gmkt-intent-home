@@ -82,7 +82,10 @@ export const HomeWeather = z.object({
 export type HomeWeather = z.infer<typeof HomeWeather>
 
 export const HomePersonalizeResult = z.object({
+  /** 상태 인사 한 줄 — 검색어 제안 없음. 최근 쓰레드를 가리키는 부분은 「」로 감싸져 있고(FE 가 탭 대상으로 만든다) threadIndex 가 그 쓰레드다 */
   greeting: z.string(),
+  /** 인사말이 가리키는 쓰레드 — 요청 threads 의 1-based 번호. 쓰레드를 언급하지 않았으면 null */
+  threadIndex: z.number().int().positive().nullable().optional(),
   /** 개인화 추천 검색어 (보라 칩) — 자연어 명사구, 최대 3 */
   suggestions: z.array(z.string()).max(3),
   weather: HomeWeather.nullable(),

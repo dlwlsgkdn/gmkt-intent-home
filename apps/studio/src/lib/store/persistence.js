@@ -1,5 +1,5 @@
 import { DEVICE_PRESETS, normalizeItems, normalizeScenario, uid } from './model.js'
-import { DEFAULT_EXPLORE, DEFAULT_KEYWORDS, DEFAULT_PROFILE, exploreItemsFrom } from './defaults.js'
+import { DEFAULT_EXPLORE, DEFAULT_KEYWORDS, DEFAULT_PROFILE, DEFAULT_SEARCH_PLACEHOLDERS, exploreItemsFrom } from './defaults.js'
 import { REMOTE_ENABLED } from '../remote.js'
 
 /*
@@ -141,6 +141,23 @@ function seedRecommendChips(explore) {
   return { ...explore, items: next, seeded: { ...seeded, recommendChips: true } }
 }
 
+/* 검색창 예문 로테이션(2026-09) — 기존 탐색 페이지의 검색창 아이템에 예문 목록이 없으면 **한 번만** 채운다: 저자가 적어 둔 플레이스홀더를
+   첫 줄에 두고 기본 예문을 뒤에 붙인다(중복 제외). explore.seeded.searchPlaceholders 표식 — 저자가 목록을 비워도 되살아나지 않는다 */
+function seedSearchPlaceholders(explore) {
+  const seeded = explore.seeded && typeof explore.seeded === 'object' ? explore.seeded : {}
+  if (seeded.searchPlaceholders) return explore
+  const items = Array.isArray(explore.items) ? explore.items : []
+  let changed = false
+  const next = items.map((it) => {
+    if (!it || it.type !== 'searchBox' || String(it.props?.placeholders || '').trim()) return it
+    const own = String(it.props?.placeholder || '').trim()
+    const list = [own, ...DEFAULT_SEARCH_PLACEHOLDERS].filter((text, i, arr) => text && arr.indexOf(text) === i)
+    changed = true
+    return { ...it, props: { ...it.props, placeholders: list.join('\n') } }
+  })
+  return { ...explore, items: changed ? next : items, seeded: { ...seeded, searchPlaceholders: true } }
+}
+
 /* 계정 보정: 탐색 페이지에 아이템이 없으면 기존 설정으로부터 만들고,
    모든 시나리오를 현재 계획 케이스 모델로 이관한다.
    탐색 아이템도 normalizeItems를 통과시킨다 — 구 좌표 데이터의 순서 이관 관문. */
@@ -155,7 +172,7 @@ function normalizeAccount(raw) {
     const items = normalizeItems(account.explore.items)
     if (items !== account.explore.items) account.explore = { ...account.explore, items }
   }
-  account.explore = seedRecommendChips(account.explore)
+  account.explore = seedSearchPlaceholders(seedRecommendChips(account.explore))
   account.scenarios = Array.isArray(account.scenarios) ? account.scenarios.map(normalizeScenario) : []
   return account
 }

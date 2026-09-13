@@ -80,7 +80,8 @@ const skinOf = (profile) => (profile || []).find((it) => /피부/.test(it.label)
 const toneOf = (profile) => (profile || []).find((it) => /컬러|톤/.test(it.label))?.value?.trim() || ''
 const quote = (text) => `「${String(text).trim().slice(0, 28)}」`
 
-/* LLM 없이 만드는 인사말 — 이름 · 시간대(+날씨) · 가장 최근 쓰레드 이어가기 제안 (없으면 프로필 제안) */
+/* LLM 없이 만드는 **상태 인사** — 이름 · 시간대(+날씨) · 가장 최근 쓰레드의 상태 한 문장(「」로 감싼 부분이 그 쓰레드 — 홈이 탭 대상으로
+   만든다). 검색어·상품 제안은 넣지 않는다(그건 추천 검색어 칩 몫). 쓰레드가 없으면 프로필이 준비돼 있다는 정도로 맞이한다 */
 export function heuristicHomeGreeting(input) {
   const head = input.name ? `${input.name}님, ` : ''
   const mood = weatherMoodOf(input.weather)
@@ -89,17 +90,28 @@ export function heuristicHomeGreeting(input) {
   let tail
   if (latest) {
     const cartCount = (latest.cart || []).length
-    if (latest.status === 'completed') tail = `지난 ${quote(latest.title)} 계획은 잘 쓰고 계세요? 오늘은 새 고민을 적어 보세요.`
-    else if (latest.stage === 'plan') tail = `${quote(latest.title)} 계획${cartCount ? `에 담은 ${cartCount}개 상품` : ''}, 다음 단계로 이어가 볼까요?`
-    else tail = `${quote(latest.title)} 설문을 이어서 답해 볼까요?`
+    if (latest.status === 'completed') tail = `지난 ${quote(latest.title)} 계획은 잘 쓰고 계세요?`
+    else if (latest.stage === 'plan') tail = cartCount
+      ? `${quote(latest.title)} 계획에 담아 둔 상품 ${cartCount}개가 기다리고 있어요.`
+      : `${quote(latest.title)} 계획을 보던 중이었어요.`
+    else tail = `답하던 ${quote(latest.title)} 설문이 남아 있어요.`
   } else {
     const skin = skinOf(input.profile)
     const tone = toneOf(input.profile)
-    tail = skin
-      ? `${skin} 피부${tone ? `·${tone}` : ''}에 맞는 오늘의 루틴을 찾아볼까요?`
-      : '오늘의 뷰티 고민을 검색창에 적어 보세요.'
+    tail = skin ? `${skin} 피부${tone ? `·${tone}` : ''} 프로필이 준비돼 있어요.` : '오늘의 뷰티 고민을 편하게 적어 보세요.'
   }
   return `${head}${when}이에요. ${tail}`
+}
+
+/* 휴리스틱 인사말이 가리키는 쓰레드 번호 — 최근 쓰레드가 있으면 언제나 1, 없으면 null */
+export function heuristicHomeThreadIndex(input) {
+  return (input.threads || []).length ? 1 : null
+}
+
+/* 인사말의 「」 부분 — 탭 대상(그 쓰레드 이어보기)으로 만들 첫 번째 「…」의 위치. 없으면 null */
+export function greetingThreadSpan(text) {
+  const m = /「[^」]+」/.exec(String(text || ''))
+  return m ? { start: m.index, end: m.index + m[0].length, text: m[0] } : null
 }
 
 /* LLM 없이 만드는 개인화 추천 검색어 — 최근 쓰레드 제목 최대 2개 + 프로필·계절 템플릿으로 3개 채움 */

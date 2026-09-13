@@ -973,3 +973,32 @@
   cursor: pointer;
 }
 .sb-cart-sheet__link:hover { color: var(--dk-brand-deep); }
+
+/* ── 검색 페이지 3영역 역할 분리 (2026-09) — 인사말 = 상태 인사, 플레이스홀더 = 입력 형식 안내, 칩 = 다음 행동 선택지 ── */
+/* 인사말 속 쓰레드 언급(「…」) — 누르면 그 쓰레드 이어보기. 인사말 서체·크기를 그대로 잇고 밑줄만 단다 */
+.beauty-greeting__thread {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-bottom: 1.5px solid var(--dk-brand-added);
+  border-radius: 0;
+  background: none;
+  color: var(--dk-brand);
+  font: inherit;
+  line-height: inherit;
+  cursor: pointer;
+  transition: border-color var(--sb-dur) var(--sb-ease);
+}
+.beauty-greeting__thread:hover { border-bottom-color: var(--dk-brand); }
+/* 추천 칩 역할 캡션 — 묶음마다 11px 회색 한 줄(홈 히어로에서는 칩처럼 가운데) */
+.sb-recochips__groups { display: flex; flex-direction: column; gap: 14px; }
+.sb-recochips__group { display: flex; flex-direction: column; gap: 6px; }
+.sb-recochips__caption {
+  font-size: var(--sb-t-micro);
+  font-weight: 400;
+  line-height: 14px;
+  letter-spacing: -0.2px;
+  color: var(--dk-muted);
+}
+.sb-home-hero .sb-recochips__caption { text-align: center; }

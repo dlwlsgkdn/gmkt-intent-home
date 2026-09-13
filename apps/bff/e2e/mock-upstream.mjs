@@ -275,9 +275,11 @@ const server = http.createServer(async (req, res) => {
       const thread = (/^- 1\. ([^|]+)/m.exec(user)?.[1] ?? '').trim()
       const head = name && name !== '(없음)' ? `${name}님, ` : ''
       const mood = weather.startsWith('(') ? '' : '맑은 '
-      const tail = thread ? `「${thread}」 계획을 이어가 볼까요?` : '오늘의 뷰티 고민을 적어 보세요.'
+      // 상태 인사 — 쓰레드를 가리키는 부분은 「」로 감싸고 threadIndex 로 번호를 준다 (FE 가 탭 대상으로 만든다)
+      const tail = thread ? `답하던 「${thread}」 설문이 남아 있어요.` : '오늘의 뷰티 고민을 편하게 적어 보세요.'
       return streamAnthropic(res, JSON.stringify({
         greeting: `${head}${mood}오후예요. ${tail}`,
+        threadIndex: thread ? 1 : null,
         suggestions: [`${thread || '가을'} 다음 단계`, '복합성 가을 베이스', '환절기 수분 루틴'],
       }), { delayMs: 1, chunkSize: 200 })
     }

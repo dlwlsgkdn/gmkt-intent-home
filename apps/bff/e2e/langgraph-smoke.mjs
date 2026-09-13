@@ -512,6 +512,7 @@ try {
       }),
     }).then((r) => r.json())
     ok(home?.source === 'llm' && /유진님/.test(home?.greeting || ''), `개인화 인사말 LLM (${home?.greeting})`)
+    ok(home?.threadIndex === 1 && /「[^」]+」/.test(home?.greeting || ''), `인사말이 최근 쓰레드를 「」로 가리키고 threadIndex=1 (${home?.threadIndex})`)
     ok(home?.suggestions?.length === 3, `개인화 추천 검색어 3개 (${home?.suggestions?.length})`)
     ok(home?.weather?.label === '대체로 맑음' && home?.weather?.tempC === 24.5, `날씨 조회·라벨 (${home?.weather?.label} ${home?.weather?.tempC})`)
     const homeCall = (await llmCalls()).find((c) => c.type === 'home-personalize')

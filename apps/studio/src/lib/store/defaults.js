@@ -6,8 +6,18 @@ import { uid } from './model.js'
  */
 
 /* ── 공통 탐색(홈) 페이지 설정 ── */
+/* 검색창 예문 로테이션 — "상황 + 고민 + 원하는 결과" 꼴을 보여 주는 입력 형식 안내(AI 아님, 저자가 편집). `{피부타입}`처럼 프로필 라벨을
+   중괄호로 쓰면 그 값이 들어간다(없으면 빈 채로). 새 계정의 검색창 아이템에 실리고, 기존 계정에는 persistence 가 한 번 끼워 넣는다 */
+export const DEFAULT_SEARCH_PLACEHOLDERS = [
+  '예: 출근 전 10분, 안 무너지는 데일리 메이크업',
+  '예: {피부타입} 피부인데 오후만 되면 번들거려요',
+  '예: 결혼식 하객, 사진 잘 나오는 자연스러운 룩',
+  '예: 환절기 각질 없이 촉촉한 베이스 루틴',
+]
+
 export const DEFAULT_EXPLORE = {
-  greeting: '유진님, 오늘은 피부결이 먼저 보이는 베이스 루틴을 가볍게 정리해볼까요?',
+  /* 기본 인사말은 상태 인사 톤 — 홈에서는 이 문구가 먼저 보이고 시각·날씨·쓰레드 상태로 만든 개인화 인사가 이어진다. 검색어 제안은 칩 몫 */
+  greeting: '유진님, 오늘도 반가워요. 어떤 뷰티 고민이든 편하게 적어 보세요.',
   searchPlaceholder: '예: 출근 전에 10분 안에 안 무너지는 데일리 메이크업',
   searchOverflow: 'ellipsis', // 검색창 긴 텍스트: 'ellipsis'(한 줄 말줄임) | 'multiline'
   stories: [
@@ -83,7 +93,7 @@ export function exploreItemsFrom(config) {
   const make = (type, props) => ({ id: uid(), type, props })
   return [
     make('greeting', { text: merged.greeting }),
-    make('searchBox', { placeholder: merged.searchPlaceholder, multiline: merged.searchOverflow === 'multiline' }),
+    make('searchBox', { placeholder: merged.searchPlaceholder, placeholders: DEFAULT_SEARCH_PLACEHOLDERS.join('\n'), multiline: merged.searchOverflow === 'multiline' }),
     make('scenarioChips', {}),
     make('recommendChips', {}), // 개인화(보라)·인기(파랑) 추천 검색어 — 내용은 홈이 채운다
     make('storyFeature', { ...stories[0] }),

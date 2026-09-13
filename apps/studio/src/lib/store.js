@@ -42,6 +42,7 @@ export {
   DEFAULT_EXPLORE,
   DEFAULT_PROFILE,
   DEFAULT_KEYWORDS,
+  DEFAULT_SEARCH_PLACEHOLDERS,
   exploreItemsFrom,
   visibleProfileItems,
 } from './store/defaults.js'

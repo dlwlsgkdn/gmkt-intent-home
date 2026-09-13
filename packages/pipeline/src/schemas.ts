@@ -328,7 +328,12 @@ export type SearchSuggestGen = z.infer<typeof SearchSuggestGen>
 export const HomePersonalizeGen = z.object({
   greeting: z
     .string()
-    .describe('홈 첫 화면 인사말 — 이름·시간대·날씨·최근 쓰레드를 녹인 존댓말 1~2문장, 60자 안팎, 이모지 없음'),
+    .describe('홈 첫 화면 상태 인사 — 이름·시간대·날씨 한 조각·최근 쓰레드 상태를 녹인 존댓말 1~2문장, 60자 안팎, 이모지 없음. 검색어·상품 제안 금지. 쓰레드를 가리키는 부분은 「」로 한 번 감싼다'),
+  threadIndex: z
+    .number()
+    .int()
+    .nullable()
+    .describe('인사말의 「」가 가리키는 최근 쓰레드 번호 (요청 목록 순서, 1부터). 쓰레드를 언급하지 않았으면 null'),
   suggestions: z
     .array(z.string())
     .min(1)

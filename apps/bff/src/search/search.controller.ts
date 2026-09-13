@@ -19,7 +19,7 @@ import {
   SearchSuggestResult,
   type Profile,
 } from '@ddak/schema'
-import { heuristicHomeGreeting, heuristicHomeSuggestions } from '@ddak/pipeline'
+import { heuristicHomeGreeting, heuristicHomeSuggestions, heuristicHomeThreadIndex } from '@ddak/pipeline'
 import { ServiceTokenGuard } from '../common/service-token.guard'
 import { ZodValidationPipe } from '../common/zod-validation.pipe'
 import { toOpenApi } from '../common/openapi'
@@ -116,9 +116,10 @@ export class SearchController {
 
   @Post('home')
   @ApiOperation({
-    summary: '홈 개인화 — 인사말 + 개인화 추천 검색어(보라 칩)',
+    summary: '홈 개인화 — 상태 인사말 + 개인화 추천 검색어(보라 칩)',
     description:
-      '이름·프로필·기기 현지 시각·(허용된) 위치·최근 쇼핑 쓰레드 요약·최근 검색어로 홈 첫 화면 인사말 한 줄과 자연어 추천 검색어 3개를 만든다. ' +
+      '이름·프로필·기기 현지 시각·(허용된) 위치·최근 쇼핑 쓰레드 요약·최근 검색어로 홈 첫 화면 상태 인사 한 줄(검색어 제안 없음 — 최근 쓰레드를 가리키는 「」 부분과 threadIndex)과 ' +
+      '자연어 추천 검색어 3개를 만든다. ' +
       '날씨는 BFF 가 Open-Meteo 에서 붙인다(없으면 서울 기준, 실패면 null). LLM 미설정·실패 시 같은 재료의 휴리스틱(source=fallback). ' +
       'FE 는 기본 인사말을 먼저 보이고 이 응답을 페이드인으로 얹는다.',
   })
@@ -139,10 +140,25 @@ export class SearchController {
       const greeting = content.greeting.trim()
       if (!greeting) throw new Error('empty greeting')
       const suggestions = content.suggestions.map((s) => s.trim()).filter(Boolean).slice(0, 3)
-      return { greeting, suggestions: suggestions.length ? suggestions : heuristicHomeSuggestions(input), weather, source: 'llm' }
+      // 가리키는 쓰레드 번호는 요청 목록 범위 안일 때만 — 범위 밖·「」 없는 인사말은 탭 대상 없음
+      const idx = typeof content.threadIndex === 'number' ? Math.floor(content.threadIndex) : null
+      const threadIndex = idx != null && idx >= 1 && idx <= input.threads.length && /「[^」]+」/.test(greeting) ? idx : null
+      return {
+        greeting,
+        threadIndex,
+        suggestions: suggestions.length ? suggestions : heuristicHomeSuggestions(input),
+        weather,
+        source: 'llm',
+      }
     } catch (e) {
       this.logger.warn(`홈 개인화 LLM 실패 — 휴리스틱으로 대신: ${(e as Error).message}`)
-      return { greeting: heuristicHomeGreeting(input), suggestions: heuristicHomeSuggestions(input), weather, source: 'fallback' }
+      return {
+        greeting: heuristicHomeGreeting(input),
+        threadIndex: heuristicHomeThreadIndex(input),
+        suggestions: heuristicHomeSuggestions(input),
+        weather,
+        source: 'fallback',
+      }
     }
   }
 
