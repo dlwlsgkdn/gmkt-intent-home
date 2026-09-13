@@ -91,7 +91,9 @@ const SKELETON_LOOK_JSON = JSON.stringify({
       desc: '데일리를 고르셔서 과하지 않은 코랄로 잡았어요.',
       tone: 'coral',
       spec: {
+        scope: 'hair', // 설문 s1 답 "메이크업 + 헤어" — 헤어 사양은 실리고 outfit 은 생략
         intensity: 'natural',
+        hair: { style: 'wavy', length: 'keep', color: 'KEEP', bangs: 'see-through', note: '끝만 살짝 웨이브, 시스루 앞머리' },
         lip: { color: 'coral', finish: 'tint', technique: 'gradient', note: '코랄 틴트를 안쪽부터 번지듯' },
         cheek: { color: '#FF8F6D', placement: 'apples', strength: 'light', note: '같은 톤으로 볼 앞쪽에 얇게' },
         eye: { shadow: [], liner: 'none', lashes: 'natural', brow: 'natural', note: '섀도 없이 마스카라만' },

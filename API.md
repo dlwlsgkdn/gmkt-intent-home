@@ -85,15 +85,17 @@ pending(재생성 게이트)으로 유지한다. **`skeleton`은 계획 전용 �
 SurveyPageWire = { intro, questions: [{ id, question, kind?: 'choice'|'photo', options[0..6], multi, placeholder? }] }
 // options 원소는 "제목|부제" 문자열 (FE 옵션 문법과 동일 — @ddak/pipeline optionWire). 설문 프롬프트가 선택지마다 제목(짧은 명사구)+부제(판단
 // 기준 한 줄)를 만들고, 답변(choices)에는 제목만 실린다. 옛 페이지의 부제 없는 문자열도 그대로 유효
-// kind 생략 = choice (구 응답 호환). kind='photo'는 선택지가 없는 얼굴 사진 질문 — id는 p1, 언제나 첫
-// 질문 자리다. **사진 원본은 서버로 오지 않는다**: 기기에 남고 답변에는 표식('사진 제출됨')만 실린다
+// kind 생략 = choice (구 응답 호환). kind='photo'는 선택지가 없는 얼굴 사진 질문 — id는 p1. 사진을 받는 설문은
+// 스캐폴드 고정 스타일링 범위 질문(id s1, choice: 메이크업만|메이크업 + 헤어|메이크업 + 헤어 + 옷차림)이 p1 앞에 선다(v24). **사진 원본은 서버로 오지 않는다**: 기기에 남고 답변에는 표식('사진 제출됨')만 실린다
 // (데이터 URL을 스텝·프롬프트에 싣지 않기 위해서 — 계획 프롬프트는 "사진을 올렸다"만 안다)
 PlanPageWire   = { headline, summary, sections: [
                    { kind: 'guide',    title, subtitle?, body } |                      // 단계 안내 — 2~3개(다단계 계획), FE가 단계 번호를 붙인다. subtitle = 단계 목적 한 줄(v17부터 필수 생성, 옛 페이지 없음)
-                   { kind: 'look',     title, desc, tone, points?[0..4], spec? } |     // 가상 메이크업 결과 — 사진 질문에 답한 쓰레드에서만. tone = coral|rose|red|peach|brown|plum
+                   { kind: 'look',     title, desc, tone, points?[0..6], spec? } |     // 가상 메이크업 결과 — 사진 질문에 답한 쓰레드에서만. tone = coral|rose|red|peach|brown|plum
                                                                                        // spec(v23) = { intensity: natural|glam, lip{color #rrggbb, finish matte|velvet|glossy|tint, technique full|gradient|overlined, note},
                                                                                        //   cheek{color, placement apples|cheekbones|drape, strength light|medium|strong, note}, eye{shadow[0..3], liner none|thin|winged, lashes natural|volume, brow natural|defined, note},
-                                                                                       //   base{finish matte|semi-matte|dewy, coverage light|medium|full, contour, highlight, note} } — 기기 합성과 정밀 렌더가 그대로 소비하는 한 원천.
+                                                                                       //   base{finish matte|semi-matte|dewy, coverage light|medium|full, contour, highlight, note}, scope? makeup|hair|outfit(v24 — s1 답),
+                                                                                       //   hair?{style keep|straight|wavy|curly|updo|ponytail, length keep|short|medium|long, color hex|keep, bangs keep|none|see-through|full, note}(scope≥hair),
+                                                                                       //   outfit?{top keep|tee|shirt|blouse|knit|jacket|dress, color hex|keep, fit regular|oversized|fitted, neckline keep|crew|v|collar|off-shoulder, note}(scope=outfit) } — 기기 합성과 정밀 렌더가 그대로 소비하는 한 원천.
                                                                                        //   points 는 BFF 가 부위별 note 에서 파생("립 — …"). FE가 기기에 남은 사진을 BEFORE, 같은 사진에 사양대로 칠한 것을 AFTER로 비포/애프터 투영 (합성은 화면에서)
                    { kind: 'products', title, reason, products: CatalogProduct[] } |  // 카탈로그 id 검증 + 웹 상품 URL 검증 통과분만
                    { kind: 'contents', title, reason, items: PlanContentItem[] } |    // 참고 콘텐츠 — 웹 검색으로 확인한 게시글·영상 (URL 검증 통과분만)

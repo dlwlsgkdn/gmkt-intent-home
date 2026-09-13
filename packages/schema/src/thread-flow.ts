@@ -41,7 +41,43 @@ export const LOOK_BROWS = ['natural', 'defined'] as const
 export const LOOK_BASE_FINISHES = ['matte', 'semi-matte', 'dewy'] as const
 export const LOOK_COVERAGES = ['light', 'medium', 'full'] as const
 
+/* 스타일링 범위 — 설문의 스캐폴드 질문("어디까지 스타일링해 볼까요?", id s1)이 정하고 뼈대 LLM 이 사양에 옮긴다.
+ * 누적 의미: hair = 메이크업+헤어, outfit = 메이크업+헤어+옷차림. 기기 합성은 메이크업만 그리고(랜드마크는 얼굴뿐)
+ * 헤어·옷은 정밀 렌더가 맡는다 — 화면은 그 사이 "헤어·옷은 정밀 렌더에서" 를 안내한다 */
+export const LOOK_SCOPES = ['makeup', 'hair', 'outfit'] as const
+export const LookScope = z.enum(LOOK_SCOPES)
+export type LookScope = z.infer<typeof LookScope>
+
+export const LOOK_HAIR_STYLES = ['keep', 'straight', 'wavy', 'curly', 'updo', 'ponytail'] as const
+export const LOOK_HAIR_LENGTHS = ['keep', 'short', 'medium', 'long'] as const
+export const LOOK_HAIR_BANGS = ['keep', 'none', 'see-through', 'full'] as const
+export const LOOK_OUTFIT_TOPS = ['keep', 'tee', 'shirt', 'blouse', 'knit', 'jacket', 'dress'] as const
+export const LOOK_OUTFIT_FITS = ['regular', 'oversized', 'fitted'] as const
+export const LOOK_OUTFIT_NECKLINES = ['keep', 'crew', 'v', 'collar', 'off-shoulder'] as const
+
+/** 헤어 사양 — 'keep' 은 그 요소를 바꾸지 않는다는 뜻. color 는 #rrggbb 또는 'keep' */
+export const LookHairSpec = z.object({
+  style: z.enum(LOOK_HAIR_STYLES),
+  length: z.enum(LOOK_HAIR_LENGTHS),
+  color: z.string(),
+  bangs: z.enum(LOOK_HAIR_BANGS),
+  note: z.string(),
+})
+export type LookHairSpec = z.infer<typeof LookHairSpec>
+
+/** 옷차림 사양 — 상의 한 벌만 바꾼다 (얼굴·포즈·배경은 그대로). color 는 #rrggbb 또는 'keep' */
+export const LookOutfitSpec = z.object({
+  top: z.enum(LOOK_OUTFIT_TOPS),
+  color: z.string(),
+  fit: z.enum(LOOK_OUTFIT_FITS),
+  neckline: z.enum(LOOK_OUTFIT_NECKLINES),
+  note: z.string(),
+})
+export type LookOutfitSpec = z.infer<typeof LookOutfitSpec>
+
 export const LookSpec = z.object({
+  /** 스타일링 범위 — 없으면 makeup (v23 초기 페이지 호환) */
+  scope: LookScope.optional(),
   /** 전체 강도 — natural(데일리·출근) | glam(파티·데이트·화보). 기기 합성의 불투명도 배율이자 정밀 렌더의 강도 문구 */
   intensity: LookIntensity,
   lip: z.object({
@@ -72,6 +108,10 @@ export const LookSpec = z.object({
     highlight: z.boolean(),
     note: z.string(),
   }),
+  /** scope 가 hair 이상일 때만 실린다 (sanitizeLookSpec 이 범위 밖이면 뗀다) */
+  hair: LookHairSpec.optional(),
+  /** scope 가 outfit 일 때만 실린다 */
+  outfit: LookOutfitSpec.optional(),
 })
 export type LookSpec = z.infer<typeof LookSpec>
 
@@ -146,7 +186,8 @@ export const LookRenderBody = z.object({
   tone: LookTone,
   /** 룩 이름·포인트 — 편집 지시문의 재료 (없으면 톤만으로 만든다) */
   title: z.string().optional(),
-  points: z.array(z.string()).max(4).optional(),
+  /** 화면 포인트 — 부위 4 + 헤어·옷(범위 안일 때) 최대 6줄 */
+  points: z.array(z.string()).max(6).optional(),
   /** 룩 사양 — 있으면 편집 지시문을 고정 템플릿이 아니라 이 사양에서 생성한다 (계획 look 섹션의 spec 그대로) */
   spec: LookSpec.optional(),
 })
@@ -271,8 +312,8 @@ export const PlanSectionWire = z.discriminatedUnion('kind', [
     title: z.string(),
     desc: z.string(),
     tone: LookTone,
-    /** 화면용 포인트 문구 — spec 이 있으면 부위별 note 에서 파생된 값(BFF `skeletonSectionWire`), 옛 페이지는 LLM 원문 */
-    points: z.array(z.string()).max(4).optional(),
+    /** 화면용 포인트 문구 — spec 이 있으면 부위별 note 에서 파생된 값(BFF `skeletonSectionWire` — 부위 4 + 범위 안 헤어·옷, 최대 6), 옛 페이지는 LLM 원문 */
+    points: z.array(z.string()).max(6).optional(),
     /** 룩 사양 — 기기 합성·정밀 렌더가 소비하는 한 원천 (v23 부터, 옛 페이지에는 없음) */
     spec: LookSpec.optional(),
   }),

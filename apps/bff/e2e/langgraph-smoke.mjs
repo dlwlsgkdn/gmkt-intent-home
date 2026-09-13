@@ -279,23 +279,28 @@ try {
   }).then((r) => r.json())
   const svM = await sse(`/api/threads/${startM.threadId}/survey`, {}, H)
   const svMPage = last(svM, 'result')?.data?.page
-  ok(svMPage?.questions?.length === 3, `사진 질문 포함 3문항 (${svMPage?.questions?.length})`)
-  const photoQ = svMPage?.questions?.[0]
-  ok(photoQ?.kind === 'photo' && photoQ?.id === 'p1', `첫 질문이 사진 질문 (${photoQ?.id}/${photoQ?.kind})`)
+  ok(svMPage?.questions?.length === 4, `범위·사진 질문 포함 4문항 (${svMPage?.questions?.length})`)
+  const scopeQ = svMPage?.questions?.[0]
+  ok(scopeQ?.id === 's1' && scopeQ?.kind === 'choice' && scopeQ?.multi === false, `첫 질문이 스타일링 범위 질문 (${scopeQ?.id}/${scopeQ?.kind})`)
+  ok((scopeQ?.options ?? []).map((o) => o.split('|')[0]).join(',') === '메이크업만,메이크업 + 헤어,메이크업 + 헤어 + 옷차림', '범위 선택지 3개 — 제목|부제 문법')
+  const photoQ = svMPage?.questions?.[1]
+  ok(photoQ?.kind === 'photo' && photoQ?.id === 'p1', `둘째 질문이 사진 질문 (${photoQ?.id}/${photoQ?.kind})`)
   ok((photoQ?.options ?? []).length === 0, '사진 질문은 선택지가 없다')
-  ok(svMPage?.questions?.[1]?.id === 'q1', '선택지 질문 id는 q1부터 — 자리만 한 칸 밀린다')
+  ok(svMPage?.questions?.[2]?.id === 'q1', '선택지 질문 id는 q1부터 — 자리만 두 칸 밀린다')
   ok(
-    svM.some((e) => e.event === 'question' && e.data.index === 0 && e.data.question?.kind === 'photo'),
-    '사진 질문이 스트리밍 index 0으로 도착',
+    svM.some((e) => e.event === 'question' && e.data.index === 0 && e.data.question?.id === 's1') &&
+      svM.some((e) => e.event === 'question' && e.data.index === 1 && e.data.question?.kind === 'photo'),
+    '범위·사진 질문이 스트리밍 index 0·1로 도착',
   )
   ok(
-    svM.some((e) => e.event === 'question' && e.data.index === 1 && e.data.question?.id === 'q1'),
+    svM.some((e) => e.event === 'question' && e.data.index === 2 && e.data.question?.id === 'q1'),
     '스트리밍 자리도 확정 페이지와 같게 밀린다',
   )
   const planM = await sse(
     `/api/threads/${startM.threadId}/plan`,
     {
       answers: [
+        { questionId: 's1', choices: ['메이크업 + 헤어'] }, // 스타일링 범위 — 뼈대가 spec.scope 로 옮긴다
         { questionId: 'p1', choices: ['사진 제출됨'] }, // 사진 원본이 아니라 표식만 온다
         { questionId: 'q1', choices: ['데이트'] },
       ],
@@ -309,7 +314,8 @@ try {
   ok(look?.spec?.lip?.finish === 'tint' && look?.spec?.intensity === 'natural', '룩 사양(spec)이 와이어에 실림')
   ok(look?.spec?.lip?.color === '#f4553a', `깨진 립 색이 tone 기본색으로 정규화 (${look?.spec?.lip?.color})`)
   ok(look?.spec?.cheek?.color === '#ff8f6d', `치크 색 소문자 정규화 (${look?.spec?.cheek?.color})`)
-  ok((look?.points ?? []).length === 4 && look.points[0] === '립 — 코랄 틴트를 안쪽부터 번지듯', `룩 포인트를 사양 note 에서 파생 (${(look?.points ?? []).length})`)
+  ok((look?.points ?? []).length === 5 && look.points[0] === '립 — 코랄 틴트를 안쪽부터 번지듯' && look.points[4].startsWith('헤어 — '), `룩 포인트를 사양 note 에서 파생 — 범위 안 헤어 포함 (${(look?.points ?? []).length})`)
+  ok(look?.spec?.scope === 'hair' && look?.spec?.hair?.style === 'wavy' && look?.spec?.hair?.color === 'keep' && !look?.spec?.outfit, '범위 hair — 헤어 사양은 실리고 옷차림은 뗀다')
   ok(planMPage?.sections?.some((s) => s.kind === 'products'), 'look과 상품 섹션이 함께 병합')
   {
     const skCall = (await llmCalls()).filter((c) => c.type === 'skeleton').at(-1)
@@ -337,6 +343,8 @@ try {
     ok((editCall?.user || '').includes('same person'), '편집 지시문에 동일성 보존 지시 포함')
     ok((editCall?.user || '').includes('#f4553a') && (editCall?.user || '').includes('Korean gradient lip'), '편집 지시문이 사양(립 hex·그라데이션)에서 생성됨')
     ok((editCall?.user || '').includes('no eyeshadow') && !(editCall?.user || '').includes('full-glam'), '사양에 없는 섀도·풀글램 템플릿을 싣지 않는다')
+    ok((editCall?.user || '').includes('- Hair: restyle the hair to soft loose waves') && (editCall?.user || '').includes('light see-through bangs'), '범위 hair — 편집 지시문에 헤어 지시가 실린다')
+    ok(/Keep exactly:[^\n]*clothing, pose/.test(editCall?.user || '') && !/Keep exactly:[^\n]*hair,/.test(editCall?.user || ''), '헤어는 보존 목록에서 빠지고 옷은 남는다')
     ok((editCall?.user || '').includes('coral'), '편집 지시문에 룩 색조 반영')
     ok((editCall?.user || '').includes('Overall intensity: medium'), '강도는 사양(intensity=natural)이 정한다')
   }

@@ -6,7 +6,7 @@ import { scrollScreenTo } from '../lib/deviceScreen.js'
 import { isQuestionType, renderItem, resolveSampleFace } from '../lib/registry.jsx'
 import BottomSheet from './ui/BottomSheet.jsx'
 import { fetchLiveCapabilities, fetchLiveThread, recordLiveEvent, renderLiveLook, sendLiveFeedback, startLiveThread, streamLivePlan, streamLiveSurvey } from '../lib/liveApi.js'
-import { PHOTO_ANSWER, isPhotoValue, livePlanItems, liveSurveyItems } from '../lib/livePage.js'
+import { PHOTO_ANSWER, isPhotoValue, livePlanItems, liveSurveyItems, lookScopeOfAnswers } from '../lib/livePage.js'
 import { composeMakeup, matchAspectTo, toPhotoDataUrl } from '../lib/makeupComposite.js'
 import { loadLookRender, saveLookRender } from '../lib/lookCache.js'
 import { BgBlobs, FloatingBar, ViewerDeviceControl } from './Frame.jsx'
@@ -784,11 +784,12 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const surveyItems = useMemo(
     () =>
       surveyPage
-        ? liveSurveyItems(surveyPage).map((it) =>
+        ? liveSurveyItems(surveyPage, { scope: lookScopeOfAnswers(answers) }).map((it) =>
             it.type === 'surveyQuestion' ? { ...it, props: { ...it.props, locked: surveyLocked } } : it
           )
         : [],
-    [surveyPage, surveyLocked]
+    // 범위 질문(s1)의 답이 사진 질문의 안내 문구를 바꾼다 — answers 가 의존성에 든다
+    [surveyPage, surveyLocked, answers]
   )
   const planItems = useMemo(
     () =>
@@ -839,14 +840,14 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     }
     if (loading.step === 'survey') {
       const intro = (partial && partial.intro) || ''
-      const items = liveSurveyItems({
-        intro,
-        questions: ((partial && partial.questions) || []).filter(Boolean),
-      })
+      const items = liveSurveyItems(
+        { intro, questions: ((partial && partial.questions) || []).filter(Boolean) },
+        { scope: lookScopeOfAnswers(answers) },
+      )
       return intro ? items : items.filter((it) => it.id !== 'live-survey-intro')
     }
     return [] // step 'start'(쓰레드 시작·이어보기 로드)는 그릴 재료가 없다 — 전체 스켈레톤
-  }, [loading, partial, livePhoto])
+  }, [loading, partial, livePhoto, answers])
   /* 미리보기도 확정 렌더와 같은 한 화면 = 질문 하나 규칙을 따른다. allItems는 도착한 전체를
      그대로 넘겨서 진행 표시가 "1 / 2 → 1 / 3"으로 자라는 것을 보여준다 */
   const partialTopItems = partialAllItems.filter((it) => !it.parentId)

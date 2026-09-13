@@ -4,12 +4,19 @@ import {
   LOOK_BROWS,
   LOOK_CHEEK_PLACEMENTS,
   LOOK_COVERAGES,
+  LOOK_HAIR_BANGS,
+  LOOK_HAIR_LENGTHS,
+  LOOK_HAIR_STYLES,
   LOOK_LASHES,
   LOOK_LINERS,
   LOOK_LIP_FINISHES,
   LOOK_LIP_TECHNIQUES,
+  LOOK_OUTFIT_FITS,
+  LOOK_OUTFIT_NECKLINES,
+  LOOK_OUTFIT_TOPS,
   LOOK_STRENGTHS,
   LookIntensity,
+  LookScope,
   LookTone,
 } from '@ddak/schema'
 
@@ -89,6 +96,9 @@ const GuideSectionGen = z.object({
    전에 sanitizeLookSpec 이 검증·정규화하고 깨진 색은 tone 기본색으로 바꾼다 */
 const HexGen = z.string().describe('#rrggbb 형식의 실제 발색 색')
 export const LookSpecGen = z.object({
+  scope: LookScope.describe(
+    '스타일링 범위 — 설문의 "어디까지 스타일링해 볼까요?" 답 그대로: 메이크업만=makeup | 메이크업 + 헤어=hair | 메이크업 + 헤어 + 옷차림=outfit. 그 질문이 없으면 makeup',
+  ),
   intensity: LookIntensity.describe(
     '전체 강도 — natural(데일리·출근·학교·"자연스럽게" 요구) | glam(파티·데이트·결혼식·화보·"또렷하게" 요구)',
   ),
@@ -127,6 +137,26 @@ export const LookSpecGen = z.object({
     highlight: z.boolean().describe('광대 위·콧대 하이라이터 여부'),
     note: z.string().describe('베이스 포인트 한 줄 (한국어)'),
   }),
+  hair: z
+    .object({
+      style: z.enum(LOOK_HAIR_STYLES).describe('헤어 스타일 — keep(그대로) | straight | wavy | curly | updo(올림) | ponytail'),
+      length: z.enum(LOOK_HAIR_LENGTHS).describe('기장 — keep | short | medium | long'),
+      color: z.string().describe("헤어 컬러 hex(#rrggbb) 또는 'keep'(그대로)"),
+      bangs: z.enum(LOOK_HAIR_BANGS).describe('앞머리 — keep | none(없음) | see-through(시스루) | full(풀뱅)'),
+      note: z.string().describe('헤어 포인트 한 줄 (한국어)'),
+    })
+    .optional()
+    .describe('scope 가 hair 또는 outfit 일 때만 채운다 — 메이크업만이면 생략'),
+  outfit: z
+    .object({
+      top: z.enum(LOOK_OUTFIT_TOPS).describe('상의 — keep(그대로) | tee | shirt | blouse | knit | jacket | dress'),
+      color: z.string().describe("상의 색 hex(#rrggbb) 또는 'keep'"),
+      fit: z.enum(LOOK_OUTFIT_FITS).describe('핏 — regular | oversized | fitted'),
+      neckline: z.enum(LOOK_OUTFIT_NECKLINES).describe('넥라인 — keep | crew | v | collar | off-shoulder'),
+      note: z.string().describe('옷차림 포인트 한 줄 (한국어)'),
+    })
+    .optional()
+    .describe('scope 가 outfit 일 때만 채운다 — 그 밖에는 생략'),
 })
 export type LookSpecGen = z.infer<typeof LookSpecGen>
 

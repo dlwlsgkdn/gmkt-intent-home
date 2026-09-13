@@ -109,6 +109,69 @@ const COVERAGE: Record<LookSpec['base']['coverage'], string> = {
   full: 'full-coverage',
 }
 
+const HAIR_STYLE: Record<NonNullable<LookSpec['hair']>['style'], string> = {
+  keep: '',
+  straight: 'sleek straight hair',
+  wavy: 'soft loose waves',
+  curly: 'defined curls',
+  updo: 'an elegant updo',
+  ponytail: 'a clean ponytail',
+}
+const HAIR_LENGTH: Record<NonNullable<LookSpec['hair']>['length'], string> = {
+  keep: '',
+  short: 'short (chin-length or above)',
+  medium: 'medium (shoulder-length)',
+  long: 'long (past the shoulders)',
+}
+const HAIR_BANGS: Record<NonNullable<LookSpec['hair']>['bangs'], string> = {
+  keep: '',
+  none: 'no bangs, forehead open',
+  'see-through': 'light see-through bangs',
+  full: 'full bangs',
+}
+const OUTFIT_TOP: Record<NonNullable<LookSpec['outfit']>['top'], string> = {
+  keep: '',
+  tee: 't-shirt',
+  shirt: 'button-up shirt',
+  blouse: 'blouse',
+  knit: 'knit top',
+  jacket: 'jacket over a simple top',
+  dress: 'dress',
+}
+const OUTFIT_FIT: Record<NonNullable<LookSpec['outfit']>['fit'], string> = {
+  regular: 'regular fit',
+  oversized: 'relaxed, oversized fit',
+  fitted: 'fitted silhouette',
+}
+const OUTFIT_NECKLINE: Record<NonNullable<LookSpec['outfit']>['neckline'], string> = {
+  keep: '',
+  crew: 'crew neckline',
+  v: 'V-neckline',
+  collar: 'collared neckline',
+  'off-shoulder': 'off-shoulder neckline',
+}
+
+/** 헤어 지시 한 줄 — 'keep' 요소는 건드리지 않는다고 명시. 전부 keep 이면 빈 문자열 */
+function hairPhrase(hair: NonNullable<LookSpec['hair']>): string {
+  const changes: string[] = []
+  if (hair.style !== 'keep') changes.push(HAIR_STYLE[hair.style])
+  if (hair.length !== 'keep') changes.push(`${HAIR_LENGTH[hair.length]} length`)
+  if (hair.color !== 'keep') changes.push(`hair color ${hair.color}`)
+  if (hair.bangs !== 'keep') changes.push(HAIR_BANGS[hair.bangs])
+  if (!changes.length) return ''
+  return `- Hair: restyle the hair to ${changes.join(', ')}; keep the hairline, head shape and face framing natural. Everything not listed stays as in the photo.`
+}
+
+/** 옷차림 지시 한 줄 — 상의만 바꾼다. 전부 keep 이면 빈 문자열 */
+function outfitPhrase(outfit: NonNullable<LookSpec['outfit']>): string {
+  const changes: string[] = []
+  if (outfit.top !== 'keep') changes.push(`a ${OUTFIT_FIT[outfit.fit]} ${OUTFIT_TOP[outfit.top]}`)
+  if (outfit.color !== 'keep') changes.push(`in ${outfit.color}`)
+  if (outfit.neckline !== 'keep') changes.push(`with a ${OUTFIT_NECKLINE[outfit.neckline]}`)
+  if (!changes.length) return ''
+  return `- Outfit: change only the clothing on the upper body to ${changes.join(' ')}; keep the body shape, pose, skin and background exactly as they are.`
+}
+
 function shadowPhrase(shadow: string[]): string {
   const [a, b, c] = shadow
   if (!a) return 'no eyeshadow — clean, bare eyelids'
@@ -138,12 +201,25 @@ function specPrompt(spec: LookSpec, color: string, title?: string): string {
       ? '- Overall intensity: high — evening / editorial level, about twice as strong as everyday makeup. The before/after difference must be unmistakable side by side; if in doubt, apply more pigment, never less.'
       : '- Overall intensity: medium — refined everyday makeup that still reads clearly as makeup next to the original, never a bare-face look.',
     '- Apply only what is listed: no extra eyeshadow, eyeliner, contour or highlighter beyond this specification.',
-    '',
-    'Keep exactly: the same person — identical facial features, face shape, eyes, nose, jawline, skin texture, moles and freckles; hair, clothing, pose, camera angle, lighting and background unchanged. Do not slim, reshape, smooth or beautify the face itself — only add the makeup above.',
-    '',
-    'Style: photorealistic makeup on real skin, not a filter or illustration.',
-    'Keep the original framing and aspect ratio.',
   ]
+  // 범위(scope) — 헤어·옷은 사양에 있을 때만 바꾸고, 그렇지 않으면 보존 목록에 남긴다
+  const hairLine = spec.hair ? hairPhrase(spec.hair) : ''
+  const outfitLine = spec.outfit ? outfitPhrase(spec.outfit) : ''
+  if (hairLine || outfitLine) {
+    lines.push('', 'Styling beyond makeup:')
+    if (hairLine) lines.push(hairLine)
+    if (outfitLine) lines.push(outfitLine)
+  }
+  const keepList = ['pose', 'camera angle', 'lighting', 'background']
+  if (!hairLine) keepList.unshift('hair')
+  if (!outfitLine) keepList.splice(hairLine ? 0 : 1, 0, 'clothing')
+  lines.push(
+    '',
+    `Keep exactly: the same person — identical facial features, face shape, eyes, nose, jawline, skin texture, moles and freckles; ${keepList.join(', ')} unchanged. Do not slim, reshape, smooth or beautify the face itself — only apply the changes above.`,
+    '',
+    'Style: photorealistic on real skin and real fabric, not a filter or illustration.',
+    'Keep the original framing and aspect ratio.',
+  )
   if (title) lines.push('', `Look name (for reference only): ${title}`)
   return lines.join('\n')
 }

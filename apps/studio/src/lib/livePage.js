@@ -15,15 +15,45 @@ export const PHOTO_ANSWER = '사진 제출됨'
 /** 룩 사양 → 화면 포인트 문구 — @ddak/pipeline look.ts `lookPointsOf` 의 거울(부위 라벨 + note).
  *  BFF 가 와이어 points 를 이 규칙으로 채워 보내므로 보통은 쓰이지 않고, 운영 콘솔 단계 단독 dry-run 처럼
  *  뼈대 생성물을 FE 가 직접 투영할 때만 폴백으로 쓴다. 규칙을 바꾸면 양쪽을 같이 맞출 것 */
-const LOOK_PART_LABELS = { lip: '립', cheek: '치크', eye: '눈', base: '베이스' }
+const LOOK_PART_LABELS = { lip: '립', cheek: '치크', eye: '눈', base: '베이스', hair: '헤어', outfit: '옷' }
+/** 범위가 그 부위를 포함하는가 — 누적: hair ⊃ makeup, outfit ⊃ hair (@ddak/pipeline look.ts scopeIncludes 거울) */
+export function scopeIncludes(scope, part) {
+  const s = scope || 'makeup'
+  if (part === 'hair') return s === 'hair' || s === 'outfit'
+  return s === 'outfit'
+}
 export function lookPointsOf(spec) {
   if (!spec) return []
-  return ['lip', 'cheek', 'eye', 'base']
+  return ['lip', 'cheek', 'eye', 'base', 'hair', 'outfit']
     .map((part) => {
+      if ((part === 'hair' || part === 'outfit') && !scopeIncludes(spec.scope, part)) return ''
       const note = String((spec[part] && spec[part].note) || '').trim()
       return note ? `${LOOK_PART_LABELS[part]} — ${note}` : ''
     })
     .filter(Boolean)
+}
+
+/** 스타일링 범위 질문(스캐폴드 고정, id s1)의 답 → scope. @ddak/pipeline survey-wire `lookScopeFromAnswer` 의 거울 —
+ *  선택지 제목이 곧 답이라 제목을 대조하고, 답이 없으면(옛 쓰레드) makeup */
+export const SCOPE_QUESTION_ID = 's1'
+export function lookScopeOfAnswers(answers) {
+  const raw = answers && answers[SCOPE_QUESTION_ID]
+  const label = String((Array.isArray(raw) ? raw[0] : raw) || '').split('|')[0].trim()
+  if (!label) return 'makeup'
+  if (label.includes('옷')) return 'outfit'
+  if (label.includes('헤어')) return 'hair'
+  return 'makeup'
+}
+
+/** 범위별 사진 안내 — 헤어까지면 머리 전체, 옷차림까지면 상반신이 보여야 정밀 렌더가 손댈 수 있다 */
+const PHOTO_PLACEHOLDER_BY_SCOPE = {
+  makeup: '정면 얼굴 사진을 선택해주세요',
+  hair: '머리 전체가 나온 정면 사진을 선택해주세요',
+  outfit: '상반신이 나온 정면 사진을 선택해주세요',
+}
+const PHOTO_HINT_BY_SCOPE = {
+  hair: '헤어까지 보려면 머리카락이 잘리지 않은 사진이 좋아요',
+  outfit: '옷차림까지 보려면 어깨와 상의가 보이는 사진이 좋아요',
 }
 
 /** 답 값이 실제로 그릴 수 있는 이미지인지 — 이어보기·관리 페이지에서는 표식만 남는다 */
@@ -38,7 +68,8 @@ export function splitIntro(intro) {
   return m ? { title: m[1].trim(), desc: m[2].trim() } : { title: text, desc: '' }
 }
 
-export function liveSurveyItems(page) {
+export function liveSurveyItems(page, opts = {}) {
+  const scope = opts.scope || 'makeup'
   const intro = splitIntro(page.intro)
   const items = [
     // 화면 헤더는 클라이언트 소유 — LLM 산출물과 무관하게 생성 시작부터 늘 그린다
@@ -63,7 +94,9 @@ export function liveSurveyItems(page) {
         type: 'surveyPhoto',
         props: {
           question: q.question,
-          placeholder: q.placeholder || '정면 얼굴 사진을 선택해주세요',
+          // 범위 질문(s1)이 앞에 있어 답이 이미 정해져 있다 — 헤어·옷차림까지면 안내를 그에 맞춘다
+          placeholder: q.placeholder || PHOTO_PLACEHOLDER_BY_SCOPE[scope] || PHOTO_PLACEHOLDER_BY_SCOPE.makeup,
+          ...(PHOTO_HINT_BY_SCOPE[scope] ? { hint: PHOTO_HINT_BY_SCOPE[scope] } : {}),
           iconLabel: '사진 아이콘',
           samples: '', // 기본 샘플 얼굴 4종
           photoUrl: '',
@@ -166,6 +199,9 @@ export function livePlanItems(page, opts = {}) {
            → 'precise'(정밀 렌더 적용). BEFORE(원본)는 어느 단계에서든 바로 보인다 */
         const stage = opts.lookStage || (opts.photoAfter ? 'landmark' : 'skeleton')
         const after = opts.photoAfter || photo
+        // 범위가 헤어·옷차림까지면 기기 합성은 메이크업만 그린다(랜드마크는 얼굴뿐) — 정밀 렌더 전엔 그 사실을 안내한다
+        const beyond = !!(section.spec && scopeIncludes(section.spec.scope, 'hair'))
+        const beyondLabel = section.spec && section.spec.scope === 'outfit' ? '헤어·옷차림' : '헤어'
         items.push({
           id: base,
           type: 'beforeAfter',
@@ -178,13 +214,15 @@ export function livePlanItems(page, opts = {}) {
             // 합성 전 CSS 프리셋 단계에서도 사양의 립 색을 쓴다 (tone 고정색 대신)
             tint: (!opts.photoAfter && section.spec && section.spec.lip && section.spec.lip.color) || '',
             beforeLabel: '내 사진',
-            afterLabel: stage === 'precise' ? 'AI 메이크업 · 정밀' : 'AI 메이크업',
+            afterLabel: stage === 'precise' ? (beyond ? 'AI 스타일링 · 정밀' : 'AI 메이크업 · 정밀') : 'AI 메이크업',
             afterState: stage,
             // 합성 결과(data URL)가 있을 때만 — CSS 프리셋 단계에서 저장하면 화장 안 된 원본이 나간다
             downloadable: !!opts.photoAfter,
             split: '50',
             hint: '',
-            disclaimer: 'AI가 올려 본 미리보기예요. 실제 발색은 피부톤 · 조명에 따라 다를 수 있어요.',
+            disclaimer:
+              'AI가 올려 본 미리보기예요. 실제 발색은 피부톤 · 조명에 따라 다를 수 있어요.' +
+              (beyond && stage !== 'precise' ? ` ${beyondLabel}은 정밀 렌더에서 반영돼요.` : ''),
           },
         })
       } else {
