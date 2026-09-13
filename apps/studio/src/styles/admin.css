@@ -3779,3 +3779,12 @@
 .sb-prompt-flow__proposal > details, .sb-prompt-flow__proposal > details summary { font-size: var(--sb-t-title); }
 .sb-prompt-flow .sb-prompt-flow__request textarea, .sb-prompt-flow .sb-flow-refine textarea { font-size: var(--sb-t-title); }
 .sb-scenario-preview__viewport { overscroll-behavior: contain; }
+
+/* 대시보드 — 추천 품질 신호 카드 (운영 인사이트 모드, 2026-09): 실주행 plan 스텝 llmMeta.quality 의 엔진별 평균.
+   항목 표는 실험 탭에서 쓰던 .sb-exp-quality 를 재사용하고, 카드 폭에 맞춰 자동 열 수로 편다 */
+.sb-admin-quality-card { margin-top: 16px; border-top: 4px solid var(--sb-ops-mint); }
+.sb-admin-quality-engine + .sb-admin-quality-engine { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--sb-n-100); }
+.sb-admin-quality-engine__head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.sb-admin-quality-engine__head b { font-size: var(--sb-t-body); font-weight: 500; color: var(--sb-ink); }
+.sb-admin-quality-engine__head span { font-size: var(--sb-t-caption); color: var(--sb-muted); }
+.sb-admin-quality-card .sb-exp-quality { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); border-top-color: var(--sb-n-100); }
