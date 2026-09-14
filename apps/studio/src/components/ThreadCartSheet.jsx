@@ -55,10 +55,19 @@ export function CartThumb({ entry, className }) {
 const MALL_TONE = { 'G마켓': 'gmarket', '지마켓': 'gmarket', '올리브영': 'oliveyoung' }
 const mallOf = (entry) => (entry.external ? entry.mall || '외부몰' : entry.mall || 'G마켓')
 
-/* 빈 파트 행 한 벌 — 세 상태 (2026-09): 담을 것이 있음(플러스 자리·「상품을 추가해 보세요」·쉐브론, 누르면 계획으로 = Figma
+/* 담을 수 없는 이유 문구 — 카드가 「담기」를 주지 않는 상품만 있는 단계(외부몰은 「상세보기」, 품절은 비활성) */
+function blockedText(part) {
+  const n = part.products ?? 0
+  if (n > 0 && part.external === n) return `외부몰 상품 ${n}개 · 담을 수 없어요`
+  if (n > 0 && part.soldOut === n) return '품절 상품뿐이라 담을 수 없어요'
+  return '담을 수 있는 상품이 없어요'
+}
+
+/* 빈 파트 행 한 벌 — 네 상태 (2026-09): 담을 것이 있음(플러스 자리·「상품을 추가해 보세요」·쉐브론, 누르면 계획으로 = Figma
    EmptyPartRow) · 찾는 중(라이브 조기 확정 뒤 그 단계의 자리에 검색 결과 대기 — ✦ 맥동, 누르면 계획으로) · 추천 상품 없음(상품이
-   하나도 안 실린 단계 — 플러스 없이 자리만). 담을 수 없는 단계까지 플러스 행으로 그리면 고를 상품이 있는 것처럼 보인다.
-   linked(파트가 계획 단계 링크)면 추천 상품 없음 행도 쉐브론을 달고 누르면 그 단계로 간다 — 안내는 계획 화면에서 읽을 수 있으니.
+   하나도 안 실린 단계 — 플러스 없이 자리만) · 담을 수 없음(추천은 있지만 전부 외부몰·품절이라 카드에 「담기」가 없는 단계 —
+   「외부몰 상품 n개 · 담을 수 없어요」, 플러스 없이 자리만). 담을 수 없는 단계까지 플러스 행으로 그리면 고를 상품이 있는 것처럼 보인다.
+   linked(파트가 계획 단계 링크)면 뒤의 두 상태도 쉐브론을 달고 누르면 그 단계로 간다 — 안내·상세보기는 계획 화면에 있으니.
    아니면 예전처럼 누를 곳이 없다 */
 function EmptyPartRow({ group, mode, onOpen, linked }) {
   const head = (
@@ -67,9 +76,9 @@ function EmptyPartRow({ group, mode, onOpen, linked }) {
       {group.stepBadge ? <span className="sb-cart-part__badge">{group.stepBadge}</span> : null}
     </span>
   )
-  const none = mode === 'none'
+  const none = mode === 'none' || mode === 'blocked' // 담을 것이 없는 두 상태 — 플러스 없이 자리만
   const pending = mode === 'pending'
-  const placeholder = pending ? '상품을 찾고 있어요…' : none ? '이 단계엔 추천 상품이 없어요' : '상품을 추가해 보세요'
+  const placeholder = pending ? '상품을 찾고 있어요…' : mode === 'none' ? '이 단계엔 추천 상품이 없어요' : mode === 'blocked' ? blockedText(group) : '상품을 추가해 보세요'
   if (none && !linked) {
     return (
       <div className="sb-cart-part__empty is-none">
@@ -123,9 +132,16 @@ export default function ThreadCartSheet({
     const key = plainStepTitle(s.title)
     if (!key) continue
     const known = typeof s.products === 'number'
+    // 담을 수 있는 상품 수 — 옛 재료(addable 없음)는 실린 상품 전부를 담을 수 있다고 본다
+    const addable = known ? (typeof s.addable === 'number' ? s.addable : s.products) : null
     if (seen.has(key)) {
       const part = seen.get(key)
-      if (known) part.products = (part.products ?? 0) + s.products
+      if (known) {
+        part.products = (part.products ?? 0) + s.products
+        part.addable = (part.addable ?? 0) + addable
+        part.external = (part.external ?? 0) + (s.external || 0)
+        part.soldOut = (part.soldOut ?? 0) + (s.soldOut || 0)
+      }
       part.pending = part.pending || !!s.pending
       continue
     }
@@ -135,6 +151,9 @@ export default function ThreadCartSheet({
       stepBadge: byStep.get(key)?.stepBadge || s.badge || '',
       entries: byStep.get(key)?.entries || [],
       products: known ? s.products : null, // null = 상품 수를 모르는 옛 재료 → 담을 수 있다고 본다
+      addable,
+      external: s.external || 0,
+      soldOut: s.soldOut || 0,
       pending: !!s.pending,
     }
     seen.set(key, part)
@@ -142,20 +161,26 @@ export default function ThreadCartSheet({
   }
   const leftovers = groups
     .filter((group) => !seen.has(plainStepTitle(group.step)))
-    .map((group) => ({ ...group, step: plainStepTitle(group.step), products: null, pending: false }))
+    .map((group) => ({ ...group, step: plainStepTitle(group.step), products: null, addable: null, external: 0, soldOut: 0, pending: false }))
   const parts = [...ordered, ...leftovers]
-  /* 빈 파트의 상태 — 찾는 중이면 pending, 실린 상품이 0개로 확인되면 none, 그 밖은 담을 수 있는 pick */
-  const emptyMode = (part) => (part.pending ? 'pending' : part.products === 0 ? 'none' : 'pick')
+  /* 빈 파트의 상태 — 찾는 중이면 pending, 실린 상품이 0개로 확인되면 none, 실렸지만 담을 수 있는 게 0개(전부 외부몰·품절)면
+     blocked, 그 밖은 담을 수 있는 pick */
+  const emptyMode = (part) =>
+    part.pending ? 'pending' : part.products === 0 ? 'none' : part.products != null && part.addable === 0 ? 'blocked' : 'pick'
   /* 파트 → 계획 단계 링크 (onOpenStep 이 있고 단계 아이템 id 를 아는 파트만). 없으면 빈 파트 행은 예전처럼 계획으로(onOpenPlan) */
   const linked = typeof onOpenStep === 'function'
   const openPart = (part) => (linked && part.id ? () => onOpenStep(part) : onOpenPlan)
   const filled = parts.filter((part) => part.entries.length > 0).length
-  /* 담을 수 있는 파트 — 추천 상품이 없다고 확인된 단계는 "k/n 파트"의 분모에서 뺀다 */
-  const fillable = parts.filter((part) => part.entries.length > 0 || emptyMode(part) !== 'none').length
-  /* 계획은 있는데 어느 단계에도 추천 상품이 없고 담은 것도 없다 — 파트 목록 대신 정직한 빈 상태 */
+  /* 담을 수 있는 파트 — 추천 상품이 없거나 전부 담을 수 없다고 확인된 단계는 "k/n 파트"의 분모에서 뺀다 */
+  const fillable = parts.filter((part) => part.entries.length > 0 || !['none', 'blocked'].includes(emptyMode(part))).length
+  /* 계획은 있는데 어느 단계에도 담을 수 있는 상품이 없고 담은 것도 없다 — 파트 목록 대신 정직한 빈 상태.
+     추천 자체가 없는 계획(검증 게이트 드롭 등)과, 추천은 있지만 전부 외부몰·품절이라 카드에 「담기」가 없는 계획을 가른다 */
   const nothingToPick = steps.length > 0 && !pending && entries.length === 0 && fillable === 0
+  const recommended = parts.reduce((sum, part) => sum + (part.products ?? 0), 0)
+  const externalOnly = recommended > 0 && parts.reduce((sum, part) => sum + (part.external || 0), 0) === recommended
+  const blockedPlan = nothingToPick && recommended > 0
   const summary = nothingToPick
-    ? '추천 상품 없음'
+    ? blockedPlan ? '담을 수 있는 상품 없음' : '추천 상품 없음'
     : steps.length
       ? `${filled}/${fillable} 파트 · ${entries.length}개 담음`
       : `${filled ? `${filled}파트 · ` : ''}${entries.length}개 담음`
@@ -192,6 +217,16 @@ export default function ThreadCartSheet({
             <p className="sb-cart-sheet__empty-hint">맞춤 계획에서 상품을 담으면 단계별로 여기에 모여요.</p>
           </div>
         )
+      ) : blockedPlan ? (
+        /* 추천은 있지만 전부 담을 수 없는 상품(외부몰 = 카드 버튼이 「상세보기」, 품절) — "상품을 추가해 보세요"라고 하지 않는다 */
+        <div className="sb-cart-sheet__empty">
+          <p className="sb-cart-sheet__empty-title">담을 수 있는 상품이 없어요</p>
+          <p className="sb-cart-sheet__empty-hint">
+            {externalOnly
+              ? `추천 상품 ${recommended}개가 모두 외부몰 상품이라 쓰레드에 담을 수 없어요. 계획 화면의 상세보기로 확인할 수 있어요.`
+              : `추천 상품 ${recommended}개가 모두 담을 수 없는 상태(외부몰·품절)예요. 계획 화면에서 확인할 수 있어요.`}
+          </p>
+        </div>
       ) : nothingToPick ? (
         /* 추천 상품이 전부 빠진 계획(검증 게이트 드롭 등) — 고를 상품이 있는 것처럼 빈 파트 행을 늘어놓지 않는다 */
         <div className="sb-cart-sheet__empty">

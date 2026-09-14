@@ -104,13 +104,23 @@ export function groupCartByStep(cart) {
    상품 카드 아이템에서, 라이브 쓰레드는 서버에 남은 계획 페이지(와이어)에서 표를 만든다 */
 const normName = (text) => String(text || '').trim().replace(/\s+/g, ' ')
 
-/* 계획 단계 목록 항목 — 담은 상품 시트의 파트 재료 { id, title, badge, products, pending? }:
+/* 계획 단계 목록 항목 — 담은 상품 시트의 파트 재료 { id, title, badge, products, addable, external, soldOut, pending? }:
    id = 그 단계 아이템의 id(시나리오는 planStep 아이템 id, 라이브는 guide 섹션의 투영 id) — 시트의 파트를 누르면 체험 화면이
-   이 id 의 래퍼(data-item-id)로 앵커 스크롤한다(2026-09), products = 그 단계에 실제로 실린 상품 카드 수(담을 것이 있는지),
-   pending = 라이브 조기 확정 뒤 그 단계의 상품·콘텐츠 자리에 아직 검색 결과가 안 옴. 시트는 이 둘로 「상품을 추가해 보세요」
-   (담을 것이 있음)·「찾는 중」·「추천 상품 없음」을 가른다 — 상품이 전부 검증 게이트에 걸려 빠진 계획에서도 고를 상품이
-   있는 것처럼 보이던 것(2026-09) */
-const stepEntry = (id, title, badge) => ({ id, title, badge, products: 0 })
+   이 id 의 래퍼(data-item-id)로 앵커 스크롤한다(2026-09), products = 그 단계에 실제로 실린 상품 카드 수, addable = 그중
+   카드가 「담기」를 주는 상품 수(담을 것이 있는지), external·soldOut = 담을 수 없는 이유별 수, pending = 라이브 조기 확정 뒤
+   그 단계의 상품·콘텐츠 자리에 아직 검색 결과가 안 옴. 시트는 이것으로 「상품을 추가해 보세요」(담을 것이 있음)·「찾는 중」·
+   「추천 상품 없음」·「외부몰 상품 n개 · 담을 수 없어요」를 가른다 — 상품이 전부 검증 게이트에 걸려 빠진 계획이나 추천이 전부
+   외부몰 상품(카드 버튼이 「상세보기」)인 계획에서도 고를 상품이 있는 것처럼 보이던 것(2026-09) */
+const stepEntry = (id, title, badge) => ({ id, title, badge, products: 0, addable: 0, external: 0, soldOut: 0 })
+
+/* 단계에 실린 상품 한 개를 센다 — 카드가 「담기」를 주는 상품만 addable (registry planComponents productCard 와 같은 규칙:
+   외부몰(external — 라이브 와이어는 mall 있음)은 버튼이 「상세보기/몰에서 찾기」, 품절(soldOut)은 버튼 비활성이라 쓰레드에 담을 수 없다) */
+const countProduct = (entry, { external = false, soldOut = false }) => {
+  entry.products += 1
+  if (external) entry.external += 1
+  else if (soldOut) entry.soldOut += 1
+  else entry.addable += 1
+}
 
 export function productLookupFromItems(items) {
   const map = new Map()
@@ -135,7 +145,7 @@ export function productLookupFromItems(items) {
     const at = topIndex.get(it.parentId || it.id)
     const owner = at == null ? null : ownerAt[at]
     // 숨긴 카드(또는 숨긴 컨테이너의 자식)는 실행 화면에 없으니 담을 수 있는 상품으로 세지 않는다
-    if (owner && !it.hidden && !top[at].hidden) owner.products += 1
+    if (owner && !it.hidden && !top[at].hidden) countProduct(owner, { external: !!it.props.external, soldOut: !!it.props.soldOut })
     const key = normName(it.props.name)
     if (!map.has(key)) map.set(key, { ...cartEntryFromProduct(it.props), step: owner?.title || '', stepBadge: owner?.badge || '' })
   }
@@ -168,7 +178,7 @@ export function productLookupFromPlanPage(page, opts = {}) {
     if (section.kind !== 'products') continue
     for (const product of section.products || []) {
       if (!product?.name) continue
-      if (current) current.products += 1
+      if (current) countProduct(current, { external: !!product.mall }) // mall 있음 = 외부몰 (livePage 투영과 같은 규칙)
       const key = normName(product.name)
       if (map.has(key)) continue
       const entry = { name: String(product.name).trim(), step: current?.title || '' }
