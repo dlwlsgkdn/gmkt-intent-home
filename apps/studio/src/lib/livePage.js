@@ -286,8 +286,9 @@ export function livePlanItems(page, opts = {}) {
             summary: '',
             emoji: product.imageUrl ? '' : '🧴', // 썸네일 없는 상품만 이모지 목업 블록으로 렌더
             gradient: '',
-            // mall 있음 = 웹 검색으로 찾은 외부몰 상품 (외부몰 태그·담기불가), 없음 = 데모 카탈로그(지마켓)
-            external: !!product.mall,
+            // mall 있음 = 웹 검색으로 찾은 상품, 없음 = 데모 카탈로그(지마켓). 지마켓에서 찾은 웹 상품은 외부몰이 아니다(v25 —
+            // 지마켓 50 : 외부몰 50). 어느 쪽이든 담기는 된다(2026-09-14) — external 은 몰 표기·담기 버튼 툴팁만 가른다
+            external: !!product.mall && !/지마켓|g마켓|gmarket/i.test(product.mall),
             urlKind: product.urlKind || 'pdp', // search = PDP 를 못 찾아 몰 검색 결과를 여는 상품 (「몰에서 찾기」)
             mall: product.mall || '',
             url: product.url || '', // 상세보기 사이드 패널이 iframe으로 연다

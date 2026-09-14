@@ -55,18 +55,16 @@ export function CartThumb({ entry, className }) {
 const MALL_TONE = { 'G마켓': 'gmarket', '지마켓': 'gmarket', '올리브영': 'oliveyoung' }
 const mallOf = (entry) => (entry.external ? entry.mall || '외부몰' : entry.mall || 'G마켓')
 
-/* 담을 수 없는 이유 문구 — 카드가 「담기」를 주지 않는 상품만 있는 단계(외부몰은 「상세보기」, 품절은 비활성) */
+/* 담을 수 없는 이유 문구 — 카드가 「담기」를 주지 않는 상품(품절 = 버튼 비활성)만 있는 단계. 외부몰 상품은 2026-09-14부터 담긴다 */
 function blockedText(part) {
   const n = part.products ?? 0
-  if (n > 0 && part.external === n) return `외부몰 상품 ${n}개 · 담을 수 없어요`
-  if (n > 0 && part.soldOut === n) return '품절 상품뿐이라 담을 수 없어요'
-  return '담을 수 있는 상품이 없어요'
+  return n > 0 && part.soldOut === n ? `품절 상품 ${n}개 · 담을 수 없어요` : '담을 수 있는 상품이 없어요'
 }
 
 /* 빈 파트 행 한 벌 — 네 상태 (2026-09): 담을 것이 있음(플러스 자리·「상품을 추가해 보세요」·쉐브론, 누르면 계획으로 = Figma
    EmptyPartRow) · 찾는 중(라이브 조기 확정 뒤 그 단계의 자리에 검색 결과 대기 — ✦ 맥동, 누르면 계획으로) · 추천 상품 없음(상품이
-   하나도 안 실린 단계 — 플러스 없이 자리만) · 담을 수 없음(추천은 있지만 전부 외부몰·품절이라 카드에 「담기」가 없는 단계 —
-   「외부몰 상품 n개 · 담을 수 없어요」, 플러스 없이 자리만). 담을 수 없는 단계까지 플러스 행으로 그리면 고를 상품이 있는 것처럼 보인다.
+   하나도 안 실린 단계 — 플러스 없이 자리만) · 담을 수 없음(추천은 있지만 전부 품절이라 카드에 「담기」가 없는 단계 —
+   「품절 상품 n개 · 담을 수 없어요」, 플러스 없이 자리만). 담을 수 없는 단계까지 플러스 행으로 그리면 고를 상품이 있는 것처럼 보인다.
    linked(파트가 계획 단계 링크)면 뒤의 두 상태도 쉐브론을 달고 누르면 그 단계로 간다 — 안내·상세보기는 계획 화면에 있으니.
    아니면 예전처럼 누를 곳이 없다 */
 function EmptyPartRow({ group, mode, onOpen, linked }) {
@@ -139,7 +137,6 @@ export default function ThreadCartSheet({
       if (known) {
         part.products = (part.products ?? 0) + s.products
         part.addable = (part.addable ?? 0) + addable
-        part.external = (part.external ?? 0) + (s.external || 0)
         part.soldOut = (part.soldOut ?? 0) + (s.soldOut || 0)
       }
       part.pending = part.pending || !!s.pending
@@ -152,7 +149,6 @@ export default function ThreadCartSheet({
       entries: byStep.get(key)?.entries || [],
       products: known ? s.products : null, // null = 상품 수를 모르는 옛 재료 → 담을 수 있다고 본다
       addable,
-      external: s.external || 0,
       soldOut: s.soldOut || 0,
       pending: !!s.pending,
     }
@@ -161,9 +157,9 @@ export default function ThreadCartSheet({
   }
   const leftovers = groups
     .filter((group) => !seen.has(plainStepTitle(group.step)))
-    .map((group) => ({ ...group, step: plainStepTitle(group.step), products: null, addable: null, external: 0, soldOut: 0, pending: false }))
+    .map((group) => ({ ...group, step: plainStepTitle(group.step), products: null, addable: null, soldOut: 0, pending: false }))
   const parts = [...ordered, ...leftovers]
-  /* 빈 파트의 상태 — 찾는 중이면 pending, 실린 상품이 0개로 확인되면 none, 실렸지만 담을 수 있는 게 0개(전부 외부몰·품절)면
+  /* 빈 파트의 상태 — 찾는 중이면 pending, 실린 상품이 0개로 확인되면 none, 실렸지만 담을 수 있는 게 0개(전부 품절)면
      blocked, 그 밖은 담을 수 있는 pick */
   const emptyMode = (part) =>
     part.pending ? 'pending' : part.products === 0 ? 'none' : part.products != null && part.addable === 0 ? 'blocked' : 'pick'
@@ -174,10 +170,9 @@ export default function ThreadCartSheet({
   /* 담을 수 있는 파트 — 추천 상품이 없거나 전부 담을 수 없다고 확인된 단계는 "k/n 파트"의 분모에서 뺀다 */
   const fillable = parts.filter((part) => part.entries.length > 0 || !['none', 'blocked'].includes(emptyMode(part))).length
   /* 계획은 있는데 어느 단계에도 담을 수 있는 상품이 없고 담은 것도 없다 — 파트 목록 대신 정직한 빈 상태.
-     추천 자체가 없는 계획(검증 게이트 드롭 등)과, 추천은 있지만 전부 외부몰·품절이라 카드에 「담기」가 없는 계획을 가른다 */
+     추천 자체가 없는 계획(검증 게이트 드롭 등)과, 추천은 있지만 전부 품절이라 카드에 「담기」가 없는 계획을 가른다 */
   const nothingToPick = steps.length > 0 && !pending && entries.length === 0 && fillable === 0
   const recommended = parts.reduce((sum, part) => sum + (part.products ?? 0), 0)
-  const externalOnly = recommended > 0 && parts.reduce((sum, part) => sum + (part.external || 0), 0) === recommended
   const blockedPlan = nothingToPick && recommended > 0
   const summary = nothingToPick
     ? blockedPlan ? '담을 수 있는 상품 없음' : '추천 상품 없음'
@@ -218,14 +213,10 @@ export default function ThreadCartSheet({
           </div>
         )
       ) : blockedPlan ? (
-        /* 추천은 있지만 전부 담을 수 없는 상품(외부몰 = 카드 버튼이 「상세보기」, 품절) — "상품을 추가해 보세요"라고 하지 않는다 */
+        /* 추천은 있지만 전부 담을 수 없는 상품(품절 — 시나리오 목업) — "상품을 추가해 보세요"라고 하지 않는다 */
         <div className="sb-cart-sheet__empty">
           <p className="sb-cart-sheet__empty-title">담을 수 있는 상품이 없어요</p>
-          <p className="sb-cart-sheet__empty-hint">
-            {externalOnly
-              ? `추천 상품 ${recommended}개가 모두 외부몰 상품이라 쓰레드에 담을 수 없어요. 계획 화면의 상세보기로 확인할 수 있어요.`
-              : `추천 상품 ${recommended}개가 모두 담을 수 없는 상태(외부몰·품절)예요. 계획 화면에서 확인할 수 있어요.`}
-          </p>
+          <p className="sb-cart-sheet__empty-hint">{`추천 상품 ${recommended}개가 모두 품절이라 담을 수 없어요. 계획 화면에서 확인할 수 있어요.`}</p>
         </div>
       ) : nothingToPick ? (
         /* 추천 상품이 전부 빠진 계획(검증 게이트 드롭 등) — 고를 상품이 있는 것처럼 빈 파트 행을 늘어놓지 않는다 */

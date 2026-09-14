@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common'
-import type { ContentsSectionGen, ProductsSectionGen } from '@ddak/pipeline'
+import { gmarketThumbnailOf, type ContentsSectionGen, type ProductsSectionGen } from '@ddak/pipeline'
 
 /*
  * 썸네일 보강 — 검색 단계가 확인하지 못한 imageUrl 을 페이지의 og:image 로 채운다 (2026-09 분석: 웹 상품 썸네일 0%,
@@ -7,8 +7,12 @@ import type { ContentsSectionGen, ProductsSectionGen } from '@ddak/pipeline'
  * 유튜브 자동 썸네일·매체명 자리 카드로 받는다. 결과는 인메모리 캐시(10분).
  *  - 콘텐츠: 티스토리·워드프레스·다음 블로그처럼 서버가 og:image 를 렌더하는 곳은 그림이 붙는다. 유튜브는 FE 가 이미 자동 썸네일을
  *    만들고, 틱톡은 FE 가 oEmbed 로 받는다 — 여기서는 건너뛴다.
- *  - 상품: PDP 주소(urlKind=pdp)만. 올리브영은 클라이언트 렌더라 og:image 가 기본 그림(img_oy_default)이고 쿠팡은 403 이라
- *    건너뛴다 — 지마켓 item 페이지 같은 곳만 실효가 있다. 몰 검색 링크(urlKind=search)는 그림이 없으니 시도하지 않는다.
+ *  - 상품: PDP 주소(urlKind=pdp)만. 지마켓은 상품 번호로 gdimg 썸네일이 결정적이라 fetch 없이 바로 채운다(@ddak/pipeline
+ *    gmarketThumbnailOf — 2026-09-14, 지마켓 50 : 외부몰 50 구성의 지마켓 몫은 언제나 그림이 있다). **올리브영은 건너뛴다**: 데스크톱
+ *    페이지의 og:image 는 기본 그림(img_oy_default)이고, 모바일 UA 로 받으면 m.oliveyoung.co.kr 이 실제 상품 이미지를 og:image 로
+ *    주지만 그건 curl 얘기다 — Node(https·undici)의 TLS 클라이언트 지문으로는 헤더·ALPN·TLS 버전을 어떻게 맞춰도 403 「잠시만
+ *    기다려 주세요」 봇 도전 페이지가 온다(2026-09-14 실측). 지문 위장은 하지 않는다. 쿠팡도 403. 몰 검색 링크(urlKind=search)는
+ *    그림이 없으니 시도하지 않는다.
  * ENRICH_FETCH=0 이면 전부 건너뛴다 (오프라인 e2e).
  */
 const ITEM_TIMEOUT_MS = 1500
@@ -17,7 +21,8 @@ const CACHE_MS = 10 * 60_000
 const MAX_HTML = 300_000
 const SKIP_HOSTS = [/(^|\.)youtube\.com$/, /(^|\.)youtu\.be$/, /(^|\.)tiktok\.com$/, /(^|\.)oliveyoung\.co\.kr$/, /(^|\.)coupang\.com$/, /(^|\.)instagram\.com$/]
 const DEFAULT_IMAGE = /default|placeholder|logo|favicon|blank|noimage|no-image/i
-const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36 ddak-bff/enrich'
+// 모바일 사파리 UA — 몰·블로그가 모바일 페이지로 넘기며 og:image 를 준다 (지마켓 item 페이지도 모바일로 넘어가 gdimg 를 준다)
+const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
 
 @Injectable()
 export class EnrichService {
@@ -94,21 +99,28 @@ export class EnrichService {
     return filled
   }
 
-  /** 웹 상품(PDP 주소)의 빈 imageUrl 을 og:image 로 */
+  /** 웹 상품(PDP 주소)의 빈 imageUrl — 지마켓은 상품 번호로 즉시, 그 밖은 og:image 로 */
   async enrichProducts(sections: ProductsSectionGen[]): Promise<number> {
     let filled = 0
+    const pending: ProductsSectionGen['webProducts'] = []
+    for (const section of sections) {
+      for (const product of section.webProducts) {
+        if (product.imageUrl || product.urlKind === 'search') continue
+        const derived = gmarketThumbnailOf(product.url)
+        if (derived) {
+          product.imageUrl = derived
+          filled += 1
+        } else pending.push(product)
+      }
+    }
     await this.withBudget(
-      sections.flatMap((section) =>
-        section.webProducts
-          .filter((product) => !product.imageUrl && product.urlKind !== 'search')
-          .map((product) => async () => {
-            const image = await this.ogImage(product.url)
-            if (image) {
-              product.imageUrl = image
-              filled += 1
-            }
-          }),
-      ),
+      pending.map((product) => async () => {
+        const image = await this.ogImage(product.url)
+        if (image) {
+          product.imageUrl = image
+          filled += 1
+        }
+      }),
     )
     if (filled) this.logger.log(`상품 썸네일 보강 ${filled}건`)
     return filled

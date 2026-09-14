@@ -125,6 +125,36 @@ function productGuardDrop(product: CatalogProduct, guard: GuardContext | undefin
   return null
 }
 
+/** 지마켓 상품 번호(goodscode) — item.gmarket.co.kr/Item?goodscode=… · m.gmarket.co.kr/vi/product/… (대소문자 무관) */
+export function gmarketGoodsCodeOf(raw: string | URL): string | null {
+  const url = typeof raw === 'string' ? parseHttpUrl(raw) : raw
+  if (!url || !/(^|\.)gmarket\.co\.kr$/i.test(url.hostname)) return null
+  for (const [key, value] of url.searchParams) if (key.toLowerCase() === 'goodscode' && /^\d{6,}$/.test(value)) return value
+  const m = url.pathname.match(/\/vi\/product\/(\d{6,})/i) ?? url.pathname.match(/\/item\/(\d{6,})/i)
+  return m ? m[1] : null
+}
+
+/** 지마켓 썸네일 — 카탈로그와 같은 규격 gdimg.gmarket.co.kr/{goodscode}/still/280. 상품 번호를 아는 지마켓 상품은 페이지를 안 받아도
+ * 썸네일이 결정적으로 나온다(2026-09-14 — 웹 검색 상품의 썸네일이 거의 비어 있던 것의 지마켓 몫) */
+export function gmarketThumbnailOf(raw: string | URL): string | null {
+  const code = gmarketGoodsCodeOf(raw)
+  return code ? `https://gdimg.gmarket.co.kr/${code}/still/280` : null
+}
+
+/** 판매처 이름 정규화 — 주소 호스트가 말해 주는 몰은 그 이름으로 통일한다(모델이 "G마켓"·"Gmarket"·"올영"처럼 제각각 적는다 —
+ * 화면의 몰 톤·담은 상품 시트·지마켓 50 : 외부몰 50 구성 확인이 같은 이름을 본다). 그 밖의 몰은 모델이 적은 이름 그대로 */
+const MALL_BY_HOST: [RegExp, string][] = [
+  [/(^|\.)gmarket\.co\.kr$/i, '지마켓'],
+  [/(^|\.)oliveyoung\.co\.kr$/i, '올리브영'],
+  [/(^|\.)coupang\.com$/i, '쿠팡'],
+  [/(^|\.)musinsa\.com$/i, '무신사'],
+  [/(^|\.)hwahae\.co\.kr$/i, '화해'],
+]
+export function normalizeMallName(mall: string, url: URL): string {
+  for (const [re, name] of MALL_BY_HOST) if (re.test(url.hostname)) return name
+  return mall.trim() || '외부몰'
+}
+
 export function parseHttpUrl(raw: string): URL | null {
   try {
     const url = new URL(raw)
@@ -194,8 +224,10 @@ export function groundProductsSection(
       })
       return
     }
-    // 썸네일도 http(s) 검증 통과분만 — 실패해도 상품은 싣는다 (FE가 이모지 목업 폴백)
-    const imageUrl = parseHttpUrl(w.imageUrl) ? w.imageUrl : undefined
+    // 썸네일도 http(s) 검증 통과분만 — 실패해도 상품은 싣는다 (FE가 이모지 목업 폴백). 프로토콜 생략(//…)은 https 로 받고,
+    // 지마켓 상품은 상품 번호로 gdimg 썸네일을 결정적으로 채운다 (썸네일 보강 fetch 가 실패해도 지마켓 몫은 언제나 그림이 있다)
+    const rawImage = w.imageUrl.trim().startsWith('//') ? `https:${w.imageUrl.trim()}` : w.imageUrl
+    const imageUrl = parseHttpUrl(rawImage) ? rawImage : gmarketThumbnailOf(url) ?? undefined
     const priceUnknown = !(Number.isFinite(w.price) && w.price > 0)
     const admitted = admit(
       {
@@ -206,7 +238,7 @@ export function groundProductsSection(
         ...(priceUnknown ? { priceUnknown: true } : {}),
         tags: w.tags,
         url: w.url,
-        mall: w.mall.trim() || '외부몰',
+        mall: normalizeMallName(w.mall, url),
         ...(searchLink ? { urlKind: 'search' as const } : {}),
         ...(imageUrl ? { imageUrl } : {}),
       },

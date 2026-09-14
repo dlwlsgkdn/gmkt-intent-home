@@ -500,7 +500,7 @@ export const PLAN_COMPONENTS = {
         defaultValue: 'pdp',
         options: [
           { value: 'pdp', label: '상품 상세 페이지' },
-          { value: 'search', label: '몰 검색 결과 (PDP 못 찾음 — 「몰에서 찾기」)' },
+          { value: 'search', label: '몰 검색 결과 (PDP 못 찾음 — 상세보기 패널이 몰 검색으로 열림)' },
         ],
       },
       { key: 'mall', label: '몰 이름 (예: 올리브영)', kind: 'text' },
@@ -572,27 +572,18 @@ export const PLAN_COMPONENTS = {
                 <span className="sb-product-card2__price sb-product-card2__price--unknown">가격 확인 필요</span>
               )}
             </div>
-            {/* 외부몰 상품은 지마켓 장바구니에 못 담는다 — 회색으로 죽어 있던 "담기불가" 대신 같은 보라
-                버튼으로 상세보기(PDP 패널)를 연다. Figma 카드는 어느 상품이든 보라 CartButton이라 색은 같고
-                동작만 갈린다 */}
+            {/* 추천 상품은 어느 몰이든 쓰레드에 담을 수 있다(2026-09-14) — 쓰레드의 담은 상품은 지마켓 장바구니가 아니라 이 체험의
+                픽 목록이고, Figma 카드도 어느 상품이든 보라 CartButton 이다. 외부몰 상품의 옛 「상세보기/몰에서 찾기」 버튼은 담기로
+                바뀌었고, 상세 페이지·몰 검색은 썸네일 클릭(상세보기 패널)이 연다. 품절(시나리오 목업, Figma 5-4)만 비활성 */}
             {soldOut ? (
               <button type="button" className="sb-cart-btn is-soldout" disabled title="지금은 담을 수 없는 상품이에요">
                 품절
-              </button>
-            ) : p.external ? (
-              <button
-                type="button"
-                className="sb-cart-btn"
-                title={p.urlKind === 'search' ? '상세 페이지를 못 찾아 몰 검색 결과를 열어요' : '외부몰 상품은 상세 페이지에서 담아 주세요'}
-                onClick={openDetail}
-              >
-                {p.urlKind === 'search' ? '몰에서 찾기' : '상세보기'}
               </button>
             ) : (
               <button
                 type="button"
                 className={'sb-cart-btn' + (added ? ' is-added' : '')}
-                title="쓰레드에 담기"
+                title={p.external ? `${mall} 상품을 쓰레드에 담기 — 상세 페이지는 썸네일을 눌러 열어요` : '쓰레드에 담기'}
                 onClick={() => {
                   /* 이름만 아니라 카드 재료(썸네일·가격·몰)와 자리(itemId → 계획 단계)를 함께 실어 쇼핑 쓰레드 패널이
                      썸네일 동그라미·파트별 상세 시트를 그린다 (lib/cart.js) */
