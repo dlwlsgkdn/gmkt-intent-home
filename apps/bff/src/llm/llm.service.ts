@@ -17,17 +17,28 @@ import {
   type SurveyPageWire,
 } from '@ddak/schema'
 import {
+  HOME_PERSONALIZE_SYSTEM,
+  HomePersonalizeGen,
   IntentGen,
   LlmGenerationError,
   PROMPT_DEFS,
   PROMPT_VERSION,
+  PlanContentsGen,
   PlanProductsGen,
   PlanSkeletonGen,
+  SEARCH_ROUTE_SYSTEM,
+  SEARCH_SUGGEST_SYSTEM,
+  SearchRouteGen,
+  SearchSuggestGen,
   StructuredStreamParser,
   SurveyGen,
+  buildHomePersonalizeRequest,
   buildIntentRequest,
+  buildPlanContentsRequest,
   buildPlanProductsRequest,
   buildPlanSkeletonRequest,
+  buildSearchRouteRequest,
+  buildSearchSuggestRequest,
   buildSurveyRequest,
   renderSystemTemplate,
   type ConstraintLedger,
@@ -64,6 +75,8 @@ const MODEL_CACHE_MS = 30_000
 const WEB_SEARCH_BASIC_MODELS = new Set(['claude-haiku-4-5'])
 /** 생성 1회당 웹 검색 상한 — 상품·콘텐츠 확인용 소수 검색만 허용 (비용·지연 가드) */
 const WEB_SEARCH_MAX_USES = 4
+/** 참고 콘텐츠 단계(5c)의 검색 예산 — 영상 1회 + 게시글 1회 + 보완 1회 */
+const WEB_SEARCH_CONTENTS_MAX_USES = 3
 /** 서버 도구 루프가 pause_turn으로 멈췄을 때 이어붙이는 최대 횟수 */
 const MAX_CONTINUATIONS = 3
 
@@ -139,7 +152,8 @@ export class LlmService implements LlmPort {
   private requireClient(): Anthropic {
     if (this.client === undefined) {
       try {
-        this.client = new Anthropic()
+        // 429·5xx(529 overloaded)·연결 오류는 SDK 가 지수 백오프로 재시도한다 — 기본 2회를 3회로 (필수 단계는 llm/retry.ts 가 한 번 더)
+        this.client = new Anthropic({ maxRetries: 3 })
       } catch {
         this.client = null
       }
@@ -160,6 +174,33 @@ export class LlmService implements LlmPort {
       system: await this.resolveSystem('intent'),
       effort: 'low' as const,
       user: buildIntentRequest(intent),
+    })
+  }
+
+  /** 홈 검색창 진입 분기 — 검색어를 DDAK(설문→계획)/SRP 로 가른다. 작고 빠른 구조화 호출(스트리밍 없음).
+   * 실패 처리는 호출자(SearchController)가 휴리스틱으로 대신 답한다 */
+  async routeSearch(query: string, profile?: Profile): Promise<GenResult<SearchRouteGen>> {
+    return this.generate('검색 라우팅', SearchRouteGen, {
+      system: { text: SEARCH_ROUTE_SYSTEM, custom: false },
+      effort: 'low' as const,
+      user: buildSearchRouteRequest(query, profile),
+    })
+  }
+
+  /** 홈 검색창 AI 검색어 추천 — 입력 중인 검색어에 상황·피부·계절을 덧붙인 자연어 검색어 3개 */
+  async suggestSearch(query: string, profile?: Profile): Promise<GenResult<SearchSuggestGen>> {
+    return this.generate('검색어 추천', SearchSuggestGen, {
+      system: { text: SEARCH_SUGGEST_SYSTEM, custom: false },
+      effort: 'low' as const,
+      user: buildSearchSuggestRequest(query, profile),
+    })
+  }
+  /** 홈 개인화 — 인사말 + 개인화 추천 검색어(보라 칩). 작고 빠른 구조화 호출(스트리밍 없음). 실패 처리는 호출자(휴리스틱 대체) */
+  async personalizeHome(input: Parameters<typeof buildHomePersonalizeRequest>[0]): Promise<GenResult<HomePersonalizeGen>> {
+    return this.generate('홈 개인화', HomePersonalizeGen, {
+      system: { text: HOME_PERSONALIZE_SYSTEM, custom: false },
+      effort: 'low' as const,
+      user: buildHomePersonalizeRequest(input),
     })
   }
 
@@ -298,6 +339,28 @@ export class LlmService implements LlmPort {
       effort: 'high' as const,
       user: buildPlanProductsRequest(intent, survey, answers, profile, revision, ledger),
       webSearch: true,
+      webSearchMaxUses: WEB_SEARCH_MAX_USES,
+      stream,
+    })
+  }
+
+  /** 계획 5c — 참고 콘텐츠 (검색 포함·medium): 웹 게시글·영상 섹션 1~2개. 상품 단계와 분리된 검색 예산(3회)으로 병렬로 돈다
+   * (2026-09 — 한 호출에 몰아 두면 상품 검색이 예산을 다 써 콘텐츠가 굶었다). 실패는 호출자가 콘텐츠 없이 진행한다 */
+  async generatePlanContents(
+    intent: string,
+    survey: SurveyPageWire,
+    answers: Answer[],
+    profile?: Profile,
+    stream?: LlmStreamHandlers,
+    revision?: PlanRevisionContext,
+    ledger?: ConstraintLedger | null,
+  ): Promise<GenResult<PlanContentsGen>> {
+    return this.generate('계획 참고 콘텐츠 생성', PlanContentsGen, {
+      system: await this.resolveSystem('plan-contents'),
+      effort: 'medium' as const,
+      user: buildPlanContentsRequest(intent, survey, answers, profile, revision, ledger),
+      webSearch: true,
+      webSearchMaxUses: WEB_SEARCH_CONTENTS_MAX_USES,
       stream,
     })
   }
@@ -313,9 +376,10 @@ export class LlmService implements LlmPort {
     const supportsEffort = MODEL_OPTIONS.find((option) => option.id === model)?.supportsEffort !== false
     // 웹 검색은 서버 도구 — 선언만 하면 검색·결과 소비를 API가 서버 쪽 루프로 처리한다.
     // 구세대 모델(haiku)은 동적 필터링 변형(20260209)을 지원하지 않아 기본 변형으로 선언한다
+    const maxUses = req.webSearchMaxUses ?? WEB_SEARCH_MAX_USES
     const webSearchTool = WEB_SEARCH_BASIC_MODELS.has(model)
-      ? { type: 'web_search_20250305' as const, name: 'web_search' as const, max_uses: WEB_SEARCH_MAX_USES }
-      : { type: 'web_search_20260209' as const, name: 'web_search' as const, max_uses: WEB_SEARCH_MAX_USES }
+      ? { type: 'web_search_20250305' as const, name: 'web_search' as const, max_uses: maxUses }
+      : { type: 'web_search_20260209' as const, name: 'web_search' as const, max_uses: maxUses }
     // 컴포넌트 경계 파서 — pause_turn 연속 호출에 걸쳐 같은 인스턴스에 델타를 누적한다.
     // 스트리밍은 미리보기일 뿐, 권위는 아래의 전체 파싱·검증(parseOutput)이다
     const parser = req.stream

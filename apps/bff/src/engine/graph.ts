@@ -11,10 +11,13 @@ import {
   buildSurveyPage,
   checkObjective,
   completeSearchSection,
+  consolidateSmallProductSections,
   groundContentsSection,
   groundProductsSection,
   isSlotKind,
   mergePlanSections,
+  skeletonSectionWire,
+  planQualityOf,
   surveyStreamHandlers,
   type GroundingDrop,
   type GuardContext,
@@ -23,6 +26,8 @@ import {
 import type { CoreClientService } from '../core-client.service'
 import type { KnowledgeService } from '../llm/knowledge.service'
 import type { LlmService } from '../llm/llm.service'
+import { LLM_STAGE_RETRY_DELAY_MS, retryLlmStage } from '../llm/retry'
+import type { EnrichService } from '../threads/enrich.service'
 import { SEQ, combineMeta } from '../threads/thread-io'
 import { ThreadGraphState, type ThreadGraphStateType } from './state'
 import type { ChunkWriter, PlanStreamCoordinator } from './stream'
@@ -31,7 +36,7 @@ import type { ChunkWriter, PlanStreamCoordinator } from './stream'
  * 쓰레드 그래프 (DESIGN-PIPELINE-LANGGRAPH.md §1) — 전략 문서 8단계의 StateGraph 구현.
  *
  *   START → ledger(2) → survey(3) → [interrupt: 답변 대기] → ledgerUpdate(2')
- *         → skeleton(5a) ∥ products(4+5b) → verify(6) → record(7) → END
+ *         → skeleton(5a) ∥ products(4+5b) ∥ contents(5c) → verify(6) → record(7) → END
  *
  * 노드는 얇은 어댑터다: 생성·검증 로직은 @ddak/pipeline과 LlmService(LlmPort)가 소유하고,
  * 노드는 상태를 읽어 호출하고 결과를 상태에 쓴다. 스트리밍은 custom 스트림 writer로,
@@ -44,7 +49,7 @@ import type { ChunkWriter, PlanStreamCoordinator } from './stream'
 /** awaitAnswers interrupt의 재개 값 — 계획 요청 본문이 그대로 실린다 */
 export type PlanResume = { answers: Answer[]; profile?: Profile; feedback?: ThreadStageFeedback }
 
-export type GraphDeps = { llm: LlmService; core: CoreClientService; knowledge: KnowledgeService }
+export type GraphDeps = { llm: LlmService; core: CoreClientService; knowledge: KnowledgeService; enrich: EnrichService }
 
 const logger = new Logger('ThreadGraph')
 
@@ -83,7 +88,7 @@ function groundLogged(
 
 /** 상태에서 확장 게이트 컨텍스트 구성 — 스트리밍(products)과 최종 검증(verify)이 같은 값을 본다 */
 function guardOf(state: ThreadGraphStateType): GuardContext {
-  return { blocklist: state.blocklist ?? [], ledger: state.ledger ?? null }
+  return { blocklist: state.blocklist ?? [], ledger: state.ledger ?? null, contentBlockHosts: state.contentBlockHosts ?? [] }
 }
 
 export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSaver) {
@@ -109,10 +114,12 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
   /** 2단계: 제약 원장 조립 — 의도 해석·프로필·답변 + 지식 소스(트렌드 키워드 KV·직전 쓰레드
    * 피드백 압축). 블록리스트도 여기서 굳혀 스트리밍·최종 검증이 같은 목록을 본다 */
   const ledgerNode = async (state: ThreadGraphStateType) => {
-    const [trendKeywords, recentFeedback, blocklist] = await Promise.all([
+    const [trendKeywords, recentFeedback, blocklist, contentBlockHosts, selections] = await Promise.all([
       deps.knowledge.trendKeywords(),
       deps.knowledge.recentFeedbackFor(state.userId, state.threadId),
       deps.knowledge.blocklist(),
+      deps.knowledge.contentBlockHosts(),
+      deps.knowledge.recentSelectionsFor(state.userId, state.threadId),
     ])
     return {
       ledger: assembleLedger({
@@ -122,8 +129,12 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
         intentProfile: state.intentProfile ?? undefined,
         trendKeywords,
         recentFeedback,
+        selectionSignals: selections.selectionSignals,
+        recentRecommended: selections.recentRecommended,
+        recentContentUrls: selections.recentContentUrls,
       }),
       blocklist,
+      contentBlockHosts,
     }
   }
 
@@ -168,7 +179,8 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
     const revision: PlanRevisionContext | undefined = state.feedback
       ? { feedback: state.feedback, prevPlan: state.prevPlan ?? null }
       : undefined
-    const result = await deps.llm.generatePlanSkeleton(
+    // 뼈대는 실패하면 계획 전체가 죽는 유일한 호출 — SDK 재시도 뒤에도 일시 오류면 잠깐 쉬고 한 번 더 (llm/retry.ts)
+    const result = await retryLlmStage(() => deps.llm.generatePlanSkeleton(
       state.intent,
       state.survey as SurveyPageWire,
       state.answers as Answer[],
@@ -181,8 +193,9 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
         onElement: (element, index) => {
           const parsed = PlanSkeletonSectionGen.safeParse(element)
           if (!parsed.success) return
-          // 상품·콘텐츠 자리는 내보내지 않는다 — 검색 단계 결과가 이 인덱스를 차지한다
-          if (!isSlotKind(parsed.data.kind)) coord.section(parsed.data as PlanSectionWire, index, true)
+          // 상품·콘텐츠 자리는 내보내지 않는다(null) — 검색 단계 결과가 이 인덱스를 차지한다
+          const wire = skeletonSectionWire(parsed.data)
+          if (wire) coord.section(wire, index, true)
         },
         // 자라는 중인 섹션 — 제목이 나오기 시작하면 토큰 단위로 같은 index에 재전송한다
         onElementPartial: (element, index) => {
@@ -199,7 +212,12 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
       },
       revision,
       state.ledger,
-    )
+    ), {
+      onRetry: (e, attempt) => {
+        logger.warn(`계획 뼈대 생성 실패 — ${LLM_STAGE_RETRY_DELAY_MS}ms 뒤 재시도 ${attempt}회: ${e.message}`)
+        coord?.status('일시적인 오류가 있어 계획 뼈대를 다시 만들고 있어요…')
+      },
+    })
     // 자리 인덱스는 스트림 조각이 아니라 최종 검증본 기준으로 확정한다 (조각 파싱 누락 보정)
     coord?.skeletonReady(result.content)
     return { skeleton: result.content, skeletonMeta: result.meta }
@@ -239,11 +257,54 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
         revision,
         state.ledger,
       )
+      // 썸네일 보강(og:image, 예산 3초) — 최종본에만 실린다 (스트림 조각은 이미 나갔다)
+      await deps.enrich.enrichProducts(result.content.sections.filter((s) => s.kind === 'products'))
       return { searchSections: result.content.sections, productsMeta: result.meta, productsFailed: null }
     } catch (e) {
       const message = (e as Error)?.message ?? String(e)
-      logger.warn(`계획 검색 단계 실패 — 상품·콘텐츠 없이 계획 반환: ${message}`)
+      logger.warn(`계획 검색 단계 실패 — 상품 없이 계획 반환: ${message}`)
       return { searchSections: [], productsMeta: null, productsFailed: message }
+    }
+  }
+
+  /** 5c: 참고 콘텐츠 (LLM, 웹 검색 별도 예산) — 상품 단계와 분리해 병렬로 돈다 (2026-09). 실패해도 계획을 죽이지 않는다 */
+  const contentsNode = async (state: ThreadGraphStateType, config: LangGraphRunnableConfig) => {
+    const coord = planCoordOf(config)
+    coord?.bind(getWriter(config))
+    const revision: PlanRevisionContext | undefined = state.feedback
+      ? { feedback: state.feedback, prevPlan: state.prevPlan ?? null }
+      : undefined
+    try {
+      const result = await deps.llm.generatePlanContents(
+        state.intent,
+        state.survey as SurveyPageWire,
+        state.answers as Answer[],
+        state.profile ?? undefined,
+        coord && {
+          arrayKey: 'sections',
+          onElement: (element, index) => {
+            const parsed = PlanSearchSectionGen.safeParse(element)
+            if (!parsed.success || parsed.data.kind !== 'contents') return
+            const section = groundLogged(parsed.data, index, false, guardOf(state))
+            if (section) coord.searchArrived(section, index)
+          },
+          onElementPartial: (element, index) => {
+            const gen = completeSearchSection(element)
+            if (!gen || gen.kind !== 'contents') return
+            const section = groundLogged(gen, index, true, guardOf(state))
+            if (section) coord.searchPartial(section, index)
+          },
+          onSearch: (query) => coord.search(query),
+        },
+        revision,
+        state.ledger,
+      )
+      await deps.enrich.enrichContents(result.content.sections)
+      return { contentSections: result.content.sections, contentsMeta: result.meta, contentsFailed: null }
+    } catch (e) {
+      const message = (e as Error)?.message ?? String(e)
+      logger.warn(`계획 참고 콘텐츠 단계 실패 — 콘텐츠 없이 계획 반환: ${message}`)
+      return { contentSections: [], contentsMeta: null, contentsFailed: message }
     }
   }
 
@@ -253,10 +314,14 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
     const skeleton = state.skeleton
     if (!skeleton) throw new Error('계획 뼈대가 없습니다 — skeleton 노드가 실패했는데 verify에 도달했습니다')
     const dropLog: GroundingDrop[] = []
-    const generated = (state.searchSections ?? [])
+    const contents = state.contentSections ?? []
+    // 5c 가 콘텐츠를 만들었으면 상품 호출(옛 재정의 프롬프트)이 덧붙인 콘텐츠 섹션은 버린다 — 자리는 5c 가 채운다
+    const fromProducts = (state.searchSections ?? []).filter((s) => !(contents.length && s.kind === 'contents'))
+    const generated = [...fromProducts, ...contents]
       .map((s, i) => groundLogged(s, i, false, guardOf(state), (d) => dropLog.push(d)))
       .filter((s): s is PlanSectionWire => s !== null)
-    const sections = mergePlanSections(skeleton.sections, generated)
+    // 1개짜리 상품 섹션은 이웃 상품 섹션에 합친다 (카드 한 장짜리 트랙 방지)
+    const sections = consolidateSmallProductSections(mergePlanSections(skeleton.sections, generated))
     if (!sections.length) {
       sections.push({ kind: 'guide', title: '준비된 안내', body: skeleton.summary })
     }
@@ -274,7 +339,10 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
       deps.core.upsertStep(state.threadId, SEQ.plan, {
         stage: 'plan',
         payload: { page: state.page, ledger: state.ledger ?? null, dropLog: state.dropLog ?? [] },
-        llmMeta: combineMeta(state.skeletonMeta!, state.productsMeta ?? null, 'langgraph'),
+        llmMeta: combineMeta(state.skeletonMeta!, state.productsMeta ?? null, 'langgraph', {
+          contents: state.contentsMeta ?? null,
+          quality: planQualityOf(state.page!, state.dropLog ?? []),
+        }),
       }),
       deps.core.updateThread(state.threadId, { status: 'planning' }),
     ])
@@ -292,6 +360,7 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
     .addNode('s2-ledger-update', ledgerUpdateNode)
     .addNode('s5a-skeleton', skeletonNode)
     .addNode('s5b-products', productsNode)
+    .addNode('s5c-contents', contentsNode)
     .addNode('s6-verify', verifyNode)
     .addNode('s7-record', recordNode)
     .addEdge(START, 's0-objective')
@@ -302,7 +371,8 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
     .addEdge('await-answers', 's2-ledger-update')
     .addEdge('s2-ledger-update', 's5a-skeleton')
     .addEdge('s2-ledger-update', 's5b-products')
-    .addEdge(['s5a-skeleton', 's5b-products'], 's6-verify')
+    .addEdge('s2-ledger-update', 's5c-contents')
+    .addEdge(['s5a-skeleton', 's5b-products', 's5c-contents'], 's6-verify')
     .addEdge('s6-verify', 's7-record')
     .addEdge('s7-record', END)
     .compile({ checkpointer })

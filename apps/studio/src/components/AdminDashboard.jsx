@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { loadTaggingReview, unitStatusKey } from '../lib/taggingCatalog.js'
 import { statusLabel } from '../lib/adminReport.jsx'
 import { TREND_KEYWORDS } from '../lib/trendKeywords.js'
+import { fetchEngineMetrics } from '../lib/adminApi.js'
 
 const ADMIN_USER = 'ops-playground'
 
@@ -9,6 +10,19 @@ const pct = (value, total) => (total > 0 ? Math.round((value / total) * 100) : 0
 
 export default function AdminDashboard({ api, threads, feedback, loading, mode, onModeChange }) {
   const [tagSummary, setTagSummary] = useState({ counts: {}, total: 0 })
+  /* 추천 품질 신호 — 실주행 plan 스텝 llmMeta(엔진 각인·phases·quality)의 엔진별 집계 (BFF /metrics/engines).
+     구 실험 탭(ExperimentStudio)이 콘솔 개편으로 마운트되지 않아 계기판이 갈 곳을 잃었던 것을 대시보드 운영 인사이트로 옮겼다 (2026-09) */
+  const [engineMetrics, setEngineMetrics] = useState(null)
+  useEffect(() => {
+    let alive = true
+    fetchEngineMetrics()
+      .then((data) => { if (alive) setEngineMetrics(data) })
+      .catch(() => { if (alive) setEngineMetrics({ engines: [], error: true }) })
+    return () => { alive = false }
+  }, [])
+  const qualityEngines = (engineMetrics?.engines || []).filter((m) => m.quality && m.quality.plans > 0)
+  const secOf = (ms) => (ms == null ? '—' : `${Math.round(ms / 1000)}s`)
+  const rateOf = (value) => (value == null ? '—' : `${Math.round(value * 100)}%`)
   useEffect(() => {
     let alive = true
     /* 사내망 밖(응답 실패)·fetch 자체 실패(reject) 둘 다 여기로 모인다 — 예시 데이터로 타일을 채운다 */
@@ -235,6 +249,45 @@ export default function AdminDashboard({ api, threads, feedback, loading, mode, 
           )}
         </section>
       </div>
+
+      {mode === 'ops' && (
+        <section className="sb-admin-card sb-admin-quality-card">
+          <div className="sb-admin-sectionhead">
+            <div>
+              <h2>추천 품질 신호</h2>
+              <p>실주행 계획의 상품·콘텐츠 품질 요약입니다. 최근 계획 중 품질 요약을 남긴 것(v22 이후 생성분)만 엔진별 평균이고, 화살표가 좋은 방향이에요.</p>
+            </div>
+            <button type="button" className="sb-btn sb-btn--ghost sb-btn--tiny" onClick={() => api.setAdminTab('pipeline')}>생성 흐름 보기</button>
+          </div>
+          {engineMetrics == null ? (
+            <p className="sb-admin__muted">품질 요약을 불러오는 중…</p>
+          ) : engineMetrics.error ? (
+            <p className="sb-admin__muted">품질 요약을 불러오지 못했어요. 잠시 후 다시 열어 주세요.</p>
+          ) : qualityEngines.length === 0 ? (
+            <div className="sb-admin-empty-good"><b>아직 품질 요약을 남긴 계획이 없어요.</b><span>v22 배포 이후 생성된 계획부터 여기에 쌓여요.</span></div>
+          ) : (
+            qualityEngines.map((m) => (
+              <div key={m.engine} className="sb-admin-quality-engine">
+                <div className="sb-admin-quality-engine__head">
+                  <b>{m.engine}</b>
+                  <span>계획 {m.quality.plans}개 · 평균 지연 뼈대 {secOf(m.avgSkeletonMs)} · 상품 {secOf(m.avgProductsMs)} · 콘텐츠 {secOf(m.avgContentsMs)}</span>
+                </div>
+                <dl className="sb-exp-quality">
+                  <div><dt>섹션당 상품</dt><dd>{m.quality.avgProductsPerSection ?? '—'}</dd></div>
+                  <div><dt>1개짜리 섹션 ↓</dt><dd>{rateOf(m.quality.singleProductSectionRate)}</dd></div>
+                  <div><dt>웹 상품 PDP ↑</dt><dd>{rateOf(m.quality.webPdpRate)}</dd></div>
+                  <div><dt>상품 썸네일 ↑</dt><dd>{rateOf(m.quality.productThumbnailRate)}</dd></div>
+                  <div><dt>가격 미확인 ↓</dt><dd>{rateOf(m.quality.priceUnknownRate)}</dd></div>
+                  <div><dt>콘텐츠 누락 ↓</dt><dd>{rateOf(m.quality.contentMissingRate)}</dd></div>
+                  <div><dt>콘텐츠 항목</dt><dd>{m.quality.avgContentItems ?? '—'}</dd></div>
+                  <div><dt>콘텐츠 썸네일 ↑</dt><dd>{rateOf(m.quality.contentThumbnailRate)}</dd></div>
+                  <div><dt>드롭/계획</dt><dd>{m.quality.avgDrops ?? '—'}</dd></div>
+                </dl>
+              </div>
+            ))
+          )}
+        </section>
+      )}
 
       {mode === 'lab' && (
         <section className="sb-admin-card sb-admin-release-flow">

@@ -327,8 +327,8 @@
 .sb-thread-panel--right {
   top: 0;
   right: 0;
-  height: 100vh;
-  width: min(320px, 86vw);
+  height: 100%;
+  width: min(320px, 86%);
   border-left: 1px solid rgba(31, 41, 51, 0.1);
   box-shadow: -24px 0 60px -30px rgba(15, 23, 42, 0.18);
   animation: sb-thread-in-right 0.24s ease;
@@ -336,8 +336,8 @@
 .sb-thread-panel--left {
   top: 0;
   left: 0;
-  height: 100vh;
-  width: min(320px, 86vw);
+  height: 100%;
+  width: min(320px, 86%);
   border-right: 1px solid rgba(31, 41, 51, 0.1);
   box-shadow: 24px 0 60px -30px rgba(15, 23, 42, 0.18);
   animation: sb-thread-in-left 0.24s ease;
@@ -346,8 +346,8 @@
   left: 50%;
   bottom: 0;
   transform: translateX(-50%);
-  width: min(360px, 94vw);
-  height: 72vh;
+  width: min(360px, 94%);
+  height: 72%;
   border: 1px solid rgba(31, 41, 51, 0.1);
   border-bottom: none;
   border-radius: 24px 24px 0 0;
@@ -836,6 +836,40 @@
 .sb-cart-part__placeholder { font-size: var(--sb-t-body); font-weight: 400; line-height: 20px; letter-spacing: -0.3px; color: var(--dk-subtle); }
 .sb-cart-part__chevron { flex: 0 0 auto; display: inline-flex; width: 24px; height: 24px; color: var(--dk-subtle); }
 .sb-cart-part__chevron svg { width: 24px; height: 24px; }
+/* 빈 파트 행의 두 변주 (2026-09) — 찾는 중: 라이브 조기 확정 뒤 그 단계의 자리에 검색 결과 대기, ✦ 가 맥동(모션 최소화는
+   base.css 전역 규칙이 걷어낸다) · 추천 상품 없음: 담을 것이 없으니 플러스·쉐브론 없이 자리만 비워 두고 누를 수도 없다 */
+.sb-cart-part__empty.is-pending .sb-cart-part__empty-thumb {
+  border-color: var(--dk-brand-soft);
+  background: var(--dk-brand-soft);
+  color: var(--dk-brand);
+  font-size: var(--sb-t-body);
+  animation: sb-cart-pending 1.4s ease-in-out infinite;
+}
+@keyframes sb-cart-pending {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.sb-cart-part__empty.is-none { cursor: default; }
+.sb-cart-part__empty.is-none:hover { background: none; }
+.sb-cart-part__empty.is-none .sb-cart-part__empty-thumb { background: transparent; }
+/* 파트 → 계획 단계 링크 (체험 화면의 시트, 2026-09): 파트 머리가 버튼이 되고 오른쪽 끝에 쉐브론, 추천 상품 없음 행도 누를 수 있다
+   — 누르면 시트가 닫히고 계획이 그 단계로 앵커 스크롤한다 */
+.sb-cart-part__head--link {
+  width: 100%;
+  border: 0;
+  border-radius: 8px 8px 0 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--sb-dur) var(--sb-ease);
+}
+.sb-cart-part__head--link:hover { background: var(--dk-brand-soft); }
+.sb-cart-part__head--link .sb-cart-part__chevron { margin-left: auto; width: 18px; height: 18px; }
+.sb-cart-part__head--link .sb-cart-part__chevron svg { width: 18px; height: 18px; }
+.sb-cart-part__empty.is-none.is-link { cursor: pointer; }
+.sb-cart-part__empty.is-none.is-link:hover { background: var(--dk-brand-soft); }
 .sb-cart-sheet__cta {
   width: 100%;
   height: 40px;
@@ -931,3 +965,74 @@
   cursor: pointer;
 }
 .sb-thread__more-btn:hover { border-color: var(--dk-brand); color: var(--dk-brand); }
+
+/* ── 추천 검색어 칩 (2026-09) — 검색창 아래 두 톤(Figma Search 랜딩 ChipSection): 보라 = 내 쇼핑 쓰레드로 만든 개인화
+   자연어 검색어(자연어 칩 #F3F0FF/#7950F2), 파랑 = 전체 사용자 인기 검색어 `#키워드`(키워드 칩 #E3ECFF/#3E7CF8 — 위 기본 톤).
+   내용은 hooks/useHomePersonalize 가 채우고 바뀌면 크로스페이드(.sb-xfade)로 갈아끼운다 ── */
+.sb-recochips { width: 100%; }
+.clean-tag-row .suggestion-tag.sb-chip-reco--personal { background: var(--dk-brand-tint); color: var(--dk-brand); }
+.clean-tag-row .suggestion-tag.sb-chip-reco--personal:hover { background: var(--dk-brand-soft); color: var(--dk-brand-deep); }
+/* 캔버스 자리표시자 — 실제 문구는 홈에서 채워진다 */
+.clean-tag-row .suggestion-tag.sb-chip-reco--sample { opacity: 0.6; border: 1px dashed currentColor !important; background: transparent; cursor: default; }
+
+/* ── 크로스페이드 (components/ui/CrossFade.jsx) — 기본 인사말·휴리스틱 칩 위에 개인화 결과가 겹쳐 떠오른다: 층을 grid 한 칸에
+   포개 전환 중 높이는 큰 쪽을 따르고, 떠나는 층은 제자리에서 흐려진다 ── */
+.sb-xfade { display: grid; }
+.sb-xfade__layer { grid-area: 1 / 1; min-width: 0; }
+.sb-xfade__layer.is-leaving { pointer-events: none; animation: sb-xfade-out 0.45s var(--sb-ease) forwards; }
+.sb-xfade__layer.is-entering { animation: sb-xfade-in 0.7s var(--sb-ease) both; }
+@keyframes sb-xfade-out { to { opacity: 0; } }
+@keyframes sb-xfade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ── 담은 상품 시트 — 체험 화면 플로팅 버튼용 추가분(2026-09): 계획 단계·담은 상품이 아직 없을 때의 빈 상태와,
+   푸터 CTA 밑 「다른 쇼핑 쓰레드 보기」 링크 ── */
+.sb-cart-sheet__empty { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 40px 16px 36px; text-align: center; }
+.sb-cart-sheet__empty-title { margin: 0; font-size: 15px; font-weight: 400; line-height: 22px; color: var(--dk-ink); }
+.sb-cart-sheet__empty-hint { margin: 0; font-size: var(--sb-t-small); font-weight: 300; line-height: 18px; color: var(--dk-muted); word-break: keep-all; }
+.sb-cart-sheet__link {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px 0 6px; /* 밑 여백 — 기기 프레임의 홈 인디케이터 바로 위에 글자가 닿지 않게 */
+  border: 0;
+  background: none;
+  font-size: var(--sb-t-small);
+  font-weight: 400;
+  line-height: 18px;
+  color: var(--dk-muted);
+  text-align: center;
+  cursor: pointer;
+}
+.sb-cart-sheet__link:hover { color: var(--dk-brand-deep); }
+
+/* ── 검색 페이지 3영역 역할 분리 (2026-09) — 인사말 = 상태 인사, 플레이스홀더 = 입력 형식 안내, 칩 = 다음 행동 선택지 ── */
+/* 인사말 속 쓰레드 언급(「…」) — 누르면 그 쓰레드 이어보기. 인사말 서체·크기를 그대로 잇고 밑줄만 단다 */
+.beauty-greeting__thread {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-bottom: 1.5px solid var(--dk-brand-added);
+  border-radius: 0;
+  background: none;
+  color: var(--dk-brand);
+  font: inherit;
+  line-height: inherit;
+  cursor: pointer;
+  transition: border-color var(--sb-dur) var(--sb-ease);
+}
+.beauty-greeting__thread:hover { border-bottom-color: var(--dk-brand); }
+/* 추천 칩 역할 캡션 — 묶음마다 11px 회색 한 줄(홈 히어로에서는 칩처럼 가운데) */
+.sb-recochips__groups { display: flex; flex-direction: column; gap: 14px; }
+.sb-recochips__group { display: flex; flex-direction: column; gap: 6px; }
+.sb-recochips__caption {
+  font-size: var(--sb-t-micro);
+  font-weight: 400;
+  line-height: 14px;
+  letter-spacing: -0.2px;
+  color: var(--dk-muted);
+}
+.sb-home-hero .sb-recochips__caption { text-align: center; }

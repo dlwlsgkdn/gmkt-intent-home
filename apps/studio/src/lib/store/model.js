@@ -11,22 +11,30 @@ export function uid() {
   return Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4)
 }
 
-/* 캔버스/플레이어 기기 프리셋 (논리 픽셀 너비) */
-/* 폭은 실기기 CSS 뷰포트(px) 기준. 기존 key는 저장된 시나리오가 참조하므로 바꾸지 말 것 */
+/* 캔버스/플레이어 기기 프리셋 (논리 픽셀 너비·높이) */
+/* 폭·높이는 실기기 CSS 뷰포트(px) 기준. 기존 key는 저장된 시나리오가 참조하므로 바꾸지 말 것.
+   frame = 실행 화면을 감싸는 기기 껍데기 종류 (components/DeviceFrame.jsx FRAME_SPECS 의 키):
+   iphone-island(다이나믹 아일랜드) · iphone-home(홈 버튼) · android(펀치홀) · android-ultra(각진 울트라) ·
+   fold(펼친 폴드 — 가운데 접힘선) · tablet · browser(데스크톱 브라우저 창). 빌더 캔버스는 폭만 쓴다 */
 export const DEVICE_PRESETS = [
-  { key: 'desktop', label: '데스크톱', w: 720, icon: '🖥️' },
-  { key: 'galaxy-fold-cover', label: '갤럭시 Z 폴드 커버 (344)', w: 344, icon: '📱' },
-  { key: 'galaxy', label: '갤럭시 S (360)', w: 360, icon: '📱' },
-  { key: 'iphone-se', label: 'iPhone SE (375)', w: 375, icon: '📱' },
-  { key: 'galaxy-s-ultra', label: '갤럭시 S 울트라 (384)', w: 384, icon: '📱' },
-  { key: 'iphone-15', label: 'iPhone 15 (390)', w: 390, icon: '📱' },
-  { key: 'iphone-16-pro', label: 'iPhone 16 Pro (402)', w: 402, icon: '📱' },
-  { key: 'galaxy-a-flip', label: '갤럭시 플립·A·노트 (412)', w: 412, icon: '📱' },
-  { key: 'iphone-pro-max', label: 'iPhone Pro Max (430)', w: 430, icon: '📱' },
-  { key: 'iphone-16-pro-max', label: 'iPhone 16 Pro Max (440)', w: 440, icon: '📱' },
-  { key: 'galaxy-fold-open', label: '갤럭시 Z 폴드 펼침 (690)', w: 690, icon: '📱' },
-  { key: 'tablet', label: '태블릿 (768)', w: 768, icon: '💻' },
+  { key: 'desktop', label: '데스크톱 (720)', w: 720, h: 900, frame: 'browser', icon: '🖥️' },
+  { key: 'galaxy-fold-cover', label: '갤럭시 Z 폴드 커버 (344)', w: 344, h: 882, frame: 'android', icon: '📱' },
+  { key: 'galaxy', label: '갤럭시 S (360)', w: 360, h: 780, frame: 'android', icon: '📱' },
+  { key: 'iphone-se', label: 'iPhone SE (375)', w: 375, h: 667, frame: 'iphone-home', icon: '📱' },
+  { key: 'galaxy-s-ultra', label: '갤럭시 S 울트라 (384)', w: 384, h: 824, frame: 'android-ultra', icon: '📱' },
+  { key: 'iphone-15', label: 'iPhone 15 (390)', w: 390, h: 844, frame: 'iphone-island', icon: '📱' },
+  { key: 'iphone-16-pro', label: 'iPhone 16 Pro (402)', w: 402, h: 874, frame: 'iphone-island', icon: '📱' },
+  { key: 'galaxy-a-flip', label: '갤럭시 플립·A·노트 (412)', w: 412, h: 915, frame: 'android', icon: '📱' },
+  { key: 'iphone-pro-max', label: 'iPhone Pro Max (430)', w: 430, h: 932, frame: 'iphone-island', icon: '📱' },
+  { key: 'iphone-16-pro-max', label: 'iPhone 16 Pro Max (440)', w: 440, h: 956, frame: 'iphone-island', icon: '📱' },
+  { key: 'galaxy-fold-open', label: '갤럭시 Z 폴드 펼침 (690)', w: 690, h: 829, frame: 'fold', icon: '📱' },
+  { key: 'tablet', label: '태블릿 (768)', w: 768, h: 1024, frame: 'tablet', icon: '💻' },
 ]
+
+/* 뷰어 기기 찾기 — 없는 키(구 저장값)는 iPhone 15 로 */
+export function viewerDeviceOf(key) {
+  return DEVICE_PRESETS.find((d) => d.key === key) || DEVICE_PRESETS.find((d) => d.key === 'iphone-15') || DEVICE_PRESETS[0]
+}
 
 /* 시나리오 칩 색상 프리셋 */
 export const CHIP_COLORS = [

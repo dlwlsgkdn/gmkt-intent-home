@@ -1,5 +1,5 @@
 import { DEVICE_PRESETS, normalizeItems, normalizeScenario, uid } from './model.js'
-import { DEFAULT_EXPLORE, DEFAULT_KEYWORDS, DEFAULT_PROFILE, exploreItemsFrom } from './defaults.js'
+import { DEFAULT_EXPLORE, DEFAULT_KEYWORDS, DEFAULT_PROFILE, DEFAULT_SEARCH_PLACEHOLDERS, exploreItemsFrom } from './defaults.js'
 import { REMOTE_ENABLED } from '../remote.js'
 
 /*
@@ -93,6 +93,23 @@ export function saveKeywords(list) {
   writeJson(KEYWORDS_KEY, list)
 }
 
+/* ── 홈 검색창 최근 검색어 — 프로필(계정)별 {[accountId]: [{ q, at }]} 최신순, 최대 10개.
+   기기 전용(계정 동기화 기계 밖) — 검색어는 기기 사용자의 흔적이라 서버 행에 싣지 않는다 ── */
+const RECENT_SEARCH_KEY = 'ddak-recent-searches-v1'
+export const RECENT_SEARCH_LIMIT = 10
+
+export function loadRecentSearches(accountId) {
+  const all = readJson(RECENT_SEARCH_KEY, null)
+  const list = all && typeof all === 'object' ? all[accountId || 'default'] : null
+  return Array.isArray(list) ? list.filter((it) => it && typeof it.q === 'string' && it.q) : []
+}
+
+export function saveRecentSearches(accountId, list) {
+  const all = readJson(RECENT_SEARCH_KEY, null)
+  const base = all && typeof all === 'object' ? all : {}
+  writeJson(RECENT_SEARCH_KEY, { ...base, [accountId || 'default']: (list || []).slice(0, RECENT_SEARCH_LIMIT) })
+}
+
 /* ── 계정 ── */
 export function createAccount(partial = {}) {
   const explore = JSON.parse(JSON.stringify(DEFAULT_EXPLORE))
@@ -106,6 +123,39 @@ export function createAccount(partial = {}) {
     createdAt: new Date().toISOString(),
     ...partial,
   }
+}
+
+/* 추천 검색어 칩(2026-09 신설 탐색 컴포넌트 — 보라 개인화·파랑 인기) 을 기존 탐색 페이지에 **한 번만** 끼워 넣는다:
+   발행 칩 목록 바로 뒤(없으면 검색창 뒤, 그것도 없으면 맨 뒤). 저자가 나중에 지워도 되살아나지 않도록 explore.seeded 표식을
+   남긴다(표식은 계정 셸 행에 실려 동기화된다). normalizeItems 처럼 읽을 때마다 거치는 lazy 이관이라 별도 일괄 마이그레이션은 없다.
+   바뀐 게 없으면 같은 참조를 돌려준다 — 서버 행 채택 기준선이 정규화 뒤 값이라 미저장 상태를 만들지 않는다 */
+function seedRecommendChips(explore) {
+  const seeded = explore.seeded && typeof explore.seeded === 'object' ? explore.seeded : {}
+  if (seeded.recommendChips) return explore
+  const items = Array.isArray(explore.items) ? explore.items : []
+  if (items.some((it) => it && it.type === 'recommendChips')) return { ...explore, seeded: { ...seeded, recommendChips: true } }
+  const after = (type) => items.findIndex((it) => it && it.type === type && !it.parentId)
+  const anchor = after('scenarioChips') >= 0 ? after('scenarioChips') : after('searchBox')
+  const next = [...items]
+  next.splice(anchor >= 0 ? anchor + 1 : next.length, 0, { id: uid(), type: 'recommendChips', props: {} })
+  return { ...explore, items: next, seeded: { ...seeded, recommendChips: true } }
+}
+
+/* 검색창 예문 로테이션(2026-09) — 기존 탐색 페이지의 검색창 아이템에 예문 목록이 없으면 **한 번만** 채운다: 저자가 적어 둔 플레이스홀더를
+   첫 줄에 두고 기본 예문을 뒤에 붙인다(중복 제외). explore.seeded.searchPlaceholders 표식 — 저자가 목록을 비워도 되살아나지 않는다 */
+function seedSearchPlaceholders(explore) {
+  const seeded = explore.seeded && typeof explore.seeded === 'object' ? explore.seeded : {}
+  if (seeded.searchPlaceholders) return explore
+  const items = Array.isArray(explore.items) ? explore.items : []
+  let changed = false
+  const next = items.map((it) => {
+    if (!it || it.type !== 'searchBox' || String(it.props?.placeholders || '').trim()) return it
+    const own = String(it.props?.placeholder || '').trim()
+    const list = [own, ...DEFAULT_SEARCH_PLACEHOLDERS].filter((text, i, arr) => text && arr.indexOf(text) === i)
+    changed = true
+    return { ...it, props: { ...it.props, placeholders: list.join('\n') } }
+  })
+  return { ...explore, items: changed ? next : items, seeded: { ...seeded, searchPlaceholders: true } }
 }
 
 /* 계정 보정: 탐색 페이지에 아이템이 없으면 기존 설정으로부터 만들고,
@@ -122,6 +172,7 @@ function normalizeAccount(raw) {
     const items = normalizeItems(account.explore.items)
     if (items !== account.explore.items) account.explore = { ...account.explore, items }
   }
+  account.explore = seedSearchPlaceholders(seedRecommendChips(account.explore))
   account.scenarios = Array.isArray(account.scenarios) ? account.scenarios.map(normalizeScenario) : []
   return account
 }

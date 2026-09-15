@@ -734,7 +734,8 @@
 
 .sb-pipe-layout {
   display: grid;
-  grid-template-columns: minmax(280px, 340px) 420px minmax(0, 1fr);
+  /* 흐름 컬럼 600px — 5단계 병렬 블록이 세 레인(170px × 3 + 간격 20 × 2 = 550)이라 카드 패딩까지 담는다 (2026-09 5c 추가) */
+  grid-template-columns: minmax(280px, 340px) 600px minmax(0, 1fr);
   grid-template-areas: 'knowledge flow side';
   gap: 20px;
   align-items: start;
@@ -1826,9 +1827,11 @@
 .sb-flow-wrap {
   overflow-x: auto;
   display: flex;
-  justify-content: center;
+  /* 가운데 정렬은 자식 margin 으로 — justify-content:center 는 내용이 더 넓을 때 왼쪽이 스크롤로 닿지 않게 잘린다 */
+  justify-content: flex-start;
   padding: 10px 0 4px;
 }
+.sb-flow-wrap > .sb-flow { margin: 0 auto; }
 .sb-flow {
   display: flex;
   flex-direction: column;
@@ -2302,6 +2305,19 @@
 .sb-exp-bar__fill--products {
   background: var(--sb-ai);
 }
+.sb-exp-bar__fill--contents { background: var(--sb-warn); }
+/* 품질 KPI (전환 판정 계기판) — 3열 라벨/값 표 */
+.sb-exp-quality {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px 10px;
+  margin: 10px 0 0;
+  padding: 10px 0 0;
+  border-top: 1px dashed var(--sb-n-200);
+}
+.sb-exp-quality > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sb-exp-quality dt { font-size: var(--sb-t-micro); color: var(--sb-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sb-exp-quality dd { margin: 0; font-size: var(--sb-t-small); font-weight: 500; color: var(--sb-ink); font-variant-numeric: tabular-nums; }
 .sb-exp-bar__fill--cache {
   background: var(--sb-success, var(--sb-info));
 }
@@ -3763,3 +3779,12 @@
 .sb-prompt-flow__proposal > details, .sb-prompt-flow__proposal > details summary { font-size: var(--sb-t-title); }
 .sb-prompt-flow .sb-prompt-flow__request textarea, .sb-prompt-flow .sb-flow-refine textarea { font-size: var(--sb-t-title); }
 .sb-scenario-preview__viewport { overscroll-behavior: contain; }
+
+/* 대시보드 — 추천 품질 신호 카드 (운영 인사이트 모드, 2026-09): 실주행 plan 스텝 llmMeta.quality 의 엔진별 평균.
+   항목 표는 실험 탭에서 쓰던 .sb-exp-quality 를 재사용하고, 카드 폭에 맞춰 자동 열 수로 편다 */
+.sb-admin-quality-card { margin-top: 16px; border-top: 4px solid var(--sb-ops-mint); }
+.sb-admin-quality-engine + .sb-admin-quality-engine { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--sb-n-100); }
+.sb-admin-quality-engine__head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.sb-admin-quality-engine__head b { font-size: var(--sb-t-body); font-weight: 500; color: var(--sb-ink); }
+.sb-admin-quality-engine__head span { font-size: var(--sb-t-caption); color: var(--sb-muted); }
+.sb-admin-quality-card .sb-exp-quality { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); border-top-color: var(--sb-n-100); }

@@ -35,6 +35,8 @@ export type LlmGenerateRequest = {
   effort: LlmEffort
   user: string
   webSearch?: boolean
+  /** 웹 검색 서버 도구의 호출 상한 — 단계마다 예산을 나눈다 (상품 4·콘텐츠 3, 2026-09). 없으면 구현체 기본값 */
+  webSearchMaxUses?: number
   stream?: LlmStreamHandlers
 }
 

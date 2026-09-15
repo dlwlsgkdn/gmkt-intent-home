@@ -85,13 +85,18 @@ pending(재생성 게이트)으로 유지한다. **`skeleton`은 계획 전용 �
 SurveyPageWire = { intro, questions: [{ id, question, kind?: 'choice'|'photo', options[0..6], multi, placeholder? }] }
 // options 원소는 "제목|부제" 문자열 (FE 옵션 문법과 동일 — @ddak/pipeline optionWire). 설문 프롬프트가 선택지마다 제목(짧은 명사구)+부제(판단
 // 기준 한 줄)를 만들고, 답변(choices)에는 제목만 실린다. 옛 페이지의 부제 없는 문자열도 그대로 유효
-// kind 생략 = choice (구 응답 호환). kind='photo'는 선택지가 없는 얼굴 사진 질문 — id는 p1, 언제나 첫
-// 질문 자리다. **사진 원본은 서버로 오지 않는다**: 기기에 남고 답변에는 표식('사진 제출됨')만 실린다
+// kind 생략 = choice (구 응답 호환). kind='photo'는 선택지가 없는 얼굴 사진 질문 — id는 p1. 사진을 받는 설문은
+// 스캐폴드 고정 스타일링 범위 질문(id s1, choice: 메이크업만|메이크업 + 헤어|메이크업 + 헤어 + 옷차림)이 p1 앞에 선다(v24). **사진 원본은 서버로 오지 않는다**: 기기에 남고 답변에는 표식('사진 제출됨')만 실린다
 // (데이터 URL을 스텝·프롬프트에 싣지 않기 위해서 — 계획 프롬프트는 "사진을 올렸다"만 안다)
 PlanPageWire   = { headline, summary, sections: [
                    { kind: 'guide',    title, subtitle?, body } |                      // 단계 안내 — 2~3개(다단계 계획), FE가 단계 번호를 붙인다. subtitle = 단계 목적 한 줄(v17부터 필수 생성, 옛 페이지 없음)
-                   { kind: 'look',     title, desc, tone, points?[0..4] } |            // 가상 메이크업 결과 — 사진 질문에 답한 쓰레드에서만. tone = coral|rose|red|peach|brown|plum
-                                                                                       // FE가 기기에 남은 사진을 BEFORE, 같은 사진에 tone을 올린 것을 AFTER로 비포/애프터 투영 (합성은 화면에서)
+                   { kind: 'look',     title, desc, tone, points?[0..6], spec? } |     // 가상 메이크업 결과 — 사진 질문에 답한 쓰레드에서만. tone = coral|rose|red|peach|brown|plum
+                                                                                       // spec(v23) = { intensity: natural|glam, lip{color #rrggbb, finish matte|velvet|glossy|tint, technique full|gradient|overlined, note},
+                                                                                       //   cheek{color, placement apples|cheekbones|drape, strength light|medium|strong, note}, eye{shadow[0..3], liner none|thin|winged, lashes natural|volume, brow natural|defined, note},
+                                                                                       //   base{finish matte|semi-matte|dewy, coverage light|medium|full, contour, highlight, note}, scope? makeup|hair|outfit(v24 — s1 답),
+                                                                                       //   hair?{style keep|straight|wavy|curly|updo|ponytail, length keep|short|medium|long, color hex|keep, bangs keep|none|see-through|full, note}(scope≥hair),
+                                                                                       //   outfit?{top keep|tee|shirt|blouse|knit|jacket|dress, color hex|keep, fit regular|oversized|fitted, neckline keep|crew|v|collar|off-shoulder, note}(scope=outfit) } — 기기 합성과 정밀 렌더가 그대로 소비하는 한 원천.
+                                                                                       //   points 는 BFF 가 부위별 note 에서 파생("립 — …"). FE가 기기에 남은 사진을 BEFORE, 같은 사진에 사양대로 칠한 것을 AFTER로 비포/애프터 투영 (합성은 화면에서)
                    { kind: 'products', title, reason, products: CatalogProduct[] } |  // 카탈로그 id 검증 + 웹 상품 URL 검증 통과분만
                    { kind: 'contents', title, reason, items: PlanContentItem[] } |    // 참고 콘텐츠 — 웹 검색으로 확인한 게시글·영상 (URL 검증 통과분만)
                    { kind: 'steps',    title, steps[] } ] }
@@ -117,7 +122,8 @@ CatalogProduct = { id, name, brand, price, tags[], url?, urlKind?: 'pdp'|'search
 **가상 메이크업 정밀 렌더** (`POST /api/threads/:id/look-render`): 계획의 `look` 섹션은 기본적으로
 **기기 안에서** 그려진다(얼굴 랜드마크로 입술·볼에만 색을 얹는 캔버스 합성 — 사진이 서버로 오지
 않는다). 이 엔드포인트는 1단계 합성이 화면에 뜬 뒤 **FE가 이어서 자동으로** 부르는 2단계다: 사진(data URL)을 받아 외부 이미지 편집 모델(OpenAI images.edits — Anthropic API에는
-이미지 생성·편집이 없다)로 룩을 실제로 올려 돌려준다. 계약은 `LookRenderBody`/`LookRenderResult`,
+이미지 생성·편집이 없다)로 룩을 실제로 올려 돌려준다. 본문에 계획 look 섹션의 `spec` 을 실으면 편집 지시문을 고정 풀글램 템플릿이
+아니라 **그 사양에서 생성**한다(`buildLookRenderPrompt` — 립 hex·마감·기법, 치크 위치·발색, 눈, 베이스, 강도 문구. 사양 없는 옛 호출은 템플릿 유지). 계약은 `LookRenderBody`/`LookRenderResult`,
 포트는 `@ddak/pipeline` `ImageEditPort`(프로바이더 중립)다. **사진은 요청 본문에만 있고 스텝에는
 톤·모델·지연만 남는다.** 실패 본문은 SSE와 같은 문법(`{ code, message, retryable }`) —
 `image_not_configured`(OPENAI_API_KEY 없음, 503) / `image_refused`(4xx, 502) / `image_failed`(5xx·타임아웃, 502).
@@ -172,6 +178,27 @@ Base: `/api/admin/*` (스튜디오 프록시 `/api/bff/admin/*` 경유) · 인�
 | PATCH | `/api/admin/eval/runs/:id` | **사람 채점** — `{ score: 0~5\|null, comment, components? }`. components는 섹션별 채점(`[{ id: sec-<index>, label, score, feedback }]` — 라이브 피드백과 같은 평가 레코드 문법, 생략=유지·빈 배열=비움). judge는 이 경로로 못 건드린다 |
 | POST | `/api/admin/eval/runs/:id/judge` | **자동 채점** (SSE) — LLM 심사관이 케이스 입력과 실행 결과를 대조해 루브릭 4차원으로 채점, `run.judge`에 저장. 사람 채점과 절대 안 섞인다(source 축). 단계 축 분기: config.stage=plan(기본)은 `judge`(근거 충실·맞춤성·단계 구성·실행 가능성, dropLog 포함 심사), survey는 `judge-survey`(질문 절제·의도 적합·답하기 쉬움·말투) — 재정의는 각각 `llm-prompt-judge`/`llm-prompt-judge-survey`. SSE: `status` → `result({ run })` \| `error` |
 | GET | `/api/admin/metrics/engines` | **전환 판정 계기판** — 실주행 plan 스텝 llmMeta(engine 각인) 엔진별 집계: 표본·평균 지연·뼈대/상품·캐시 적중률·promptVersion |
+
+## 1-2. BFF — search API (홈 검색창 전용, 공개)
+
+홈 검색창의 **진입 분기**와 **AI 검색어 추천**. threads API 와 같은 `x-device-id` 규약, 쓰레드·core 기록 없음(LLM 1회, effort low). LLM 이 막히면(키 없음·실패·파싱 실패) 같은 규칙의 휴리스틱이 대신 답하고 `source: 'fallback'` 으로 표시한다 — 검색은 언제나 어디론가 가야 한다. 계약은 `@ddak/schema` `search.ts`.
+
+| 메서드 | 경로 | 역할 | 요청 본문 | 응답 |
+|---|---|---|---|---|
+| POST | `/api/search/route` | **두 갈래 판정** — 뷰티 카테고리 한정으로 설문→맞춤 계획(DDAK)을 요구하는 검색어면 `ddak: true`(추천·비교·고민·루틴·상황·피부 타입·"~추천해줘"), 상품 종류 한 단어·브랜드·모델명 조회·비뷰티·서비스 문의·애매하면 `false`(검색 결과 페이지). 프롬프트는 @ddak/pipeline `SEARCH_ROUTE_SYSTEM`(PROMPT_DEFS 밖 — 운영 콘솔 재정의 대상 아님) | `SearchRouteBody` `{ query(1~200), profile? }` | `SearchRouteResult` `{ ddak, normalized(DDAK 면 의도 문장·아니면 원문), reason, source: llm\|fallback }` |
+| POST | `/api/search/suggest` | **AI 검색어 추천** — 입력 중인 검색어로 자연어 검색 문장 최대 3개(~25자, "~추천해줘/~찾아줘" 꼴, 서로 다른 축, 프로필 피부 타입 반영). `SEARCH_SUGGEST_SYSTEM` | `SearchSuggestBody` `{ query(1~100), profile? }` | `SearchSuggestResult` `{ suggestions: string[≤3], source }` |
+| POST | `/api/search/home` | **홈 개인화** — 첫 화면 **상태 인사** 한 줄(존댓말 1~2문장, 이름·시간대·날씨 한 조각·가장 최근 쓰레드의 상태 — 검색어·상품 제안 없음. 쓰레드를 가리키는 부분은 「」로 감싸고 `threadIndex`(요청 threads 의 1-based 번호)로 알린다 — FE 가 탭 대상(이어보기)으로 만든다) + 개인화 추천 검색어(보라 칩, 8~16자 명사구) 최대 3개. 재료는 이름·프로필·**기기 현지 시각**(`now.iso` 오프셋 포함 — 서버 UTC 로 시간대·날짜를 정하지 않는다)·브라우저가 **이미 허용한** 위치·최근 쓰레드 요약(제목·단계·상태·담은 상품·답변, 최신순 ≤10)·최근 검색어. 날씨는 BFF `WeatherService`가 Open-Meteo(키 없음 — 좌표 0.1도 반올림별 10분 캐시, 1.5초 타임아웃, 위치 없으면 서울, 실패면 null, `WEATHER_API_URL` 로 교체·비활성)에서 붙여 응답에도 싣는다. 프롬프트 @ddak/pipeline `HOME_PERSONALIZE_SYSTEM`(PROMPT_DEFS 밖), 휴리스틱 `heuristicHomeGreeting`/`heuristicHomeSuggestions`(`home.ts`). FE 는 기본 인사말을 먼저 그리고 이 응답을 페이드인으로 얹는다(7초 넘으면 FE 휴리스틱) | `HomePersonalizeBody` `{ name?, profile?, now{iso,hour,weekday}, location?{lat,lon}, threads?: HomeThreadDigest[≤10], recentSearches?[≤10] }` | `HomePersonalizeResult` `{ greeting, threadIndex: number\|null, suggestions: string[≤3], weather: {tempC,humidity?,code,label}\|null, source }` |
+| GET | `/api/search/popular?limit=` | **인기 검색어**(파랑 칩) — 전체 사용자 후보 표를 인기순 내림차순(동률 가나다, 정규화 중복 제거)으로 최대 n(1~10, 기본 3). 원천은 core 설정 KV `search-popular`(`[{keyword,count}]`, 30초 캐시) — 표가 없으면 @ddak/pipeline `POPULAR_SEARCH_SEED`로 답하며 같은 값을 KV 에 한 번 시딩한다(`source: seed`→`kv`, core 미연결이면 시드로만). `POST /route` 의 검색어가 후보 표와 일치(대소문자·공백·#·_ 무시)하면 count+1 — 임의 검색어는 표에 넣지 않는다(모두에게 노출되는 칩). 파랑 칩 클릭 자체는 라우터를 거치지 않고 SRP 로 직행하므로 세지 않는다(칩이 스스로 순위를 굳히지 않게) | — | `PopularSearchesResult` `{ items: [{keyword,count}], source: kv\|seed }` |
+
+FE(`apps/studio/src/lib/liveApi.js` `routeSearch`/`suggestSearch`)는 실패 시 `lib/searchCatalog.js` 의 같은 규칙 휴리스틱(`heuristicRoute`/`fallbackSuggest`)으로 대신한다. 홈 첫 화면(`personalizeHome`/`fetchPopularSearches` — `hooks/useHomePersonalize.js`)은 실패·지연을 `lib/homePersonalize.js`(pipeline `home.ts` 의 거울 — 휴리스틱 인사말·추천 검색어·같은 시드 표)로 받고, 결과를 세션 캐시(프로필·쓰레드 상태·날짜·시 단위 키)에 둔다. 모의 스택(`apps/bff/e2e/mock-upstream.mjs`)은 시스템 프롬프트 표식 '검색 라우터'·'검색어 추천'·'홈 인사'로 응답하고 `/v1/weather` 가 모의 Open-Meteo 다(스모크가 `WEATHER_API_URL` 로 가리킨다). 스모크 10.6 이 두 갈래·추천 3개·빈 검색어 400 을, 10.6b 가 개인화 인사말(쓰레드 요약·날씨 포함)·인기 검색어 내림차순·후보 표 count+1·KV 시딩·limit 상한을 확인한다.
+
+## 1-3. 계획 생성 — 상품·콘텐츠 분리와 품질 요약 (2026-09)
+
+계획 생성은 세 LLM 호출의 병렬이다: **5a 뼈대**(`plan-skeleton`) ∥ **5b 상품**(`plan-products`, 웹 검색 최대 4회 — 상품 섹션만) ∥ **5c 참고 콘텐츠**(`plan-contents`, 웹 검색 최대 3회 — 영상·게시글 섹션만, 항목마다 `why`). 셋 다 끝나면 6 검증 게이트가 그라운딩·병합(`mergePlanSections` → `consolidateSmallProductSections`)하고 7 기록이 `llmMeta` 에 `phases{skeletonMs,productsMs,contentsMs}`·합산 `usage.webSearchRequests`·**`quality`**(`PlanQuality` — 섹션·상품·웹 상품·PDP·썸네일·가격 미확인·콘텐츠 섹션/항목/썸네일·드롭 수)를 남긴다. 5b 나 5c 가 실패해도 계획은 살아 있고(없는 채로 반환), 옛 재정의 프롬프트가 5b 에서 콘텐츠를 만들어도 5c 결과가 있으면 그쪽을 쓴다.
+
+와이어 변화: `CatalogProduct.priceUnknown?`(판매가 미확인 — price 0), `PlanContentItem.why?`. 검증 게이트 드롭 코드 추가: `catalog-low-match`·`catalog-overflow`·`already-in-cart`·`stale-content`·`low-trust-source`·`duplicate-source`·`duplicate-recent`. 원장(`ledger`)에 `budgetMinKrw`(예산 하한 — 드롭 기준 아님)·`recentRecommended`·`recentContentUrls`(같은 사용자 최근 3개 쓰레드) 추가.
+
+admin: 프롬프트 카탈로그에 `plan-contents` 추가, 지식 목록에 guard 행 `guard-content-hosts`(콘텐츠 저신뢰 출처 도메인, 줄바꿈 구분·접미 일치) 추가, dry-run `stageId` 에 `plan-contents` 추가(응답은 `sections`·`dropLog`), `GET /api/admin/metrics/engines` 엔진별 `avgContentsMs`·`quality`(비율 0~1·평균, quality 요약이 있는 표본만). 썸네일 보강(`EnrichService`, og:image)은 BFF 환경변수 `ENRICH_FETCH=0` 으로 끌 수 있다(오프라인 e2e).
 
 ## 2. Core — internal API (BFF 전용, 비공개)
 

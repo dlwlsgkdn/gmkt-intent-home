@@ -4,15 +4,19 @@ import ExploreFrame from './ExploreFrame.jsx'
 import ThreadPanel from './ThreadPanel.jsx'
 import StarterPanel from './StarterPanel.jsx'
 import { TEMPLATES } from '../lib/templates.js'
-import { classifyImportPayload, createScenariosExport, hexToRgba, DEVICE_PRESETS } from '../lib/store.js'
+import { classifyImportPayload, createScenariosExport, hexToRgba, viewerDeviceOf } from '../lib/store.js'
+import DeviceFrame from './DeviceFrame.jsx'
 
 /* 홈 첫 화면을 이루는 탐색 컴포넌트 — 이 타입들이 스택 앞머리에 연속으로 있으면 히어로 블록으로 묶여
    화면 세로 중앙에 놓인다 (Figma Search 랜딩: 제목 · 검색창 · 추천 칩) */
-const HOME_HERO_TYPES = new Set(['greeting', 'searchBox', 'scenarioChips', 'tagRow'])
+const HOME_HERO_TYPES = new Set(['greeting', 'searchBox', 'scenarioChips', 'recommendChips', 'tagRow'])
 import { scenariosFromImport } from '../lib/scenarioOps.js'
 import { downloadJson, readFileText } from '../lib/jsonFile.js'
 import { renderItem } from '../lib/registry.jsx'
 import ScenarioGenerationDialog from './builder/ScenarioGenerationDialog.jsx'
+import SearchOverlay from './SearchOverlay.jsx'
+import { useSearchEntry } from '../hooks/useSearchEntry.js'
+import { useHomePersonalize } from '../hooks/useHomePersonalize.js'
 
 export default function HomeView({ api }) {
   const [query, setQuery] = useState('')
@@ -21,6 +25,7 @@ export default function HomeView({ api }) {
   const [scenarioGenOpen, setScenarioGenOpen] = useState(false)
   const [threadOrigin, setThreadOrigin] = useState(null) // null=닫힘 | 'left'|'center'|'right'
   const [liveChoice, setLiveChoice] = useState(null) // 검색어가 발행 칩과 매칭될 때의 체험 선택 시트: { query, hit }
+  const [searchOpen, setSearchOpen] = useState(false) // 검색 화면(최근 검색어·자동완성·AI 추천) — 검색창을 누르면 뜬다
   const [draggingChipId, setDraggingChipId] = useState(null)
   const [scenarioFilter, setScenarioFilter] = useState('')
   const importInputRef = useRef(null)
@@ -175,8 +180,8 @@ export default function HomeView({ api }) {
   /* 검색 진입 분기 — 칩 = 시나리오 체험, 자유 검색 = AI 라이브 생성 (BFF).
      검색어가 발행 시나리오와 매칭되면 어느 쪽으로 체험할지 시트로 명시적으로 고르게 한다
      — 자동으로 한쪽에 보내면 "지금 뭘 보는지"가 불투명해지기 때문 */
-  const submit = () => {
-    const q = query.trim()
+  const submitDdak = (raw) => {
+    const q = String(raw == null ? query : raw).trim()
     if (!q) return
     // 공백/언더스코어 차이를 무시하고 매칭한다 ("나이트 루틴" ↔ "나이트_루틴")
     const norm = (str) => String(str || '').toLowerCase().replace(/[\s_]+/g, '')
@@ -185,15 +190,44 @@ export default function HomeView({ api }) {
       const fields = [s.title, s.chip, s.query].map(norm).filter(Boolean)
       return fields.some((f) => f.includes(nq) || nq.includes(f))
     })
-    if (hit) setLiveChoice({ query: q, hit })
-    else api.playLive(q)
+    if (hit) {
+      setSearchOpen(false) // 검색 화면 위에 시트가 겹치지 않게 — 라이브 생성·SRP 는 화면 전환이라 따로 닫을 게 없다
+      setLiveChoice({ query: q, hit })
+    } else api.playLive(q)
   }
+  /* 검색 제출은 라우터를 거친다 — DDAK(위 submitDdak) / 검색 결과 페이지. 최근 검색어 기록도 훅 몫 */
+  const search = useSearchEntry(api, { onDdak: submitDdak })
+  /* 홈 첫 화면 개인화 — 인사말(기본 문구 → 개인화 문구 페이드인)과 추천 검색어 칩(보라 = 내 쓰레드 기반 · 파랑 = 전체 인기).
+     탐색 아이템(greeting·recommendChips)이 ctx.home 으로 받아 그린다 */
+  const home = useHomePersonalize(api)
+  /* 인사말의 「쓰레드」 탭 — 쇼핑 쓰레드 패널의 이어보기와 같은 규칙: 라이브는 서버 기록 복원, 시나리오 체험은 그 시나리오를 마지막 단계부터 */
+  const resumeThread = (id) => {
+    const t = (api.threads || []).find((thread) => thread.id === id)
+    if (!t) {
+      api.showToast('이 쓰레드를 찾을 수 없어요.')
+      return
+    }
+    if (t.live) api.resumeLive(t.id)
+    else if (api.scenarios.some((s) => s.id === t.scenarioId)) api.playScenario(t.scenarioId, { threadId: t.id, stage: t.stage })
+    else api.showToast('이 쓰레드의 시나리오를 찾을 수 없어요. (삭제되었거나 공유 체험이에요)')
+  }
+  const homeCtx = { ...home, resumeThread }
+  const viewer = viewerDeviceOf(api.viewerDevice) // 실행 화면을 감싸는 기기 — 화면 크기(w×h)·껍데기 종류
 
   /* 탐색 아이템에 공급하는 실행 컨텍스트 — 검색/칩/키워드만 실제 동작, 나머지는 목업 */
   const homePlayer = {
     query,
     setQuery,
-    submitQuery: submit,
+    submitQuery: () => search.runSearch(query),
+    /* 추천 검색어 칩 — 검색창에 넣고 칩 종류가 정한 목적지로 바로 간다(to: 'srp' 파랑 인기 키워드 = 검색 결과 페이지,
+       'ddak' 보라 개인화 자연어 = 맞춤 설문(발행 칩과 겹치면 선택 시트), 없으면 라우터 판정). 검색 화면은 열지 않는다 */
+    submitSearch: (text, to) => {
+      const q = String(text || '').trim()
+      if (!q) return
+      setQuery(q)
+      search.runSearch(q, { to })
+    },
+    openSearch: () => setSearchOpen(true), // 검색창 포커스 → 검색 화면 (Figma 1-2/1-3)
     answers: {},
     setAnswer: () => {},
     addToCart: () => {},
@@ -211,19 +245,19 @@ export default function HomeView({ api }) {
 
   return (
     <>
-      <BgBlobs />
-      <FloatingBar onList={(origin) => setThreadOrigin((v) => (v ? null : origin || 'right'))} />
+      {/* 스튜디오 크롬 — 기기 프레임 밖(브라우저 창 고정). 화면 안에는 DDAK 요소만 둔다 */}
       <StudioFab onClick={() => setDrawerOpen(true)} />
       <div className="sb-topleft">
         <ViewerDeviceControl deviceKey={api.viewerDevice} onChange={api.setViewerDevice} />
         <ProfileControl api={api} />
       </div>
 
+      {/* 기기 프레임 — 홈 화면·플로팅 버튼·쓰레드 패널·검색 화면이 실기기 화면 크기 안에서 돈다 */}
+      <DeviceFrame device={viewer}>
+      <BgBlobs />
+      <FloatingBar onList={(origin) => setThreadOrigin((v) => (v ? null : origin || 'right'))} />
       <section className="clean-home min-h-screen relative z-10">
-        <div
-          className="sb-phone"
-          style={{ width: (DEVICE_PRESETS.find((d) => d.key === api.viewerDevice) || DEVICE_PRESETS[0]).w }}
-        >
+        <div className="sb-phone" style={{ width: viewer.w }}>
         {exploreItems.length > 0 ? (
           /* 탐색 페이지 = 캔버스 아이템 스택 (빌더 탐색 탭에서 자유 배치·편집) */
           <div className="sb-player__stack sb-home-stack">
@@ -231,14 +265,14 @@ export default function HomeView({ api }) {
               <div className="sb-home-hero">
                 {heroItems.map((it) => (
                   <div key={it.id} className="sb-player__item">
-                    {renderItem(it, { mode: 'player', player: homePlayer, profile: api.profile, chips, allItems: allExploreItems })}
+                    {renderItem(it, { mode: 'player', player: homePlayer, profile: api.profile, chips, home: homeCtx, allItems: allExploreItems })}
                   </div>
                 ))}
               </div>
             ) : null}
             {restItems.map((it) => (
               <div key={it.id} className="sb-player__item">
-                {renderItem(it, { mode: 'player', player: homePlayer, profile: api.profile, chips, allItems: allExploreItems })}
+                {renderItem(it, { mode: 'player', player: homePlayer, profile: api.profile, chips, home: homeCtx, allItems: allExploreItems })}
               </div>
             ))}
           </div>
@@ -248,7 +282,7 @@ export default function HomeView({ api }) {
             config={api.explore}
             searchValue={query}
             onSearchChange={setQuery}
-            onSubmit={submit}
+            onSubmit={() => search.runSearch(query)}
             chips={chips}
           />
         )}
@@ -257,6 +291,26 @@ export default function HomeView({ api }) {
 
       {/* 쇼핑 쓰레드 히스토리 패널 — 햄버거 버튼 위치에서 등장 */}
       <ThreadPanel api={api} open={!!threadOrigin} origin={threadOrigin || 'right'} onClose={() => setThreadOrigin(null)} />
+
+      {/* 검색 화면 — 최근 검색어 · 자동완성 · AI 추천. 제출은 라우터를 거쳐 DDAK / 검색 결과 페이지로 */}
+      <SearchOverlay
+        open={searchOpen}
+        initialQuery={query}
+        width={viewer.w}
+        profile={search.profile}
+        recents={search.recents}
+        routing={search.routing}
+        onRemoveRecent={search.removeRecent}
+        onSubmit={(q) => {
+          setQuery(q)
+          search.runSearch(q) // 판정이 끝나면 라이브 생성·SRP 로 바로 넘어간다 — 검색 화면은 그때까지 열려 있다
+        }}
+        onClose={() => setSearchOpen(false)}
+      />
+      {search.routing && !searchOpen ? (
+        <div className="sb-search-routing" role="status">✦ 「{search.routing}」 — 어떤 화면이 맞을지 살펴보고 있어요…</div>
+      ) : null}
+      </DeviceFrame>
 
       {/* 시나리오 관리 드로어 */}
       {drawerOpen && (

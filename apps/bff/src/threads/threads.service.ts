@@ -24,17 +24,21 @@ import {
   buildLookRenderPrompt,
   buildSurveyPage,
   completeSearchSection,
+  consolidateSmallProductSections,
   groundContentsSection,
   groundProductsSection,
   isSlotKind,
+  skeletonSectionWire,
   mergePlanSections,
   parseDataUrl,
-  slotIndexesOf,
+  planQualityOf,
   surveyStreamHandlers,
 } from '@ddak/pipeline'
 import { CoreClientService } from '../core-client.service'
 import { LlmService } from '../llm/llm.service'
+import { LLM_STAGE_RETRY_DELAY_MS, retryLlmStage } from '../llm/retry'
 import { ImageEditService } from '../image/image-edit.service'
+import { EnrichService } from './enrich.service'
 import { EngineFlagService } from '../engine/engine-flag.service'
 import { GraphEngineService } from '../engine/graph-engine.service'
 import { SEQ, combineMeta, intentOf } from './thread-io'
@@ -64,6 +68,8 @@ export type PlanStreamHandlers = {
    * 이 올 때까지 그 자리를 pending(재생성 게이트)으로 유지한다 */
   onSection?: (section: PlanSectionWire, index: number, final: boolean) => void
   onSearch?: (query: string) => void
+  /** 진행 안내 한 줄 (뼈대 재시도 등) — 컨트롤러가 SSE status 로 보낸다 */
+  onStatus?: (message: string) => void
 }
 
 @Injectable()
@@ -76,6 +82,7 @@ export class ThreadsService {
     private readonly imageEdit: ImageEditService,
     private readonly engineFlag: EngineFlagService,
     private readonly graphEngine: GraphEngineService,
+    private readonly enrich: EnrichService,
   ) {}
 
   /** 쓰레드 시작 — 생성 + 탐색 스텝(의도·프로필) 기록 */
@@ -167,12 +174,16 @@ export class ThreadsService {
     const arrivedSections: { section: PlanSectionWire; streamIndex: number }[] = [] // 그라운딩 통과분 (도착 순)
     // 검색 스트림 원소 index → 자리 index. 첫 방출(대개 partial)에 배정하고 재전송·최종본이 같은 자리를 쓴다.
     // 검색 스트림은 원소를 순차로 내보내므로 첫 방출 순서 = 완성 순서 — 도착 순 배정 규칙이 유지된다
-    const slotByStream = new Map<number, number>()
-    const slotFor = (streamIndex: number, kind: string): number => {
-      let slot = slotByStream.get(streamIndex)
+    // 상품(5b)·콘텐츠(5c) 호출의 스트림 index 가 각자 0부터라 종류와 함께 키로 쓴다
+    const slotByStream = new Map<string, number>()
+    const slotFor = (streamIndex: number, section: PlanSectionWire): number => {
+      const slotKind = section.kind === 'contents' ? 'contents' : 'products'
+      const key = `${slotKind}:${streamIndex}`
+      let slot = slotByStream.get(key)
       if (slot === undefined) {
-        slot = (allocator as GeneratedIndexAllocator).next(kind === 'contents' ? 'contents' : 'products')
-        slotByStream.set(streamIndex, slot)
+        // 제목·reason 으로 단계 묶음을 골라 자리를 받는다 (@ddak/pipeline merge.ts PlanPlacer — 최종 병합과 같은 배정)
+        slot = (allocator as GeneratedIndexAllocator).next(section)
+        slotByStream.set(key, slot)
       }
       return slot
     }
@@ -181,12 +192,13 @@ export class ThreadsService {
       if (!allocator || !stream?.onSection) return
       while (emitted < arrivedSections.length) {
         const { section, streamIndex } = arrivedSections[emitted]
-        stream.onSection(section, slotFor(streamIndex, section.kind), true)
+        stream.onSection(section, slotFor(streamIndex, section), true)
         emitted += 1
       }
     }
 
-    const skeletonPromise = this.llm
+    // 뼈대는 실패하면 계획 전체가 죽는 유일한 호출 — SDK 재시도 뒤에도 일시 오류면 잠깐 쉬고 한 번 더 (llm/retry.ts)
+    const skeletonPromise = retryLlmStage(() => this.llm
       .generatePlanSkeleton(
         intent,
         survey,
@@ -200,8 +212,9 @@ export class ThreadsService {
           onElement: (element, index) => {
             const parsed = PlanSkeletonSectionGen.safeParse(element)
             if (!parsed.success) return
-            // 상품·콘텐츠 자리는 내보내지 않는다 — 검색 단계 결과가 이 인덱스를 차지한다
-            if (!isSlotKind(parsed.data.kind)) stream.onSection?.(parsed.data as PlanSectionWire, index, true)
+            // 상품·콘텐츠 자리는 내보내지 않는다(null) — 검색 단계 결과가 이 인덱스를 차지한다
+            const wire = skeletonSectionWire(parsed.data)
+            if (wire) stream.onSection?.(wire, index, true)
           },
           // 자라는 중인 섹션 — 제목이 나오기 시작하면 토큰 단위로 같은 index에 재전송한다
           onElementPartial: (element, index) => {
@@ -217,11 +230,16 @@ export class ThreadsService {
           },
         },
         revision,
-      )
+      ), {
+        onRetry: (e, attempt) => {
+          this.logger.warn(`계획 뼈대 생성 실패 — ${LLM_STAGE_RETRY_DELAY_MS}ms 뒤 재시도 ${attempt}회: ${e.message}`)
+          stream?.onStatus?.('일시적인 오류가 있어 계획 뼈대를 다시 만들고 있어요…')
+        },
+      })
       .then((result) => {
         // 자리 인덱스는 스트림 조각이 아니라 최종 검증본 기준으로 확정한다 (조각 파싱 누락 보정)
         const skeletonSections = result.content.sections
-        allocator = new GeneratedIndexAllocator(slotIndexesOf(skeletonSections), skeletonSections.length)
+        allocator = new GeneratedIndexAllocator(skeletonSections)
         // 뼈대 조기 확정 알림 — 텍스트 완성본 + 아직 안 채워진 자리 인덱스. 대기열 플러시보다 먼저
         if (stream?.onSkeleton) {
           const pending: number[] = []
@@ -230,7 +248,7 @@ export class ThreadsService {
               pending.push(i)
               return null
             }
-            return s as PlanSectionWire
+            return skeletonSectionWire(s)
           })
           stream.onSkeleton(
             { headline: result.content.headline, summary: result.content.summary, sections: wireSections },
@@ -272,32 +290,80 @@ export class ThreadsService {
             gen.kind === 'contents'
               ? this.resolveContentsSection(gen, true)
               : this.resolveProductsSection(gen, index, true)
-          if (section) stream.onSection(section, slotFor(index, section.kind), false)
+          if (section) stream.onSection(section, slotFor(index, section), false)
         },
         onSearch: stream.onSearch,
       },
       revision,
     )
 
-    const [skeletonSettled, searchSettled] = await Promise.allSettled([skeletonPromise, searchPromise])
+    // 5c 참고 콘텐츠 — 상품 검색과 분리된 웹 검색 예산으로 병렬 (2026-09). 자리 배정은 종류별 큐라 상품과 섞이지 않는다
+    const contentsPromise = this.llm.generatePlanContents(
+      intent,
+      survey,
+      answers,
+      profile,
+      stream && {
+        arrayKey: 'sections',
+        onElement: (element, index) => {
+          const parsed = PlanSearchSectionGen.safeParse(element)
+          if (!parsed.success || parsed.data.kind !== 'contents') return
+          const section = this.resolveContentsSection(parsed.data)
+          if (section) {
+            arrivedSections.push({ section, streamIndex: index })
+            flushGenerated()
+          }
+        },
+        onElementPartial: (element, index) => {
+          if (!allocator || !stream.onSection) return
+          const gen = completeSearchSection(element)
+          if (!gen || gen.kind !== 'contents') return
+          const section = this.resolveContentsSection(gen, true)
+          if (section) stream.onSection(section, slotFor(index, section), false)
+        },
+        onSearch: stream.onSearch,
+      },
+      revision,
+    )
+
+    const [skeletonSettled, searchSettled, contentsSettled] = await Promise.allSettled([skeletonPromise, searchPromise, contentsPromise])
     if (skeletonSettled.status === 'rejected') throw skeletonSettled.reason
     const skeleton = skeletonSettled.value
 
-    // 검색 단계 실패는 계획 전체를 죽이지 않는다 — 상품·콘텐츠 없는 계획을 정직하게 반환하고 로그만 남긴다
+    // 검색·콘텐츠 단계 실패는 계획 전체를 죽이지 않는다 — 없는 채로 정직하게 반환하고 로그만 남긴다
     let generatedSections: PlanSectionWire[] = []
     let productsMeta: LlmMeta | null = null
+    let contentsMeta: LlmMeta | null = null
+    let contentSections: PlanSectionWire[] = []
+    if (contentsSettled.status === 'fulfilled') {
+      contentsMeta = contentsSettled.value.meta
+      await this.enrich.enrichContents(contentsSettled.value.content.sections)
+      contentSections = contentsSettled.value.content.sections
+        .map((s) => this.resolveContentsSection(s))
+        .filter((s): s is PlanSectionWire => s !== null)
+    } else {
+      this.logger.warn(
+        `계획 참고 콘텐츠 단계 실패 — 콘텐츠 없이 계획 반환: ${(contentsSettled.reason as Error)?.message ?? contentsSettled.reason}`,
+      )
+    }
     if (searchSettled.status === 'fulfilled') {
       productsMeta = searchSettled.value.meta
-      generatedSections = searchSettled.value.content.sections
+      const raw = searchSettled.value.content.sections
+      await this.enrich.enrichProducts(raw.filter((s) => s.kind === 'products'))
+      generatedSections = raw
+        // 5c 가 콘텐츠를 만들었으면 상품 호출(옛 재정의 프롬프트)이 덧붙인 콘텐츠 섹션은 버린다
+        .filter((s) => !(contentSections.length && s.kind === 'contents'))
         .map((s, i) => (s.kind === 'contents' ? this.resolveContentsSection(s) : this.resolveProductsSection(s, i)))
         .filter((s): s is PlanSectionWire => s !== null)
     } else {
       this.logger.warn(
-        `계획 검색 단계 실패 — 상품·콘텐츠 없이 계획 반환: ${(searchSettled.reason as Error)?.message ?? searchSettled.reason}`,
+        `계획 검색 단계 실패 — 상품 없이 계획 반환: ${(searchSettled.reason as Error)?.message ?? searchSettled.reason}`,
       )
     }
 
-    const sections = mergePlanSections(skeleton.content.sections, generatedSections)
+    const sections = consolidateSmallProductSections(
+      mergePlanSections(skeleton.content.sections, [...generatedSections, ...contentSections]),
+    )
     if (!sections.length) {
       sections.push({ kind: 'guide', title: '준비된 안내', body: skeleton.content.summary })
     }
@@ -312,7 +378,7 @@ export class ThreadsService {
       this.core.upsertStep(threadId, SEQ.plan, {
         stage: 'plan',
         payload: { page },
-        llmMeta: combineMeta(skeleton.meta, productsMeta, 'legacy'),
+        llmMeta: combineMeta(skeleton.meta, productsMeta, 'legacy', { contents: contentsMeta, quality: planQualityOf(page) }),
       }),
       this.core.updateThread(threadId, { status: 'planning' }),
     )
@@ -347,7 +413,8 @@ export class ThreadsService {
   async renderLook(threadId: string, body: LookRenderBody): Promise<LookRenderResult> {
     const photo = parseDataUrl(body.photo)
     if (!photo) throw new BadRequestException('photo는 data:image/*;base64 형식이어야 합니다')
-    const prompt = buildLookRenderPrompt({ tone: body.tone, title: body.title, points: body.points })
+    // 사양(spec)이 있으면 지시문을 사양에서 생성한다 — 계획 look 섹션의 값 그대로 (없는 옛 페이지는 풀글램 템플릿)
+    const prompt = buildLookRenderPrompt({ tone: body.tone, title: body.title, points: body.points, spec: body.spec })
     const result = await this.imageEdit.edit({
       imageBase64: photo.base64,
       mediaType: photo.mediaType,
@@ -357,7 +424,13 @@ export class ThreadsService {
     try {
       await this.recordEvent(threadId, {
         type: 'look-render',
-        data: { tone: body.tone, model: result.meta.model ?? null, latencyMs: result.meta.latencyMs ?? null },
+        data: {
+          tone: body.tone,
+          intensity: body.spec?.intensity ?? null,
+          spec: body.spec ?? null,
+          model: result.meta.model ?? null,
+          latencyMs: result.meta.latencyMs ?? null,
+        },
       })
     } catch (e) {
       this.logger.warn(`정밀 렌더 기록 실패: ${(e as Error).message}`)

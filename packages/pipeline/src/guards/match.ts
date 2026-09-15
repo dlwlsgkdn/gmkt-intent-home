@@ -48,16 +48,25 @@ function heuristicRating(product: CatalogProduct, facts: LedgerFact[]): { rating
 }
 
 function priceFactor(product: CatalogProduct, ledger: ConstraintLedger | null | undefined, rating?: ProductRatingGen): { score: number; note: string } {
+  if (product.priceUnknown || !(product.price > 0)) {
+    return { score: 60, note: '검색 결과에 판매가가 없어 가격을 확인하지 못했어요' }
+  }
   const budget = ledger?.budgetKrw
+  const floor = ledger?.budgetMinKrw ?? null
+  const won = product.price.toLocaleString('ko-KR')
+  if (floor != null && floor > 0 && product.price < floor) {
+    return { score: 75, note: `예산 ${floor.toLocaleString('ko-KR')}원 이상을 원하셨는데 그보다 저렴한 상품이에요 (${won}원)` }
+  }
   if (budget != null && budget > 0) {
     const ratio = product.price / budget
-    const won = product.price.toLocaleString('ko-KR')
     const cap = budget.toLocaleString('ko-KR')
+    if (floor != null && floor > 0) return { score: 100, note: `원하신 ${floor.toLocaleString('ko-KR')}~${cap}원 범위 안의 가격 (${won}원)` }
     if (ratio <= 0.5) return { score: 100, note: `예산 ${cap}원의 절반 이하 (${won}원)` }
     if (ratio <= 0.75) return { score: 75, note: `예산 ${cap}원 안에서 여유 있는 가격 (${won}원)` }
     if (ratio <= 1) return { score: 50, note: `예산 ${cap}원에 가까운 가격 (${won}원)` }
     return { score: 0, note: `예산 ${cap}원을 넘는 가격 (${won}원)` }
   }
+  if (floor != null && floor > 0) return { score: 100, note: `원하신 ${floor.toLocaleString('ko-KR')}원 이상의 가격대예요 (${won}원)` }
   if (rating?.price != null) return { score: pct(rating.price), note: '예산 답변이 없어 가격 대비 가치로 봤어요' }
   return { score: 75, note: '예산 답변이 없어 가격대 무리 없음으로 봤어요' }
 }

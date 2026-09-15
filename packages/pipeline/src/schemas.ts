@@ -1,5 +1,24 @@
 import { z } from 'zod'
-import { LookTone } from '@ddak/schema'
+import {
+  LOOK_BASE_FINISHES,
+  LOOK_BROWS,
+  LOOK_CHEEK_PLACEMENTS,
+  LOOK_COVERAGES,
+  LOOK_HAIR_BANGS,
+  LOOK_HAIR_LENGTHS,
+  LOOK_HAIR_STYLES,
+  LOOK_LASHES,
+  LOOK_LINERS,
+  LOOK_LIP_FINISHES,
+  LOOK_LIP_TECHNIQUES,
+  LOOK_OUTFIT_FITS,
+  LOOK_OUTFIT_NECKLINES,
+  LOOK_OUTFIT_TOPS,
+  LOOK_STRENGTHS,
+  LookIntensity,
+  LookScope,
+  LookTone,
+} from '@ddak/schema'
 
 /*
  * LLM 생성 출력 스키마 — 구조화 출력(zodOutputFormat)으로 강제된다.
@@ -72,14 +91,84 @@ const GuideSectionGen = z.object({
   body: z.string().describe('가이드 본문 — 답변을 근거로 든다'),
 })
 
-/** 가상 메이크업 결과 — 사진 질문에 답한 쓰레드에서만. 합성은 화면이 하고(올린 사진 + tone
- * 프리셋), 이 단계는 "어떤 룩인지"만 정한다. 상품 자리와 달리 검색이 채울 자리가 아니다 */
+/* 룩 사양 — 기기 합성(FE makeupComposite)과 이미지 편집 모델(buildLookRenderPrompt)이 **그대로 소비하는 값**.
+   hex 는 생성 스키마에서 regex 로 묶지 않는다(구조화 출력이 지원하지 않는 제약을 피한다) — 와이어에 실리기
+   전에 sanitizeLookSpec 이 검증·정규화하고 깨진 색은 tone 기본색으로 바꾼다 */
+const HexGen = z.string().describe('#rrggbb 형식의 실제 발색 색')
+export const LookSpecGen = z.object({
+  scope: LookScope.describe(
+    '스타일링 범위 — 설문의 "어디까지 스타일링해 볼까요?" 답 그대로: 메이크업만=makeup | 메이크업 + 헤어=hair | 메이크업 + 헤어 + 옷차림=outfit. 그 질문이 없으면 makeup',
+  ),
+  intensity: LookIntensity.describe(
+    '전체 강도 — natural(데일리·출근·학교·"자연스럽게" 요구) | glam(파티·데이트·결혼식·화보·"또렷하게" 요구)',
+  ),
+  lip: z.object({
+    color: HexGen.describe(
+      '립 발색 hex — tone 계열 안에서 (코랄 #F4553A·로즈 #D94B73·레드 #C22232·피치 #F4744F·브라운 #9C5A44·플럼 #8D3B74 근처, 밝기·채도만 조절)',
+    ),
+    finish: z.enum(LOOK_LIP_FINISHES).describe('마감 — matte(무광 풀커버) | velvet(부드러운 무광) | glossy(윤광) | tint(물들이듯 얇게)'),
+    technique: z
+      .enum(LOOK_LIP_TECHNIQUES)
+      .describe('기법 — full(입술 전체 균일) | gradient(안쪽만 진하게 번지듯) | overlined(입술선을 살짝 넘겨 볼륨)'),
+    note: z.string().describe('사용자에게 보이는 립 포인트 한 줄 (한국어, 예: 코랄 틴트를 안쪽부터 번지듯)'),
+  }),
+  cheek: z.object({
+    color: HexGen.describe('블러셔 색 hex — 립과 같은 계열의 밝은 색'),
+    placement: z
+      .enum(LOOK_CHEEK_PLACEMENTS)
+      .describe('위치 — apples(볼 앞쪽) | cheekbones(광대 위로 쓸어 올려) | drape(광대에서 관자놀이까지)'),
+    strength: z.enum(LOOK_STRENGTHS).describe('발색 — light | medium | strong'),
+    note: z.string().describe('치크 포인트 한 줄 (한국어)'),
+  }),
+  eye: z.object({
+    shadow: z
+      .array(HexGen)
+      .max(3)
+      .describe('섀도 색 0~3개 — 섀도가 없는 룩이면 빈 배열. 순서: 눈두덩 바탕 → 눈꼬리·크리즈 → 눈앞머리 하이라이트'),
+    liner: z.enum(LOOK_LINERS).describe('아이라인 — none | thin(속눈썹 사이 얇게) | winged(눈꼬리를 올려 뺀 윙)'),
+    lashes: z.enum(LOOK_LASHES).describe('속눈썹 — natural(마스카라 한 번) | volume(볼륨 마스카라·인조 속눈썹 느낌)'),
+    brow: z.enum(LOOK_BROWS).describe('눈썹 — natural | defined(또렷하게 채움)'),
+    note: z.string().describe('눈 포인트 한 줄 (한국어) — 섀도가 없으면 그 뜻을 쓴다'),
+  }),
+  base: z.object({
+    finish: z.enum(LOOK_BASE_FINISHES).describe('피부 마감 — matte | semi-matte | dewy(촉촉·윤광)'),
+    coverage: z.enum(LOOK_COVERAGES).describe('커버력 — light | medium | full'),
+    contour: z.boolean().describe('광대 아래 컨투어 여부'),
+    highlight: z.boolean().describe('광대 위·콧대 하이라이터 여부'),
+    note: z.string().describe('베이스 포인트 한 줄 (한국어)'),
+  }),
+  hair: z
+    .object({
+      style: z.enum(LOOK_HAIR_STYLES).describe('헤어 스타일 — keep(그대로) | straight | wavy | curly | updo(올림) | ponytail'),
+      length: z.enum(LOOK_HAIR_LENGTHS).describe('기장 — keep | short | medium | long'),
+      color: z.string().describe("헤어 컬러 hex(#rrggbb) 또는 'keep'(그대로)"),
+      bangs: z.enum(LOOK_HAIR_BANGS).describe('앞머리 — keep | none(없음) | see-through(시스루) | full(풀뱅)'),
+      note: z.string().describe('헤어 포인트 한 줄 (한국어)'),
+    })
+    .optional()
+    .describe('scope 가 hair 또는 outfit 일 때만 채운다 — 메이크업만이면 생략'),
+  outfit: z
+    .object({
+      top: z.enum(LOOK_OUTFIT_TOPS).describe('상의 — keep(그대로) | tee | shirt | blouse | knit | jacket | dress'),
+      color: z.string().describe("상의 색 hex(#rrggbb) 또는 'keep'"),
+      fit: z.enum(LOOK_OUTFIT_FITS).describe('핏 — regular | oversized | fitted'),
+      neckline: z.enum(LOOK_OUTFIT_NECKLINES).describe('넥라인 — keep | crew | v | collar | off-shoulder'),
+      note: z.string().describe('옷차림 포인트 한 줄 (한국어)'),
+    })
+    .optional()
+    .describe('scope 가 outfit 일 때만 채운다 — 그 밖에는 생략'),
+})
+export type LookSpecGen = z.infer<typeof LookSpecGen>
+
+/** 가상 메이크업 결과 — 사진 질문에 답한 쓰레드에서만. 이 단계는 "어떤 룩인지"를 사양(spec)까지 정하고,
+ * 합성은 화면(기기 합성)과 정밀 렌더가 같은 사양으로 한다. 화면 포인트 문구(points)는 BFF 가 부위별
+ * note 에서 파생하므로 여기서는 만들지 않는다. 상품 자리와 달리 검색이 채울 자리가 아니다 */
 const LookSectionGen = z.object({
   kind: z.literal('look'),
   title: z.string().describe('룩 이름 — 예: 코랄 생기 데일리 룩'),
   desc: z.string().describe('이 룩을 고른 이유 한두 문장 — 답변을 근거로'),
-  tone: LookTone.describe('룩의 기본 색조 — 화면이 올린 사진에 이 톤을 올려 보여준다'),
-  points: z.array(z.string()).max(4).describe('포인트 한 줄씩 — 예: 립 — 코랄 틴트를 안쪽부터 그라데이션'),
+  tone: LookTone.describe('룩의 기본 색조 계열 — spec 의 립·치크 색이 이 계열 안에 있어야 한다'),
+  spec: LookSpecGen.describe('부위별 사양 — 기기 합성과 이미지 편집 모델이 그대로 소비한다. 룩 이름과 사양이 맞아야 한다'),
 })
 
 const StepsSectionGen = z.object({
@@ -155,6 +244,9 @@ export const ContentItemGen = z.object({
   meta: z.string().describe('부가 정보 — 영상은 채널·조회수, 게시글은 작성자·시점. 못 확인했으면 빈 문자열'),
   snippet: z.string().describe('게시글 본문 미리보기 한두 문장 — 영상이거나 없으면 빈 문자열'),
   duration: z.string().describe('영상 길이 (예: 5:24) — 게시글이거나 모르면 빈 문자열'),
+  why: z
+    .string()
+    .describe('이 콘텐츠를 고른 이유 한 줄 — 사용자 답변을 인용해 어느 단계에 왜 도움이 되는지 ("복합성 피부라 T존·볼을 나눠 바르는 순서가 나온 영상이에요")'),
 })
 export type ContentItemGen = z.infer<typeof ContentItemGen>
 
@@ -205,9 +297,19 @@ export const PlanProductsGen = z.object({
     .array(PlanSearchSectionGen)
     .min(1)
     .max(5)
-    .describe('추천 상품 섹션 1~2개 + 참고 콘텐츠 섹션 0~1개'),
+    .describe('추천 상품 섹션 1~2개 (참고 콘텐츠는 별도 단계가 만든다 — 여기서는 만들지 않는다)'),
 })
 export type PlanProductsGen = z.infer<typeof PlanProductsGen>
+
+/** 계획 3단계(5c) — 참고 콘텐츠(웹 게시글·영상) 섹션만. 상품 검색과 분리해 웹 검색 예산을 따로 쓴다 (2026-09).
+ * 확인된 콘텐츠가 하나도 없으면 빈 배열 */
+export const PlanContentsGen = z.object({
+  sections: z
+    .array(ContentsSectionGen)
+    .max(2)
+    .describe('참고 콘텐츠 섹션 — 계획의 단계 순서대로 1~2개 (검색해도 확인된 콘텐츠가 없으면 빈 배열)'),
+})
+export type PlanContentsGen = z.infer<typeof PlanContentsGen>
 
 /*
  * 자동 채점(judge) — 실험 탭 실행 결과를 루브릭 4차원으로 심사하는 구조화 출력.
@@ -304,3 +406,40 @@ export const PlanSearchSectionPartialGen = z.object({
   items: z.array(z.unknown()).optional(),
 })
 export type PlanSearchSectionPartialGen = z.infer<typeof PlanSearchSectionPartialGen>
+
+/* ── 홈 검색창 — 진입 분기(라우터)와 AI 검색어 추천 (짧은 구조화 호출, 스트리밍 없음) ── */
+export const SearchRouteGen = z.object({
+  ddak: z.boolean().describe('true = DDAK(뷰티 설문→맞춤 계획)으로 보낼 검색어, false = 일반 검색 결과(SRP)'),
+  reason: z.string().describe('판정 근거 한 줄 (운영 로그용)'),
+  normalized: z
+    .string()
+    .describe('DDAK 으로 보낼 때 설문 생성에 넘길 의도 문장 — 검색어를 자연어 한 문장으로 정리(없는 정보를 지어내지 않는다). SRP 면 검색어 그대로'),
+})
+export type SearchRouteGen = z.infer<typeof SearchRouteGen>
+
+export const SearchSuggestGen = z.object({
+  suggestions: z
+    .array(z.string())
+    .min(1)
+    .max(3)
+    .describe('DDAK 에 어울리는 자연어 검색어 3개 — 입력어를 품고 상황·피부·계절 중 하나를 덧붙인 한 문장, "~추천해줘" 꼴'),
+})
+export type SearchSuggestGen = z.infer<typeof SearchSuggestGen>
+
+/* ── 홈 개인화 — 인사말 + 개인화 추천 검색어 (짧은 구조화 호출, 스트리밍 없음) ── */
+export const HomePersonalizeGen = z.object({
+  greeting: z
+    .string()
+    .describe('홈 첫 화면 상태 인사 — 이름·시간대·날씨 한 조각·최근 쓰레드 상태를 녹인 존댓말 1~2문장, 60자 안팎, 이모지 없음. 검색어·상품 제안 금지. 쓰레드를 가리키는 부분은 「」로 한 번 감싼다'),
+  threadIndex: z
+    .number()
+    .int()
+    .nullable()
+    .describe('인사말의 「」가 가리키는 최근 쓰레드 번호 (요청 목록 순서, 1부터). 쓰레드를 언급하지 않았으면 null'),
+  suggestions: z
+    .array(z.string())
+    .min(1)
+    .max(3)
+    .describe('쓰레드·검색어·프로필에서 읽히는 관심사를 발전시킨 자연어 검색어 3개 — 8~16자 명사구, "~추천해줘" 없이'),
+})
+export type HomePersonalizeGen = z.infer<typeof HomePersonalizeGen>

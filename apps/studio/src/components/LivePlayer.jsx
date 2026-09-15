@@ -1,14 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { enrichCartEntries, productLookupFromPlanPage, stepInfoOfItem } from '../lib/cart.js'
-import { DEVICE_PRESETS, STAGES } from '../lib/store.js'
+import { viewerDeviceOf, STAGES } from '../lib/store.js'
+import DeviceFrame from './DeviceFrame.jsx'
+import { itemEl, scrollScreenTo, scrollScreenToEl } from '../lib/deviceScreen.js'
 import { isQuestionType, renderItem, resolveSampleFace } from '../lib/registry.jsx'
 import BottomSheet from './ui/BottomSheet.jsx'
 import { fetchLiveCapabilities, fetchLiveThread, recordLiveEvent, renderLiveLook, sendLiveFeedback, startLiveThread, streamLivePlan, streamLiveSurvey } from '../lib/liveApi.js'
-import { PHOTO_ANSWER, isPhotoValue, livePlanItems, liveSurveyItems } from '../lib/livePage.js'
+import { PHOTO_ANSWER, isPhotoValue, livePlanItems, liveSurveyItems, lookScopeOfAnswers } from '../lib/livePage.js'
 import { composeMakeup, matchAspectTo, toPhotoDataUrl } from '../lib/makeupComposite.js'
 import { loadLookRender, saveLookRender } from '../lib/lookCache.js'
 import { BgBlobs, FloatingBar, ViewerDeviceControl } from './Frame.jsx'
 import ThreadPanel from './ThreadPanel.jsx'
+import ThreadCartSheet from './ThreadCartSheet.jsx'
 import ProductDetailPanel from './ProductDetailPanel.jsx'
 import LiveFeedbackBubble, {
   buildLiveFeedbackPayload,
@@ -103,6 +106,67 @@ function LiveSkeleton({ message }) {
       <div className="sb-live-skel" />
       <div className="sb-live-skel sb-live-skel--tall" />
       <div className="sb-live-skel" />
+    </div>
+  )
+}
+
+/* 계획 생성 대기 화면 — Figma [PP1K] 계획 "1. 로딩 & 진입" (1-1 AI 분석 중 · 1-2 지연, 2026-09-12). 첫 LLM 조각이 오기
+   전까지만 보이고 그 뒤엔 컴포넌트 단위 스트리밍이 이어받는다(1-3 "분석 완료" 화면은 스트리밍이 대신한다). 진행률 원은
+   시간 기반 근사(90% 상한 — 서버가 진행률을 주지 않는다), 단계 목록은 서버 status 문구(검색 중이면 상품 단계)로 가른다.
+   20초가 지나면 지연 안내와 「계속 기다리기 / 나중에 다시 시도」가 선다 */
+const ANALYZE_SLOW_MS = 20000
+function LiveAnalyzing({ message, onCancel }) {
+  const [elapsed, setElapsed] = useState(0)
+  const [keepWaiting, setKeepWaiting] = useState(false)
+  useEffect(() => {
+    const started = Date.now()
+    const timer = setInterval(() => setElapsed(Date.now() - started), 250)
+    return () => clearInterval(timer)
+  }, [])
+  const pct = Math.min(90, Math.round(100 * (1 - Math.exp(-elapsed / 9000))))
+  const slow = elapsed > ANALYZE_SLOW_MS && !keepWaiting
+  const searching = /검색/.test(message || '')
+  const steps = [
+    { label: '설문 답변 분석 완료', state: 'done' },
+    { label: searching ? '추천 상품·콘텐츠 찾는 중…' : '맞춤 루틴 구성 중…', state: 'active' },
+    { label: searching ? '맞춤 루틴 순서 정리 대기' : '추천 상품·콘텐츠 매칭 대기', state: 'pending' },
+  ]
+  return (
+    <div className="sb-live-analyze" role="status" aria-live="polite">
+      <div className="sb-live-analyze__ring" style={{ '--sb-pct': pct }} aria-label={`진행 ${pct}%`}>
+        <span>{pct}%</span>
+      </div>
+      <p className="sb-live-analyze__title">{slow ? '예상보다 시간이 걸리고 있어요' : '분석 중이에요...'}</p>
+      <p className="sb-live-analyze__desc">
+        {slow
+          ? '현재 분석 요청이 많아 계획 생성이 지연되고 있습니다. 잠시만 더 기다려주시겠어요?'
+          : '입력하신 정보를 바탕으로 맞춤 계획을 만들고 있어요'}
+      </p>
+      {slow && (
+        <div className="sb-live-analyze__actions">
+          <button type="button" className="sb-live-analyze__btn sb-live-analyze__btn--primary" onClick={() => setKeepWaiting(true)}>
+            계속 기다리기
+          </button>
+          <button type="button" className="sb-live-analyze__btn" onClick={onCancel}>나중에 다시 시도</button>
+        </div>
+      )}
+      <div className="sb-live-analyze__card">
+        <p className="sb-live-analyze__card-title">분석 진행 상황</p>
+        <ul className="sb-live-analyze__steps">
+          {steps.map((s) => (
+            <li key={s.label} className={'is-' + s.state}>
+              <span className="sb-live-analyze__dot" aria-hidden="true" />
+              {s.label}
+            </li>
+          ))}
+        </ul>
+      </div>
+      {message ? (
+        <p className="sb-live-status sb-live-analyze__msg">
+          <span className="sb-live-status__spark" aria-hidden="true">✦</span>
+          {message}
+        </p>
+      ) : null}
     </div>
   )
 }
@@ -204,7 +268,8 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const [completed, setCompleted] = useState(false)
   const [keyword, setKeyword] = useState(null)
   const [productDetail, setProductDetail] = useState(null) // 상품 상세보기 사이드 패널 (null=닫힘)
-  const [threadOrigin, setThreadOrigin] = useState(null)
+  const [threadOrigin, setThreadOrigin] = useState(null) // 쓰레드 히스토리 패널 — 담은 상품 시트의 링크로만 연다
+  const [cartSheet, setCartSheet] = useState(false) // 플로팅 버튼 → 현재 쓰레드의 담은 상품 시트
   const [reselecting, setReselecting] = useState(false) // "설문 다시 선택" 확인 후 잠금 해제 상태 — 새 계획 생성 시 다시 잠김
   const [reselectConfirm, setReselectConfirm] = useState(false) // 재선택 확인 다이얼로그
   /* 피드백(평가) — 단계별 { review, components }. 서버에는 action 스텝(type='feedback')으로
@@ -315,7 +380,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
       step: 'plan',
       message: opts.feedback ? '피드백을 반영해 계획을 다시 세우고 있어요…' : '카탈로그와 웹을 살펴 계획을 세우고 있어요…',
     })
-    window.scrollTo(0, 0) // 스트리밍이 위에서부터 채워지므로 시작 시점에 올려 둔다
+    scrollScreenTo(0) // 스트리밍이 위에서부터 채워지므로 시작 시점에 올려 둔다
     streamLivePlan(threadId, {
       answers: wire,
       profile: profileWire(),
@@ -347,7 +412,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         setPartial(null)
         setLoading(null)
         setStageKey('plan')
-        window.scrollTo(0, 0)
+        scrollScreenTo(0)
       },
       onSection: (section, index, final = true) => {
         if (!active()) return
@@ -392,7 +457,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         setPartial(null)
         setLoading(null)
         setStageKey('plan')
-        window.scrollTo(0, 0)
+        scrollScreenTo(0)
       },
       onError: (e) => {
         if (!active()) return
@@ -502,10 +567,15 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   }, [threadId, surveyPage, answers])
 
   /* 가상 메이크업 합성 — 계획에 룩 섹션이 있고 사진이 있을 때만. 실패(모델 미로드·얼굴
-     미검출)는 null 유지 = tone 프리셋 렌더 그대로다 (향상 계층이라 체험을 막지 않는다) */
-  const lookTone = ((planPage && planPage.sections) || []).find((s) => s && s.kind === 'look')?.tone || ''
+     미검출)는 null 유지 = tone 프리셋 렌더 그대로다 (향상 계층이라 체험을 막지 않는다).
+     룩은 색조(tone)만이 아니라 **사양(spec — 강도·립·치크·눈·베이스)**까지 합성에 들어간다:
+     기기 합성과 정밀 렌더가 같은 사양을 소비해 두 단계의 룩이 같다(사양 없는 옛 페이지는 tone 기본 사양) */
+  const lookSection = ((planPage && planPage.sections) || []).find((s) => s && s.kind === 'look') || null
+  const lookTone = lookSection?.tone || ''
+  // 색조+사양을 값으로 묶은 서명 — planPage 참조는 스트리밍마다 바뀌므로 효과 의존성은 이 문자열이다
+  const lookSig = lookSection ? JSON.stringify({ tone: lookSection.tone, spec: lookSection.spec || null }) : ''
   useEffect(() => {
-    if (!lookTone || !livePhoto) {
+    if (!lookSig || !livePhoto) {
       setLookAfter(null)
       setLookStage('skeleton')
       return undefined
@@ -515,7 +585,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     preciseRef.current = false
     refineRef.current = null
     setLookStage('skeleton')
-    composeMakeup(livePhoto, lookTone).then((url) => {
+    composeMakeup(livePhoto, JSON.parse(lookSig)).then((url) => {
       // 정밀 렌더가 이미 적용됐으면 덮지 않는다 (기기 합성이 늦게 끝나는 경우)
       if (cancelled || preciseRef.current) return
       if (url) {
@@ -529,7 +599,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     return () => {
       cancelled = true
     }
-  }, [lookTone, livePhoto])
+  }, [lookSig, livePhoto])
 
   /* 워크스페이스 쓰레드 기록 — Player와 같은 upsert 흐름, live 마커로 구분한다.
      threadId(스노우플레이크)가 나온 뒤부터 단계 이동/답변/담기/완료마다 갱신 */
@@ -578,15 +648,20 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const planPageRef = useRef(planPage)
   planPageRef.current = planPage
   useEffect(() => {
-    if (!landmarkReady || !threadId || !livePhoto || !lookTone) return undefined
-    const key = `${threadId}:${lookTone}:${livePhoto.length}`
+    if (!landmarkReady || !threadId || !livePhoto || !lookSig) return undefined
+    const key = `${threadId}:${lookSig}:${livePhoto.length}`
     if (refineRef.current === key) return undefined
     refineRef.current = key
+    const hasSpec = !!JSON.parse(lookSig).spec
+    // 보관 키 = 색조+사양+사진 지문 — 같은 쓰레드에서 사진이나 사양이 바뀌면 옛 렌더를 다른 사진 위에 올리지 않는다
+    const cacheKey = `${lookSig}:${livePhoto.length}`
     let cancelled = false
     ;(async () => {
-      // 지난 결과가 있으면 그대로 — 같은 쓰레드·색조에 유료 호출을 반복하지 않는다 (IndexedDB)
+      // 지난 결과가 있으면 그대로 — 같은 입력에 유료 호출을 반복하지 않는다 (IndexedDB).
+      // key 없는 옛 보관분은 사양 없는 옛 페이지에 한해 색조 일치로 받아들인다
       const cached = await loadLookRender(threadId)
-      if (cached && cached.tone === lookTone && cached.image) {
+      const cacheHit = cached && cached.image && (cached.key ? cached.key === cacheKey : !hasSpec && cached.tone === lookTone)
+      if (cacheHit) {
         // 옛 보관분은 비율 보정 전 결과일 수 있다 — 원본 비율로 되맞춰 쓰고, 바뀌었으면 보관도 갱신
         const ref = await toPhotoDataUrl(livePhoto)
         const fitted = ref ? await matchAspectTo(cached.image, ref) : cached.image
@@ -594,7 +669,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         preciseRef.current = true
         setLookAfter(fitted)
         setLookStage('precise')
-        if (fitted !== cached.image) saveLookRender(threadId, lookTone, fitted)
+        if (fitted !== cached.image) saveLookRender(threadId, fitted, { tone: lookTone, key: cacheKey })
         return
       }
       const caps = await fetchLiveCapabilities()
@@ -611,6 +686,8 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
           tone: look.tone,
           title: look.title,
           points: look.points,
+          // 사양이 있으면 BFF 가 지시문을 사양에서 생성한다 — 기기 합성과 같은 룩
+          ...(look.spec ? { spec: look.spec } : {}),
         })
         // 편집 모델은 표준 규격(1024×1536 등)으로 돌려주며 원본을 살짝 늘린다 — 원본 비율로 되맞춰야
         // 슬라이더의 두 층이 정확히 겹친다 (matchAspectTo). 보관도 보정본으로
@@ -620,7 +697,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         setLookAfter(fitted)
         setLookStage('precise')
         // 다음 이어보기에서 재호출하지 않도록 원본 화질 그대로 보관한다 (IndexedDB — 실패해도 화면은 그대로)
-        saveLookRender(threadId, lookTone, fitted)
+        saveLookRender(threadId, fitted, { tone: lookTone, key: cacheKey })
       } catch (e) {
         if (cancelled || cancelledRef.current) return
         console.warn('[look] 정밀 렌더 실패 — 기기 합성을 유지합니다:', e.message)
@@ -631,7 +708,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [landmarkReady, threadId, livePhoto, lookTone])
+  }, [landmarkReady, threadId, livePhoto, lookSig])
 
   const playerApi = {
     query: liveQuery,
@@ -707,11 +784,12 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const surveyItems = useMemo(
     () =>
       surveyPage
-        ? liveSurveyItems(surveyPage).map((it) =>
+        ? liveSurveyItems(surveyPage, { scope: lookScopeOfAnswers(answers) }).map((it) =>
             it.type === 'surveyQuestion' ? { ...it, props: { ...it.props, locked: surveyLocked } } : it
           )
         : [],
-    [surveyPage, surveyLocked]
+    // 범위 질문(s1)의 답이 사진 질문의 안내 문구를 바꾼다 — answers 가 의존성에 든다
+    [surveyPage, surveyLocked, answers]
   )
   const planItems = useMemo(
     () =>
@@ -758,28 +836,41 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         summary: (partial && partial.summary) || '',
         sections,
       }, { query: liveQuery, pendingSlots: pendingPreview, photo: livePhoto })
-      return headline ? items : items.filter((it) => it.id !== 'live-plan-title')
+      return items // 타이틀 밴드는 인용 “질의”(클라이언트 소유)뿐이라 헤드라인 도착을 기다리지 않는다 (2026-09-12)
     }
     if (loading.step === 'survey') {
       const intro = (partial && partial.intro) || ''
-      const items = liveSurveyItems({
-        intro,
-        questions: ((partial && partial.questions) || []).filter(Boolean),
-      })
+      const items = liveSurveyItems(
+        { intro, questions: ((partial && partial.questions) || []).filter(Boolean) },
+        { scope: lookScopeOfAnswers(answers) },
+      )
       return intro ? items : items.filter((it) => it.id !== 'live-survey-intro')
     }
     return [] // step 'start'(쓰레드 시작·이어보기 로드)는 그릴 재료가 없다 — 전체 스켈레톤
-  }, [loading, partial, livePhoto])
+  }, [loading, partial, livePhoto, answers])
   /* 미리보기도 확정 렌더와 같은 한 화면 = 질문 하나 규칙을 따른다. allItems는 도착한 전체를
      그대로 넘겨서 진행 표시가 "1 / 2 → 1 / 3"으로 자라는 것을 보여준다 */
   const partialTopItems = partialAllItems.filter((it) => !it.parentId)
   const partialItems =
     loading && loading.step === 'survey' ? pageQuestions(partialTopItems, qStep) : partialTopItems
 
+  /* 계획 생성의 첫 LLM 조각(제목·정리·섹션)이 왔는가 — 오기 전엔 Figma "AI 분석 중" 대기 화면, 온 뒤엔 스트리밍 렌더 */
+  const planContentStarted = !!(partial && (partial.headline || partial.summary || (partial.sections || []).some(Boolean)))
+  /* 대기 화면의 「나중에 다시 시도」 — 진행 중 스트림의 이벤트를 버리고 설문으로 되돌린다 (요청 자체는 끊지 못한다) */
+  const cancelPlan = () => {
+    planRunRef.current += 1
+    skeletonDoneRef.current = false
+    setPartial(null)
+    setLoading(null)
+    setStageKey('survey')
+    scrollScreenTo(0)
+    api.showToast('계획 생성을 멈췄어요. 답변을 확인하고 다시 시도해 주세요.')
+  }
+
   /* 스테퍼 표시는 생성 중엔 생성 대상 단계를 따른다 (계획 스트리밍 중엔 계획 강조) */
   const displayStageKey = loading ? (loading.step === 'plan' ? 'plan' : 'survey') : stageKey
   const stageIdx = STAGES.findIndex((s) => s.key === displayStageKey)
-  const viewer = DEVICE_PRESETS.find((d) => d.key === api.viewerDevice) || DEVICE_PRESETS[0]
+  const viewer = viewerDeviceOf(api.viewerDevice)
   const planStale = planPage && planKey !== JSON.stringify(answersWire())
 
   /* 피드백(평가) — 현재 단계의 상태와 미전송 여부. 저장은 명시적 버튼 한 번 = 제출 한 번 */
@@ -934,7 +1025,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const goPlan = (opts = {}) => {
     if (planPage && !(planStale && opts.regenerate)) {
       setStageKey('plan')
-      window.scrollTo(0, 0)
+      scrollScreenTo(0)
       return
     }
     generatePlan()
@@ -946,8 +1037,28 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     if (target.key === 'plan') goPlan()
     else {
       setStageKey('survey')
-      window.scrollTo(0, 0)
+      scrollScreenTo(0)
     }
+  }
+
+  /* 담은 상품 시트의 파트 → 계획의 그 단계로 앵커 스크롤 (Player 와 같은 규칙, 2026-09). 계획 화면이면 바로, 설문 화면에서
+     눌렀으면 이미 만든 계획을 여는 goPlan(LLM 재호출 없음) 뒤 렌더가 끝난 시점(효과)에 스크롤한다 */
+  const anchorRef = useRef(null)
+  useEffect(() => {
+    const anchor = anchorRef.current
+    if (!anchor || stageKey !== 'plan' || loading) return
+    anchorRef.current = null
+    scrollScreenToEl(itemEl(phoneRef.current, anchor))
+  }, [stageKey, loading])
+  const openStepFromSheet = (part) => {
+    setCartSheet(false)
+    if (!planPage) return
+    if (stageKey === 'plan' && !loading) {
+      scrollScreenToEl(itemEl(phoneRef.current, part.id))
+      return
+    }
+    anchorRef.current = part.id
+    goPlan()
   }
 
   const retry = () => {
@@ -961,8 +1072,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
 
   return (
     <>
-      <BgBlobs />
-      <FloatingBar onList={(origin) => setThreadOrigin((v) => (v ? null : origin || 'right'))} />
+      {/* 스튜디오 크롬 — 기기 프레임 밖(브라우저 창 고정) */}
       <ViewerDeviceControl deviceKey={api.viewerDevice} onChange={api.setViewerDevice} />
 
       {/* 단계 스테퍼 — 시나리오 플레이어와 같은 골격 */}
@@ -986,13 +1096,31 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         ))}
       </nav>
 
+      {/* 기기 프레임 — 평가 모드는 말풍선 레일을 페이지 옆에 나란히 배치해야 하므로(창 스크롤 기준) 껍데기를 벗고
+         평면으로 본다(plain). DOM 은 같아서 페이지가 다시 마운트되지 않는다 */}
+      <DeviceFrame device={viewer} plain={fbMode && fbAvailable}>
+      <BgBlobs />
+      {/* 플로팅 버튼 — 체험 화면에서는 쓰레드 목록이 아니라 **지금 진행 중인 쓰레드**의 담은 상품 시트를 연다(2026-09) */}
+      <FloatingBar label="현재 쇼핑 쓰레드" onList={() => setCartSheet(true)} />
       <section className={'sb-player sb-player--live min-h-screen relative z-10' + (fillActive ? ' sb-player--fill' : '')}>
         <div className={'sb-live-annotate' + (fbMode && fbAvailable ? ' is-on' : '')}>
         <div className="sb-phone sb-phone--player" ref={phoneRef} style={{ width: viewer.w }}>
           {error ? (
             <LiveError error={error} onRetry={retry} fallbacks={fallbacks} onPlayScenario={api.playScenario} />
           ) : loading ? (
-            partialItems.length === 0 ? (
+            loading.step === 'plan' && !planContentStarted ? (
+              /* Figma "AI 분석 중" — 화면 헤더(클라이언트 소유)만 위에 두고 진행률 원·단계 목록으로 기다린다 */
+              <>
+                <div className="sb-player__stack">
+                  {partialItems.filter((it) => it.id === 'live-plan-header').map((it) => (
+                    <div key={it.id} className="sb-player__item">
+                      {renderItem(it, { mode: 'player', player: playerApi, profile: api.profile, allItems: partialAllItems })}
+                    </div>
+                  ))}
+                </div>
+                <LiveAnalyzing message={loading.message} onCancel={cancelPlan} />
+              </>
+            ) : partialItems.length === 0 ? (
               <LiveSkeleton message={loading.message} />
             ) : (
               /* 컴포넌트 단위 스트리밍 — 도착한 컴포넌트부터 실제 렌더, 아래엔 진행 꼬리 */
@@ -1001,7 +1129,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
                   {partialItems.map((it) => (
                     /* sb-live-item-enter — 마운트 1회 페이드인. id가 안정적이라(같은 index
                        재도착 = 같은 엘리먼트) 텍스트가 자라는 재렌더에는 다시 재생되지 않는다 */
-                    <div key={it.id} className={'sb-player__item sb-live-item-enter' + (it.stepSub ? ' sb-player__item--stepsub' : '')}>
+                    <div key={it.id} className={'sb-player__item sb-live-item-enter' + (it.stepSub ? ' sb-player__item--stepsub' : '')} data-item-id={it.id}>
                       {/* 아직 안 채워진 자리 — 확정 렌더와 같이 로딩 카드로 그린다 (레지스트리 밖 타입) */}
                       {it.type === 'livePending' ? (
                         <LivePendingSlot message={pendingMessage} />
@@ -1038,7 +1166,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
                   /* 검색 결과가 아직 안 채운 자리 — 레지스트리 밖 타입이라 여기서 직접 그린다 */
                   if (it.type === 'livePending') {
                     return (
-                      <div key={it.id} className={'sb-player__item' + (it.stepSub ? ' sb-player__item--stepsub' : '')}>
+                      <div key={it.id} className={'sb-player__item' + (it.stepSub ? ' sb-player__item--stepsub' : '')} data-item-id={it.id}>
                         <LivePendingSlot message={pendingMessage} />
                       </div>
                     )
@@ -1050,6 +1178,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
                     <div
                       key={it.id}
                       ref={(el) => { fbAnchorRefs.current[it.id] = el }}
+                      data-item-id={it.id}
                       className={
                         'sb-player__item'
                         + (it.stepSub ? ' sb-player__item--stepsub' : '')
@@ -1172,6 +1301,31 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
 
       {/* 상품 상세보기 사이드 패널 — 외부몰 페이지 iframe (모바일은 전체화면) */}
       <ProductDetailPanel product={productDetail} onClose={() => setProductDetail(null)} />
+      </DeviceFrame>
+
+      {/* 현재 쓰레드의 담은 상품 시트 — 쇼핑 쓰레드 패널 카드가 여는 것과 같은 시트. 파트는 생성된 계획의 단계(guide) 목록(단계마다
+         실린 상품 수·아직 안 찬 자리(pendingSlots) 표식을 함께 실어 시트가 「추가해 보세요/찾는 중/추천 상품 없음」을 가른다),
+         ⊖ 는 이 체험의 담기 상태에서 뺀다(기록은 recordThread 효과가 따라간다). 계획이 아직 없으면 CTA 는 시트만 닫는
+         「설문 이어서 답하기」, 계획을 만드는 중이면 「계획 화면으로 돌아가기」 */}
+      {cartSheet && (
+        <ThreadCartSheet
+          thread={{ title: liveQuery || 'AI 실시간 생성', cart }}
+          steps={planPage ? productLookupFromPlanPage(planPage, { pendingSlots }).steps : []}
+          pending={pendingSlots.length > 0 || !!(loading && loading.step === 'plan')}
+          ctaLabel={planPage ? '뷰티 맞춤 계획 보기' : loading && loading.step === 'plan' ? '계획 화면으로 돌아가기' : '설문 이어서 답하기'}
+          onClose={() => setCartSheet(false)}
+          onRemove={(index) => setCart((prev) => prev.filter((_, i) => i !== index))}
+          onOpenStep={planPage ? openStepFromSheet : undefined}
+          onOpenPlan={() => {
+            setCartSheet(false)
+            if (planPage) goPlan()
+          }}
+          onOpenList={() => {
+            setCartSheet(false)
+            setThreadOrigin('right')
+          }}
+        />
+      )}
 
       {/* 설문 재선택 확인 — 잠금 해제는 이 다이얼로그를 거쳐서만 */}
       {reselectConfirm && (

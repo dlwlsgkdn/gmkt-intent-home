@@ -8,9 +8,57 @@
 
 import { joinTextList } from './store.js'
 
+/** 계획 섹션 i 의 투영 아이템 id — 섹션 종류와 무관하게 인덱스로 결정된다(스트리밍 중 같은 index 재도착 = 같은 엘리먼트).
+ * lib/cart.js 가 단계(guide) 목록에 같은 id 를 실어, 담은 상품 시트의 파트 → 계획 단계 앵커 스크롤이 이 id 로 래퍼를 찾는다 */
+export const livePlanSectionId = (index) => `live-plan-s${index}`
+
 /** 사진 질문의 와이어 답 — @ddak/schema PHOTO_ANSWER와 같은 문자열이어야 한다.
  * 사진 원본은 기기에 남고 서버로는 이 표식만 간다 (데이터 URL은 스텝·프롬프트에 실을 것이 못 된다) */
 export const PHOTO_ANSWER = '사진 제출됨'
+
+/** 룩 사양 → 화면 포인트 문구 — @ddak/pipeline look.ts `lookPointsOf` 의 거울(부위 라벨 + note).
+ *  BFF 가 와이어 points 를 이 규칙으로 채워 보내므로 보통은 쓰이지 않고, 운영 콘솔 단계 단독 dry-run 처럼
+ *  뼈대 생성물을 FE 가 직접 투영할 때만 폴백으로 쓴다. 규칙을 바꾸면 양쪽을 같이 맞출 것 */
+const LOOK_PART_LABELS = { lip: '립', cheek: '치크', eye: '눈', base: '베이스', hair: '헤어', outfit: '옷' }
+/** 범위가 그 부위를 포함하는가 — 누적: hair ⊃ makeup, outfit ⊃ hair (@ddak/pipeline look.ts scopeIncludes 거울) */
+export function scopeIncludes(scope, part) {
+  const s = scope || 'makeup'
+  if (part === 'hair') return s === 'hair' || s === 'outfit'
+  return s === 'outfit'
+}
+export function lookPointsOf(spec) {
+  if (!spec) return []
+  return ['lip', 'cheek', 'eye', 'base', 'hair', 'outfit']
+    .map((part) => {
+      if ((part === 'hair' || part === 'outfit') && !scopeIncludes(spec.scope, part)) return ''
+      const note = String((spec[part] && spec[part].note) || '').trim()
+      return note ? `${LOOK_PART_LABELS[part]} — ${note}` : ''
+    })
+    .filter(Boolean)
+}
+
+/** 스타일링 범위 질문(스캐폴드 고정, id s1)의 답 → scope. @ddak/pipeline survey-wire `lookScopeFromAnswer` 의 거울 —
+ *  선택지 제목이 곧 답이라 제목을 대조하고, 답이 없으면(옛 쓰레드) makeup */
+export const SCOPE_QUESTION_ID = 's1'
+export function lookScopeOfAnswers(answers) {
+  const raw = answers && answers[SCOPE_QUESTION_ID]
+  const label = String((Array.isArray(raw) ? raw[0] : raw) || '').split('|')[0].trim()
+  if (!label) return 'makeup'
+  if (label.includes('옷')) return 'outfit'
+  if (label.includes('헤어')) return 'hair'
+  return 'makeup'
+}
+
+/** 범위별 사진 안내 — 헤어까지면 머리 전체, 옷차림까지면 상반신이 보여야 정밀 렌더가 손댈 수 있다 */
+const PHOTO_PLACEHOLDER_BY_SCOPE = {
+  makeup: '정면 얼굴 사진을 선택해주세요',
+  hair: '머리 전체가 나온 정면 사진을 선택해주세요',
+  outfit: '상반신이 나온 정면 사진을 선택해주세요',
+}
+const PHOTO_HINT_BY_SCOPE = {
+  hair: '헤어까지 보려면 머리카락이 잘리지 않은 사진이 좋아요',
+  outfit: '옷차림까지 보려면 어깨와 상의가 보이는 사진이 좋아요',
+}
 
 /** 답 값이 실제로 그릴 수 있는 이미지인지 — 이어보기·관리 페이지에서는 표식만 남는다 */
 export const isPhotoValue = (value) => /^(data:image\/|https?:\/\/|\.{0,2}\/)/.test(String(value || ''))
@@ -24,7 +72,8 @@ export function splitIntro(intro) {
   return m ? { title: m[1].trim(), desc: m[2].trim() } : { title: text, desc: '' }
 }
 
-export function liveSurveyItems(page) {
+export function liveSurveyItems(page, opts = {}) {
+  const scope = opts.scope || 'makeup'
   const intro = splitIntro(page.intro)
   const items = [
     // 화면 헤더는 클라이언트 소유 — LLM 산출물과 무관하게 생성 시작부터 늘 그린다
@@ -49,7 +98,9 @@ export function liveSurveyItems(page) {
         type: 'surveyPhoto',
         props: {
           question: q.question,
-          placeholder: q.placeholder || '정면 얼굴 사진을 선택해주세요',
+          // 범위 질문(s1)이 앞에 있어 답이 이미 정해져 있다 — 헤어·옷차림까지면 안내를 그에 맞춘다
+          placeholder: q.placeholder || PHOTO_PLACEHOLDER_BY_SCOPE[scope] || PHOTO_PLACEHOLDER_BY_SCOPE.makeup,
+          ...(PHOTO_HINT_BY_SCOPE[scope] ? { hint: PHOTO_HINT_BY_SCOPE[scope] } : {}),
           iconLabel: '사진 아이콘',
           samples: '', // 기본 샘플 얼굴 4종
           photoUrl: '',
@@ -94,10 +145,10 @@ export function livePlanItems(page, opts = {}) {
       type: 'planTitle',
       props: {
         query: opts.query || '', // 사용자 질의 — 비면 인용 줄이 숨는다
-        title: page.headline || '',
+        title: '', // Figma AIIntro 는 인용 한 줄뿐 — LLM 헤드라인은 아래 정리 문단의 제목 자리로 (2026-09-12)
         notice: 'AI가 만든 계획이에요. 내용이 사실과 다를 수 있으니 확인해 주세요.',
         noticeOpen: false,
-        highlight: true,
+        highlight: false,
       },
     },
   ]
@@ -110,7 +161,11 @@ export function livePlanItems(page, opts = {}) {
     props: { hiddenProfile: '', hiddenQuestions: '' },
   })
   if (page.summary) {
-    items.push({ id: 'live-plan-summary', type: 'textBlock', props: { kicker: '', title: '이렇게 정리했어요', body: page.summary } })
+    items.push({
+      id: 'live-plan-summary',
+      type: 'textBlock',
+      props: { kicker: '', title: page.headline || '이렇게 정리했어요', body: page.summary },
+    })
   }
   const sections = page.sections || []
   /* forEach가 아니라 인덱스 순회다 — 스트리밍 중 partial.sections는 도착한 인덱스에만 값이
@@ -133,7 +188,7 @@ export function livePlanItems(page, opts = {}) {
       }
       continue
     }
-    const base = `live-plan-s${i}`
+    const base = livePlanSectionId(i)
     if (section.kind === 'look') {
       /* 가상 메이크업 결과 — 올린 사진을 BEFORE로, 같은 사진에 룩 톤을 올린 것을 AFTER로.
          사진이 없으면(이어보기로 기기 보관분이 없거나 관리 페이지 미리보기) 합성할 재료가
@@ -148,6 +203,9 @@ export function livePlanItems(page, opts = {}) {
            → 'precise'(정밀 렌더 적용). BEFORE(원본)는 어느 단계에서든 바로 보인다 */
         const stage = opts.lookStage || (opts.photoAfter ? 'landmark' : 'skeleton')
         const after = opts.photoAfter || photo
+        // 범위가 헤어·옷차림까지면 기기 합성은 메이크업만 그린다(랜드마크는 얼굴뿐) — 정밀 렌더 전엔 그 사실을 안내한다
+        const beyond = !!(section.spec && scopeIncludes(section.spec.scope, 'hair'))
+        const beyondLabel = section.spec && section.spec.scope === 'outfit' ? '헤어·옷차림' : '헤어'
         items.push({
           id: base,
           type: 'beforeAfter',
@@ -157,14 +215,18 @@ export function livePlanItems(page, opts = {}) {
             beforeImage: photo,
             afterImage: after,
             tone: opts.photoAfter ? '' : section.tone || '',
+            // 합성 전 CSS 프리셋 단계에서도 사양의 립 색을 쓴다 (tone 고정색 대신)
+            tint: (!opts.photoAfter && section.spec && section.spec.lip && section.spec.lip.color) || '',
             beforeLabel: '내 사진',
-            afterLabel: stage === 'precise' ? 'AI 메이크업 · 정밀' : 'AI 메이크업',
+            afterLabel: stage === 'precise' ? (beyond ? 'AI 스타일링 · 정밀' : 'AI 메이크업 · 정밀') : 'AI 메이크업',
             afterState: stage,
             // 합성 결과(data URL)가 있을 때만 — CSS 프리셋 단계에서 저장하면 화장 안 된 원본이 나간다
             downloadable: !!opts.photoAfter,
             split: '50',
             hint: '',
-            disclaimer: 'AI가 올려 본 미리보기예요. 실제 발색은 피부톤 · 조명에 따라 다를 수 있어요.',
+            disclaimer:
+              'AI가 올려 본 미리보기예요. 실제 발색은 피부톤 · 조명에 따라 다를 수 있어요.' +
+              (beyond && stage !== 'precise' ? ` ${beyondLabel}은 정밀 렌더에서 반영돼요.` : ''),
           },
         })
       } else {
@@ -174,7 +236,8 @@ export function livePlanItems(page, opts = {}) {
           props: { title: section.title, body: section.desc || '' },
         })
       }
-      const points = (section.points || []).filter(Boolean)
+      // 포인트는 BFF 가 사양 note 에서 파생해 보낸다 — 없으면(FE 직접 투영) 같은 규칙으로 여기서 파생
+      const points = (section.points && section.points.length ? section.points : lookPointsOf(section.spec)).filter(Boolean)
       if (points.length) {
         items.push({
           id: `${base}-points`,
@@ -211,7 +274,8 @@ export function livePlanItems(page, opts = {}) {
           props: {
             brand: product.brand || '',
             name: product.name,
-            price: Number(product.price || 0).toLocaleString('ko-KR'),
+            // 판매가를 못 확인한 웹 상품(priceUnknown·0원)은 가격을 비운다 — 카드가 "가격 확인 필요"로 보인다 (2026-09)
+            price: product.priceUnknown || !(Number(product.price) > 0) ? '' : Number(product.price).toLocaleString('ko-KR'),
             was: '',
             // 매칭율 — 검증 게이트(@ddak/pipeline guards/match.ts)가 상품마다 계산해 페이지에 남긴 값. 항목 표(factors)와
             // 계산식(basis)이 배지 팝오버 재료다. 옛 페이지(match 없음)는 예전처럼 "AI 추천" 문구 배지로 남는다
@@ -222,8 +286,9 @@ export function livePlanItems(page, opts = {}) {
             summary: '',
             emoji: product.imageUrl ? '' : '🧴', // 썸네일 없는 상품만 이모지 목업 블록으로 렌더
             gradient: '',
-            // mall 있음 = 웹 검색으로 찾은 외부몰 상품 (외부몰 태그·담기불가), 없음 = 데모 카탈로그(지마켓)
-            external: !!product.mall,
+            // mall 있음 = 웹 검색으로 찾은 상품, 없음 = 데모 카탈로그(지마켓). 지마켓에서 찾은 웹 상품은 외부몰이 아니다(v25 —
+            // 지마켓 50 : 외부몰 50). 어느 쪽이든 담기는 된다(2026-09-14) — external 은 몰 표기·담기 버튼 툴팁만 가른다
+            external: !!product.mall && !/지마켓|g마켓|gmarket/i.test(product.mall),
             urlKind: product.urlKind || 'pdp', // search = PDP 를 못 찾아 몰 검색 결과를 여는 상품 (「몰에서 찾기」)
             mall: product.mall || '',
             url: product.url || '', // 상세보기 사이드 패널이 iframe으로 연다
@@ -236,9 +301,16 @@ export function livePlanItems(page, opts = {}) {
       if (section.reason) {
         items.push({ id: `${base}-reason`, type: 'textBlock', props: { kicker: '', title: '', body: section.reason } })
       }
-      items.push({ id: base, type: 'hscroll', props: { title: section.title, cardW: '260', items: '' } })
-      ;(section.items || []).forEach((c, j) => {
-        const common = { id: `${base}-c${j}`, parentId: base, slot: j, w: 260 } // Figma VideoCard 는 전폭 — 트랙에선 한 장 반이 보이는 폭
+      /* Figma [PP1K] 계획 2-2·4-1 의 VideoCard 는 단계 본문 안 전폭 카드 한 장이다 — 콘텐츠가 하나면 트랙 없이 최상위
+         전폭 카드로(섹션 id `base` 를 카드가 그대로 받아 피드백 말풍선 앵커·늦은 도착 페이드인 규칙이 섹션과 같다),
+         둘 이상이면 가로 트랙(한 장 반이 보이는 260 폭)으로 투영한다 */
+      const contents = section.items || []
+      const single = contents.length === 1
+      if (!single) items.push({ id: base, type: 'hscroll', stepSub, props: { title: section.title, cardW: '260', items: '' } })
+      contents.forEach((c, j) => {
+        const common = single
+          ? { id: base, stepSub }
+          : { id: `${base}-c${j}`, parentId: base, slot: j, w: 260 }
         if (c.type === 'video') {
           items.push({
             ...common,
@@ -250,6 +322,7 @@ export function livePlanItems(page, opts = {}) {
               duration: c.duration || '',
               url: c.url || '', // 카드 클릭 = 새 탭 (registry videoCard의 openExternal)
               imageUrl: c.imageUrl || '', // 없으면 유튜브 URL 자동 썸네일 → 폴백 이미지
+              note: c.why || '', // 5c 콘텐츠 단계가 답변을 인용해 적은 "왜 이 콘텐츠인지" (옛 페이지엔 없음)
             },
           })
         } else {
@@ -263,6 +336,7 @@ export function livePlanItems(page, opts = {}) {
               author: c.meta || '',
               url: c.url || '',
               imageUrl: c.imageUrl || '',
+              note: c.why || '',
             },
           })
         }

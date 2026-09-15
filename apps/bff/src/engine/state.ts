@@ -1,6 +1,6 @@
 import { Annotation } from '@langchain/langgraph'
 import type { Answer, LlmMeta, PlanPageWire, Profile, SurveyPageWire, ThreadStageFeedback } from '@ddak/schema'
-import type { ConstraintLedger, GroundingDrop, IntentGen, PlanSearchSectionGen, PlanSkeletonGen } from '@ddak/pipeline'
+import type { ConstraintLedger, ContentsSectionGen, GroundingDrop, IntentGen, PlanSearchSectionGen, PlanSkeletonGen } from '@ddak/pipeline'
 
 /*
  * 쓰레드 그래프 상태 (DESIGN-PIPELINE-LANGGRAPH.md §1) — 체크포인트로 직렬화되므로
@@ -23,6 +23,8 @@ export const ThreadGraphState = Annotation.Root({
   ledger: Annotation<ConstraintLedger | null>(),
   /** 상품 블록리스트 (KV guard-blocklist) — s2에서 굳혀 스트리밍·최종 검증이 같은 목록을 본다 */
   blocklist: Annotation<string[] | null>(),
+  /** 콘텐츠 저신뢰 출처 도메인 (KV guard-content-hosts) — 같은 규칙 */
+  contentBlockHosts: Annotation<string[] | null>(),
   survey: Annotation<SurveyPageWire | null>(),
   surveyMeta: Annotation<LlmMeta | null>(),
   answers: Annotation<Answer[] | null>(),
@@ -37,6 +39,10 @@ export const ThreadGraphState = Annotation.Root({
   productsMeta: Annotation<LlmMeta | null>(),
   /** 검색 단계 실패 메시지 — 실패는 계획 전체를 죽이지 않는다 (legacy allSettled 정책 유지) */
   productsFailed: Annotation<string | null>(),
+  /** 5c 참고 콘텐츠 단계 원본 섹션 (그라운딩 전) — verify 노드가 상품 섹션과 함께 병합한다 (2026-09 분리) */
+  contentSections: Annotation<ContentsSectionGen[] | null>(),
+  contentsMeta: Annotation<LlmMeta | null>(),
+  contentsFailed: Annotation<string | null>(),
   page: Annotation<PlanPageWire | null>(),
   /** 검증 게이트 드롭 사유 (최종 검증 기준) — plan 스텝 payload.dropLog로 기록 (전략 문서 p.11) */
   dropLog: Annotation<GroundingDrop[] | null>(),

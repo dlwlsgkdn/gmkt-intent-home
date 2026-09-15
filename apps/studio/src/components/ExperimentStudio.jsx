@@ -314,7 +314,7 @@ export default function ExperimentStudio() {
           /* 지연 3종을 전 엔진 공통 축으로 그린다 — 막대 길이가 곧 비교라 표보다 판정이 빠르다 */
           const latMax = Math.max(
             1,
-            ...metrics.engines.flatMap((m) => [m.avgLatencyMs || 0, m.avgSkeletonMs || 0, m.avgProductsMs || 0]),
+            ...metrics.engines.flatMap((m) => [m.avgLatencyMs || 0, m.avgSkeletonMs || 0, m.avgProductsMs || 0, m.avgContentsMs || 0]),
           )
           const latencyBar = (label, value, mod) => (
             <div className="sb-exp-bar">
@@ -342,6 +342,7 @@ export default function ExperimentStudio() {
                     {latencyBar('전체', m.avgLatencyMs)}
                     {latencyBar('뼈대', m.avgSkeletonMs, 'skeleton')}
                     {latencyBar('상품', m.avgProductsMs, 'products')}
+                    {m.avgContentsMs != null && latencyBar('콘텐츠', m.avgContentsMs, 'contents')}
                     <div className="sb-exp-bar">
                       <span className="sb-exp-bar__label">캐시</span>
                       <span className="sb-exp-bar__track">
@@ -356,6 +357,21 @@ export default function ExperimentStudio() {
                         {m.cacheHitRate != null ? `${Math.round(m.cacheHitRate * 100)}%` : '—'}
                       </span>
                     </div>
+                    {m.quality && (
+                      /* 품질 KPI — llmMeta.quality 를 가진 표본(v22 이후)만. 비율은 낮을수록 좋은 것(1개짜리 섹션·가격 미확인·콘텐츠 누락·드롭)과
+                         높을수록 좋은 것(PDP·썸네일)이 섞여 있어 라벨에 방향을 적는다 */
+                      <dl className="sb-exp-quality" title={`품질 요약을 가진 계획 ${m.quality.plans}개 기준`}>
+                        <div><dt>섹션당 상품</dt><dd>{m.quality.avgProductsPerSection ?? '—'}</dd></div>
+                        <div><dt>1개짜리 섹션 ↓</dt><dd>{m.quality.singleProductSectionRate == null ? '—' : `${Math.round(m.quality.singleProductSectionRate * 100)}%`}</dd></div>
+                        <div><dt>웹 상품 PDP ↑</dt><dd>{m.quality.webPdpRate == null ? '—' : `${Math.round(m.quality.webPdpRate * 100)}%`}</dd></div>
+                        <div><dt>상품 썸네일 ↑</dt><dd>{m.quality.productThumbnailRate == null ? '—' : `${Math.round(m.quality.productThumbnailRate * 100)}%`}</dd></div>
+                        <div><dt>가격 미확인 ↓</dt><dd>{m.quality.priceUnknownRate == null ? '—' : `${Math.round(m.quality.priceUnknownRate * 100)}%`}</dd></div>
+                        <div><dt>콘텐츠 누락 ↓</dt><dd>{m.quality.contentMissingRate == null ? '—' : `${Math.round(m.quality.contentMissingRate * 100)}%`}</dd></div>
+                        <div><dt>콘텐츠 항목</dt><dd>{m.quality.avgContentItems ?? '—'}</dd></div>
+                        <div><dt>콘텐츠 썸네일 ↑</dt><dd>{m.quality.contentThumbnailRate == null ? '—' : `${Math.round(m.quality.contentThumbnailRate * 100)}%`}</dd></div>
+                        <div><dt>드롭/계획</dt><dd>{m.quality.avgDrops ?? '—'}</dd></div>
+                      </dl>
+                    )}
                     {(m.promptVersions || []).length > 0 && (
                       <div className="sb-exp-engine__foot">
                         {m.promptVersions.map((v) => (
@@ -366,7 +382,7 @@ export default function ExperimentStudio() {
                   </div>
                 ))}
               </div>
-              <p className="sb-admin__muted">지연 막대는 짧을수록 좋아요 — 세 지표 모두 엔진 공통 축이라 길이로 바로 비교돼요.</p>
+              <p className="sb-admin__muted">지연 막대는 짧을수록 좋아요 — 지표 전부 엔진 공통 축이라 길이로 바로 비교돼요. 품질 KPI 는 품질 요약(v22 이후 계획)이 있는 표본만 평균이에요 — 화살표가 좋은 방향이에요.</p>
             </>
           )
         })()}

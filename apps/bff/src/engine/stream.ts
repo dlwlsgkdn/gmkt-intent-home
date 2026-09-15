@@ -1,7 +1,7 @@
 import {
   GeneratedIndexAllocator,
   isSlotKind,
-  slotIndexesOf,
+  skeletonSectionWire,
   type PlanSkeletonGen,
 } from '@ddak/pipeline'
 import type { PlanSectionWire, SurveyQuestionWire } from '@ddak/schema'
@@ -20,6 +20,7 @@ export type GraphStreamChunk =
   | { event: 'skeleton'; data: { page: PlanSkeletonPageWire; pending: number[] } }
   | { event: 'section'; data: { index: number; section: PlanSectionWire; final: boolean } }
   | { event: 'search'; data: { query: string } }
+  | { event: 'status'; data: { message: string } }
 
 export type ChunkWriter = (chunk: GraphStreamChunk) => void
 
@@ -33,7 +34,7 @@ export type ChunkWriter = (chunk: GraphStreamChunk) => void
 export class PlanStreamCoordinator {
   private emit: ChunkWriter | null = null
   private allocator: GeneratedIndexAllocator | null = null
-  private readonly slotByStream = new Map<number, number>()
+  private readonly slotByStream = new Map<string, number>()
   private readonly arrived: { section: PlanSectionWire; streamIndex: number }[] = []
   private emitted = 0
 
@@ -54,17 +55,22 @@ export class PlanStreamCoordinator {
     this.emit?.({ event: 'search', data: { query } })
   }
 
+  /** 진행 안내 한 줄 — 뼈대 재시도처럼 FE 대기 화면(✦ status 줄)에 보여줄 상태 */
+  status(message: string) {
+    this.emit?.({ event: 'status', data: { message } })
+  }
+
   /** 뼈대 최종 검증본 도착 — 자리 인덱스 확정 + 조기 확정 알림 + 대기열 플러시 */
   skeletonReady(content: PlanSkeletonGen) {
     const sections = content.sections
-    this.allocator = new GeneratedIndexAllocator(slotIndexesOf(sections), sections.length)
+    this.allocator = new GeneratedIndexAllocator(sections)
     const pending: number[] = []
     const wireSections = sections.map((s, i) => {
       if (isSlotKind(s.kind)) {
         pending.push(i)
         return null
       }
-      return s as PlanSectionWire
+      return skeletonSectionWire(s)
     })
     this.emit?.({
       event: 'skeleton',
@@ -82,14 +88,18 @@ export class PlanStreamCoordinator {
   /** 자라는 중인 검색 섹션 증분 — 뼈대 확정(자리 카드) 전 조각은 버린다 (완성본은 대기열이 보전) */
   searchPartial(section: PlanSectionWire, streamIndex: number) {
     if (!this.allocator) return
-    this.section(section, this.slotFor(streamIndex, section.kind), false)
+    this.section(section, this.slotFor(streamIndex, section), false)
   }
 
-  private slotFor(streamIndex: number, kind: string): number {
-    let slot = this.slotByStream.get(streamIndex)
+  /** 자리 배정 — 상품(5b)·콘텐츠(5c) 호출의 스트림 index 가 각자 0부터라 종류와 함께 키로 쓴다 */
+  private slotFor(streamIndex: number, section: PlanSectionWire): number {
+    const slotKind = section.kind === 'contents' ? 'contents' : 'products'
+    const key = `${slotKind}:${streamIndex}`
+    let slot = this.slotByStream.get(key)
     if (slot === undefined) {
-      slot = (this.allocator as GeneratedIndexAllocator).next(kind === 'contents' ? 'contents' : 'products')
-      this.slotByStream.set(streamIndex, slot)
+      // 제목·reason 으로 단계 묶음을 골라 자리를 받는다 (@ddak/pipeline merge.ts PlanPlacer — verify 노드의 최종 병합과 같은 배정)
+      slot = (this.allocator as GeneratedIndexAllocator).next(section)
+      this.slotByStream.set(key, slot)
     }
     return slot
   }
@@ -98,7 +108,7 @@ export class PlanStreamCoordinator {
     if (!this.allocator || !this.emit) return
     while (this.emitted < this.arrived.length) {
       const { section, streamIndex } = this.arrived[this.emitted]
-      this.section(section, this.slotFor(streamIndex, section.kind), true)
+      this.section(section, this.slotFor(streamIndex, section), true)
       this.emitted += 1
     }
   }

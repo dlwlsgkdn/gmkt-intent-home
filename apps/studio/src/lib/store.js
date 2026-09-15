@@ -12,6 +12,7 @@
 export {
   uid,
   DEVICE_PRESETS,
+  viewerDeviceOf,
   CHIP_COLORS,
   hexToRgba,
   STAGES,
@@ -41,6 +42,7 @@ export {
   DEFAULT_EXPLORE,
   DEFAULT_PROFILE,
   DEFAULT_KEYWORDS,
+  DEFAULT_SEARCH_PLACEHOLDERS,
   exploreItemsFrom,
   visibleProfileItems,
 } from './store/defaults.js'
@@ -57,6 +59,8 @@ export {
   loadStarters,
   saveStarters,
   loadKeywords,
+  loadRecentSearches,
+  saveRecentSearches,
   saveKeywords,
   loadViewerDevice,
   saveViewerDevice,

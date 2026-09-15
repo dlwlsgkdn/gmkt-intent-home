@@ -1,10 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { stepInfoOfItem } from '../lib/cart.js'
-import { STAGES, DEVICE_PRESETS, resolvePlanCase, uid, visibleProfileItems } from '../lib/store.js'
+import { productLookupFromItems, stepInfoOfItem } from '../lib/cart.js'
+import { STAGES, viewerDeviceOf, resolvePlanCase, uid, visibleProfileItems } from '../lib/store.js'
+import DeviceFrame from './DeviceFrame.jsx'
+import { itemEl, screenScrollY, scrollScreenTo, scrollScreenToEl } from '../lib/deviceScreen.js'
 import { isQuestionType, renderItem } from '../lib/registry.jsx'
 import BottomSheet from './ui/BottomSheet.jsx'
 import { BgBlobs, FloatingBar, StudioFab, ViewerDeviceControl } from './Frame.jsx'
 import ThreadPanel from './ThreadPanel.jsx'
+import ThreadCartSheet from './ThreadCartSheet.jsx'
 import ProductDetailPanel from './ProductDetailPanel.jsx'
 
 function defaultAnswersFor(scenario) {
@@ -40,36 +43,61 @@ export default function Player({ api, scenario, resume }) {
   const [keyword, setKeyword] = useState(null) // 점선 밑줄 키워드 클릭 → 설명 모달
   const [productDetail, setProductDetail] = useState(null) // 상품 상세보기 사이드 패널 (null=닫힘)
   const [completed, setCompleted] = useState(() => (resumeThread ? resumeThread.status === 'completed' : false))
-  const [threadOrigin, setThreadOrigin] = useState(null) // 쓰레드 히스토리 패널 (null=닫힘)
+  const [threadOrigin, setThreadOrigin] = useState(null) // 쓰레드 히스토리 패널 (null=닫힘) — 담은 상품 시트의 링크로만 연다
+  const [cartSheet, setCartSheet] = useState(false) // 플로팅 버튼 → 현재 쓰레드의 담은 상품 시트
   const [qStep, setQStep] = useState(0) // 설문은 질문 하나씩 — 지금 보여줄 질문 인덱스
 
   const stage = STAGES[stageIdx]
 
   /* 단계별 스크롤 기억 (세션 메모리, 저장 안 함):
-     처음 여는 단계는 맨 위에서, 다시 돌아온 단계는 떠날 때 위치에서 열린다 */
+     처음 여는 단계는 맨 위에서, 다시 돌아온 단계는 떠날 때 위치에서 열린다.
+     스크롤은 기기 프레임 화면 안에서 돈다(lib/deviceScreen.js — 프레임이 없으면 창) */
   const scrollMemRef = useRef({})
+  const phoneRef = useRef(null) // 실행 화면 스택 루트 — 앵커 스크롤이 아이템 래퍼(data-item-id)를 찾는 범위
+  const anchorRef = useRef(null) // 담은 상품 시트의 파트 클릭으로 계획에 넘어올 때 갈 단계 아이템 id (단계 효과가 소비)
   const goStage = (idx) => {
     if (idx === stageIdx) return
-    scrollMemRef.current[stage.key] = window.scrollY
+    scrollMemRef.current[stage.key] = screenScrollY()
     setStageIdx(idx)
     setQStep(0)
   }
   useEffect(() => {
+    /* 시트의 파트 클릭으로 넘어온 단계면 기억한 위치 대신 그 단계로 — 렌더가 끝난 시점이라 래퍼가 있다 */
+    const anchor = anchorRef.current
+    if (anchor) {
+      anchorRef.current = null
+      if (scrollScreenToEl(itemEl(phoneRef.current, anchor))) return
+    }
     const saved = scrollMemRef.current[STAGES[stageIdx].key]
     const y = saved != null ? saved : 0
-    window.scrollTo(0, y)
+    scrollScreenTo(y)
     if (y > 0) {
       // 이미지 로딩 등으로 페이지가 잠깐 짧을 때 클램프되는 것 보정
-      const t = setTimeout(() => window.scrollTo(0, y), 150)
+      const t = setTimeout(() => scrollScreenTo(y), 150)
       return () => clearTimeout(t)
     }
   }, [stageIdx])
+  /* 담은 상품 시트의 파트 → 계획의 그 단계로 앵커 스크롤 (2026-09). 계획 화면이면 바로, 다른 단계면 계획으로 넘어간 뒤
+     단계 효과가 기억한 위치 대신 그 단계로 스크롤한다 */
+  const openStepFromSheet = (part) => {
+    setCartSheet(false)
+    const planIdx = STAGES.findIndex((s) => s.key === 'plan')
+    if (stageIdx === planIdx) {
+      scrollScreenToEl(itemEl(phoneRef.current, part.id))
+      return
+    }
+    anchorRef.current = part.id
+    goStage(planIdx)
+  }
   /* 설문 답 조합으로 위에서부터 첫 번째 일치 계획 케이스를 선택한다.
      일치 항목이 없으면 isFallback 기본 계획 케이스가 선택된다. */
   const matchedPlanCase = useMemo(
     () => resolvePlanCase(scenario, answers),
     [scenario, answers]
   )
+
+  /* 계획 단계 목록 — 담은 상품 시트의 파트(빈 파트 행 포함) 재료 */
+  const planSteps = useMemo(() => productLookupFromItems(matchedPlanCase?.items || []).steps, [matchedPlanCase])
 
   /* 숨김·컨테이너 자식 제외한 최상위만 배열 순서대로 스택 렌더 (자식은 컨테이너가 렌더) */
   const stageItems = stage.key === 'plan'
@@ -117,8 +145,8 @@ export default function Player({ api, scenario, resume }) {
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stageIdx, answers, excludedProfile, cart, completed, matchedPlanCase?.id])
-  /* 실행 화면은 전역 뷰어 기기 폭의 모바일 프레임으로 고정 (좌상단 컨트롤로 조절) */
-  const viewer = DEVICE_PRESETS.find((d) => d.key === api.viewerDevice) || DEVICE_PRESETS.find((d) => d.key === 'iphone-15') || DEVICE_PRESETS[0]
+  /* 실행 화면은 전역 뷰어 기기의 실기기 껍데기·화면 크기로 고정 (좌상단 컨트롤로 조절) */
+  const viewer = viewerDeviceOf(api.viewerDevice)
 
   const next = () => goStage(Math.min(STAGES.length - 1, stageIdx + 1))
   const prev = () => goStage(Math.max(0, stageIdx - 1))
@@ -211,8 +239,7 @@ export default function Player({ api, scenario, resume }) {
 
   return (
     <>
-      <BgBlobs />
-      <FloatingBar onList={(origin) => setThreadOrigin((v) => (v ? null : origin || 'right'))} />
+      {/* 스튜디오 크롬 — 기기 프레임 밖(브라우저 창 고정) */}
       <StudioFab label="이 시나리오 편집" onClick={() => api.openBuilder(scenario.id)} />
       <ViewerDeviceControl deviceKey={api.viewerDevice} onChange={api.setViewerDevice} />
 
@@ -239,8 +266,13 @@ export default function Player({ api, scenario, resume }) {
         ))}
       </nav>
 
+      {/* 기기 프레임 — 실행 화면·플로팅 버튼·쓰레드 패널·상품 상세가 실기기 화면 크기 안에서 돈다 */}
+      <DeviceFrame device={viewer}>
+      <BgBlobs />
+      {/* 플로팅 버튼 — 체험 화면에서는 쓰레드 목록이 아니라 **지금 진행 중인 쓰레드**의 담은 상품 시트를 연다(2026-09). 목록은 시트 밑 링크로 */}
+      <FloatingBar label="현재 쇼핑 쓰레드" onList={() => setCartSheet(true)} />
       <section className={'sb-player min-h-screen relative z-10' + (fillActive ? ' sb-player--fill' : '')}>
-        <div className="sb-phone sb-phone--player" style={{ width: viewer.w }}>
+        <div className="sb-phone sb-phone--player" ref={phoneRef} style={{ width: viewer.w }}>
         <div className="sb-player__stack">
           {visibleItems.length === 0 && (
             <div className="sb-player__empty">
@@ -249,7 +281,7 @@ export default function Player({ api, scenario, resume }) {
             </div>
           )}
           {visibleItems.map((it) => (
-            <div key={it.id} className="sb-player__item">
+            <div key={it.id} className="sb-player__item" data-item-id={it.id}>
               {renderItem(it, { mode: 'player', player: playerApi, profile: api.profile, allItems: stageItems })}
             </div>
           ))}
@@ -295,10 +327,31 @@ export default function Player({ api, scenario, resume }) {
       {/* 쇼핑 쓰레드 히스토리 패널 — 햄버거 버튼 위치에서 등장 */}
       <ThreadPanel api={api} open={!!threadOrigin} origin={threadOrigin || 'right'} onClose={() => setThreadOrigin(null)} />
 
-      {/* 상품 상세보기 사이드 패널 — 외부몰 페이지 iframe (모바일은 전체화면) */}
+      {/* 상품 상세보기 사이드 패널 — 외부몰 페이지 iframe (기기 프레임·모바일은 전체화면) */}
       <ProductDetailPanel product={productDetail} onClose={() => setProductDetail(null)} />
+      </DeviceFrame>
 
-      {/* 키워드 설명 — 설문 날짜/사진 시트와 같은 바텀 시트 문법 */}
+      {/* 현재 쓰레드의 담은 상품 시트 — 쇼핑 쓰레드 패널 카드가 여는 것과 같은 시트(Figma ThreadMoreSheet). 파트는 이 계획 케이스의
+         단계 목록, ⊖ 는 이 체험의 담기 상태에서 뺀다(기록은 recordThread 효과가 따라간다) */}
+      {cartSheet && (
+        <ThreadCartSheet
+          thread={{ title: scenario.title, cart }}
+          steps={planSteps}
+          onClose={() => setCartSheet(false)}
+          onOpenStep={openStepFromSheet}
+          onRemove={(index) => setCart((prev) => prev.filter((_, i) => i !== index))}
+          onOpenPlan={() => {
+            setCartSheet(false)
+            goStage(STAGES.findIndex((s) => s.key === 'plan'))
+          }}
+          onOpenList={() => {
+            setCartSheet(false)
+            setThreadOrigin('right')
+          }}
+        />
+      )}
+
+      {/* 키워드 설명 — 설문 날짜/사진 시트와 같은 바텀 시트 문법 (기기 화면으로 포털) */}
       {keyword && (
         <BottomSheet title={keyword.word} onClose={() => setKeyword(null)}>
           <div className="sb-keyword-sheet">

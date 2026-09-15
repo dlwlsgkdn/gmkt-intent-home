@@ -11,7 +11,8 @@
   "engines": { "node": ">=20" },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "prepare": "npm --prefix ../schema run build && npm run build"
+    "prepare": "npm --prefix ../schema run build && npm run build",
+    "test": "npm run build && node --test test/*.test.mjs"
   },
   "dependencies": {
     "@ddak/schema": "*",

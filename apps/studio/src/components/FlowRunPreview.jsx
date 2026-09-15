@@ -88,7 +88,7 @@ export default function FlowRunPreview({
       { headline: page.headline || '', summary: page.summary || '', sections: page.sections || [] },
       { pendingSlots },
     )
-    return streaming && !page.headline ? items.filter((it) => it.id !== 'live-plan-title') : items
+    return items // 타이틀 밴드는 인용 “질의”뿐이라 헤드라인 도착과 무관하게 그린다 (2026-09-12)
   }, [page, stage, streaming, pendingSlots])
   const items = allItems.filter((it) => !it.parentId)
 
@@ -496,8 +496,11 @@ export default function FlowRunPreview({
               >
                 <summary>
                   생성 제약 근거 (원장) — 사실 {(overall.ledger.facts || []).length}
-                  {overall.ledger.budgetKrw != null
-                    ? ` · 예산 ${overall.ledger.budgetKrw.toLocaleString('ko-KR')}원 이하`
+                  {overall.ledger.budgetKrw != null || overall.ledger.budgetMinKrw != null
+                    ? ` · 예산 ${[
+                        overall.ledger.budgetMinKrw != null ? `${overall.ledger.budgetMinKrw.toLocaleString('ko-KR')}원 이상` : '',
+                        overall.ledger.budgetKrw != null ? `${overall.ledger.budgetKrw.toLocaleString('ko-KR')}원 이하` : '',
+                      ].filter(Boolean).join(' · ')}`
                     : ''}
                   {(overall.ledger.avoid || []).length ? ` · 기피 ${overall.ledger.avoid.length}` : ''}
                 </summary>

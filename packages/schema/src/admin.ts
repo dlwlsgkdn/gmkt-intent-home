@@ -62,7 +62,7 @@ export type PutAdminModelBody = z.infer<typeof PutAdminModelBody>
  * 프롬프트는 캐시 적중을 위해 바이트 고정이어야 하므로 저장값 자체가 곧 시스템 프롬프트다
  * (plan-products의 카탈로그 목록만 {{CATALOG}} 자리표시자로 호출 시점에 치환). */
 
-export const AdminPromptId = z.enum(['intent', 'survey', 'plan-skeleton', 'plan-products', 'judge', 'judge-survey'])
+export const AdminPromptId = z.enum(['intent', 'survey', 'plan-skeleton', 'plan-products', 'plan-contents', 'judge', 'judge-survey'])
 export type AdminPromptId = z.infer<typeof AdminPromptId>
 
 export const AdminPromptRevision = z.object({
@@ -350,7 +350,7 @@ export const PutAdminEngineBody = z.object({
 export type PutAdminEngineBody = z.infer<typeof PutAdminEngineBody>
 
 /** dry-run 대상 — LLM 단계만 (결정적 단계는 실행할 LLM이 없다. 검증 게이트는 products 결과에 포함) */
-export const AdminDryRunStageId = z.enum(['survey', 'plan-skeleton', 'plan-products'])
+export const AdminDryRunStageId = z.enum(['survey', 'plan-skeleton', 'plan-products', 'plan-contents'])
 export type AdminDryRunStageId = z.infer<typeof AdminDryRunStageId>
 
 export const AdminDryRunBody = z.object({

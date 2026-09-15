@@ -4,12 +4,14 @@
 //   → core 기록 → 피드백 재생성(재실행 경로·survey 멱등 스킵) → 설문 재요청 멱등 → legacy 회귀.
 // 실행: npm run build && npm run e2e:mock  (외부 네트워크·API 키 불필요)
 import { spawn } from 'node:child_process'
+import { PROMPT_VERSION } from '@ddak/pipeline'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
-const MOCK_PORT = 19799
-const BFF_PORT = 18788
+// 포트는 환경변수로 바꿀 수 있다 — 같은 머신에서 스모크 두 벌이 동시에 돌면(세션 두 개) 모의 서버를 공유해 호출 횟수가 2배로 집계된다
+const MOCK_PORT = Number(process.env.SMOKE_MOCK_PORT ?? 19799)
+const BFF_PORT = Number(process.env.SMOKE_BFF_PORT ?? 18788)
 const MOCK = `http://localhost:${MOCK_PORT}`
 const BFF = `http://localhost:${BFF_PORT}`
 const H = { 'content-type': 'application/json', 'x-ddak-engine': 'langgraph' }
@@ -61,8 +63,10 @@ const bff = spawn(process.execPath, [path.join(here, '..', 'dist', 'main.js')], 
     ANTHROPIC_API_KEY: 'mock-key',
     OPENAI_BASE_URL: MOCK, // 가상 메이크업 정밀 렌더 — 모의 이미지 편집 엔드포인트
     OPENAI_API_KEY: 'mock-image-key',
+    WEATHER_API_URL: MOCK + '/v1/weather', // 홈 인사말 날씨 — 모의 Open-Meteo
     LANGGRAPH_DATABASE_URL: '', // MemorySaver — interrupt/재개는 프로세스 내에서 검증
     BFF_SERVICE_TOKEN: '',
+    ENRICH_FETCH: '0', // 썸네일 og:image 보강은 실 네트워크 — 오프라인 스모크에서는 끈다
   },
   stdio: 'ignore',
 })
@@ -123,7 +127,25 @@ try {
   const planPage = last(plan, 'result')?.data?.page
   ok(!!planPage, 'result 계획 수신')
   ok(planPage?.headline === '모의 여름 쿠션 계획', `headline (${planPage?.headline})`)
-  ok(planPage?.sections?.length === 3, `섹션 3개 병합 (${planPage?.sections?.length})`)
+  ok(planPage?.sections?.length === 4, `섹션 4개 병합 — 뼈대 3 + 5c 콘텐츠(자리 없어 단계 묶음 끝에 끼움) (${planPage?.sections?.length})`)
+  ok(
+    (planPage?.sections ?? []).map((s) => s.kind).join(',') === 'guide,products,contents,steps',
+    `자리 없는 콘텐츠 섹션은 끝이 아니라 그 단계 묶음(steps 앞)에 끼워진다 (${(planPage?.sections ?? []).map((s) => s.kind).join(',')})`,
+  )
+  {
+    const contSection = planPage?.sections?.find((s) => s.kind === 'contents')
+    ok(contSection?.items?.length === 3, `참고 콘텐츠 3개 — 2020년 글(stale)·같은 출처 3개째(duplicate-source) 드롭 (${contSection?.items?.length})`)
+    ok(contSection?.items?.[0]?.why === '지성 피부에 얇게 여러 겹 올리는 순서가 나온 영상이에요', '콘텐츠 항목의 고른 이유(why) 전달')
+    const detail = await fetch(BFF + `/api/admin/threads/${tid}`, { headers: H }).then((r) => r.json())
+    const planStep = detail?.steps?.find((s) => s.stage === 'plan')
+    const codes = (planStep?.payload?.dropLog || []).map((d) => d.code)
+    ok(codes.includes('stale-content') && codes.includes('duplicate-source'), `콘텐츠 게이트 드롭 로그 기록 (${codes.join(',')})`)
+    ok((planStep?.payload?.dropLog || []).some((d) => d.code === 'blocklist' && d.message.includes('모의브랜드 모의 세미매트 쿠션') && !d.message.includes('[')),
+      '웹 상품 이름 정규화 — 대괄호 프로모션·브랜드 중복을 뗀 뒤 블록리스트 대조')
+    const q = planStep?.llmMeta?.quality
+    ok(q && q.productSections === 1 && q.contentSections === 1 && q.contentItems === 3 && q.priceUnknown === 1, `llmMeta.quality 품질 요약 기록 (${JSON.stringify(q)})`)
+    ok(typeof planStep?.llmMeta?.phases?.contentsMs === 'number' && planStep?.llmMeta?.usage?.webSearchRequests == null, '메타 결합 — 5c 소요(phases.contentsMs)')
+  }
   const prodSection = planPage?.sections?.find((s) => s.kind === 'products')
   ok(
     prodSection?.products?.length === 2,
@@ -139,6 +161,8 @@ try {
     ok(planPage?.sections?.find((s) => s.kind === 'guide')?.subtitle === '유분만 덜어내고 결은 남기는 준비', '단계 안내 서브타이틀 전달')
   }
   ok(prodSection?.products?.[0]?.urlKind === 'search' && prodSection?.products?.[0]?.mall === '지마켓', '검색 링크 상품(urlKind=search)이 게이트를 통과')
+  ok(prodSection?.products?.[0]?.priceUnknown === true && prodSection?.products?.[0]?.price === 0, '판매가 0 → priceUnknown 표식')
+  ok(prodSection?.products?.[0]?.match?.factors?.find((f) => f.key === 'price')?.note?.includes('확인하지 못했'), '가격 미확인 상품의 가격 적합 근거')
   ok(prodSection?.products?.[0]?.match?.factors?.find((f) => f.key === 'evidence')?.score === 25, '검색 링크 상품의 근거 신뢰 25점')
   ok(prodSection?.products?.[1]?.id === 'p-012', '카탈로그 p-012 가 뒤에 붙는다')
   const sk = last(plan, 'skeleton')?.data
@@ -151,6 +175,7 @@ try {
   ok(calls.filter((c) => c.type === 'survey').length === 1, `LLM survey 호출 1회 (${calls.filter((c) => c.type === 'survey').length})`)
   ok(calls.filter((c) => c.type === 'skeleton').length === 1, 'LLM skeleton 호출 1회')
   ok(calls.filter((c) => c.type === 'products').length === 1, 'LLM products 호출 1회')
+  ok(calls.filter((c) => c.type === 'contents').length === 1, 'LLM contents(5c) 호출 1회 — 상품과 분리')
 
   // ── 4. core 기록 확인 (record 노드) ──
   console.log('4) core 스텝 기록')
@@ -243,7 +268,7 @@ try {
   const svB = await sse(`/api/threads/${startB.threadId}/survey`, {}, plain)
   ok(last(svB, 'result')?.data?.page?.questions?.length === 3, 'legacy 설문 생성 정상')
   const planB = await sse(`/api/threads/${startB.threadId}/plan`, { answers: [{ questionId: 'q1', choices: ['건성'] }] }, plain)
-  ok(last(planB, 'result')?.data?.page?.sections?.length === 3, 'legacy 계획 생성 정상')
+  ok(last(planB, 'result')?.data?.page?.sections?.length === 4, `legacy 계획 생성 정상 — 5c 콘텐츠 포함 (${last(planB, 'result')?.data?.page?.sections?.length})`)
 
   // ── 8.5 가상 메이크업 저니 — 사진 질문 스캐폴드 + 가상 메이크업 결과(look) 섹션 ──
   console.log('8.5) 가상 메이크업 저니 (graph)')
@@ -254,23 +279,28 @@ try {
   }).then((r) => r.json())
   const svM = await sse(`/api/threads/${startM.threadId}/survey`, {}, H)
   const svMPage = last(svM, 'result')?.data?.page
-  ok(svMPage?.questions?.length === 3, `사진 질문 포함 3문항 (${svMPage?.questions?.length})`)
-  const photoQ = svMPage?.questions?.[0]
-  ok(photoQ?.kind === 'photo' && photoQ?.id === 'p1', `첫 질문이 사진 질문 (${photoQ?.id}/${photoQ?.kind})`)
+  ok(svMPage?.questions?.length === 4, `범위·사진 질문 포함 4문항 (${svMPage?.questions?.length})`)
+  const scopeQ = svMPage?.questions?.[0]
+  ok(scopeQ?.id === 's1' && scopeQ?.kind === 'choice' && scopeQ?.multi === false, `첫 질문이 스타일링 범위 질문 (${scopeQ?.id}/${scopeQ?.kind})`)
+  ok((scopeQ?.options ?? []).map((o) => o.split('|')[0]).join(',') === '메이크업만,메이크업 + 헤어,메이크업 + 헤어 + 옷차림', '범위 선택지 3개 — 제목|부제 문법')
+  const photoQ = svMPage?.questions?.[1]
+  ok(photoQ?.kind === 'photo' && photoQ?.id === 'p1', `둘째 질문이 사진 질문 (${photoQ?.id}/${photoQ?.kind})`)
   ok((photoQ?.options ?? []).length === 0, '사진 질문은 선택지가 없다')
-  ok(svMPage?.questions?.[1]?.id === 'q1', '선택지 질문 id는 q1부터 — 자리만 한 칸 밀린다')
+  ok(svMPage?.questions?.[2]?.id === 'q1', '선택지 질문 id는 q1부터 — 자리만 두 칸 밀린다')
   ok(
-    svM.some((e) => e.event === 'question' && e.data.index === 0 && e.data.question?.kind === 'photo'),
-    '사진 질문이 스트리밍 index 0으로 도착',
+    svM.some((e) => e.event === 'question' && e.data.index === 0 && e.data.question?.id === 's1') &&
+      svM.some((e) => e.event === 'question' && e.data.index === 1 && e.data.question?.kind === 'photo'),
+    '범위·사진 질문이 스트리밍 index 0·1로 도착',
   )
   ok(
-    svM.some((e) => e.event === 'question' && e.data.index === 1 && e.data.question?.id === 'q1'),
+    svM.some((e) => e.event === 'question' && e.data.index === 2 && e.data.question?.id === 'q1'),
     '스트리밍 자리도 확정 페이지와 같게 밀린다',
   )
   const planM = await sse(
     `/api/threads/${startM.threadId}/plan`,
     {
       answers: [
+        { questionId: 's1', choices: ['메이크업 + 헤어'] }, // 스타일링 범위 — 뼈대가 spec.scope 로 옮긴다
         { questionId: 'p1', choices: ['사진 제출됨'] }, // 사진 원본이 아니라 표식만 온다
         { questionId: 'q1', choices: ['데이트'] },
       ],
@@ -281,7 +311,11 @@ try {
   ok(planMPage?.sections?.[0]?.kind === 'look', `가상 메이크업 결과가 계획 맨 앞 (${planMPage?.sections?.[0]?.kind})`)
   const look = planMPage?.sections?.[0]
   ok(look?.tone === 'coral', `룩 색조 전달 (${look?.tone})`)
-  ok((look?.points ?? []).length === 2, `룩 포인트 유지 (${(look?.points ?? []).length})`)
+  ok(look?.spec?.lip?.finish === 'tint' && look?.spec?.intensity === 'natural', '룩 사양(spec)이 와이어에 실림')
+  ok(look?.spec?.lip?.color === '#f4553a', `깨진 립 색이 tone 기본색으로 정규화 (${look?.spec?.lip?.color})`)
+  ok(look?.spec?.cheek?.color === '#ff8f6d', `치크 색 소문자 정규화 (${look?.spec?.cheek?.color})`)
+  ok((look?.points ?? []).length === 5 && look.points[0] === '립 — 코랄 틴트를 안쪽부터 번지듯' && look.points[4].startsWith('헤어 — '), `룩 포인트를 사양 note 에서 파생 — 범위 안 헤어 포함 (${(look?.points ?? []).length})`)
+  ok(look?.spec?.scope === 'hair' && look?.spec?.hair?.style === 'wavy' && look?.spec?.hair?.color === 'keep' && !look?.spec?.outfit, '범위 hair — 헤어 사양은 실리고 옷차림은 뗀다')
   ok(planMPage?.sections?.some((s) => s.kind === 'products'), 'look과 상품 섹션이 함께 병합')
   {
     const skCall = (await llmCalls()).filter((c) => c.type === 'skeleton').at(-1)
@@ -297,7 +331,7 @@ try {
   const renderRes = await fetch(`${BFF}/api/threads/${startM.threadId}/look-render`, {
     method: 'POST',
     headers: H,
-    body: JSON.stringify({ photo: tinyPhoto, tone: 'coral', title: '코랄 생기 데일리 룩', points: ['립 — 코랄 틴트'] }),
+    body: JSON.stringify({ photo: tinyPhoto, tone: 'coral', title: '코랄 생기 데일리 룩', points: look?.points, spec: look?.spec }),
   })
   const render = await renderRes.json()
   ok(renderRes.status === 201, `정밀 렌더 응답 201 (${renderRes.status})`)
@@ -307,8 +341,23 @@ try {
     const editCall = (await llmCalls()).filter((c) => c.type === 'image-edit').at(-1)
     ok(!!editCall, '이미지 편집 모델 호출됨')
     ok((editCall?.user || '').includes('same person'), '편집 지시문에 동일성 보존 지시 포함')
+    ok((editCall?.user || '').includes('#f4553a') && (editCall?.user || '').includes('Korean gradient lip'), '편집 지시문이 사양(립 hex·그라데이션)에서 생성됨')
+    ok((editCall?.user || '').includes('no eyeshadow') && !(editCall?.user || '').includes('full-glam'), '사양에 없는 섀도·풀글램 템플릿을 싣지 않는다')
+    ok((editCall?.user || '').includes('- Hair: restyle the hair to soft loose waves') && (editCall?.user || '').includes('light see-through bangs'), '범위 hair — 편집 지시문에 헤어 지시가 실린다')
+    ok(/Keep exactly:[^\n]*clothing, pose/.test(editCall?.user || '') && !/Keep exactly:[^\n]*hair,/.test(editCall?.user || ''), '헤어는 보존 목록에서 빠지고 옷은 남는다')
     ok((editCall?.user || '').includes('coral'), '편집 지시문에 룩 색조 반영')
-    ok((editCall?.user || '').includes('opaque coral lipstick'), '편집 지시문 기본 강도 strong (진한 메이크업)')
+    ok((editCall?.user || '').includes('Overall intensity: medium'), '강도는 사양(intensity=natural)이 정한다')
+  }
+  {
+    // 사양 없는 옛 호출(v22 이전 페이지)은 풀글램 템플릿을 그대로 쓴다 — 호환 경로 회귀
+    const legacyRes = await fetch(`${BFF}/api/threads/${startM.threadId}/look-render`, {
+      method: 'POST',
+      headers: H,
+      body: JSON.stringify({ photo: tinyPhoto, tone: 'coral', title: '코랄 생기 데일리 룩', points: ['립 — 코랄 틴트'] }),
+    })
+    ok(legacyRes.status === 201, `사양 없는 정밀 렌더 응답 201 (${legacyRes.status})`)
+    const legacyCall = (await llmCalls()).filter((c) => c.type === 'image-edit').at(-1)
+    ok((legacyCall?.user || '').includes('opaque coral lipstick') && (legacyCall?.user || '').includes('full-glam'), '사양 없는 호출은 풀글램 템플릿 유지')
   }
   {
     const dumpM = await fetch(MOCK + `/internal/dump/${startM.threadId}`).then((r) => r.json())
@@ -327,9 +376,11 @@ try {
   // ── 9. 파이프라인 스튜디오 API (페이즈 4) ──
   console.log('9) 파이프라인 스튜디오 API')
   const pipe = await fetch(BFF + '/api/admin/pipeline').then((r) => r.json())
-  ok(pipe?.stages?.length === 9, `단계 카탈로그 9개 (${pipe?.stages?.length})`)
+  ok(pipe?.stages?.length === 10, `단계 카탈로그 10개 — 5c 참고 콘텐츠 포함 (${pipe?.stages?.length})`)
   ok(pipe?.stages?.some((s) => s.no === '5a') && pipe?.stages?.some((s) => s.no === '5b'), '병렬 5a/5b 표기')
   ok(pipe?.knowledge?.some((k) => k.id === 'guard-blocklist' && k.value), '블록리스트 KV가 지식 목록에 노출')
+  ok(pipe?.knowledge?.some((k) => k.id === 'guard-content-hosts' && k.injection === 'guard'), '콘텐츠 저신뢰 출처 KV 행 노출')
+  ok(pipe?.stages?.some((st) => st.id === 'plan-contents' && st.promptId === 'plan-contents'), '5c 참고 콘텐츠 단계가 카탈로그에 등록')
   const promptWire = await fetch(BFF + '/api/admin/prompts').then((r) => r.json())
   const productPrompt = promptWire?.prompts?.find((p) => p.id === 'plan-products')
   const assistRes = await fetch(BFF + '/api/admin/prompts/plan-products/assist', {
@@ -408,14 +459,14 @@ try {
   )
   const fr2Result = last(fr2, 'result')?.data
   ok(!last(fr2, 'error'), '플로우 계획 구간 오류 없음')
-  ok(fr2Result?.page?.sections?.length === 3, `플로우 최종 병합 페이지 (${fr2Result?.page?.sections?.length}섹션)`)
+  ok(fr2Result?.page?.sections?.length === 4, `플로우 최종 병합 페이지 (${fr2Result?.page?.sections?.length}섹션)`)
   ok((fr2Result?.dropLog ?? []).some((d) => d.code === 'blocklist'), '플로우 dropLog에 검증 게이트 기록')
   const fr2Stages = fr2.filter((e) => e.event === 'stage').map((e) => e.data)
   ok(stageOf(fr2Stages, 'plan-skeleton', 'start')?.prompt?.promptId === 'plan-skeleton', 'stage 이벤트 — 뼈대 시작 프롬프트')
   ok(stageOf(fr2Stages, 'plan-products', 'start')?.prompt?.user?.includes('지성'), 'stage 이벤트 — 상품 가변부에 답변 반영')
   ok(stageOf(fr2Stages, 'plan-skeleton', 'done') && stageOf(fr2Stages, 'plan-products', 'done'), 'stage 이벤트 — 병렬 5a·5b done')
   const verifyStage = stageOf(fr2Stages, 'verify', 'done')
-  ok(verifyStage?.pass === 3 && verifyStage?.drops >= 1, `stage 이벤트 — 검증 게이트 통과 ${verifyStage?.pass}·드롭 ${verifyStage?.drops}`)
+  ok(verifyStage?.pass === 4 && verifyStage?.drops >= 1, `stage 이벤트 — 검증 게이트 통과 ${verifyStage?.pass}·드롭 ${verifyStage?.drops}`)
   ok(
     (stageOf(fr2Stages, 'record', 'done')?.summary ?? '').includes('admin 프로필(ops-playground)'),
     'stage 이벤트 — admin 프로필 쓰레드로 기록',
@@ -449,7 +500,7 @@ try {
   ok((promo?.answers || []).length >= 1, '답변 스냅샷 포함')
   const runEvents = await sse(`/api/admin/eval/cases/${promo.id}/run`, { label: '기본 설정' }, plain)
   const run = last(runEvents, 'result')?.data?.run
-  ok(run?.page?.sections?.length === 3, `케이스 실행 — 병합 페이지 (${run?.page?.sections?.length})`)
+  ok(run?.page?.sections?.length === 4, `케이스 실행 — 병합 페이지 (${run?.page?.sections?.length})`)
   ok(run?.config?.engine === 'dry-run' && run?.config?.label === '기본 설정', '실행 config 스냅샷')
   ok((run?.dropLog || []).some((d) => d.code === 'blocklist'), '실행 dropLog에 검증 게이트 기록')
   ok(run?.meta?.phases?.skeletonMs != null, '실행 meta phases 결합')
@@ -484,6 +535,55 @@ try {
   }
 
   // ── 10.7 단계 축 — 설문 단계 실행 + 설문 judge (다른 루브릭) ──
+  console.log('10.6) 홈 검색 라우팅·추천')
+  {
+    const srp = await fetch(BFF + '/api/search/route', { method: 'POST', headers: plain, body: JSON.stringify({ query: '바디워시' }) }).then((r) => r.json())
+    ok(srp?.ddak === false && srp?.source === 'llm', `상품 종류 검색어는 SRP (ddak=${srp?.ddak}, ${srp?.source})`)
+    const ddak = await fetch(BFF + '/api/search/route', { method: 'POST', headers: plain, body: JSON.stringify({ query: '여드름 트러블 피부 기초 메이크업', profile: [{ label: '피부타입', value: '지성' }] }) }).then((r) => r.json())
+    ok(ddak?.ddak === true && ddak?.normalized?.includes('메이크업'), `고민형 검색어는 DDAK (ddak=${ddak?.ddak})`)
+    const sug = await fetch(BFF + '/api/search/suggest', { method: 'POST', headers: plain, body: JSON.stringify({ query: '쿠션' }) }).then((r) => r.json())
+    ok(sug?.suggestions?.length === 3 && sug.suggestions.every((s) => s.includes('쿠션')), `AI 검색어 추천 3개 (${sug?.suggestions?.length})`)
+    const bad = await fetch(BFF + '/api/search/route', { method: 'POST', headers: plain, body: JSON.stringify({ query: '' }) })
+    ok(bad.status === 400, `빈 검색어는 400 (${bad.status})`)
+    const calls = await llmCalls()
+    ok(calls.some((c) => c.type === 'search-route') && calls.some((c) => c.type === 'search-suggest'), '라우터·추천 LLM 호출 기록')
+  }
+
+  // ── 10.6b 홈 개인화(인사말·보라 칩) + 인기 검색어(파랑 칩) ──
+  console.log('10.6b) 홈 개인화 인사말·인기 검색어')
+  {
+    const home = await fetch(BFF + '/api/search/home', {
+      method: 'POST', headers: plain,
+      body: JSON.stringify({
+        name: '유진', profile: [{ label: '피부타입', value: '복합성' }],
+        now: { iso: '2026-09-13T15:20:00+09:00', hour: 15, weekday: 0 },
+        threads: [{ title: '여름 쿠션 지속력', stage: 'plan', status: 'ongoing', live: true, cart: ['모의 쿠션'], answers: ['복합성', '지속력'] }],
+        recentSearches: ['여름 쿠션 지속력'],
+      }),
+    }).then((r) => r.json())
+    ok(home?.source === 'llm' && /유진님/.test(home?.greeting || ''), `개인화 인사말 LLM (${home?.greeting})`)
+    ok(home?.threadIndex === 1 && /「[^」]+」/.test(home?.greeting || ''), `인사말이 최근 쓰레드를 「」로 가리키고 threadIndex=1 (${home?.threadIndex})`)
+    ok(home?.suggestions?.length === 3, `개인화 추천 검색어 3개 (${home?.suggestions?.length})`)
+    ok(home?.weather?.label === '대체로 맑음' && home?.weather?.tempC === 24.5, `날씨 조회·라벨 (${home?.weather?.label} ${home?.weather?.tempC})`)
+    const homeCall = (await llmCalls()).find((c) => c.type === 'home-personalize')
+    ok(!!homeCall && homeCall.user.includes('담은 상품: 모의 쿠션') && homeCall.user.includes('대체로 맑음'), '홈 인사 요청에 쓰레드 요약·날씨 포함')
+    const badHome = await fetch(BFF + '/api/search/home', { method: 'POST', headers: plain, body: JSON.stringify({ now: { iso: 'x', hour: 25, weekday: 0 } }) })
+    ok(badHome.status === 400, `시각 범위 밖은 400 (${badHome.status})`)
+
+    const pop = await fetch(BFF + '/api/search/popular?limit=3').then((r) => r.json())
+    ok(pop?.items?.length === 3 && pop.items[0].count >= pop.items[1].count && pop.items[1].count >= pop.items[2].count, `인기 검색어 상위 3 내림차순 (${pop?.items?.map((i) => i.keyword).join(', ')})`)
+    ok(pop?.source === 'seed' || pop?.source === 'kv', `원천 표식 (${pop?.source})`)
+    const top = pop.items[0]
+    await fetch(BFF + '/api/search/route', { method: 'POST', headers: plain, body: JSON.stringify({ query: top.keyword }) })
+    await new Promise((r) => setTimeout(r, 300))
+    const pop2 = await fetch(BFF + '/api/search/popular?limit=3').then((r) => r.json())
+    ok(pop2?.items?.[0]?.keyword === top.keyword && pop2.items[0].count === top.count + 1, `후보 표 검색어 제출 시 count+1 (${top.count} → ${pop2?.items?.[0]?.count})`)
+    const kv = await fetch(MOCK + '/internal/settings/search-popular').then((r) => r.json())
+    ok(Array.isArray(kv?.value) && kv.value.some((row) => row.keyword === top.keyword && row.count === top.count + 1), 'core KV search-popular 에 표 시딩·반영')
+    const popMax = await fetch(BFF + '/api/search/popular?limit=99').then((r) => r.json())
+    ok(popMax?.items?.length === 10, `limit 상한 10 (${popMax?.items?.length})`)
+  }
+
   console.log('10.7) 설문 단계 실행·판정 (stage=survey)')
   const svRunEvents = await sse(`/api/admin/eval/cases/${promo.id}/run`, { stage: 'survey', label: '설문 회귀' }, plain)
   const svRun = last(svRunEvents, 'result')?.data?.run
@@ -504,7 +604,7 @@ try {
   const legacyM = engineMetrics?.engines?.find((e) => e.engine === 'legacy')
   ok(lg?.count >= 1, `전환 계기판 — langgraph 표본 (${lg?.count})`)
   ok(legacyM?.count >= 1, `전환 계기판 — legacy 표본 (${legacyM?.count})`)
-  ok(lg?.promptVersions?.includes('v21'), 'promptVersion 각인 (v21)')
+  ok(lg?.promptVersions?.includes(PROMPT_VERSION), `promptVersion 각인 (${PROMPT_VERSION})`)
 
   {
   console.log('11) 전체 지시서 요청·묶음 적용·충돌 보호')
@@ -555,6 +655,31 @@ try {
   ok((await flowReq('prompt-flow', applyBody, 'PUT')).status === 200, '동일 묶음 재시도 허용')
   const noAnswers = await sse('/api/admin/pipeline/dry-run', { stageId: 'plan-skeleton', intent: '쿠션 추천', survey: { ...drResult.survey, questions: [{ id: 'p1', kind: 'photo', question: '사진을 올려주세요', options: [], multi: false }] }, answers: [] }, plain)
   ok(Boolean(last(noAnswers, 'result')?.data?.skeleton), '사진만 있는 설문도 건너뛰고 계획까지 진행')
+  }
+
+  // ── 12. 계획 뼈대 재시도 — 실제 그래프(flow-run)에서 뼈대 호출만 529 를 4번 연속 받으면
+  //    SDK 자동 재시도(maxRetries 3 = 4번 시도)가 다 실패하고, bff llm/retry.ts 가 2초 뒤 한 번 더 불러 5번째에 성공한다.
+  //    상품·콘텐츠 호출은 건드리지 않는다(only: 'skeleton')
+  console.log('12) 계획 뼈대 재시도')
+  {
+    const before = await llmCalls()
+    const rs = await sse('/api/admin/pipeline/flow-run', { phase: 'survey', intent: '재시도 플로우 확인' }, plain)
+    const rsResult = last(rs, 'result')?.data
+    ok(Boolean(rsResult?.flowId), '재시도 플로우 — 설문 구간')
+    await fetch(MOCK + '/internal/mock/llm-fail', { method: 'PUT', headers: plain, body: JSON.stringify({ count: 4, status: 529, only: 'skeleton' }) })
+    const rp = await sse(
+      '/api/admin/pipeline/flow-run',
+      { phase: 'plan', flowId: rsResult.flowId, intent: '재시도 플로우 확인', survey: rsResult.survey, answers: [{ questionId: 'q1', choices: ['지성'] }] },
+      plain,
+    )
+    const failState = await fetch(MOCK + '/internal/mock/llm-fail').then((r) => r.json())
+    ok(!last(rp, 'error') && (last(rp, 'result')?.data?.page?.sections?.length ?? 0) >= 3, `뼈대 529 4연속 뒤 재시도로 계획 완성 (${last(rp, 'result')?.data?.page?.sections?.length}섹션)`)
+    ok(failState.failed === 4 && failState.count === 0, `모의 실패 4회 소진 (failed ${failState.failed}, 남음 ${failState.count})`)
+    ok(rp.some((e) => e.event === 'status' && /다시 만들고/.test(e.data?.message ?? '')), '재시도 안내 status 이벤트')
+    const after = await llmCalls()
+    const delta = (type) => after.filter((c) => c.type === type).length - before.filter((c) => c.type === type).length
+    ok(delta('skeleton') === 1 && delta('products') === 1 && delta('contents') === 1, `성공 호출만 기록 — skeleton ${delta('skeleton')}·products ${delta('products')}·contents ${delta('contents')}`)
+    ok(stageOf(rp.filter((e) => e.event === 'stage').map((e) => e.data), 'plan-skeleton', 'done'), '재시도 뒤 뼈대 stage done')
   }
 } finally {
   shutdown()
