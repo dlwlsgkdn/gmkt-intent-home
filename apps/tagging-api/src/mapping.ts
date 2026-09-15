@@ -141,22 +141,55 @@ const primaryListing = (cards: ReturnType<typeof toListingCard>[]) => {
  *    본품이라 검토자에게 다른 물건이다. 사람이 직접 적어 넣은 경우도 있어(예: "… 30ml")
  *    이미 있으면 덧붙이지 않는다.
  *
- * 차이 하나: display_name 이 없을 때 Flask 는 리스팅 제목을 clean_listing_name 으로 다듬는다.
- * 그 정규식 한 벌(_NAME_LEAD·_NAME_TAIL·한글/영문 단위 목록)은 여기로 베끼지 않는다 —
- * 두 벌이 되면 갈린다. 정제된 이름이 필요하면 수집 파이프라인이 문서에 써 주는 쪽이 맞다. */
+ * display_name 이 없을 때(실측 903 건 중 721 건) Flask 는 리스팅 제목을 clean_listing_name
+ * 으로 다듬어 보여준다. 그 규칙을 여기로 옮겼다 — 안 옮겼더니 대시보드는 「메디큐브 에이지알
+ * 미니플러스」인데 검토 화면만 「[7월 올영픽][한교동 장바구니백 증정] …」 원문이 떴다.
+ * **두 벌이 된 규칙이라 같이 고쳐야 한다**: app.py 의 clean_listing_name /
+ * catalog_display_name 과 짝이고, apps/tagging-api/test/mapping.test.mjs 가 실제 문서로
+ * 두 구현의 결과가 같은지 지킨다. */
 const escapeRe = (v: string) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/* 앞머리 홍보 블록: [7월 올영픽] 【단독】 (증정) — 붙어 있는 만큼 반복해 떼어낸다. */
+const NAME_LEAD = /^\s*(?:\[[^\]]*\]|【[^】]*】|\([^)]*\))\s*/
+/* 한글 단위는 뒤에 다른 글자가 붙는다("10매입") — 경계를 쓰면 안 걸린다. */
+const NAME_KO_UNIT = '(?:매입|매|개입|개|입|장|정|종|색|팩|회분|회|박스|캡슐)'
+/* 영문 단위 뒤 경계는 파이썬 \b 와 같게 — JS \b 는 ASCII 라 "15ml짜리" 를 잘못 자른다. */
+const NAME_EN_UNIT = '(?:ml|mL|ML|㎖|g|kg|L|ea|sets?|colors?|pcs)(?![0-9A-Za-z_\u3131-\u318E\uAC00-\uD7A3])'
+/* 홍보 낱말은 상품명 안에도 나온다("더블샷 퍼퓸 바디미스트") — 홀로 선 것만 자른다. */
+const NAME_WORDS = '(?:기획|단품|모음|골라담기|대용량|택\\s*\\d|더블\\s*기획|\\s증정|\\s리필|\\s세트|\\s본품)'
+const NAME_TAIL = new RegExp(
+  `\\d+(?:\\.\\d+)?\\s*${NAME_KO_UNIT}` +
+    `|\\d+(?:\\.\\d+)?\\s*${NAME_EN_UNIT}` +
+    `|\\s\\(|\\s\\+|${NAME_WORDS}`,
+  'i',
+)
+const NAME_TRAIL = /(?:[\s,/\-_·|]+|\s\d+(?:\.\d+)?\+?)+$/
+/* 너무 짧아지면 규칙이 헛나간 것으로 보고 원문을 쓴다 — 이름이 사라지는 것보다 낫다. */
+const NAME_MIN = 4
+
+/** 리스팅 제목에서 상품 이름만 남긴다. app.py clean_listing_name 과 같은 규칙이다. */
+export function cleanListingName(name: any): string {
+  let s = typeof name === 'string' ? name.trim() : ''
+  for (;;) {
+    const cut = s.replace(NAME_LEAD, '')
+    if (cut === s) break
+    s = cut
+  }
+  const m = NAME_TAIL.exec(s)
+  if (m) s = s.slice(0, m.index)
+  s = s.replace(NAME_TRAIL, '').trim()
+  return s.length >= NAME_MIN ? s : (typeof name === 'string' ? name.trim() : '')
+}
 
 export function catalogDisplayName(doc: any): string {
   const curated = typeof doc.display_name === 'string' ? doc.display_name.trim() : ''
-  /* 고친 이름이 없으면 리스팅 제목 원문을 그대로 둔다 — 용량도 붙이지 않는다.
-     Flask 는 이 경로에서 clean_listing_name 으로 용량 표기 앞을 잘라낸 뒤 붙이는데,
-     그 정규식을 안 베낀 채 붙이기만 하면 "… 100mL 100ml" 처럼 겹친다(실측 6건). */
-  if (!curated) return doc.name || ''
-  const name = curated
+  /* 사람이 정한 이름이 있으면 그대로, 없으면 리스팅 제목을 다듬는다. 다듬기가 용량 표기
+     앞에서 자르므로, 아래 용량 덧붙이기가 "… 100mL 100ml" 로 겹치지 않는다. */
+  const name = curated || cleanListingName(doc.name)
   const v = doc.volume_ml
   if (typeof v !== 'number' || !Number.isFinite(v) || !name) return name
   const unit = typeof doc.volume_unit === 'string' && doc.volume_unit ? doc.volume_unit : 'ml'
-  if (new RegExp(`\\d+(?:\\.\\d+)?\\s*${escapeRe(unit)}(?![a-z\uac00-\ud7a3])`).test(name)) return name
+  if (new RegExp(`\\d+\\s*${escapeRe(unit)}(?![a-z\uac00-\ud7a3])`).test(name)) return name
   return `${name} ${v}${unit}`
 }
 

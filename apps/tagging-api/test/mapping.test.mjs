@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import mapping from '../dist/mapping.js'
 
 const { toUnit, toDocPatch, sanitizeTaxonomyDoc, readCacheEnvelope,
-        toCatalogUnit, toListingCard, toUnlinkedCard, joinListings, catalogDisplayName } = mapping
+        toCatalogUnit, toListingCard, toUnlinkedCard, joinListings, catalogDisplayName,
+        cleanListingName } = mapping
 
 /* 실제 문서에서 추린 모양 — 필드 이름·중첩 구조를 바꾸지 말 것 */
 const DOC = {
@@ -424,10 +425,12 @@ test('toCatalogUnit — display_name 이 있으면 그 이름을 쓴다', () => 
   assert.equal(u.name, 'AHC 프로샷 포어이레이저 세럼 30ml')
 })
 
-test('toCatalogUnit — display_name 이 없거나 공백뿐이면 name 원문 그대로', () => {
-  assert.equal(toCatalogUnit(CAT, []).name, CAT.name)
-  assert.equal(toCatalogUnit({ ...CAT, display_name: '   ' }, []).name, CAT.name)
-  assert.equal(toCatalogUnit({ ...CAT, display_name: null }, []).name, CAT.name)
+test('toCatalogUnit — display_name 이 없거나 공백뿐이면 다듬은 name 을 쓴다', () => {
+  /* Flask catalog_display_name 과 같은 값이다(실제로 돌려 대조함). */
+  const expected = '가히 에어리 핏 선스틱 50ml'
+  assert.equal(toCatalogUnit(CAT, []).name, expected)
+  assert.equal(toCatalogUnit({ ...CAT, display_name: '   ' }, []).name, expected)
+  assert.equal(toCatalogUnit({ ...CAT, display_name: null }, []).name, expected)
 })
 
 test('catalogDisplayName — 고친 이름에 용량이 없으면 붙인다 (Flask 와 같은 규칙)', () => {
@@ -436,12 +439,33 @@ test('catalogDisplayName — 고친 이름에 용량이 없으면 붙인다 (Fla
   assert.equal(catalogDisplayName({ display_name: '설화수 자음수 EX', volume_ml: 150 }), '설화수 자음수 EX 150ml')
 })
 
-test('catalogDisplayName — 고친 이름이 없으면 원문 그대로, 용량도 안 붙인다', () => {
-  /* Flask 는 이 경로에서 clean_listing_name 으로 잘라낸 뒤 붙인다. 그 정규식을 안 베낀 채
-     붙이기만 하면 원문에 이미 있는 용량과 겹친다(실측 6건: "… 100mL 100ml"). */
+test('catalogDisplayName — 고친 이름이 없으면 리스팅 제목을 다듬어 쓴다', () => {
+  /* 실측: display_name 은 903 건 중 182 건에만 있다. 나머지는 이 경로로 그려지므로 여기가
+     원문이면 대시보드와 이름이 갈린다(「[7월 올영픽][한교동 …]」 대 「메디큐브 에이지알 …」). */
+  assert.equal(
+    catalogDisplayName({ name: '[7월 올영픽][한교동 장바구니백 증정] 메디큐브 에이지알 미니플러스 한교동 에디션/짱구 에디션/핑크/베이지 택 1' }),
+    '메디큐브 에이지알 미니플러스 한교동 에디션/짱구 에디션/핑크/베이지')
+  /* 다듬기가 용량 앞에서 자르므로 덧붙여도 겹치지 않는다(예전엔 "… 100mL 100ml" 이 됐다). */
   assert.equal(catalogDisplayName({ name: '식물나라 워터프루프 선 크림 100mL', volume_ml: 100 }),
-               '식물나라 워터프루프 선 크림 100mL')
-  assert.equal(catalogDisplayName({ name: '원문만', volume_ml: 50 }), '원문만')
+               '식물나라 워터프루프 선 크림 100ml')
+  /* 다듬은 결과가 너무 짧으면(4 자 미만) 규칙이 헛나간 것으로 보고 원문을 쓴다. */
+  assert.equal(catalogDisplayName({ name: '원문만', volume_ml: 50 }), '원문만 50ml')
+})
+
+test('cleanListingName — app.py clean_listing_name 과 같은 결과', () => {
+  /* 아래 기대값은 Flask 의 clean_listing_name 을 실제로 돌려 받은 것이다. 규칙이 두 벌이라
+     한쪽만 고치면 두 화면의 이름이 갈린다 — 바꿀 일이 생기면 양쪽을 같이 고칠 것. */
+  assert.equal(cleanListingName('[NEW컬러] 투크 워터프루프 슬림 아이라이너 15 colors'),
+               '투크 워터프루프 슬림 아이라이너')
+  assert.equal(cleanListingName('토리든 다이브인 세럼 50ml 기획'), '토리든 다이브인 세럼')
+  /* 앞머리 블록은 붙어 있는 만큼 반복해 떼어낸다. */
+  assert.equal(cleanListingName('[7월 올영픽][한교동 장바구니백 증정] 메디큐브 에이지알 미니플러스 한교동 에디션/짱구 에디션/핑크/베이지 택 1'),
+               '메디큐브 에이지알 미니플러스 한교동 에디션/짱구 에디션/핑크/베이지')
+  /* 영문 단위 뒤 경계 — 파이썬 \b 는 유니코드라 한글이 이어지면 안 자른다. JS \b 를 그대로
+     쓰면 "15ml짜리" 가 잘려 두 구현이 갈린다. */
+  assert.equal(cleanListingName('바이오더마 이드라비오 H2O 옹까'), '바이오더마 이드라비오 H2O 옹까')
+  assert.equal(cleanListingName('원문만'), '원문만')   // 4 자 미만이면 원문
+  assert.equal(cleanListingName(null), '')
 })
 
 test('catalogDisplayName — 이름에 이미 용량이 있으면 덧붙이지 않는다', () => {
