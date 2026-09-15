@@ -798,7 +798,7 @@
   font-size: var(--sb-t-small);
 }
 
-/* 묶인 몰 리스팅 — 카탈로그엔 가격·PDP가 없어 여기가 유일한 출처다 */
+/* 묶인 몰 상품 — 카탈로그엔 가격·PDP가 없어 여기가 유일한 출처다 */
 .sb-tagging-listings { display: grid; gap: 6px; }
 .sb-tagging-listings__none { color: var(--sb-muted); }
 .sb-tagging-listing { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -811,7 +811,7 @@
 }
 .sb-tagging-mall--gmarket { background: var(--sb-info-soft, var(--sb-n-100)); }
 
-/* 카탈로그에 안 묶인 리스팅 — 읽기 전용. 묶는 일은 Flask 대시보드 몫이다 */
+/* 카탈로그에 안 묶인 상품 — 읽기 전용. 묶는 일은 Flask 대시보드 몫이다 */
 .sb-tagging-unlinked__note {
   padding: 8px 10px; margin: 0 0 8px;
   background: var(--sb-n-50); border-radius: var(--sb-r-sm);
@@ -826,7 +826,7 @@
 .sb-tagging-unlinked b { display: block; font-weight: 400; }
 .sb-tagging-unlinked small { display: flex; gap: 6px; align-items: center; color: var(--sb-muted); }
 
-/* 상단 문구·리뷰의 출처 몰 — 어느 리스팅에서 온 값인지 라벨 옆에 작게 */
+/* 상단 문구·리뷰의 출처 몰 — 어느 상품에서 온 값인지 라벨 옆에 작게 */
 .sb-tagging-pinfo dt em {
   font-style: normal; font-weight: 400;
   color: var(--sb-subtle); font-size: var(--sb-t-micro);

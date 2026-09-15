@@ -36,7 +36,7 @@ export class TaggingService {
     return collection
   }
 
-  /* 카탈로그 946건 + 리스팅 요약을 한 번에 보낸다(gzip 후 506KB). 목록/상세를 나누지
+  /* 카탈로그 946건 + 상품 요약을 한 번에 보낸다(gzip 후 506KB). 목록/상세를 나누지
      않는 이유: 병목은 건수가 아니라 투영 누락이었다 — 설계 문서 §4-5. */
   async bootstrap() {
     const [catalogDocs, productDocs] = await Promise.all([
@@ -73,7 +73,7 @@ export class TaggingService {
   }
 
   /* 쓰기 응답은 성공 여부만 돌려준다.
-     예전에는 되쓰기마다 단위를 다시 조립해 보냈는데, 그러려면 묶인 리스팅을 다시 읽어야
+     예전에는 되쓰기마다 단위를 다시 조립해 보냈는데, 그러려면 묶인 상품을 다시 읽어야
      하고 products.catalog_ids 에는 인덱스가 없다(인덱스: _id_·product_id_1·status_1) —
      칩 하나 토글할 때마다 1020건 컬렉션 스캔이 돌았다. 게다가 FE(postTagging)는 본문을
      보지 않고 성공 여부만 쓴다. 쓰지도 않는 값을 위해 스캔하지 않는다.

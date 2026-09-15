@@ -88,8 +88,8 @@ export function toUnit(doc: any) {
 }
 
 /* ── 카탈로그 단위 ──────────────────────────────────────────────────────
- * 검토 단위는 카탈로그(몰 중립 상품 실체)이고, 몰 리스팅은 판단 근거로 붙는다.
- * 카탈로그엔 가격·PDP·리뷰가 하나도 없다(실측 0/946) — 전부 리스팅에서 온다.
+ * 검토 단위는 카탈로그(몰 중립 물건 실체)이고, 몰 상품은 판단 근거로 붙는다.
+ * 카탈로그엔 가격·PDP·리뷰가 하나도 없다(실측 0/946) — 전부 상품에서 온다.
  */
 
 const mallOf = (doc: any): string => doc.source || 'oliveyoung'
@@ -118,7 +118,7 @@ export function toUnlinkedCard(doc: any) {
   }
 }
 
-/* 문구·리뷰는 올리브영 리스팅에만 있다. 대표를 하나 골라 상단 줄에 쓰되 **어느 리스팅에서
+/* 문구·리뷰는 올리브영 상품에만 있다. 대표를 하나 골라 상단 줄에 쓰되 **어느 상품에서
    왔는지 함께 싣는다**(unit.copySource·reviewSource) — 검토자가 근거로 읽는 값이라 출처가
    없으면 어느 변형(본품/기획세트) 얘기인지 알 수 없다.
    후보가 여럿일 때는 product_id 로 정렬해 고른다. Mongo 반환 순서에 맡기면 같은 카탈로그가
@@ -141,7 +141,7 @@ const primaryListing = (cards: ReturnType<typeof toListingCard>[]) => {
  *    본품이라 검토자에게 다른 물건이다. 사람이 직접 적어 넣은 경우도 있어(예: "… 30ml")
  *    이미 있으면 덧붙이지 않는다.
  *
- * display_name 이 없을 때(실측 903 건 중 721 건) Flask 는 리스팅 제목을 clean_listing_name
+ * display_name 이 없을 때(실측 903 건 중 721 건) Flask 는 상품 제목을 clean_listing_name
  * 으로 다듬어 보여준다. 그 규칙을 여기로 옮겼다 — 안 옮겼더니 대시보드는 「메디큐브 에이지알
  * 미니플러스」인데 검토 화면만 「[7월 올영픽][한교동 장바구니백 증정] …」 원문이 떴다.
  * **두 벌이 된 규칙이라 같이 고쳐야 한다**: app.py 의 clean_listing_name /
@@ -167,7 +167,7 @@ const NAME_TRAIL = /(?:[\s,/\-_·|]+|\s\d+(?:\.\d+)?\+?)+$/
 /* 너무 짧아지면 규칙이 헛나간 것으로 보고 원문을 쓴다 — 이름이 사라지는 것보다 낫다. */
 const NAME_MIN = 4
 
-/** 리스팅 제목에서 상품 이름만 남긴다. app.py clean_listing_name 과 같은 규칙이다. */
+/** 상품 제목에서 물건 이름만 남긴다. app.py clean_listing_name 과 같은 규칙이다. */
 export function cleanListingName(name: any): string {
   let s = typeof name === 'string' ? name.trim() : ''
   for (;;) {
@@ -183,7 +183,7 @@ export function cleanListingName(name: any): string {
 
 export function catalogDisplayName(doc: any): string {
   const curated = typeof doc.display_name === 'string' ? doc.display_name.trim() : ''
-  /* 사람이 정한 이름이 있으면 그대로, 없으면 리스팅 제목을 다듬는다. 다듬기가 용량 표기
+  /* 사람이 정한 이름이 있으면 그대로, 없으면 상품 제목을 다듬는다. 다듬기가 용량 표기
      앞에서 자르므로, 아래 용량 덧붙이기가 "… 100mL 100ml" 로 겹치지 않는다. */
   const name = curated || cleanListingName(doc.name)
   const v = doc.volume_ml
@@ -217,7 +217,7 @@ export function toCatalogUnit(doc: any, listings: any[]) {
     id: doc.catalog_id,
     name: catalogDisplayName(doc),
     brand: doc.brand_name || doc.brand || doc.inferred_brand || '',
-    option: cards.length ? `리스팅 ${cards.length}곳` : '리스팅 없음',
+    option: cards.length ? `상품 ${cards.length}곳` : '상품 없음',
     price: null,
     url: null,
     copy: primary?.copy || '',
@@ -234,7 +234,7 @@ export function toCatalogUnit(doc: any, listings: any[]) {
 /* 두 컬렉션을 한 번씩 읽어 메모리에서 맞춘다 — products.catalog_ids 에 인덱스가 없어
    카탈로그마다 질의하면 느리다(실측: 조인 7ms). */
 export function joinListings(catalogDocs: any[], productDocs: any[]) {
-  /* 묘비(merged_into)만 가리키는 리스팅은 "묶였다"고 칠 수 없다 — 살아 있는
+  /* 묘비(merged_into)만 가리키는 상품은 "묶였다"고 칠 수 없다 — 살아 있는
      카탈로그를 하나도 못 붙이면 검토자 눈에 안 보이게 사라진다(§4-4). */
   const liveCatalogIds = new Set(catalogDocs.filter((d) => !d.merged_into).map((d) => d.catalog_id))
 

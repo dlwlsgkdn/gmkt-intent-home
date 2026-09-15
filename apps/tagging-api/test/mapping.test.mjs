@@ -347,14 +347,14 @@ test('toListingCard — 지마켓은 url 이 없어 null 이다 (PDP 버튼을 �
   assert.equal(toListingCard(OY).url, 'https://www.oliveyoung.co.kr/p/1')
 })
 
-test('toListingCard — 리뷰·상세문구는 있는 리스팅에만', () => {
+test('toListingCard — 리뷰·상세문구는 있는 상품에만', () => {
   assert.match(toListingCard(OY).review, /리뷰 1,204건/)
   assert.equal(toListingCard(OY).copy, '가벼운 마무리')
   assert.equal(toListingCard(GM).review, '')
   assert.equal(toListingCard(GM).copy, '')
 })
 
-test('toCatalogUnit — 대표 리스팅(올리브영 우선)의 문구를 상단에 올린다', () => {
+test('toCatalogUnit — 대표 상품(올리브영 우선)의 문구를 상단에 올린다', () => {
   const u = toCatalogUnit(CAT, [GM, OY])
   assert.equal(u.copy, '가벼운 마무리')
   assert.match(u.review, /리뷰 1,204건/)
@@ -370,7 +370,7 @@ test('joinListings — catalog_id 로 묶고 merged_into 는 뺀다', () => {
   assert.equal(unlinked.length, 0)
 })
 
-test('joinListings — 어느 카탈로그에도 안 묶인 리스팅은 unlinked 로만 나온다', () => {
+test('joinListings — 어느 카탈로그에도 안 묶인 상품은 unlinked 로만 나온다', () => {
   const orphan = { product_id: 'A999', name: '미연결', image_url: null }
   const { units, unlinked } = joinListings([CAT], [OY, orphan])
   assert.equal(units.length, 1)
@@ -378,7 +378,7 @@ test('joinListings — 어느 카탈로그에도 안 묶인 리스팅은 unlinke
   assert.equal(unlinked[0].mall, 'oliveyoung')
 })
 
-test('joinListings — 묘비만 가리키는 리스팅은 unlinked 로 나온다 (살아있는 카탈로그가 하나도 없다)', () => {
+test('joinListings — 묘비만 가리키는 상품은 unlinked 로 나온다 (살아있는 카탈로그가 하나도 없다)', () => {
   const tomb = { catalog_id: 'c-000999', merged_into: 'c-000242', name: '흡수됨' }
   const onlyTomb = { product_id: 'A777', catalog_ids: ['c-000999'], name: '묘비만 참조' }
   const { units, unlinked } = joinListings([tomb], [onlyTomb])
@@ -395,7 +395,7 @@ test('joinListings — 묘비와 살아있는 카탈로그를 함께 가리키�
   assert.equal(unlinked.length, 0)
 })
 
-/* ── 대표 리스팅의 출처·결정성 (코드리뷰 지적) ────────────────────────── */
+/* ── 대표 상품의 출처·결정성 (코드리뷰 지적) ────────────────────────── */
 
 test('toCatalogUnit — 상단 문구·리뷰에 출처 몰을 함께 싣는다', () => {
   const u = toCatalogUnit(CAT, [GM, OY])
@@ -410,10 +410,10 @@ test('toCatalogUnit — 문구·리뷰가 없으면 출처도 null', () => {
   assert.equal(u.reviewSource, null)
 })
 
-test('toCatalogUnit — 후보가 여럿이면 리스팅 순서가 아니라 product_id 로 정해진다', () => {
+test('toCatalogUnit — 후보가 여럿이면 상품 순서가 아니라 product_id 로 정해진다', () => {
   const a = { ...OY, product_id: 'A000000000001', product_info: { '제품 주요 사양': '먼저' } }
   const b = { ...OY, product_id: 'A000000000002', product_info: { '제품 주요 사양': '나중' } }
-  /* 어느 순서로 들어와도 같은 리스팅이 뽑혀야 한다 — Mongo 반환 순서에 흔들리지 않게 */
+  /* 어느 순서로 들어와도 같은 상품이 뽑혀야 한다 — Mongo 반환 순서에 흔들리지 않게 */
   assert.equal(toCatalogUnit(CAT, [a, b]).copy, '먼저')
   assert.equal(toCatalogUnit(CAT, [b, a]).copy, '먼저')
 })
@@ -439,7 +439,7 @@ test('catalogDisplayName — 고친 이름에 용량이 없으면 붙인다 (Fla
   assert.equal(catalogDisplayName({ display_name: '설화수 자음수 EX', volume_ml: 150 }), '설화수 자음수 EX 150ml')
 })
 
-test('catalogDisplayName — 고친 이름이 없으면 리스팅 제목을 다듬어 쓴다', () => {
+test('catalogDisplayName — 고친 이름이 없으면 상품 제목을 다듬어 쓴다', () => {
   /* 실측: display_name 은 903 건 중 182 건에만 있다. 나머지는 이 경로로 그려지므로 여기가
      원문이면 대시보드와 이름이 갈린다(「[7월 올영픽][한교동 …]」 대 「메디큐브 에이지알 …」). */
   assert.equal(

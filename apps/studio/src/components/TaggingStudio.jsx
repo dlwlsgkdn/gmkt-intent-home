@@ -42,7 +42,7 @@ const EMPTY_UNIT = {
   aiFields: Object.fromEntries(FIELD_DEFS.map((d) => [d.key, { selected: [], rep: null, status: 'unreviewed', origin: 'ai', confidence: 0, rationale: '' }])),
 }
 
-/* 몰 코드 → 사람이 읽는 이름. 리스팅 카드·미연결 카드·문구 출처가 같은 규칙을 쓴다. */
+/* 몰 코드 → 사람이 읽는 이름. 상품 카드·미연결 카드·문구 출처가 같은 규칙을 쓴다. */
 const mallLabel = (mall) => (mall === 'gmarket' ? '지마켓' : '올리브영')
 
 const formatPrice = (price) => (typeof price === 'number' ? `${price.toLocaleString('ko-KR')}원` : '가격 정보 없음')
@@ -548,7 +548,7 @@ export default function TaggingStudio({ api, embedded = false }) {
               type="button"
               className={'sb-tagging-pill sb-tagging-pill--unlinked' + (listFilter === 'unlinked' ? ' is-on' : '')}
               onClick={() => setListFilter((prev) => (prev === 'unlinked' ? 'all' : 'unlinked'))}
-              title="카탈로그에 아직 묶이지 않은 몰 리스팅이에요. 묶는 일은 대시보드에서 합니다."
+              title="카탈로그에 아직 묶이지 않은 몰 상품이에요. 묶는 일은 대시보드에서 합니다."
             >
               카탈로그 미연결 <b>{unlinked.length}</b>
             </button>
@@ -655,19 +655,19 @@ export default function TaggingStudio({ api, embedded = false }) {
             <dl>
               {unit.copy && (
                 <>
-                  <dt>상세페이지 주요 문구 {unit.copySource && <em>{mallLabel(unit.copySource)} 리스팅</em>}</dt>
+                  <dt>상세페이지 주요 문구 {unit.copySource && <em>{mallLabel(unit.copySource)} 상품</em>}</dt>
                   <dd>{unit.copy}</dd>
                 </>
               )}
               {unit.review && (
                 <>
-                  <dt>리뷰 요약 {unit.reviewSource && <em>{mallLabel(unit.reviewSource)} 리스팅</em>}</dt>
+                  <dt>리뷰 요약 {unit.reviewSource && <em>{mallLabel(unit.reviewSource)} 상품</em>}</dt>
                   <dd>{unit.review}</dd>
                 </>
               )}
               <dt>판매 중인 몰</dt>
               <dd className="sb-tagging-listings">
-                {unit.listings.length === 0 && <span className="sb-tagging-listings__none">묶인 리스팅이 없어요.</span>}
+                {unit.listings.length === 0 && <span className="sb-tagging-listings__none">묶인 상품이 없어요.</span>}
                 {unit.listings.map((l) => (
                   <div key={l.productId} className="sb-tagging-listing">
                     <span className={`sb-tagging-mall sb-tagging-mall--${l.mall}`}>
