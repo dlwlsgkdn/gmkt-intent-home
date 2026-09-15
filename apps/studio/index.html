@@ -4,6 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DDAK Scenario Studio</title>
+    <!-- 탭 아이콘 — 딱! 마크(손가락 스냅). 원본은 public/ddak-mark.png 이고 favicon.ico 에는
+         16·32·48 프레임을 각각 다르게 넣었다: 작은 자리는 획을 부풀려 줄여야 선이 남는다
+         (그냥 줄이면 16px 에서 손 윤곽이 사라진다). vite base 가 './' 라 경로는 문서 기준이다. -->
+    <link rel="icon" href="./favicon.ico" sizes="16x16 32x32 48x48">
+    <link rel="icon" href="./ddak-mark.png" type="image/png" sizes="256x256">
+    <link rel="apple-touch-icon" href="./ddak-mark.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="./gmarket-advanced.tailwind.js"></script>
     <!-- 텍스트 서식용 한글 웹폰트 (lib/richtext.jsx FONT_OPTIONS와 짝) -->
