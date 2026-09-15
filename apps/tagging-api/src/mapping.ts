@@ -147,7 +147,12 @@ const primaryListing = (cards: ReturnType<typeof toListingCard>[]) => {
 const escapeRe = (v: string) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 export function catalogDisplayName(doc: any): string {
-  const name = (typeof doc.display_name === 'string' && doc.display_name.trim()) || doc.name || ''
+  const curated = typeof doc.display_name === 'string' ? doc.display_name.trim() : ''
+  /* 고친 이름이 없으면 리스팅 제목 원문을 그대로 둔다 — 용량도 붙이지 않는다.
+     Flask 는 이 경로에서 clean_listing_name 으로 용량 표기 앞을 잘라낸 뒤 붙이는데,
+     그 정규식을 안 베낀 채 붙이기만 하면 "… 100mL 100ml" 처럼 겹친다(실측 6건). */
+  if (!curated) return doc.name || ''
+  const name = curated
   const v = doc.volume_ml
   if (typeof v !== 'number' || !Number.isFinite(v) || !name) return name
   const unit = typeof doc.volume_unit === 'string' && doc.volume_unit ? doc.volume_unit : 'ml'

@@ -7,7 +7,7 @@ import { decisionToReview, joinListings, nowIso, toDocPatch } from './mapping'
    (실측) — toUnit 이 대부분 버리는데도. 투영 후 두 질의 병렬로 276ms. */
 const CATALOG_FIELDS = [
   'catalog_id', 'merged_into', 'name', 'display_name', 'brand', 'brand_name', 'inferred_brand', 'image_url',
-  'ingredients_from_spec', 'volume_ml', 'formulation', 'ingredient_tags',
+  'ingredients_from_spec', 'volume_ml', 'volume_unit', 'formulation', 'ingredient_tags',
   'confidence', 'field_confidence', 'rationale', 'review_status', 'review_meta',
   'inferred_category', 'sub_type', 'body_part',
   'skin_types', 'skin_types_primary', 'concerns', 'concerns_primary',

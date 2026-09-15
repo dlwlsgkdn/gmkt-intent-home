@@ -424,20 +424,24 @@ test('toCatalogUnit — display_name 이 있으면 그 이름을 쓴다', () => 
   assert.equal(u.name, 'AHC 프로샷 포어이레이저 세럼 30ml')
 })
 
-test('toCatalogUnit — display_name 이 없거나 공백뿐이면 name 으로 떨어진다', () => {
-  /* CAT 은 volume_ml: 50 이라 용량이 붙는다 — Flask 와 같은 규칙 */
-  const expected = `${CAT.name} 50ml`
-  assert.equal(toCatalogUnit(CAT, []).name, expected)
-  assert.equal(toCatalogUnit({ ...CAT, display_name: '   ' }, []).name, expected)
-  assert.equal(toCatalogUnit({ ...CAT, display_name: null }, []).name, expected)
-  /* 용량을 모르면 원문 그대로 */
-  assert.equal(toCatalogUnit({ ...CAT, volume_ml: null }, []).name, CAT.name)
+test('toCatalogUnit — display_name 이 없거나 공백뿐이면 name 원문 그대로', () => {
+  assert.equal(toCatalogUnit(CAT, []).name, CAT.name)
+  assert.equal(toCatalogUnit({ ...CAT, display_name: '   ' }, []).name, CAT.name)
+  assert.equal(toCatalogUnit({ ...CAT, display_name: null }, []).name, CAT.name)
 })
 
-test('catalogDisplayName — 용량을 아는데 이름에 없으면 붙인다 (Flask 와 같은 규칙)', () => {
+test('catalogDisplayName — 고친 이름에 용량이 없으면 붙인다 (Flask 와 같은 규칙)', () => {
   assert.equal(catalogDisplayName({ display_name: '홀리카홀리카 마이페이브 피스', volume_ml: 1.7, volume_unit: 'g' }),
                '홀리카홀리카 마이페이브 피스 1.7g')
   assert.equal(catalogDisplayName({ display_name: '설화수 자음수 EX', volume_ml: 150 }), '설화수 자음수 EX 150ml')
+})
+
+test('catalogDisplayName — 고친 이름이 없으면 원문 그대로, 용량도 안 붙인다', () => {
+  /* Flask 는 이 경로에서 clean_listing_name 으로 잘라낸 뒤 붙인다. 그 정규식을 안 베낀 채
+     붙이기만 하면 원문에 이미 있는 용량과 겹친다(실측 6건: "… 100mL 100ml"). */
+  assert.equal(catalogDisplayName({ name: '식물나라 워터프루프 선 크림 100mL', volume_ml: 100 }),
+               '식물나라 워터프루프 선 크림 100mL')
+  assert.equal(catalogDisplayName({ name: '원문만', volume_ml: 50 }), '원문만')
 })
 
 test('catalogDisplayName — 이름에 이미 용량이 있으면 덧붙이지 않는다', () => {
