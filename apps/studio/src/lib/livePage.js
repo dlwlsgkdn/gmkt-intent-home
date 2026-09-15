@@ -128,6 +128,7 @@ export function liveSurveyItems(page, opts = {}) {
 
 /** opts.photo — 설문에서 고른 얼굴 사진(데이터 URL). 가상 메이크업 결과(look) 섹션의
  * BEFORE 재료다: 서버는 어떤 룩인지(tone)만 정하고 합성은 화면이 한다.
+ * opts.photoBefore — 정밀 정렬 시 AFTER와 동일 영역으로 자른 BEFORE. 없으면 opts.photo 그대로.
  * opts.photoAfter — 메이크업이 올라간 AFTER 이미지(로컬 랜드마크 합성 또는 정밀 렌더). 늦게
  * 도착하므로 없을 수도 있고, 그때는 같은 사진에 tone 프리셋을 얹어 보여준다.
  * opts.lookStage — AFTER 자리의 진행 단계(skeleton|landmark|refining|precise). 원본(BEFORE)은
@@ -212,7 +213,7 @@ export function livePlanItems(page, opts = {}) {
           props: {
             title: section.title,
             desc: section.desc || '',
-            beforeImage: photo,
+            beforeImage: opts.photoBefore || photo,
             afterImage: after,
             tone: opts.photoAfter ? '' : section.tone || '',
             // 합성 전 CSS 프리셋 단계에서도 사양의 립 색을 쓴다 (tone 고정색 대신)

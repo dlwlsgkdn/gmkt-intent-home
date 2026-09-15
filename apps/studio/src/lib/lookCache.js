@@ -6,7 +6,9 @@
  * 재접속마다 유료 렌더를 다시 돌리는 사고가 났다. IndexedDB는 수백 MB급이라 **원본 화질
  * 그대로** 보관한다 (720px 축소 불필요 — 재접속 화질도 첫 렌더와 같다).
  *
- * 키 = threadId (스노우플레이크 — 문자열 정렬이 곧 시간순), 값 = { tone, key, image, at }.
+ * 키 = threadId (스노우플레이크 — 문자열 정렬이 곧 시간순), 값 = { tone, key, image, alignment?, at }.
+ * image는 생성 원본, alignment는 눈 정렬 변환·공통 크롭이다. 표시용 보정본으로 image를 덮지 않아
+ * 이어보기마다 크롭/리샘플링이 누적되지 않는다. 옛 비율 보정본도 최초 정렬의 원본으로 그대로 유지한다.
  * key 는 렌더 입력의 서명(색조+사양+사진 지문) — 같은 쓰레드에서 사진이나 룩 사양이 바뀌면 옛 렌더를
  * 다른 사진 위에 올리지 않기 위해서다(2026-09). 옛 행에는 key 가 없다(tone 만) — 호출자가 사양 없는
  * 페이지에 한해 tone 일치로 받아들인다.
@@ -16,6 +18,18 @@
 const DB_NAME = 'ddak-live'
 const STORE = 'look-renders'
 const KEEP = 12
+
+/** 사진 내용까지 묶은 키. 길이만 비교하면 같은 크기의 다른 사진에 이전 정렬을 재사용할 수 있다. */
+export async function lookRenderInputKey(lookSignature, photo) {
+  const input = JSON.stringify([lookSignature, photo])
+  try {
+    const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(input))
+    return `v2:${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')}`
+  } catch {
+    // Web Crypto를 쓸 수 없는 환경에서도 길이 키로 후퇴하지 않는다. 키는 기기에만 남는다.
+    return `v2:${input}`
+  }
+}
 
 let dbPromise = null
 function openDb() {
@@ -84,7 +98,7 @@ export async function loadLookRender(threadId) {
   return row && row.image ? row : null
 }
 
-/** 렌더 저장 + 오래된 것 정리 (최근 KEEP개만). meta = { tone, key } — key 는 렌더 입력 서명 */
+/** 렌더 원본 저장 + 오래된 것 정리 (최근 KEEP개만). meta = { tone, key, alignment? } */
 export async function saveLookRender(threadId, image, meta = {}) {
   if (!threadId || !image) return
   await withStore('readwrite', (s) => s.put({ ...meta, image, at: Date.now() }, threadId))

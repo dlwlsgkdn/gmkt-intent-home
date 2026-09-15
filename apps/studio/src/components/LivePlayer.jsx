@@ -7,8 +7,8 @@ import { isQuestionType, renderItem, resolveSampleFace } from '../lib/registry.j
 import BottomSheet from './ui/BottomSheet.jsx'
 import { fetchLiveCapabilities, fetchLiveThread, recordLiveEvent, renderLiveLook, sendLiveFeedback, startLiveThread, streamLivePlan, streamLiveSurvey } from '../lib/liveApi.js'
 import { PHOTO_ANSWER, isPhotoValue, livePlanItems, liveSurveyItems, lookScopeOfAnswers } from '../lib/livePage.js'
-import { composeMakeup, matchAspectTo, toPhotoDataUrl } from '../lib/makeupComposite.js'
-import { loadLookRender, saveLookRender } from '../lib/lookCache.js'
+import { composeMakeup, alignMakeupPair, toPhotoDataUrl } from '../lib/makeupComposite.js'
+import { loadLookRender, saveLookRender, lookRenderInputKey } from '../lib/lookCache.js'
 import { BgBlobs, FloatingBar, ViewerDeviceControl } from './Frame.jsx'
 import ThreadPanel from './ThreadPanel.jsx'
 import ThreadCartSheet from './ThreadCartSheet.jsx'
@@ -245,6 +245,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   /* 메이크업이 올라간 AFTER 이미지 — 얼굴 랜드마크 합성은 모델 로드가 걸려 늦게 온다.
      그동안 화면은 tone 프리셋으로 이미 그려져 있고, 도착하면 조용히 갈아끼운다 */
   const [lookAfter, setLookAfter] = useState(null)
+  const [lookBefore, setLookBefore] = useState(null) // 정밀 정렬 시 AFTER와 동일한 영역으로 자른 원본
   /* 가상 메이크업 AFTER의 진행 단계 — 'skeleton'(아직 아무 합성도 없음) | 'landmark'(1단계
      기기 합성 표시 중) | 'refining'(그 위에서 2단계 정밀 렌더 진행 중) | 'precise'(2단계 완료).
      사용자가 누를 것이 없다: 계획에 룩이 뜨면 1단계 → (가능하면) 2단계까지 알아서 이어 간다 */
@@ -577,11 +578,13 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   useEffect(() => {
     if (!lookSig || !livePhoto) {
       setLookAfter(null)
+      setLookBefore(null)
       setLookStage('skeleton')
       return undefined
     }
     let cancelled = false
     setLookAfter(null) // 룩·사진이 바뀌면 이전 합성부터 내린다 (엉뚱한 얼굴이 남지 않게)
+    setLookBefore(null)
     preciseRef.current = false
     refineRef.current = null
     setLookStage('skeleton')
@@ -654,22 +657,27 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     refineRef.current = key
     const hasSpec = !!JSON.parse(lookSig).spec
     // 보관 키 = 색조+사양+사진 지문 — 같은 쓰레드에서 사진이나 사양이 바뀌면 옛 렌더를 다른 사진 위에 올리지 않는다
-    const cacheKey = `${lookSig}:${livePhoto.length}`
+    const legacyCacheKey = `${lookSig}:${livePhoto.length}`
     let cancelled = false
     ;(async () => {
+      const cacheKey = await lookRenderInputKey(lookSig, livePhoto)
+      if (cancelled || cancelledRef.current) return
       // 지난 결과가 있으면 그대로 — 같은 입력에 유료 호출을 반복하지 않는다 (IndexedDB).
       // key 없는 옛 보관분은 사양 없는 옛 페이지에 한해 색조 일치로 받아들인다
       const cached = await loadLookRender(threadId)
-      const cacheHit = cached && cached.image && (cached.key ? cached.key === cacheKey : !hasSpec && cached.tone === lookTone)
+      const cacheHit = cached && cached.image && (cached.key
+        ? cached.key === cacheKey || cached.key === legacyCacheKey
+        : !hasSpec && cached.tone === lookTone)
       if (cacheHit) {
-        // 옛 보관분은 비율 보정 전 결과일 수 있다 — 원본 비율로 되맞춰 쓰고, 바뀌었으면 보관도 갱신
-        const ref = await toPhotoDataUrl(livePhoto)
-        const fitted = ref ? await matchAspectTo(cached.image, ref) : cached.image
+        // 옛 캐시도 눈 기준 정렬. 보정된 픽셀로 원본을 덮지 않고 변환 정보만 함께 보관한다.
+        const pair = await alignMakeupPair(cached.image, livePhoto, cached.key === cacheKey ? cached.alignment : null)
         if (cancelled || cancelledRef.current) return
+        if (!pair) return // 얼굴 정렬 실패면 기기 합성을 그대로 유지 (유료 재생성 없음)
         preciseRef.current = true
-        setLookAfter(fitted)
+        setLookBefore(pair.before)
+        setLookAfter(pair.after)
         setLookStage('precise')
-        if (fitted !== cached.image) saveLookRender(threadId, fitted, { tone: lookTone, key: cacheKey })
+        saveLookRender(threadId, cached.image, { tone: lookTone, key: cacheKey, alignment: pair.alignment })
         return
       }
       const caps = await fetchLiveCapabilities()
@@ -681,6 +689,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         // 샘플 얼굴은 상대 URL이라 그대로 못 보낸다 — 계약(data URL)에 맞춰 변환한다
         const photo = await toPhotoDataUrl(livePhoto)
         if (!photo) throw new Error('사진을 읽지 못했어요.')
+        if (cancelled || cancelledRef.current) return
         const { image } = await renderLiveLook(threadId, {
           photo,
           tone: look.tone,
@@ -689,15 +698,19 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
           // 사양이 있으면 BFF 가 지시문을 사양에서 생성한다 — 기기 합성과 같은 룩
           ...(look.spec ? { spec: look.spec } : {}),
         })
-        // 편집 모델은 표준 규격(1024×1536 등)으로 돌려주며 원본을 살짝 늘린다 — 원본 비율로 되맞춰야
-        // 슬라이더의 두 층이 정확히 겹친다 (matchAspectTo). 보관도 보정본으로
-        const fitted = await matchAspectTo(image, photo)
         if (cancelled || cancelledRef.current) return
+        const pair = await alignMakeupPair(image, livePhoto)
+        if (cancelled || cancelledRef.current) return
+        // 정렬 불가여도 생성 원본을 남긴다 — 이어보기에서 같은 이미지에 유료 호출을 반복하지 않는다.
+        saveLookRender(threadId, image, { tone: lookTone, key: cacheKey, alignment: pair?.alignment || null })
+        if (!pair) {
+          setLookStage('landmark')
+          return
+        }
         preciseRef.current = true
-        setLookAfter(fitted)
+        setLookBefore(pair.before)
+        setLookAfter(pair.after)
         setLookStage('precise')
-        // 다음 이어보기에서 재호출하지 않도록 원본 화질 그대로 보관한다 (IndexedDB — 실패해도 화면은 그대로)
-        saveLookRender(threadId, fitted, { tone: lookTone, key: cacheKey })
       } catch (e) {
         if (cancelled || cancelledRef.current) return
         console.warn('[look] 정밀 렌더 실패 — 기기 합성을 유지합니다:', e.message)
@@ -706,6 +719,8 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     })()
     return () => {
       cancelled = true
+      // 사진/룩 교체 때 skeleton으로 돌아가며 취소된 실행은, 기기 합성 완료 후 다시 시작할 수 있다.
+      if (refineRef.current === key) refineRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [landmarkReady, threadId, livePhoto, lookSig])
@@ -798,11 +813,12 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
             pendingSlots,
             query: liveQuery,
             photo: livePhoto,
+            photoBefore: lookBefore,
             photoAfter: lookAfter,
             lookStage,
           })
         : [],
-    [planPage, pendingSlots, liveQuery, livePhoto, lookAfter, lookStage]
+    [planPage, pendingSlots, liveQuery, livePhoto, lookBefore, lookAfter, lookStage]
   )
   const allItems = stageKey === 'plan' ? planItems : surveyItems
   const topItems = allItems.filter((it) => !it.parentId)

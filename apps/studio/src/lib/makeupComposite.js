@@ -15,6 +15,8 @@
  * 사진은 기기 밖으로 나가지 않는다: 모델·wasm은 같은 오리진에서 받고 합성은 캔버스에서 끝난다.
  */
 
+import { calculateFaceAlignment, faceAnchors, reusableFaceAlignment } from './faceAlignment.js'
+
 /* 런타임 자산은 전부 public/mediapipe에서 받는다 (문서 기준 상대 경로 — sample-faces와 같은 규칙).
    wasm은 패키지 exports가 막아 번들러가 못 집어 가므로 predev/prebuild가 복사해 둔다
    (scripts/copy-mediapipe-wasm.mjs), 모델(.task)은 커밋되어 있다 */
@@ -467,33 +469,51 @@ export async function toPhotoDataUrl(src, maxEdge = MAX_EDGE, opts = {}) {
 }
 
 /**
- * 정밀 렌더 결과를 원본 사진의 가로세로 비율로 되맞춘다. 이미지 편집 API는 출력 크기를 표준 규격
- * (1024×1536 등)으로 맞추느라 원본(예: 3:4)을 세로로 살짝 늘려 돌려준다 — 비포/애프터 슬라이더는
- * 두 층을 같은 상자에 cover로 깔기 때문에 비율이 다르면 애프터 얼굴이 원본보다 길어 보이고 이음새가
- * 어긋난다. 출력 해상도(가로)는 그대로 두고 세로만 원본 비율로 다시 샘플링한다: 모델이 늘린 것을
- * 되돌리는 것이므로 왜곡을 더하지 않는다. 비율 차이가 0.5% 이내면 그대로, 어떤 실패에도 입력을
- * 그대로 돌려준다 (향상 계층 원칙).
+ * 정밀 렌더의 두 눈을 원본에 맞추고 두 사진을 동일한 영역으로 자른다.
+ * 같은 비율의 사진도 얼굴 위치는 다를 수 있으므로 반드시 랜드마크로 정렬한다.
+ * 저장된 변환이 있으면 검출만 생략하고, 매번 생성 원본에서 그려 재압축/크롭 누적을 막는다.
+ * 얼굴 미검출·코 위치 불일치·과도한 크롭·캔버스 실패는 null → 호출자가 기기 합성을 유지한다.
  */
-export async function matchAspectTo(dataUrl, refSrc) {
-  if (!dataUrl || !refSrc || typeof document === 'undefined') return dataUrl
+export async function alignMakeupPair(dataUrl, refSrc, savedAlignment = null) {
+  if (!dataUrl || !refSrc || typeof document === 'undefined') return null
   try {
     const [img, ref] = await Promise.all([loadImage(dataUrl), loadImage(refSrc)])
-    const iw = img.naturalWidth || img.width
-    const ih = img.naturalHeight || img.height
-    const rw = ref.naturalWidth || ref.width
-    const rh = ref.naturalHeight || ref.height
-    if (!iw || !ih || !rw || !rh) return dataUrl
-    const targetH = Math.round((iw * rh) / rw)
-    if (Math.abs(targetH - ih) / ih < 0.005) return dataUrl
-    const canvas = document.createElement('canvas')
-    canvas.width = iw
-    canvas.height = targetH
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return dataUrl
-    ctx.drawImage(img, 0, 0, iw, ih, 0, 0, iw, targetH)
-    return canvas.toDataURL('image/png')
+    const source = { width: img.naturalWidth, height: img.naturalHeight }
+    const reference = { width: ref.naturalWidth, height: ref.naturalHeight }
+    let alignment = reusableFaceAlignment(savedAlignment, source, reference)
+    if (!alignment) {
+      const landmarker = await loadLandmarker()
+      if (!landmarker) return null
+      // detect는 동기 호출이다. 공유 랜드마커를 순서대로 사용한다.
+      const beforeFace = faceAnchors(landmarker.detect(ref)?.faceLandmarks?.[0], reference)
+      const afterFace = faceAnchors(landmarker.detect(img)?.faceLandmarks?.[0], source)
+      alignment = calculateFaceAlignment(afterFace, beforeFace, source, reference)
+    }
+    if (!alignment) return null
+    const { transform: m, crop } = alignment
+    const scale = Math.hypot(m.a, m.b)
+    // 생성 이미지의 픽셀 밀도를 유지하되 큰 이미지의 메모리 사용량을 제한한다.
+    const outputScale = Math.min(1 / scale, 1600 / Math.max(crop.width, crop.height))
+    const width = Math.max(1, Math.round(crop.width * outputScale))
+    const height = Math.max(1, Math.round(crop.height * outputScale))
+    const draw = (image, transform) => {
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return null
+      const sx = width / crop.width, sy = height / crop.height
+      ctx.imageSmoothingQuality = 'high'
+      ctx.setTransform(sx * transform.a, sy * transform.b, -sx * transform.b, sy * transform.a,
+        sx * (transform.x - crop.x), sy * (transform.y - crop.y))
+      ctx.drawImage(image, 0, 0)
+      return canvas.toDataURL('image/png')
+    }
+    const before = draw(ref, { a: 1, b: 0, x: 0, y: 0 })
+    const after = draw(img, m)
+    return before && after ? { before, after, alignment } : null
   } catch {
-    return dataUrl
+    return null
   }
 }
 
