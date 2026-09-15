@@ -133,6 +133,28 @@ const primaryListing = (cards: ReturnType<typeof toListingCard>[]) => {
   )
 }
 
+/* 화면에 보여줄 카탈로그 이름 — Flask catalog_display_name 과 같은 규칙.
+ *
+ * 1) 사람이 대시보드에서 고친 이름(display_name)이 있으면 그것, 없으면 저장된 name.
+ *    저장된 name 은 병합 판정의 키라 절대 건드리지 않는다.
+ * 2) 용량을 아는데 이름에 없으면 붙인다 — 같은 내용물이라도 30ml 은 여행용, 80ml 은
+ *    본품이라 검토자에게 다른 물건이다. 사람이 직접 적어 넣은 경우도 있어(예: "… 30ml")
+ *    이미 있으면 덧붙이지 않는다.
+ *
+ * 차이 하나: display_name 이 없을 때 Flask 는 리스팅 제목을 clean_listing_name 으로 다듬는다.
+ * 그 정규식 한 벌(_NAME_LEAD·_NAME_TAIL·한글/영문 단위 목록)은 여기로 베끼지 않는다 —
+ * 두 벌이 되면 갈린다. 정제된 이름이 필요하면 수집 파이프라인이 문서에 써 주는 쪽이 맞다. */
+const escapeRe = (v: string) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+export function catalogDisplayName(doc: any): string {
+  const name = (typeof doc.display_name === 'string' && doc.display_name.trim()) || doc.name || ''
+  const v = doc.volume_ml
+  if (typeof v !== 'number' || !Number.isFinite(v) || !name) return name
+  const unit = typeof doc.volume_unit === 'string' && doc.volume_unit ? doc.volume_unit : 'ml'
+  if (new RegExp(`\\d+(?:\\.\\d+)?\\s*${escapeRe(unit)}(?![a-z\uac00-\ud7a3])`).test(name)) return name
+  return `${name} ${v}${unit}`
+}
+
 export function toCatalogUnit(doc: any, listings: any[]) {
   const base = toUnit(doc)
   const cards = listings.map(toListingCard)
@@ -155,6 +177,7 @@ export function toCatalogUnit(doc: any, listings: any[]) {
     ...base,
     fields,
     id: doc.catalog_id,
+    name: catalogDisplayName(doc),
     brand: doc.brand_name || doc.brand || doc.inferred_brand || '',
     option: cards.length ? `리스팅 ${cards.length}곳` : '리스팅 없음',
     price: null,

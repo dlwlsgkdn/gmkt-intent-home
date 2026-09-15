@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import mapping from '../dist/mapping.js'
 
 const { toUnit, toDocPatch, sanitizeTaxonomyDoc, readCacheEnvelope,
-        toCatalogUnit, toListingCard, toUnlinkedCard, joinListings } = mapping
+        toCatalogUnit, toListingCard, toUnlinkedCard, joinListings, catalogDisplayName } = mapping
 
 /* 실제 문서에서 추린 모양 — 필드 이름·중첩 구조를 바꾸지 말 것 */
 const DOC = {
@@ -415,4 +415,45 @@ test('toCatalogUnit — 후보가 여럿이면 리스팅 순서가 아니라 pro
   /* 어느 순서로 들어와도 같은 리스팅이 뽑혀야 한다 — Mongo 반환 순서에 흔들리지 않게 */
   assert.equal(toCatalogUnit(CAT, [a, b]).copy, '먼저')
   assert.equal(toCatalogUnit(CAT, [b, a]).copy, '먼저')
+})
+
+/* ── 사람이 고친 카탈로그 이름 (Flask display_name) ──────────────────── */
+
+test('toCatalogUnit — display_name 이 있으면 그 이름을 쓴다', () => {
+  const u = toCatalogUnit({ ...CAT, display_name: 'AHC 프로샷 포어이레이저 세럼 30ml' }, [])
+  assert.equal(u.name, 'AHC 프로샷 포어이레이저 세럼 30ml')
+})
+
+test('toCatalogUnit — display_name 이 없거나 공백뿐이면 name 으로 떨어진다', () => {
+  /* CAT 은 volume_ml: 50 이라 용량이 붙는다 — Flask 와 같은 규칙 */
+  const expected = `${CAT.name} 50ml`
+  assert.equal(toCatalogUnit(CAT, []).name, expected)
+  assert.equal(toCatalogUnit({ ...CAT, display_name: '   ' }, []).name, expected)
+  assert.equal(toCatalogUnit({ ...CAT, display_name: null }, []).name, expected)
+  /* 용량을 모르면 원문 그대로 */
+  assert.equal(toCatalogUnit({ ...CAT, volume_ml: null }, []).name, CAT.name)
+})
+
+test('catalogDisplayName — 용량을 아는데 이름에 없으면 붙인다 (Flask 와 같은 규칙)', () => {
+  assert.equal(catalogDisplayName({ display_name: '홀리카홀리카 마이페이브 피스', volume_ml: 1.7, volume_unit: 'g' }),
+               '홀리카홀리카 마이페이브 피스 1.7g')
+  assert.equal(catalogDisplayName({ display_name: '설화수 자음수 EX', volume_ml: 150 }), '설화수 자음수 EX 150ml')
+})
+
+test('catalogDisplayName — 이름에 이미 용량이 있으면 덧붙이지 않는다', () => {
+  assert.equal(catalogDisplayName({ display_name: 'AHC 프로샷 포어이레이저 세럼 30ml', volume_ml: 30 }),
+               'AHC 프로샷 포어이레이저 세럼 30ml')
+  assert.equal(catalogDisplayName({ display_name: '리얼 네이처 수딩젤 1000ml', volume_ml: 1000 }),
+               '리얼 네이처 수딩젤 1000ml')
+})
+
+test('catalogDisplayName — 용량을 모르면 이름만', () => {
+  assert.equal(catalogDisplayName({ display_name: '이름만', volume_ml: null }), '이름만')
+  assert.equal(catalogDisplayName({ name: '원문만' }), '원문만')
+})
+
+test('catalogDisplayName — 단위 뒤에 글자가 붙은 건 용량으로 치지 않는다', () => {
+  /* Flask 의 (?![a-z가-힣]) 와 같은 판정 — "30ml리필"의 ml 은 걸리지만 "5g램프"의 g 는 아니다 */
+  assert.equal(catalogDisplayName({ display_name: '샘플 5그램짜리', volume_ml: 5, volume_unit: 'g' }),
+               '샘플 5그램짜리 5g')
 })

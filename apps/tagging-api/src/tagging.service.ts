@@ -6,7 +6,7 @@ import { decisionToReview, joinListings, nowIso, toDocPatch } from './mapping'
 /* 화면이 쓰는 필드만 가져온다. 투영이 없으면 11.53MB 를 통째로 끌어와 2.7초가 걸린다
    (실측) — toUnit 이 대부분 버리는데도. 투영 후 두 질의 병렬로 276ms. */
 const CATALOG_FIELDS = [
-  'catalog_id', 'merged_into', 'name', 'brand', 'brand_name', 'inferred_brand', 'image_url',
+  'catalog_id', 'merged_into', 'name', 'display_name', 'brand', 'brand_name', 'inferred_brand', 'image_url',
   'ingredients_from_spec', 'volume_ml', 'formulation', 'ingredient_tags',
   'confidence', 'field_confidence', 'rationale', 'review_status', 'review_meta',
   'inferred_category', 'sub_type', 'body_part',
