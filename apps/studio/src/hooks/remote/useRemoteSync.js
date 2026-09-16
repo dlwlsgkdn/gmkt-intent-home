@@ -132,7 +132,11 @@ export function useRemoteSync({
 
   /* ── 서버에 저장 (수동 업로드) ── */
   const pushToServer = async () => {
-    if (!REMOTE_ENABLED || busyRef.current) return
+    if (!REMOTE_ENABLED) return
+    if (busyRef.current) {
+      autoQueuedRef.current = true // 진행 중 전송(자동 싱크 등)이 끝나면 flushQueuedAutoSync 가 이어 올린다 — 조용히 버리지 않는다
+      return
+    }
     if (!bootReady) {
       showToast(remoteFailed
         ? '서버 상태를 불러오지 못해 저장할 수 없어요. 새로고침 후 다시 시도해주세요.'

@@ -347,7 +347,10 @@ export default function Builder({ api, scenario }) {
         toggleMenu={toggleMenu}
         closeMenu={closeMenu}
         history={history}
-        onGoHome={api.goHome}
+        onGoHome={() => {
+          topbar.pushToServerSoon() // 미저장 서버 변경이 있으면 올리고 나간다 (useTopBarActions 참고)
+          api.goHome()
+        }}
         onPlay={() => api.playScenario(scenario.id)}
         onPatchScenario={topbar.patchScenario}
         onChangeDevice={topbar.changeDevice}
@@ -358,6 +361,7 @@ export default function Builder({ api, scenario }) {
         onUnpublish={() => {
           topbar.patchScenario({ status: 'draft' })
           api.showToast('발행을 취소했어요.')
+          topbar.pushToServerSoon({ force: true }) // 홈 칩이 바로 바뀌는 상태라 발행처럼 서버에도 즉시
         }}
         onRestoreVersion={topbar.restoreVersion}
         onExportJson={topbar.exportScenarioJson}
