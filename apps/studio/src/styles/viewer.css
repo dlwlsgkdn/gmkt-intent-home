@@ -464,6 +464,8 @@
 .sb-player {
   padding: 96px 24px 80px;
 }
+/* 계획 페이지(플레인 모드) — 하단 내비 없이 끝나므로(2026-09-15) 창 우하단 플로팅 버튼(바닥 28px + 56px) 위로 여백 */
+.sb-player--plan { padding-bottom: 100px; }
 .sb-player__head {
   width: min(760px, 100%);
   /* 시나리오 제목은 화면 헤더 컴포넌트가 맡는다 — 여기는 진입 경로 표기·재시작만 남은 얇은 줄 */

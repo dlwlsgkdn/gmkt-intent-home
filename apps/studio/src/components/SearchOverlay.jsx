@@ -31,8 +31,9 @@ const CloseIcon = () => (
     <path d="M6 6l12 12M18 6L6 18" />
   </svg>
 )
-/* ✦ — AI 추천 행 (Figma 자연어 칩의 스파클). 라이브 생성으로 이어지는 검색어라 ✦ 를 쓴다 */
-const SparkIcon = () => (
+/* ✦ — AI 추천 행 (Figma 자연어 칩의 스파클). 라이브 생성으로 이어지는 검색어라 ✦ 를 쓴다.
+   홈 추천 검색어 칩(registry recommendChips)의 보라 칩 아이콘으로도 쓴다 — SearchIcon 은 파랑(인기) 칩 */
+export const SparkIcon = () => (
   <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
     <path d="M12 2.5l2.1 6.1 6.4 2.2-6.4 2.2L12 19.1l-2.1-6.1-6.4-2.2 6.4-2.2z" />
     <path d="M19.5 15.5l.9 2.4 2.4.9-2.4.9-.9 2.4-.9-2.4-2.4-.9 2.4-.9z" opacity="0.7" />

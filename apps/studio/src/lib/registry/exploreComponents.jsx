@@ -3,6 +3,7 @@ import { DEFAULT_SEARCH_PLACEHOLDERS, splitTextList } from '../store.js'
 import { greetingThreadSpan } from '../homePersonalize.js'
 import { Img, kText } from './support.jsx'
 import CrossFade from '../../components/ui/CrossFade.jsx'
+import { SearchIcon, SparkIcon } from '../../components/SearchOverlay.jsx'
 
 /* 개인화 인사말 — 최근 쓰레드를 가리키는 「」 부분을 탭 대상(그 쓰레드 이어보기)으로 만든다. 탭 대상이 없으면 문장 그대로 */
 function greetingNodes(text, onResume) {
@@ -118,6 +119,30 @@ const CHIP_COUNT_OPTIONS = [
   { value: '3', label: '3개' },
 ]
 const chipCount = (value) => Math.max(0, Math.min(3, Number(value == null || value === '' ? 3 : value) || 0))
+/* 추천 칩 섞기 — 보라(개인화)·파랑(인기)을 한 줄에 순서 없이 섞는다(2026-09-15). 시드는 칩 내용 + 접속 1회 소금(FNV-1a → mulberry32
+   → Fisher-Yates): 같은 내용이면 같은 순서라 재렌더·홈 복귀·크로스페이드에 칩이 뛰지 않고, 새로고침마다는 다르게 섞인다 */
+const MIX_SALT = String(Math.random())
+const mixChips = (list, seedText) => {
+  let seed = 2166136261
+  const text = seedText + MIX_SALT
+  for (let i = 0; i < text.length; i += 1) seed = Math.imul(seed ^ text.charCodeAt(i), 16777619)
+  const next = () => {
+    seed = (seed + 0x6d2b79f5) | 0
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+  const out = list.slice()
+  for (let i = out.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(next() * (i + 1))
+    ;[out[i], out[j]] = [out[j], out[i]]
+  }
+  return out
+}
+/* 칩 종류 아이콘 — 보라 = ✦(맞춤 설문·라이브 생성으로 직행), 파랑 = 돋보기(검색 결과로). 글자색을 따른다 */
+const RecoChipIcon = ({ kind }) => (
+  <span className="sb-chip-reco__icon" aria-hidden="true">{kind === 'popular' ? <SearchIcon /> : <SparkIcon />}</span>
+)
 
 /* 탐색 단계 컴포넌트 — 홈 상단 인사·검색·칩·웹진 스토리 카드 */
 export const EXPLORE_COMPONENTS = {
@@ -197,50 +222,40 @@ export const EXPLORE_COMPONENTS = {
     ),
   },
 
-  /* 추천 검색어 칩 — 검색창 아래 두 톤(Figma Search 랜딩 ChipSection): 보라 = 내 쇼핑 쓰레드 히스토리로 만든 개인화 자연어 검색어
-     (BFF `/api/search/home`, 실패면 휴리스틱 — 최근 쓰레드 제목·프로필), 파랑 = 전체 사용자 인기 검색어 후보 표 상위(`/api/search/popular`
-     — core KV, 실패면 시드 표) `#키워드`. 내용은 hooks/useHomePersonalize 가 ctx.home 으로 공급하고 바뀌면 크로스페이드로 갈아끼운다.
+  /* 추천 검색어 칩 — 검색창 아래 두 톤(Figma Search 랜딩 ChipSection): 보라 = ✦ + 내 쇼핑 쓰레드 히스토리로 만든 개인화 자연어 검색어
+     (BFF `/api/search/home`, 실패면 휴리스틱 — 최근 쓰레드 제목·프로필), 파랑 = 돋보기 + 전체 사용자 인기 검색어 후보 표 상위
+     (`/api/search/popular` — core KV, 실패면 시드 표). 두 톤은 역할 캡션 없이 **한 줄에 순서 없이 섞여** 선다(2026-09-15 — 종류는
+     아이콘·색이 가른다. 옛 「내 쓰레드에서 이어서 / 지금 인기 검색어」 캡션과 파랑 칩의 `#키워드` 표기는 뗐다). 내용은
+     hooks/useHomePersonalize 가 ctx.home 으로 공급하고 바뀌면 크로스페이드로 갈아끼운다.
      칩 클릭 = 검색 제출 — 칩 종류가 곧 목적지다: 보라 = 맞춤 설문(DDAK) 직행, 파랑 = 검색 결과 페이지(SRP) 직행 (라우터 판정 없음) */
   recommendChips: {
     label: '추천 검색어 칩',
     stage: 'explore',
     icon: '💡',
-    hint: '보라 = 내 쇼핑 쓰레드로 만든 개인화 검색어 · 파랑 = 전체 사용자 인기 검색어 (내용은 자동)',
-    defaults: { personalCount: '3', popularCount: '3', showCaptions: true },
+    hint: '보라 ✦ = 내 쇼핑 쓰레드로 만든 개인화 검색어 · 파랑 🔍 = 전체 사용자 인기 검색어 — 한 줄에 순서 없이 섞임 (내용은 자동)',
+    defaults: { personalCount: '3', popularCount: '3' },
     fields: [
-      { key: 'personalCount', label: '개인화 추천 검색어 (보라) 개수', kind: 'select', defaultValue: '3', options: CHIP_COUNT_OPTIONS },
-      { key: 'popularCount', label: '인기 검색어 (파랑) 개수', kind: 'select', defaultValue: '3', options: CHIP_COUNT_OPTIONS },
-      { key: 'showCaptions', label: '역할 캡션 표시 (내 쓰레드에서 이어서 / 지금 인기 검색어)', kind: 'toggle', defaultValue: true },
+      { key: 'personalCount', label: '개인화 추천 검색어 (보라 ✦) 개수', kind: 'select', defaultValue: '3', options: CHIP_COUNT_OPTIONS },
+      { key: 'popularCount', label: '인기 검색어 (파랑 🔍) 개수', kind: 'select', defaultValue: '3', options: CHIP_COUNT_OPTIONS },
     ],
-    /* 캡션 — 두 칩 묶음의 역할을 글자로도 가른다(Figma ChipSection 에는 없는 요소라 토글로 끌 수 있다). 보라 캡션은 쓰레드가 없어
-       프로필·계절로만 만든 칩이면 "내 프로필에 맞춰"로 바뀐다(hooks/useHomePersonalize personal.basis) */
     render: (p, ctx) => {
       const nPersonal = chipCount(p.personalCount)
       const nPopular = chipCount(p.popularCount)
-      const captions = p.showCaptions !== false
       const home = ctx.mode === 'player' ? ctx.home : null
-      const group = (caption, key, nodes) => (
-        <div key={key} className="sb-recochips__group">
-          <span className="sb-recochips__caption">{caption}</span>
-          <div className="clean-tag-row sb-recochips__row">{nodes}</div>
-        </div>
-      )
-      const POPULAR_CAPTION = '지금 인기 검색어'
       if (!home) {
         // 캔버스·미리보기 자리표시자 — 실제 문구는 홈에서 쓰레드·인기 표로 채워진다
-        const purple = Array.from({ length: nPersonal }, (_, i) => (
-          <span key={`p${i}`} className="suggestion-tag sb-chip-reco sb-chip-reco--personal sb-chip-reco--sample">내 쓰레드 기반 추천 {i + 1}</span>
-        ))
-        const blue = Array.from({ length: nPopular }, (_, i) => (
-          <span key={`h${i}`} className="suggestion-tag sb-chip-reco sb-chip-reco--popular sb-chip-reco--sample">#인기_검색어_{i + 1}</span>
-        ))
-        if (!captions) return <div className="clean-tag-row sb-static">{purple}{blue}</div>
+        const samples = [
+          ...Array.from({ length: nPersonal }, (_, i) => ({ key: `p${i}`, kind: 'personal', text: `내 쓰레드 기반 추천 ${i + 1}` })),
+          ...Array.from({ length: nPopular }, (_, i) => ({ key: `h${i}`, kind: 'popular', text: `인기 검색어 ${i + 1}` })),
+        ]
         return (
-          <div className="sb-recochips sb-static">
-            <div className="sb-recochips__groups">
-              {purple.length ? group('내 쓰레드에서 이어서', 'p', purple) : null}
-              {blue.length ? group(POPULAR_CAPTION, 'h', blue) : null}
-            </div>
+          <div className="clean-tag-row sb-static">
+            {mixChips(samples, 'sample').map((c) => (
+              <span key={c.key} className={`suggestion-tag sb-chip-reco sb-chip-reco--${c.kind} sb-chip-reco--sample`}>
+                <RecoChipIcon kind={c.kind} />
+                {c.text}
+              </span>
+            ))}
           </div>
         )
       }
@@ -251,40 +266,39 @@ export const EXPLORE_COMPONENTS = {
       const personal = ((home.personal && home.personal.items) || []).slice(0, nPersonal)
       const popular = ((home.popular && home.popular.items) || []).slice(0, nPopular)
       if (!personal.length && !popular.length) return null
-      const personalCaption = home.personal && home.personal.basis === 'profile' ? '내 프로필에 맞춰' : '내 쓰레드에서 이어서'
-      const stamp = [...personal.map((t) => `p:${t}`), ...popular.map((row) => `h:${row.keyword}`)].join('|') + (captions ? `|c:${personalCaption}` : '')
-      const purple = personal.map((text) => (
-        <button
-          key={`p:${text}`}
-          type="button"
-          className="suggestion-tag sb-chip-reco sb-chip-reco--personal"
-          title="내 쇼핑 쓰레드로 만든 추천 검색어 — 맞춤 설문으로 바로 시작"
-          onClick={() => submit(text, 'ddak')}
-        >
-          {text}
-        </button>
-      ))
-      const blue = popular.map((row) => (
-        <button
-          key={`h:${row.keyword}`}
-          type="button"
-          className="suggestion-tag sb-chip-reco sb-chip-reco--popular"
-          title={`인기 검색어 · 최근 ${Number(row.count || 0).toLocaleString('ko-KR')}회 — 검색 결과 보기`}
-          onClick={() => submit(row.keyword, 'srp')}
-        >
-          #{String(row.keyword).replace(/\s+/g, '_')}
-        </button>
-      ))
+      const chips = [
+        ...personal.map((text) => ({
+          key: `p:${text}`,
+          kind: 'personal',
+          text,
+          title: '내 쇼핑 쓰레드로 만든 추천 검색어 — 맞춤 설문으로 바로 시작',
+          onClick: () => submit(text, 'ddak'),
+        })),
+        ...popular.map((row) => ({
+          key: `h:${row.keyword}`,
+          kind: 'popular',
+          text: String(row.keyword),
+          title: `인기 검색어 · 최근 ${Number(row.count || 0).toLocaleString('ko-KR')}회 — 검색 결과 보기`,
+          onClick: () => submit(row.keyword, 'srp'),
+        })),
+      ]
+      const stamp = chips.map((c) => c.key).join('|')
       return (
         <CrossFade className="sb-recochips sb-static" stamp={stamp}>
-          {captions ? (
-            <div className="sb-recochips__groups">
-              {purple.length ? group(personalCaption, 'p', purple) : null}
-              {blue.length ? group(POPULAR_CAPTION, 'h', blue) : null}
-            </div>
-          ) : (
-            <div className="clean-tag-row sb-recochips__row">{purple}{blue}</div>
-          )}
+          <div className="clean-tag-row">
+            {mixChips(chips, stamp).map((c) => (
+              <button
+                key={c.key}
+                type="button"
+                className={`suggestion-tag sb-chip-reco sb-chip-reco--${c.kind}`}
+                title={c.title}
+                onClick={c.onClick}
+              >
+                <RecoChipIcon kind={c.kind} />
+                {c.text}
+              </button>
+            ))}
+          </div>
         </CrossFade>
       )
     },

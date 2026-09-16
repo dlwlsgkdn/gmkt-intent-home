@@ -826,7 +826,8 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const qIndex = stepQuestions.length ? Math.min(qStep, stepQuestions.length - 1) : 0
   /* 화면 꽉 채우기 — Player 와 같은 규칙. 라이브 투영 아이템은 fillScreen 을 싣지 않으므로(기본 켜짐) 언제나 켜진다 */
   const fillActive = stageKey === 'survey' && stepQuestions.length > 0 && stepQuestions[qIndex].props?.fillScreen !== false
-  const navHidden = fillActive && topItems.some((it) => it.type === 'screenHeader')
+  /* 하단 내비는 설문 전용 — 계획 페이지에는 「이전 단계 / 체험 완료」 줄을 두지 않는다(2026-09-15, Player 와 같은 규칙) */
+  const navHidden = stageKey !== 'survey' || (fillActive && topItems.some((it) => it.type === 'screenHeader'))
   const items = stageKey === 'survey' ? pageQuestions(topItems, qStep) : topItems
 
   /* 생성 중 부분 페이지 투영 — 최종과 같은 livePage 투영을 그대로 쓴다 (아이템 id가 인덱스
@@ -1118,7 +1119,13 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
       <BgBlobs />
       {/* 플로팅 버튼 — 체험 화면에서는 쓰레드 목록이 아니라 **지금 진행 중인 쓰레드**의 담은 상품 시트를 연다(2026-09) */}
       <FloatingBar label="현재 쇼핑 쓰레드" onList={() => setCartSheet(true)} />
-      <section className={'sb-player sb-player--live min-h-screen relative z-10' + (fillActive ? ' sb-player--fill' : '')}>
+      <section
+        className={
+          'sb-player sb-player--live min-h-screen relative z-10'
+          + (fillActive ? ' sb-player--fill' : '')
+          + (stageKey === 'plan' ? ' sb-player--plan' : '')
+        }
+      >
         <div className={'sb-live-annotate' + (fbMode && fbAvailable ? ' is-on' : '')}>
         <div className="sb-phone sb-phone--player" ref={phoneRef} style={{ width: viewer.w }}>
           {error ? (
@@ -1211,9 +1218,10 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
                   )
                 })}
               </div>
+              {/* 하단 내비 — 설문 전용(계획 페이지엔 없음): 질문 단위로 뒤로 가고, 질문이 없는 설문만 여기서 계획 생성으로 */}
               {!navHidden && (
               <div className="clean-survey-nav sb-player__nav">
-                {stageKey === 'survey' && qIndex > 0 ? (
+                {qIndex > 0 ? (
                   <button
                     type="button"
                     className="clean-survey-nav-btn clean-survey-nav-btn--ghost"
@@ -1221,21 +1229,13 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
                   >
                     이전 질문
                   </button>
-                ) : stageKey === 'plan' ? (
-                  <button type="button" className="clean-survey-nav-btn clean-survey-nav-btn--ghost" onClick={() => goStage(0)}>
-                    이전 단계
-                  </button>
                 ) : (
                   <button type="button" className="clean-survey-nav-btn clean-survey-nav-btn--ghost" onClick={api.goHome}>
                     홈으로
                   </button>
                 )}
                 {/* 설문에서 앞으로 가는 버튼은 질문 컴포넌트 안에 있다 (진행 표시·질문·항목과 한 벌) */}
-                {stageKey === 'survey' && stepQuestions.length > 0 ? null : stageKey === 'plan' ? (
-                  <button type="button" className="clean-plan-submit" onClick={playerApi.complete}>
-                    체험 완료
-                  </button>
-                ) : (
+                {stepQuestions.length > 0 ? null : (
                   <button
                     type="button"
                     className="clean-plan-submit"
