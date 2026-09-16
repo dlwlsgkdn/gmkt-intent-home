@@ -115,6 +115,38 @@ const SKELETON_JSON = JSON.stringify({
   ],
 })
 
+/* 성분이 기준인 의도(면도 자극·성분 비교 요구) — 뼈대가 성분 비교표(compare)·주의 성분(caution)을 단계 안내 뒤·상품 자리 앞에
+   둔다 (v26). short·desc 의 빈 문자열이 와이어에서 떨어지는지, 5c 콘텐츠가 그 단계 끝(steps 앞)에 끼는지 본다 */
+const SKELETON_INGREDIENT_JSON = JSON.stringify({
+  headline: '모의 면도 자극 케어 계획',
+  summary: '면도 뒤 붉어지는 피부를 위한 모의 요약입니다.',
+  sections: [
+    { kind: 'guide', title: '자극 원인 짚기', subtitle: '면도 뒤 붉어짐을 부르는 성분부터', body: '면도 직후 피부 장벽이 약해져 있어요.' },
+    {
+      kind: 'compare',
+      title: '기존 워시와 추천 기준을 성분으로 비교했어요',
+      alt: { badge: '기존 제품', name: '일반 올인원 워시', short: '' },
+      pick: { badge: '추천 기준', name: '약산성 저자극 쉐이빙 젤', short: '쉐이빙 젤' },
+      rows: [
+        { ingredient: 'SLS/SLES', alt: '있음', pick: '없음', risk: '높음' },
+        { ingredient: '인공향료', alt: '있음', pick: '없음', risk: '중간' },
+        { ingredient: '에탄올', alt: '소량', pick: '없음', risk: '낮음' },
+      ],
+    },
+    {
+      kind: 'caution',
+      title: '주의해서 볼 성분',
+      desc: '',
+      items: [
+        { name: 'SLS (Sodium Lauryl Sulfate)', note: '세정력이 강해 면도 직후엔 자극이 될 수 있어요.' },
+        { name: '인공향료 (Fragrance)', note: '민감해진 피부에 자극이 될 수 있어요.' },
+      ],
+    },
+    { kind: 'products', title: '저자극 쉐이빙 젤·폼 고르기', reason: '약산성·무향·SLS 프리 기준으로 고를 거예요.' },
+    { kind: 'steps', title: '사용 순서', steps: ['미온수로 적시기', '젤을 얇게 펴 바르기'] },
+  ],
+})
+
 const INTENT_JSON = JSON.stringify({
   template: '제품 추천',
   goal: '여름 지속력',
@@ -367,7 +399,9 @@ const server = http.createServer(async (req, res) => {
       llmCalls.push({ type: 'skeleton', system, user })
       // 사진을 받은 쓰레드면 가상 메이크업 결과(look)로 여는 뼈대를 돌려준다
       const lookPlan = user.includes('얼굴 사진을 올렸습니다')
-      return streamAnthropic(res, lookPlan ? SKELETON_LOOK_JSON : SKELETON_JSON, { delayMs: 4, chunkSize: 18 })
+      // 성분이 기준인 의도(면도 자극·성분 비교)면 성분 비교표·주의 성분이 든 뼈대를 돌려준다 (v26)
+      const ingredientPlan = user.includes('성분 비교')
+      return streamAnthropic(res, lookPlan ? SKELETON_LOOK_JSON : ingredientPlan ? SKELETON_INGREDIENT_JSON : SKELETON_JSON, { delayMs: 4, chunkSize: 18 })
     }
     if (system.includes('정규화한다')) {
       llmCalls.push({ type: 'intent', system, user })

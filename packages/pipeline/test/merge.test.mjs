@@ -127,3 +127,72 @@ test('안 채워진 자리는 null + pending(미리보기), 최종 병합에서�
   assert.deepEqual(pending, [3])
   assert.deepEqual(mergePlanSections(skeleton, [p1, p2]).map((s) => s.kind), ['look', 'products', 'products', 'steps'])
 })
+
+// 성분 비교표·주의 성분 (v26) — 성분이 기준인 의도에서 뼈대가 [안내 → compare → caution → 상품 자리] 로 두는 단계
+const ingredientSkeleton = () => [
+  { kind: 'guide', title: '자극 원인 짚기', subtitle: '면도 뒤 붉어짐을 부르는 성분부터', body: '면도 직후 피부 장벽이 약해져 있어요.' },
+  {
+    kind: 'compare',
+    title: '기존 워시와 추천 기준을 성분으로 비교했어요',
+    alt: { badge: '기존 제품', name: '일반 올인원 워시', short: '' },
+    pick: { badge: '추천 기준', name: '약산성 저자극 쉐이빙 젤', short: '쉐이빙 젤' },
+    rows: [
+      { ingredient: 'SLS/SLES', alt: '있음', pick: '없음', risk: '높음' },
+      { ingredient: '인공향료', alt: '있음', pick: '없음', risk: '중간' },
+      { ingredient: '에탄올', alt: '소량', pick: '없음', risk: '낮음' },
+    ],
+  },
+  {
+    kind: 'caution',
+    title: '주의해서 볼 성분',
+    desc: '',
+    items: [
+      { name: 'SLS (Sodium Lauryl Sulfate)', note: '세정력이 강해 면도 직후엔 자극이 될 수 있어요.' },
+      { name: '인공향료 (Fragrance)', note: '민감해진 피부에 자극이 될 수 있어요.' },
+    ],
+  },
+  { kind: 'products', title: '저자극 쉐이빙 젤·폼 고르기', reason: '약산성·무향·SLS 프리 기준으로 고를 거예요.' },
+  { kind: 'guide', title: '면도 뒤 진정과 보습', subtitle: '붉어진 피부를 빨리 가라앉히는 마무리', body: '면도 직후엔 알코올 없는 진정 제품으로 마무리해요.' },
+  { kind: 'steps', title: '사용 순서', steps: ['미온수로 적시기', '젤을 얇게 펴 바르기'] },
+]
+
+test('성분 비교표·주의 성분 — 단계 본문이라 연속 구간을 끊지 않고, 자리 없는 상품·콘텐츠는 그 뒤에 선다', () => {
+  const groups = planGroupsOf(ingredientSkeleton())
+  assert.equal(groups.length, 3) // 앞머리 + 안내 2
+  assert.deepEqual(groups[1].slots, { products: [3], contents: [] })
+  assert.deepEqual(groups[1].insertAt, { products: 4, contents: 4 }) // 비교표·주의 성분·상품 자리 뒤, 다음 안내 앞
+  assert.ok(groups[1].text.includes('쉐이빙젤') && groups[1].text.includes('slssles'), '성분·제품 유형이 대조 텍스트에 실린다')
+  const products = {
+    kind: 'products',
+    title: '약산성 저자극 쉐이빙 젤 추천',
+    reason: '무향·SLS 프리 기준으로 골랐어요.',
+    products: [{ id: 'a', name: 'A', brand: '', price: 1, tags: [], url: 'https://x/a' }],
+  }
+  const contents = {
+    kind: 'contents',
+    title: '면도 자극 줄이는 쉐이빙 젤 사용법 영상',
+    reason: '붉어짐을 줄이는 면도 순서가 나온 영상이에요.',
+    items: [{ type: 'video', source: '유튜브', title: 'T', url: 'https://youtu.be/x' }],
+  }
+  const { sections, pending } = composePlanSections(ingredientSkeleton(), [products, contents])
+  assert.deepEqual(
+    sections.map((s) => s && s.kind),
+    ['guide', 'compare', 'caution', 'products', 'contents', 'guide', 'steps'],
+  )
+  assert.deepEqual(pending, [])
+})
+
+test('성분 비교표·주의 성분 — 와이어 변환에서 빈 short·desc 가 떨어지고 행·항목은 그대로', () => {
+  const { sections } = composePlanSections(ingredientSkeleton(), [])
+  const compare = sections[1]
+  assert.equal(compare.kind, 'compare')
+  assert.equal(compare.alt.short, undefined)
+  assert.equal(compare.pick.short, '쉐이빙 젤')
+  assert.deepEqual(compare.rows[0], { ingredient: 'SLS/SLES', alt: '있음', pick: '없음', risk: '높음' })
+  const caution = sections[2]
+  assert.equal(caution.kind, 'caution')
+  assert.equal(caution.desc, undefined)
+  assert.equal(caution.items.length, 2)
+  assert.deepEqual(pendingOf(sections), [3]) // 상품 자리는 비어 있다
+})
+const pendingOf = (sections) => sections.map((s, i) => (s ? -1 : i)).filter((i) => i >= 0)

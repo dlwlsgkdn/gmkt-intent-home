@@ -460,6 +460,33 @@
 .sb-player-stepper__step--done { color: var(--sb-accent); }
 .sb-player-stepper__step--done .sb-player-stepper__dot { background: var(--sb-accent); color: #fff; }
 .sb-player-stepper__line { width: 26px; height: 1px; background: var(--sb-line); }
+/* 라이브 도구 — 평가(주석 말풍선 토글)·새로 생성. 기기 화면의 헤더(DDAK 요소, Figma TopBar 는 뒤로·제목·홈뿐)가 아니라
+   스튜디오 크롬인 스테퍼 알약 오른쪽에 붙는다 (2026-09-16 — 옛 헤더 아이콘 자리에서 옮겨 왔다) */
+.sb-player-stepper__tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 2px;
+  padding-left: 10px;
+  border-left: 1px solid var(--sb-line);
+}
+.sb-player-stepper__tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--sb-r-pill);
+  background: none;
+  color: var(--sb-n-500);
+  font-size: var(--sb-t-caption);
+  cursor: pointer;
+  transition: color var(--sb-dur) var(--sb-ease), background-color var(--sb-dur) var(--sb-ease);
+}
+.sb-player-stepper__tool svg { width: 16px; height: 16px; }
+.sb-player-stepper__tool:hover { color: var(--sb-ink); background: var(--sb-n-100); }
+.sb-player-stepper__tool.is-on { color: var(--sb-info); background: var(--sb-info-soft); }
+.sb-player-stepper__tool:disabled { opacity: 0.4; cursor: not-allowed; background: none; }
 
 .sb-player {
   padding: 96px 24px 80px;
@@ -1885,17 +1912,13 @@
 .sb-fabbar__btn:focus-visible { background: rgba(255, 255, 255, 0.12) !important; }
 .sb-fabbar__btn svg { width: 24px; height: 24px; }
 
-/* 화면 헤더 — AI 생성 표식과 플레이어 액션(평가·새로 생성) */
+/* 화면 헤더 — AI 생성 표식 (플레이어 액션은 2026-09-16 스테퍼 알약 .sb-player-stepper__tools 로 옮겨 헤더엔 뒤로·제목·홈만 남는다) */
 .sb-screen-header__ai {
   margin-right: 6px;
   color: var(--sb-ai);
   font-size: var(--sb-t-small);
   vertical-align: 2px;
 }
-.sb-screen-header__icon.is-on { color: var(--sb-ai); }
-.sb-screen-header__icon:disabled { opacity: 0.35; cursor: not-allowed; }
-/* 이모지 액션은 svg가 아니라 글자라 크기를 따로 잡는다 */
-.sb-screen-header__icon { font-size: var(--sb-t-body); line-height: 1; }
 
 /* ── 계획 페이지 밴드 — Figma "[PP1K] EEVEE 공유용" AIIntro (2026-09) ──
    플레이어(.sb-player 좌우 패딩 24)에서는 타이틀 밴드를 프레임 폭으로 꽉 채우고, 바로 다음

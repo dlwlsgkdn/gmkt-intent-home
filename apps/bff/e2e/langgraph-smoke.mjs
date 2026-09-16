@@ -270,6 +270,42 @@ try {
   const planB = await sse(`/api/threads/${startB.threadId}/plan`, { answers: [{ questionId: 'q1', choices: ['건성'] }] }, plain)
   ok(last(planB, 'result')?.data?.page?.sections?.length === 4, `legacy 계획 생성 정상 — 5c 콘텐츠 포함 (${last(planB, 'result')?.data?.page?.sections?.length})`)
 
+  // ── 8.3 성분 비교표·주의 성분 저니 (v26) — 성분이 기준인 의도면 뼈대가 [안내 → compare → caution → 상품 자리] 를 두고,
+  //    5c 콘텐츠는 그 단계 끝(steps 앞)에 끼며, 빈 short·desc 는 와이어에서 떨어진다 ──
+  console.log('8.3) 성분 비교표·주의 성분 저니 (graph)')
+  {
+    const startI = await fetch(BFF + '/api/threads', {
+      method: 'POST',
+      headers: H,
+      body: JSON.stringify({ query: '면도하면 늘 붉어지고 따가워요 성분 비교표를 구성해서 비교해줘' }),
+    }).then((r) => r.json())
+    const svI = await sse(`/api/threads/${startI.threadId}/survey`, {}, H)
+    ok(last(svI, 'result')?.data?.page?.questions?.length === 3, '성분 비교 저니 — 설문 생성')
+    const planI = await sse(`/api/threads/${startI.threadId}/plan`, { answers: [{ questionId: 'q1', choices: ['건성'] }] }, H)
+    const pageI = last(planI, 'result')?.data?.page
+    const kindsI = (pageI?.sections ?? []).map((s) => s.kind).join(',')
+    // 5c 콘텐츠는 여기서 빠진다 — 같은 모의 URL 을 앞 쓰레드(3·8단계, 같은 사용자)에서 이미 보여줘 검증 게이트가 duplicate-recent 로 드롭한다
+    ok(kindsI === 'guide,compare,caution,products,steps', `성분 비교표·주의 성분이 단계 안내 뒤·상품 자리 앞에 선다 (${kindsI})`)
+    const cmp = pageI?.sections?.find((s) => s.kind === 'compare')
+    ok(cmp?.rows?.length === 3 && cmp?.pick?.short === '쉐이빙 젤' && cmp?.alt?.short === undefined && cmp?.rows?.[0]?.risk === '높음', '비교표 와이어 — 행 3 · 빈 short 제거 · 위험도')
+    const cau = pageI?.sections?.find((s) => s.kind === 'caution')
+    ok(cau?.items?.length === 2 && cau?.desc === undefined, '주의 성분 와이어 — 항목 2 · 빈 desc 제거')
+    ok(planI.some((e) => e.event === 'section' && e.data.section?.kind === 'compare' && e.data.final === true && e.data.index === 1), '비교표가 뼈대 index 1 에 final 도착')
+    const skI = last(planI, 'skeleton')?.data
+    ok(
+      skI?.page?.sections?.[1]?.kind === 'compare' && skI?.page?.sections?.[2]?.kind === 'caution' && JSON.stringify(skI?.pending) === '[3]',
+      `skeleton 조기 확정에 비교표·주의 성분 포함 + pending [3] (${JSON.stringify(skI?.pending)})`,
+    )
+    ok(!last(planI, 'error'), '오류 없음')
+    const detailI = await fetch(BFF + `/api/admin/threads/${startI.threadId}`, { headers: H }).then((r) => r.json())
+    const planStepI = detailI?.steps?.find((s) => s.stage === 'plan')
+    ok(planStepI?.payload?.page?.sections?.[1]?.kind === 'compare', 'core 기록에도 비교표 섹션이 남는다')
+    const codesI = (planStepI?.payload?.dropLog || []).map((d) => d.code)
+    ok(codesI.includes('duplicate-recent'), `콘텐츠는 최근 쓰레드에서 보여준 URL 이라 duplicate-recent 로 드롭 (${[...new Set(codesI)].join(',')})`)
+    // 심사관·재생성 요청이 새 종류를 [성분 비교]·[주의 성분] 줄로 싣는지는 packages/pipeline/test/prompts-compare.test.mjs 가 본다
+    // (여기서 judge 를 부르면 10.5 의 judge 호출 1회 계수가 흔들린다)
+  }
+
   // ── 8.5 가상 메이크업 저니 — 사진 질문 스캐폴드 + 가상 메이크업 결과(look) 섹션 ──
   console.log('8.5) 가상 메이크업 저니 (graph)')
   const startM = await fetch(BFF + '/api/threads', {

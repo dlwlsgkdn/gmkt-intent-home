@@ -79,7 +79,7 @@ pending(재생성 게이트)으로 유지한다. **`skeleton`은 계획 전용 �
 | `llm_failed` | 호출 실패·파싱 실패 (SDK 자동 재시도 2회 후) | ○ |
 | `internal` | 그 외 서버 오류 (core 연결 등) | ○ |
 
-**와이어 페이지 형태** (스튜디오 레지스트리 투영 기준: question→`surveyQuestion`(사진 질문은 `surveyPhoto`), guide→`planStep`, look→`beforeAfter`, products→`productCard`, contents→`videoCard`/`articleCard`, steps→`checklist`):
+**와이어 페이지 형태** (스튜디오 레지스트리 투영 기준: question→`surveyQuestion`(사진 질문은 `surveyPhoto`), guide→`planStep`, look→`beforeAfter`, products→`productCard`, contents→`videoCard`/`articleCard`, steps→`checklist`, compare→`ingredientCompare`(성분 비교표), caution→`cautionIngredients`(주의 성분)):
 
 ```ts
 SurveyPageWire = { intro, questions: [{ id, question, kind?: 'choice'|'photo', options[0..6], multi, placeholder? }] }
@@ -97,6 +97,10 @@ PlanPageWire   = { headline, summary, sections: [
                                                                                        //   hair?{style keep|straight|wavy|curly|updo|ponytail, length keep|short|medium|long, color hex|keep, bangs keep|none|see-through|full, note}(scope≥hair),
                                                                                        //   outfit?{top keep|tee|shirt|blouse|knit|jacket|dress, color hex|keep, fit regular|oversized|fitted, neckline keep|crew|v|collar|off-shoulder, note}(scope=outfit) } — 기기 합성과 정밀 렌더가 그대로 소비하는 한 원천.
                                                                                        //   points 는 BFF 가 부위별 note 에서 파생("립 — …"). FE가 기기에 남은 사진을 BEFORE, 같은 사진에 사양대로 칠한 것을 AFTER로 비포/애프터 투영 (합성은 화면에서)
+                   { kind: 'compare',  title, alt: CompareSide, pick: CompareSide, rows: [{ ingredient, alt, pick, risk? }] } |  // 성분 비교표(v26) — 뼈대(5a)가 성분이 기준인 의도(면도 자극·민감·"성분 비교해 줘")에서만.
+                                                                                       //   **제품 유형 수준** 대조: alt = 기존/일반 제품 유형(답변의 사용 중 제품이 있으면 그것), pick = 이 계획이 권하는 제품 유형. CompareSide = { badge, name, short? }.
+                                                                                       //   행 = 성분 · 기존 열 값(있음/없음/소량) · 추천 열 값 · 위험도(높음/중간/낮음). 구체 상품명·전성분 단정 없음 — 그 기준으로 고른 상품은 바로 뒤 products 가 채운다
+                   { kind: 'caution',  title, desc?, items: [{ name, note }] } |       // 주의 성분(v26) — compare 와 같은 조건에서 뼈대가 만든다. 이름(한글 + INCI) · 왜 주의하는지 한 줄
                    { kind: 'products', title, reason, products: CatalogProduct[] } |  // 카탈로그 id 검증 + 웹 상품 URL 검증 통과분만
                    { kind: 'contents', title, reason, items: PlanContentItem[] } |    // 참고 콘텐츠 — 웹 검색으로 확인한 게시글·영상 (URL 검증 통과분만)
                    { kind: 'steps',    title, steps[] } ] }

@@ -905,12 +905,11 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const fbDirty =
     stageFeedbackSignature(stageFb) !== (fbSavedRef.current[stageKey] ?? stageFeedbackSignature(emptyStageFeedback()))
   const fbAvailable = !loading && !error && (stageKey === 'plan' ? !!planPage : !!surveyPage)
-  /* 화면 헤더 오른쪽 액션 — 옛 상단 크롬(평가·새로 생성)이 헤더로 들어왔다.
-     playerApi 리터럴은 fbMode/fbAvailable보다 앞이라 여기서 뒤늦게 매단다 */
-  playerApi.headerActions = [
+  /* 라이브 도구(평가·새로 생성) — 스튜디오 크롬이라 기기 화면의 헤더가 아니라 스테퍼 알약에 붙인다 (2026-09-16:
+     한때 화면 헤더 오른쪽 아이콘이었는데 Figma TopBar 는 뒤로·제목·홈뿐이라 뗐다. 화면 안에는 DDAK 요소만 둔다) */
+  const liveActions = [
     {
       key: 'feedback',
-      // 이모지 대신 헤더의 뒤로·홈과 같은 24px 라인 아이콘 (Figma TopBar 톤)
       icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H10l-4.6 3.6V16A2.5 2.5 0 0 1 4 13.5z" />
@@ -1111,6 +1110,23 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
             </button>
           </React.Fragment>
         ))}
+        {/* 라이브 도구 — 평가(주석 말풍선 토글)·새로 생성. 기기 화면 밖 스튜디오 크롬 */}
+        <span className="sb-player-stepper__tools" role="group" aria-label="라이브 도구">
+          {liveActions.map((a) => (
+            <button
+              key={a.key}
+              type="button"
+              className={'sb-player-stepper__tool' + (a.active ? ' is-on' : '')}
+              title={a.title || a.label}
+              aria-pressed={a.key === 'feedback' ? !!a.active : undefined}
+              disabled={!!a.disabled}
+              onClick={a.onClick}
+            >
+              {a.icon}
+              <span>{a.label}</span>
+            </button>
+          ))}
+        </span>
       </nav>
 
       {/* 기기 프레임 — 평가 모드는 말풍선 레일을 페이지 옆에 나란히 배치해야 하므로(창 스크롤 기준) 껍데기를 벗고

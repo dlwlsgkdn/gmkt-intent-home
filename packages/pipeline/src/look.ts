@@ -139,5 +139,23 @@ export function skeletonSectionWire(s: PlanSkeletonSectionGen): PlanSectionWire 
       ...(spec ? { spec } : {}),
     }
   }
+  // 성분 비교표·주의 성분 (v26) — 생성 스키마의 빈 문자열(short·desc)은 와이어에서 뗀다 (FE 가 없으면 기본값·숨김으로 그린다)
+  if (s.kind === 'compare') {
+    const side = (x: { badge: string; name: string; short?: string }) => {
+      const short = String(x.short ?? '').trim()
+      return { badge: x.badge, name: x.name, ...(short ? { short } : {}) }
+    }
+    return {
+      kind: 'compare',
+      title: s.title,
+      alt: side(s.alt),
+      pick: side(s.pick),
+      rows: s.rows.map((r) => ({ ingredient: r.ingredient, alt: r.alt, pick: r.pick, ...(r.risk ? { risk: r.risk } : {}) })),
+    }
+  }
+  if (s.kind === 'caution') {
+    const desc = String(s.desc ?? '').trim()
+    return { kind: 'caution', title: s.title, ...(desc ? { desc } : {}), items: s.items.map((it) => ({ name: it.name, note: it.note })) }
+  }
   return s as PlanSectionWire
 }

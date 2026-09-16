@@ -18,7 +18,7 @@ import {
   ContentsSectionGen,
   GeneratedIndexAllocator,
   PlanSearchSectionGen,
-  PlanSectionPartialGen,
+  partialSkeletonSection,
   PlanSkeletonSectionGen,
   ProductsSectionGen,
   buildLookRenderPrompt,
@@ -216,17 +216,11 @@ export class ThreadsService {
             const wire = skeletonSectionWire(parsed.data)
             if (wire) stream.onSection?.(wire, index, true)
           },
-          // 자라는 중인 섹션 — 제목이 나오기 시작하면 토큰 단위로 같은 index에 재전송한다
+          // 자라는 중인 섹션 — 제목이 나오기 시작하면 토큰 단위로 같은 index에 재전송한다 (guide·steps·compare·caution —
+          // products·contents 자리는 부분도 내보내지 않는다: 검색 단계 결과가 차지할 인덱스. 규칙은 @ddak/pipeline partial.ts)
           onElementPartial: (element, index) => {
-            const parsed = PlanSectionPartialGen.safeParse(element)
-            if (!parsed.success) return
-            const s = parsed.data
-            if (!s.title) return
-            if (s.kind === 'guide')
-              stream.onSection?.({ kind: 'guide', title: s.title, ...(s.subtitle ? { subtitle: s.subtitle } : {}), body: s.body ?? '' }, index, false)
-            else if (s.kind === 'steps')
-              stream.onSection?.({ kind: 'steps', title: s.title, steps: (s.steps ?? []).filter(Boolean) }, index, false)
-            // products·contents 자리는 부분도 내보내지 않는다 — 검색 단계 결과가 차지할 인덱스
+            const wire = partialSkeletonSection(element)
+            if (wire) stream.onSection?.(wire, index, false)
           },
         },
         revision,

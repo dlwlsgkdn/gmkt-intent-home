@@ -1,8 +1,14 @@
+import type { PlanSectionWire } from '@ddak/schema'
+import { skeletonSectionWire } from './look'
 import {
   CatalogRatingGen,
+  CautionItemGen,
+  CompareRowGen,
+  CompareSideGen,
   ContentItemGen,
   PlanSearchSectionGen,
   PlanSearchSectionPartialGen,
+  PlanSectionPartialGen,
   WebProductGen,
 } from './schemas'
 
@@ -38,4 +44,40 @@ export function completeSearchSection(element: unknown): PlanSearchSectionGen | 
     .map((v) => ContentItemGen.safeParse(v))
     .flatMap((r) => (r.success ? [r.data] : []))
   return items.length ? { kind: 'contents', title: s.title, reason: s.reason, items } : null
+}
+
+/** 자라는 중인 뼈대 섹션 조각 → 부분 와이어 섹션 (guide·steps·compare·caution) — 제목이 나오기 시작하면 토큰 단위로
+ * 같은 index 에 재전송할 재료다. 상품·콘텐츠 자리는 부분도 내보내지 않는다(검색 단계 결과가 차지할 인덱스), look 은 사양이
+ * 닫히기 전엔 합성할 수 없어 최종본(onElement)만 나간다. 표·목록형(compare·caution)은 **완성된 행·항목만** 싣는다 —
+ * 복구 파싱은 버퍼상 마지막 키의 값만 잘렸을 수 있으므로 그 키가 배열이면 마지막 원소를 버린다(completeSearchSection 과
+ * 같은 근거). 행이 하나도 없으면 null(빈 표를 그리지 않는다). legacy(threads.service)·그래프(graph.ts) 뼈대 노드가 같은 규칙을 쓴다 */
+export function partialSkeletonSection(element: unknown): PlanSectionWire | null {
+  const parsed = PlanSectionPartialGen.safeParse(element)
+  if (!parsed.success) return null
+  const s = parsed.data
+  if (!s.title) return null
+  if (s.kind === 'guide') return { kind: 'guide', title: s.title, ...(s.subtitle ? { subtitle: s.subtitle } : {}), body: s.body ?? '' }
+  if (s.kind === 'steps') return { kind: 'steps', title: s.title, steps: (s.steps ?? []).filter(Boolean) }
+  const keys = Object.keys(element as Record<string, unknown>)
+  const openKey = keys[keys.length - 1]
+  const settled = (key: string, list: unknown[] | undefined): unknown[] =>
+    key === openKey ? (list ?? []).slice(0, -1) : (list ?? [])
+  if (s.kind === 'compare') {
+    const alt = CompareSideGen.safeParse(s.alt)
+    const pick = CompareSideGen.safeParse(s.pick)
+    if (!alt.success || !pick.success) return null
+    const rows = settled('rows', s.rows)
+      .map((r) => CompareRowGen.safeParse(r))
+      .flatMap((r) => (r.success ? [r.data] : []))
+    if (!rows.length) return null
+    return skeletonSectionWire({ kind: 'compare', title: s.title, alt: alt.data, pick: pick.data, rows })
+  }
+  if (s.kind === 'caution') {
+    const items = settled('items', s.items)
+      .map((it) => CautionItemGen.safeParse(it))
+      .flatMap((r) => (r.success ? [r.data] : []))
+    if (!items.length) return null
+    return skeletonSectionWire({ kind: 'caution', title: s.title, desc: s.desc ?? '', items })
+  }
+  return null
 }

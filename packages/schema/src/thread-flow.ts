@@ -301,6 +301,28 @@ export const PlanContentItem = z.object({
 })
 export type PlanContentItem = z.infer<typeof PlanContentItem>
 
+/** 성분 비교표 한쪽 — 구체 상품이 아니라 **제품 유형**이다(기존/일반 제품 유형 · 이 계획이 권하는 제품 유형).
+ * badge 는 카드 알약 문구("기존 제품"·"추천 기준"), name 은 유형 이름, short 는 표 머리에 쓸 짧은 이름(없으면 name) */
+export const CompareSide = z.object({
+  badge: z.string(),
+  name: z.string(),
+  short: z.string().optional(),
+})
+export type CompareSide = z.infer<typeof CompareSide>
+
+/** 성분 비교표 행 — 성분 이름 · 기존 열 값(있음/없음/소량) · 추천 열 값 · 위험도(높음/중간/낮음 — 없으면 열을 숨긴다) */
+export const CompareRow = z.object({
+  ingredient: z.string(),
+  alt: z.string(),
+  pick: z.string(),
+  risk: z.string().optional(),
+})
+export type CompareRow = z.infer<typeof CompareRow>
+
+/** 주의 성분 항목 — 이름(한글 + 영문/INCI 병기) · 왜 주의하는지 한 줄 */
+export const CautionItem = z.object({ name: z.string(), note: z.string() })
+export type CautionItem = z.infer<typeof CautionItem>
+
 export const PlanSectionWire = z.discriminatedUnion('kind', [
   /* 단계 안내 — 제목 · 서브타이틀(단계의 목적 한 줄, 뼈대 프롬프트가 채운다 — 옛 페이지는 없음) · 본문 */
   z.object({ kind: z.literal('guide'), title: z.string(), subtitle: z.string().optional(), body: z.string() }),
@@ -316,6 +338,23 @@ export const PlanSectionWire = z.discriminatedUnion('kind', [
     points: z.array(z.string()).max(6).optional(),
     /** 룩 사양 — 기기 합성·정밀 렌더가 소비하는 한 원천 (v23 부터, 옛 페이지에는 없음) */
     spec: LookSpec.optional(),
+  }),
+  /* 성분 비교표 — 기존(일반) 제품 유형 vs 이 계획이 권하는 제품 유형을 성분별로 대조 (FE ingredientCompare).
+     뼈대(5a)가 성분이 판단 기준인 의도(면도 자극·민감·성분 비교 요청)에서만 만든다 — 제품 유형·기준 수준이라 검색 없이
+     쓸 수 있고, 그 기준으로 고른 실제 상품은 바로 뒤 상품 자리가 채운다 (v26, 2026-09) */
+  z.object({
+    kind: z.literal('compare'),
+    title: z.string(),
+    alt: CompareSide,
+    pick: CompareSide,
+    rows: z.array(CompareRow).min(1),
+  }),
+  /* 주의 성분 — 이 고민에서 먼저 확인할 성분 목록 (FE cautionIngredients). compare 와 같은 조건에서 뼈대가 만든다 */
+  z.object({
+    kind: z.literal('caution'),
+    title: z.string(),
+    desc: z.string().optional(),
+    items: z.array(CautionItem).min(1),
   }),
   z.object({
     kind: z.literal('products'),

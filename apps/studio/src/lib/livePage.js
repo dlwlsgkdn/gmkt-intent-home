@@ -1,7 +1,9 @@
 /* 라이브 와이어 페이지 → 스튜디오 아이템 투영 (DESIGN-LLM-SERVICE.md §2-1).
    매핑 기준: question→surveyQuestion(사진 질문은 surveyPhoto), guide→planStep,
    look→beforeAfter(가상 메이크업 결과), products→hscroll+productCard,
-   contents→hscroll+videoCard/articleCard, steps→checklist. 새 렌더 계층을 만들지 않고
+   contents→hscroll+videoCard/articleCard, steps→checklist,
+   compare→ingredientCompare(성분 비교표)·caution→cautionIngredients(주의 성분 — 뼈대가 성분이
+   기준인 의도에서만 만든다, v26). 새 렌더 계층을 만들지 않고
    레지스트리 player 렌더러를 그대로 재사용하기 위한 얇은 변환이다. id는 결정적으로
    부여한다 — 설문 답변 키는 와이어 질문 id 그대로(= surveyQuestion 아이템 id)라 answers
    왕복에 재매핑이 없다. 좌표(x/y)는 넣지 않는다. */
@@ -178,9 +180,9 @@ export function livePlanItems(page, opts = {}) {
   let chain = false
   for (let i = 0; i < sections.length; i += 1) {
     const section = sections[i]
-    // 상품·콘텐츠(빈 자리 포함)만 단계 하위가 될 수 있다 — 다음 단계 안내·사용 순서는 연쇄를 끊는다
-    const isSlotKind = !section || section.kind === 'products' || section.kind === 'contents'
-    const stepSub = chain && isSlotKind
+    // 상품·콘텐츠(빈 자리 포함)와 단계 본문 섹션(성분 비교표·주의 성분)만 단계 하위가 될 수 있다 — 다음 단계 안내·사용 순서는 연쇄를 끊는다
+    const isSubKind = !section || ['products', 'contents', 'compare', 'caution'].includes(section.kind)
+    const stepSub = chain && isSubKind
     chain = (section != null && section.kind === 'guide') || stepSub
     if (!section) {
       // 빈 슬롯 — 아직 안 온 상품·콘텐츠 자리. 인덱스는 보존되고, 자리 표시는 로딩 카드
@@ -259,6 +261,43 @@ export function livePlanItems(page, opts = {}) {
         id: base,
         type: 'checklist',
         props: { title: section.title, items: joinTextList(section.steps || []) },
+      })
+    } else if (section.kind === 'compare') {
+      /* 성분 비교표(v26) — 뼈대가 성분이 기준인 의도에서 만든 **제품 유형 수준**의 대조(기존/일반 제품 유형 vs 추천 기준).
+         스튜디오 ingredientCompare 렌더러의 행 문법 "추천 값|성분|기존 값|위험도"로 직렬화한다(셀 안의 | 는 / 로).
+         이미지는 싣지 않는다 — 특정 상품의 전성분을 확인한 것이 아니라 유형 비교라 상품 사진을 붙이면 단정이 된다 */
+      const cell = (v) => String(v || '').replace(/\|/g, '/')
+      const alt = section.alt || {}
+      const pick = section.pick || {}
+      items.push({
+        id: base,
+        type: 'ingredientCompare',
+        stepSub,
+        props: {
+          caption: section.title || '',
+          pickBadge: pick.badge || '추천 기준',
+          pickName: pick.name || '',
+          pickMeta: pick.short || '',
+          pickImage: '',
+          altBadge: alt.badge || '기존 제품',
+          altName: alt.name || '',
+          altMeta: alt.short || '',
+          altImage: '',
+          rows: joinTextList((section.rows || []).map((r) => [r.pick, r.ingredient, r.alt, r.risk].map(cell).join('|'))),
+        },
+      })
+    } else if (section.kind === 'caution') {
+      // 주의 성분(v26) — 이 고민에서 먼저 확인할 성분. 스튜디오 cautionIngredients 렌더러의 "이름|설명" 행 문법
+      const cell = (v) => String(v || '').replace(/\|/g, '/')
+      items.push({
+        id: base,
+        type: 'cautionIngredients',
+        stepSub,
+        props: {
+          title: section.title || '주의해서 볼 성분',
+          desc: section.desc || '',
+          items: joinTextList((section.items || []).map((it) => `${cell(it.name)}|${cell(it.note)}`)),
+        },
       })
     } else if (section.kind === 'products') {
       if (section.reason) {

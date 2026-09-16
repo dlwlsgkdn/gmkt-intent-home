@@ -81,6 +81,7 @@ export type IntentGen = z.infer<typeof IntentGen>
 /*
  * 계획은 2단계 병렬 생성이다 (DESIGN-LLM-SERVICE.md §9-1):
  * ① 뼈대(PlanSkeletonGen) — 검색 없이 제목·요약·안내(2~3단계)·순서 + 상품/콘텐츠 섹션 "자리"(제목·기준)만
+ *    (+ 성분이 판단 기준인 의도면 성분 비교표(compare)·주의 성분(caution) — 제품 유형 수준의 텍스트라 뼈대 몫, v26)
  * ② 검색(PlanProductsGen) — 웹 검색 포함으로 상품 섹션 + 참고 콘텐츠(게시글·영상) 섹션만. 뼈대의 자리를 채운다
  */
 
@@ -176,6 +177,49 @@ const StepsSectionGen = z.object({
   title: z.string(),
   steps: z.array(z.string()).min(2).max(8).describe('실행 순서 — 아침/저녁 루틴 등'),
 })
+
+/* 성분 비교표·주의 성분 (v26) — 성분이 판단 기준인 의도(면도 자극·민감·트러블·"성분 비교해 줘")에서만 뼈대가 만든다.
+   구체 상품이 아니라 **제품 유형·기준** 수준의 대조다 — 뼈대는 검색 없이 돌고 "구체 상품명 금지" 규칙을 지키며,
+   특정 제품의 전성분을 확인하지 않은 채 단정하지 않기 위해서다. 그 기준으로 고른 실제 상품은 바로 뒤 상품 자리가 채운다.
+   빈 문자열(short·desc)은 와이어에 실리기 전 skeletonSectionWire 가 뗀다. 부분 스트리밍은 partialSkeletonSection 이
+   완성된 행·항목만 싣는다 (반 토막 행은 표를 깨뜨린다) */
+export const CompareSideGen = z.object({
+  badge: z.string().describe('카드 알약 문구 — 기존 쪽은 "기존 제품"·"일반 제품", 추천 쪽은 "추천 기준"'),
+  name: z.string().describe('제품 유형 이름 — 예: "일반 올인원 워시", "약산성 저자극 쉐이빙 젤" (브랜드·구체 상품명 금지)'),
+  short: z.string().describe('표 머리에 쓸 짧은 이름 2~8자 — 비우면 name 을 그대로 쓴다'),
+})
+export type CompareSideGen = z.infer<typeof CompareSideGen>
+
+export const CompareRowGen = z.object({
+  ingredient: z.string().describe('성분 이름 — 한글(영문/INCI 병기 가능), 예: "SLS/SLES", "인공향료"'),
+  alt: z.string().describe('기존(일반) 제품 유형에서의 함유 — "있음"·"없음"·"소량"·"흔함" 처럼 2~4자'),
+  pick: z.string().describe('추천 기준 제품 유형에서의 함유 — 같은 눈금'),
+  risk: z.enum(['높음', '중간', '낮음']).describe('이 고민에서의 위험도'),
+})
+export type CompareRowGen = z.infer<typeof CompareRowGen>
+
+export const CompareSectionGen = z.object({
+  kind: z.literal('compare'),
+  title: z.string().describe('표 머리 문구 한 줄 — 예: "기존 워시와 추천 기준을 성분으로 비교했어요"'),
+  alt: CompareSideGen.describe('기존/일반 제품 유형 — 답변에 지금 쓰는 제품(유형)이 있으면 그것, 없으면 이 고민을 부르는 통상 제품 유형'),
+  pick: CompareSideGen.describe('이 계획이 권하는 제품 유형(고를 기준)'),
+  rows: z.array(CompareRowGen).min(3).max(6).describe('성분 3~6행 — 이 고민에서 차이가 나는 성분만'),
+})
+export type CompareSectionGen = z.infer<typeof CompareSectionGen>
+
+export const CautionItemGen = z.object({
+  name: z.string().describe('성분 이름 — 한글 + 영문/INCI 병기, 예: "인공향료 (Fragrance)"'),
+  note: z.string().describe('왜 주의하는지 한 줄 — 가능성 표현("자극이 될 수 있어요"), 치료·질병 같은 의학 단정 금지'),
+})
+export type CautionItemGen = z.infer<typeof CautionItemGen>
+
+export const CautionSectionGen = z.object({
+  kind: z.literal('caution'),
+  title: z.string().describe('카드 제목 — 예: "주의해서 볼 성분"'),
+  desc: z.string().describe('한 줄 설명 — 없으면 빈 문자열'),
+  items: z.array(CautionItemGen).min(2).max(5).describe('먼저 확인할 성분 2~5개'),
+})
+export type CautionSectionGen = z.infer<typeof CautionSectionGen>
 
 /** 상품 하나의 매칭 평가 — LLM 이 프로필·답변과 대조해 1~5 로 매기는 세 항목 + 근거 한 줄.
  * 퍼센트 계산은 LLM 이 아니라 검증 게이트(guards/match.ts)가 가중치 표로 한다 — 눈금은 여기, 가중치는 거기 */
@@ -279,6 +323,8 @@ const ContentsSlotGen = z.object({
 export const PlanSkeletonSectionGen = z.discriminatedUnion('kind', [
   GuideSectionGen,
   LookSectionGen,
+  CompareSectionGen,
+  CautionSectionGen,
   ProductsSlotGen,
   ContentsSlotGen,
   StepsSectionGen,
@@ -383,7 +429,7 @@ export const SurveyQuestionPartialGen = z.object({
 export type SurveyQuestionPartialGen = z.infer<typeof SurveyQuestionPartialGen>
 
 export const PlanSectionPartialGen = z.object({
-  kind: z.enum(['guide', 'look', 'steps', 'products', 'contents']),
+  kind: z.enum(['guide', 'look', 'steps', 'products', 'contents', 'compare', 'caution']),
   title: z.string().optional(),
   subtitle: z.string().optional(),
   body: z.string().optional(),
@@ -391,6 +437,11 @@ export const PlanSectionPartialGen = z.object({
   tone: LookTone.optional(),
   points: z.array(z.string()).optional(),
   steps: z.array(z.string()).optional(),
+  // 성분 비교표·주의 성분 — 자라는 중인 객체·행 배열은 unknown 으로 받고 완성분만 항목 스키마로 개별 검증한다 (partial.ts)
+  alt: z.unknown().optional(),
+  pick: z.unknown().optional(),
+  rows: z.array(z.unknown()).optional(),
+  items: z.array(z.unknown()).optional(),
 })
 export type PlanSectionPartialGen = z.infer<typeof PlanSectionPartialGen>
 

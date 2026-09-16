@@ -26,7 +26,7 @@ export function liveFeedbackLabel(item) {
   if (item.type === 'surveyQuestion' || item.type === 'surveyPhoto') return item.props.question || '질문'
   if (item.id === 'live-survey-intro') return '인트로'
   if (item.id === 'live-plan-summary') return '요약'
-  return item.props.title || '섹션'
+  return item.props.title || item.props.caption || '섹션' // 성분 비교표는 머리 문구(caption)가 제목 자리다
 }
 
 /* ── 상태 헬퍼 — LivePlayer의 단계별 피드백 상태 { review, components } ──────── */

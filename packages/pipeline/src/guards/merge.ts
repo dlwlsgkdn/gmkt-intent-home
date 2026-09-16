@@ -12,6 +12,7 @@ import type { PlanSkeletonSectionGen } from '../schemas'
  * 새 규칙 — **단계 묶음(guide + 바로 뒤 자리들)에 의미 대조·순서 보존으로 배정**한다 (PlanPlacer):
  *   - 뼈대를 단계 묶음으로 자른다: guide 가 묶음을 열고 바로 이어지는 products/contents 자리가 그 묶음의 연속 구간이다.
  *     첫 guide 앞(look 등)은 앞머리 묶음, steps 같은 닫는 섹션은 연속 구간을 끊는다(끼워 넣을 위치는 그 앞).
+ *     성분 비교표(compare)·주의 성분(caution)은 단계 본문이라 구간을 끊지 않는다 — 자리 없는 상품·콘텐츠는 그 뒤에 선다 (v26).
  *   - 검색 섹션은 kind 별로 도착 순서대로, 직전 섹션이 간 묶음 **이후**(같은 묶음 포함)의 묶음 중에서 고른다:
  *     제목(+reason 은 0.3 가중 — reason 은 설문 답변을 되풀이해 단계 안내 본문과 두루 겹친다)의 글자 2-gram 이
  *     묶음 텍스트(안내 제목·서브타이틀·본문 + 자리 제목·기준)에 얼마나 덮이는지를 재되, 모든 묶음에 나오는
@@ -30,6 +31,13 @@ export type SlotKind = 'products' | 'contents'
 
 export function isSlotKind(kind: string): kind is SlotKind {
   return kind === 'products' || kind === 'contents'
+}
+
+/** 단계 본문에 속하는 텍스트 섹션 — 성분 비교표·주의 성분 (v26). 자리는 아니지만 안내 뒤 연속 구간의 일부다: 자리 없이
+ * 배정된 상품·콘텐츠는 이 뒤에 끼우고(표가 세운 기준 → 그 기준으로 고른 상품 순서), 성분·제품 유형 텍스트는 묶음의 대조
+ * 재료에 더한다 — "약산성 저자극 쉐이빙 젤" 상품 섹션이 비교표를 둔 단계를 찾아가게 */
+export function isStepBodyKind(kind: string): kind is 'compare' | 'caution' {
+  return kind === 'compare' || kind === 'caution'
 }
 
 /** 뼈대에서 kind별 자리 인덱스 추출 (조기 확정 알림의 pending 목록 재료) */
@@ -102,6 +110,16 @@ export function planGroupsOf(skeleton: PlanSkeletonSectionGen[]): PlanGroup[] {
         current.insertAt.contents = i + 1
         if (s.kind === 'products') current.insertAt.products = i + 1
       }
+      return
+    }
+    if (s.kind === 'compare' || s.kind === 'caution') {
+      // 단계 본문 섹션 — 연속 구간을 끊지 않고 끼울 위치를 그 뒤로 미룬다. 성분·제품 유형은 대조 텍스트에 더한다
+      current.text += normalizeText(
+        s.kind === 'compare'
+          ? [s.title, s.alt.name, s.pick.name, ...s.rows.map((r) => r.ingredient)]
+          : [s.title, s.desc, ...s.items.map((it) => it.name)],
+      )
+      if (runOpen) current.insertAt = { products: i + 1, contents: i + 1 }
       return
     }
     // look·steps 같은 닫는 섹션 — 연속 구간이 끝난다. 앞머리 묶음의 look 만은 구간에 포함(끼울 위치를 그 뒤로)
