@@ -337,7 +337,8 @@ const planSkeletonGenOf = <T extends z.ZodTypeAny>(sections: T) =>
   z.object({
     headline: z.string().describe('계획 페이지 제목 — 설문 결과를 반영한 맞춤 문구'),
     summary: z.string().describe('추천 방향 요약 두세 문장'),
-    sections: z.array(sections).min(2).max(10),
+    // 3단계 × (안내 + 콘텐츠 + 상품) + 사용 순서 + 성분 비교·주의 또는 룩.
+    sections: z.array(sections).min(2).max(12),
   })
 
 export const PlanSkeletonGen = planSkeletonGenOf(PlanSkeletonSectionGen)
@@ -385,7 +386,7 @@ export const PlanProductsGen = z.object({
     .array(PlanSearchSectionGen)
     .min(1)
     .max(5)
-    .describe('추천 상품 섹션 1~2개 (참고 콘텐츠는 별도 단계가 만든다 — 여기서는 만들지 않는다)'),
+    .describe('추천 상품 섹션 — 각 단계마다 최소 1개씩 우선, 보통 2~3개 (참고 콘텐츠는 별도 단계가 만든다 — 여기서는 만들지 않는다)'),
 })
 export type PlanProductsGen = z.infer<typeof PlanProductsGen>
 
@@ -394,8 +395,8 @@ export type PlanProductsGen = z.infer<typeof PlanProductsGen>
 export const PlanContentsGen = z.object({
   sections: z
     .array(ContentsSectionGen)
-    .max(2)
-    .describe('참고 콘텐츠 섹션 — 계획의 단계 순서대로 1~2개 (검색해도 확인된 콘텐츠가 없으면 빈 배열)'),
+    .max(3)
+    .describe('참고 콘텐츠 섹션 — 계획의 단계 순서대로 각 단계마다 최소 1개씩 우선, 보통 2~3개 (검색해도 확인된 콘텐츠가 없으면 빈 배열)'),
 })
 export type PlanContentsGen = z.infer<typeof PlanContentsGen>
 
