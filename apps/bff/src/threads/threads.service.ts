@@ -34,6 +34,7 @@ import {
   parseDataUrl,
   planQualityOf,
   surveyStreamHandlers,
+  orderSkeletonSlots,
 } from '@ddak/pipeline'
 import { CoreClientService } from '../core-client.service'
 import { LlmService } from '../llm/llm.service'
@@ -232,8 +233,10 @@ export class ThreadsService {
           stream?.onStatus?.('일시적인 오류가 있어 계획 뼈대를 다시 만들고 있어요…')
         },
       })
-      .then((result) => {
-        // 자리 인덱스는 스트림 조각이 아니라 최종 검증본 기준으로 확정한다 (조각 파싱 누락 보정)
+      .then((raw) => {
+        // 자리 인덱스는 스트림 조각이 아니라 최종 검증본 기준으로 확정한다 (조각 파싱 누락 보정).
+        // 자리 순서 정규화(콘텐츠 자리가 상품 자리보다 앞 — orderSkeletonSlots)는 여기서 한 번 — 이후 인덱스는 전부 이 뼈대 기준
+        const result = { ...raw, content: { ...raw.content, sections: orderSkeletonSlots(raw.content.sections) } }
         const skeletonSections = result.content.sections
         allocator = new GeneratedIndexAllocator(skeletonSections)
         // 뼈대 조기 확정 알림 — 텍스트 완성본 + 아직 안 채워진 자리 인덱스. 대기열 플러시보다 먼저

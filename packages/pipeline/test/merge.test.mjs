@@ -3,7 +3,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { GeneratedIndexAllocator, PlanPlacer, composePlanSections, mergePlanSections, planGroupsOf } from '../dist/guards/merge.js'
+import { GeneratedIndexAllocator, PlanPlacer, composePlanSections, mergePlanSections, orderSkeletonSlots, planGroupsOf } from '../dist/guards/merge.js'
 
 const fixtures = JSON.parse(readFileSync(new URL('./fixtures/plan-threads-2026-09.json', import.meta.url), 'utf8'))
 const guide = (thread, title) => {
@@ -44,12 +44,15 @@ const tonerSkeleton = () => [
 const tonerGenerated = () => [gen('toner', 'products', '1단계'), gen('toner', 'products', '2단계'), gen('toner', 'contents', '1단계')]
 
 test('단계 묶음 — guide 가 묶음을 열고 바로 뒤 자리가 속하며, steps 는 연속 구간을 끊는다', () => {
-  const groups = planGroupsOf(makeupSkeleton())
+  // planGroupsOf 는 받은 순서 그대로 본다 — 배정기·병합은 언제나 정규화된 뼈대(orderSkeletonSlots)를 넘긴다
+  const groups = planGroupsOf(orderSkeletonSlots(makeupSkeleton()))
   assert.equal(groups.length, 4) // 앞머리 + 안내 3
   assert.equal(groups[0].index, -1)
   assert.deepEqual(groups[1].slots, { products: [], contents: [2] })
-  assert.deepEqual(groups[1].insertAt, { products: 2, contents: 3 }) // 상품은 안내 바로 뒤, 콘텐츠는 구간 끝
-  assert.deepEqual(groups[2].slots, { products: [4], contents: [5] })
+  assert.deepEqual(groups[1].insertAt, { products: 3, contents: 3 }) // 콘텐츠는 콘텐츠 자리 뒤, 상품은 구간 끝 (콘텐츠 → 상품)
+  // 정규화(orderSkeletonSlots)로 2단계는 [콘텐츠 자리(4) → 상품 자리(5)] — 뼈대가 상품을 먼저 뒀어도 콘텐츠가 위
+  assert.deepEqual(groups[2].slots, { products: [5], contents: [4] })
+  assert.deepEqual(groups[2].insertAt, { products: 6, contents: 5 }) // 콘텐츠는 콘텐츠 자리 뒤(상품 자리 앞), 상품은 구간 끝
   assert.deepEqual(groups[3].insertAt, { products: 7, contents: 7 }) // steps 앞
 })
 
@@ -58,11 +61,11 @@ test('메이크업 — 베이스 상품은 첫 단계(자리 없어도 끼움), 
   assert.deepEqual(kinds(sections), [
     'look',
     'guide:베이스 밀착 준비',
-    'products:1단계',
     'contents:1단계',
+    'products:1단계',
     'guide:강렬한 포인트 완성',
-    'products:2단계',
     'contents:2단계',
+    'products:2단계',
     'guide:무너짐 방지와 수정',
     'steps',
   ])
@@ -75,8 +78,8 @@ test('토너패드 — 패드 상품·콘텐츠는 2단계 자리, 마무리 보
   assert.deepEqual(kinds(sections), [
     'guide:내 얼굴 구역 나누기',
     'guide:패드 고르고 기본 루틴 세우기',
-    'products:1단계',
     'contents:1단계',
+    'products:1단계',
     'guide:매일 닦고 남기기',
     'products:2단계',
     'guide:주 2회 심화와 관리',
@@ -90,8 +93,9 @@ test('스트리밍 인덱스 — 자리를 받은 섹션은 뼈대 인덱스, �
   const [p1, p2, c1, c2] = makeupGenerated()
   assert.equal(allocator.next(p1), skeleton.length) // 1단계엔 상품 자리가 없다 → 끝에 보였다가 result 에서 제자리
   assert.equal(allocator.next(c1), 2)
-  assert.equal(allocator.next(p2), 4)
-  assert.equal(allocator.next(c2), 5)
+  // 정규화된 뼈대 인덱스 — 2단계는 [콘텐츠 자리 4 → 상품 자리 5]
+  assert.equal(allocator.next(p2), 5)
+  assert.equal(allocator.next(c2), 4)
   // 같은 순서로 부르면 배정기(PlanPlacer)는 언제나 같은 답 — 부분 스트림과 최종 병합이 어긋나지 않는다
   const a = new PlanPlacer(skeleton)
   const b = new PlanPlacer(skeleton)
@@ -123,8 +127,9 @@ test('안 채워진 자리는 null + pending(미리보기), 최종 병합에서�
   const p1 = { kind: 'products', title: '코랄 립·치크', reason: '', products: [{ id: 'a', name: 'A', brand: '', price: 1, tags: [], url: 'https://x/a' }] }
   const p2 = { kind: 'products', title: '베이스', reason: '', products: [{ id: 'b', name: 'B', brand: '', price: 1, tags: [], url: 'https://x/b' }] }
   const { sections, pending } = composePlanSections(skeleton, [p1, p2])
-  assert.deepEqual(sections.map((s) => (s ? s.kind : null)), ['look', 'products', 'products', null, 'steps'])
-  assert.deepEqual(pending, [3])
+  // 정규화로 콘텐츠 자리가 상품 자리 앞으로 온다 — 안 채워진 콘텐츠 자리(null)가 look 바로 뒤
+  assert.deepEqual(sections.map((s) => (s ? s.kind : null)), ['look', null, 'products', 'products', 'steps'])
+  assert.deepEqual(pending, [1])
   assert.deepEqual(mergePlanSections(skeleton, [p1, p2]).map((s) => s.kind), ['look', 'products', 'products', 'steps'])
 })
 
@@ -160,7 +165,7 @@ test('성분 비교표·주의 성분 — 단계 본문이라 연속 구간을 �
   const groups = planGroupsOf(ingredientSkeleton())
   assert.equal(groups.length, 3) // 앞머리 + 안내 2
   assert.deepEqual(groups[1].slots, { products: [3], contents: [] })
-  assert.deepEqual(groups[1].insertAt, { products: 4, contents: 4 }) // 비교표·주의 성분·상품 자리 뒤, 다음 안내 앞
+  assert.deepEqual(groups[1].insertAt, { products: 4, contents: 3 }) // 상품은 상품 자리 뒤(다음 안내 앞), 콘텐츠는 비교표·주의 성분 뒤·상품 자리 앞
   assert.ok(groups[1].text.includes('쉐이빙젤') && groups[1].text.includes('slssles'), '성분·제품 유형이 대조 텍스트에 실린다')
   const products = {
     kind: 'products',
@@ -177,7 +182,7 @@ test('성분 비교표·주의 성분 — 단계 본문이라 연속 구간을 �
   const { sections, pending } = composePlanSections(ingredientSkeleton(), [products, contents])
   assert.deepEqual(
     sections.map((s) => s && s.kind),
-    ['guide', 'compare', 'caution', 'products', 'contents', 'guide', 'steps'],
+    ['guide', 'compare', 'caution', 'contents', 'products', 'guide', 'steps'],
   )
   assert.deepEqual(pending, [])
 })
@@ -196,3 +201,20 @@ test('성분 비교표·주의 성분 — 와이어 변환에서 빈 short·desc
   assert.deepEqual(pendingOf(sections), [3]) // 상품 자리는 비어 있다
 })
 const pendingOf = (sections) => sections.map((s, i) => (s ? -1 : i)).filter((i) => i >= 0)
+
+test('orderSkeletonSlots — 연속 구간 안에서 콘텐츠 자리가 상품 자리보다 앞, 텍스트 섹션 제자리, 멱등', () => {
+  const skeleton = [
+    { kind: 'guide', title: 'A', subtitle: '', body: '' },
+    { kind: 'products', title: 'pA', reason: '' },
+    { kind: 'contents', title: 'cA', reason: '' },
+    { kind: 'guide', title: 'B', subtitle: '', body: '' },
+    { kind: 'compare', title: '비교', alt: { badge: '', name: 'x', short: '' }, pick: { badge: '', name: 'y', short: '' }, rows: [] },
+    { kind: 'products', title: 'pB1', reason: '' },
+    { kind: 'products', title: 'pB2', reason: '' },
+    { kind: 'contents', title: 'cB', reason: '' },
+    { kind: 'steps', title: '순서', steps: ['x'] },
+  ]
+  const once = orderSkeletonSlots(skeleton)
+  assert.deepEqual(once.map((s) => s.title), ['A', 'cA', 'pA', 'B', '비교', 'cB', 'pB1', 'pB2', '순서'])
+  assert.deepEqual(orderSkeletonSlots(once), once)
+})

@@ -23,6 +23,7 @@ import {
   type GroundingDrop,
   type GuardContext,
   type PlanRevisionContext,
+  orderSkeletonSlots,
 } from '@ddak/pipeline'
 import type { CoreClientService } from '../core-client.service'
 import type { KnowledgeService } from '../llm/knowledge.service'
@@ -214,9 +215,12 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
         coord?.status('일시적인 오류가 있어 계획 뼈대를 다시 만들고 있어요…')
       },
     })
-    // 자리 인덱스는 스트림 조각이 아니라 최종 검증본 기준으로 확정한다 (조각 파싱 누락 보정)
-    coord?.skeletonReady(result.content)
-    return { skeleton: result.content, skeletonMeta: result.meta }
+    // 자리 인덱스는 스트림 조각이 아니라 최종 검증본 기준으로 확정한다 (조각 파싱 누락 보정).
+    // 자리 순서는 여기서 한 번 정규화한다(콘텐츠 자리가 상품 자리보다 앞 — @ddak/pipeline orderSkeletonSlots): skeleton 이벤트·
+    // 배정기·verify 병합이 전부 이 정규화된 뼈대를 본다
+    const skeleton = { ...result.content, sections: orderSkeletonSlots(result.content.sections) }
+    coord?.skeletonReady(skeleton)
+    return { skeleton, skeletonMeta: result.meta }
   }
 
   /** 4+5b: 근거 수집(웹 검색 병행) + 상품·콘텐츠 섹션 (LLM) — 실패해도 계획을 죽이지 않는다 */

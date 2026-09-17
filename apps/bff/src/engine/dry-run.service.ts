@@ -23,6 +23,7 @@ import {
   type PlanSkeletonGen,
   type PromptDefId,
   type ResolvedSystem,
+  orderSkeletonSlots,
 } from '@ddak/pipeline'
 import { KnowledgeService } from '../llm/knowledge.service'
 import { LlmService, WEB_SEARCH_CONTENTS_MAX_USES } from '../llm/llm.service'
@@ -140,7 +141,8 @@ export class PipelineDryRunService {
         promptCustom: system.custom,
         prompt: { promptId: 'plan-skeleton', system: system.text, custom: system.custom, user },
         meta,
-        skeleton: content,
+        // 자리 순서 정규화(콘텐츠 자리가 상품 자리보다 앞) — 운영 경로와 같은 뼈대를 플레이그라운드도 본다
+        skeleton: { ...content, sections: orderSkeletonSlots(content.sections as PlanSkeletonGen['sections']) },
       }
     }
 

@@ -129,8 +129,8 @@ try {
   ok(planPage?.headline === '모의 여름 쿠션 계획', `headline (${planPage?.headline})`)
   ok(planPage?.sections?.length === 4, `섹션 4개 병합 — 뼈대 3 + 5c 콘텐츠(자리 없어 단계 묶음 끝에 끼움) (${planPage?.sections?.length})`)
   ok(
-    (planPage?.sections ?? []).map((s) => s.kind).join(',') === 'guide,products,contents,steps',
-    `자리 없는 콘텐츠 섹션은 끝이 아니라 그 단계 묶음(steps 앞)에 끼워진다 (${(planPage?.sections ?? []).map((s) => s.kind).join(',')})`,
+    (planPage?.sections ?? []).map((s) => s.kind).join(',') === 'guide,contents,products,steps',
+    `자리 없는 콘텐츠 섹션은 끝이 아니라 그 단계 묶음 안, 상품 자리 앞에 끼워진다 — 참고 콘텐츠가 상품보다 위 (${(planPage?.sections ?? []).map((s) => s.kind).join(',')})`,
   )
   {
     const contSection = planPage?.sections?.find((s) => s.kind === 'contents')

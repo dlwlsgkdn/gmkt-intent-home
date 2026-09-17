@@ -58,8 +58,9 @@ export type PlanGroup = {
   guideAt: number | null
   /** 이 묶음에 속한 자리의 뼈대 인덱스 (kind 별, 뼈대 순서) */
   slots: Record<SlotKind, number[]>
-  /** 자리 없이 배정된 섹션을 끼울 뼈대 인덱스(이 인덱스 **앞**) — 상품은 묶음의 마지막 상품 자리 뒤(없으면 안내 바로 뒤),
-   * 콘텐츠는 연속 구간 끝. 뼈대의 [안내 → 상품 → 콘텐츠] 순서를 지킨다 */
+  /** 자리 없이 배정된 섹션을 끼울 뼈대 인덱스(이 인덱스 **앞**) — 콘텐츠는 묶음의 마지막 콘텐츠 자리 뒤(없으면 안내·비교표 바로 뒤,
+   * 상품 자리 앞), 상품은 연속 구간 끝. 뼈대의 [안내 → (비교표·주의 성분) → 콘텐츠 → 상품] 순서를 지킨다 (2026-09-17 — 참고
+   * 콘텐츠가 상품보다 위에 선다) */
   insertAt: Record<SlotKind, number>
   /** 대조용 텍스트(정규화) — 안내 제목·서브타이틀·본문 + 자리 제목·기준 */
   text: string
@@ -75,6 +76,30 @@ const normalizeText = (parts: (string | undefined | null)[]): string =>
 const bigramsOf = (text: string): Set<string> => {
   const out = new Set<string>()
   for (let i = 0; i + 1 < text.length; i += 1) out.add(text.slice(i, i + 2))
+  return out
+}
+
+/** 뼈대의 자리 순서 정규화 (2026-09-17) — 단계 묶음의 연속 구간 안에서 **콘텐츠 자리가 상품 자리보다 앞**에 오도록 안정 정렬한다
+ * (텍스트 섹션·구간 밖 섹션은 제자리, 같은 종류끼리 순서 유지). 뼈대 프롬프트가 [안내 → 콘텐츠 → 상품] 을 요구하지만 모델·옛 재정의
+ * 프롬프트가 [안내 → 상품 → 콘텐츠] 로 내도 화면 규칙(참고 콘텐츠가 상품 위)이 지켜지도록 5a 완료 직후(스트림 skeleton 이벤트·
+ * 배정기·최종 병합 전) 한 번 적용한다 — 그 뒤 모든 인덱스는 정규화된 뼈대 기준이다. 멱등 */
+export function orderSkeletonSlots<T extends PlanSkeletonSectionGen>(skeleton: T[]): T[] {
+  const out: T[] = []
+  let run: T[] = [] // 현재 연속 구간의 자리 섹션들
+  const flushRun = () => {
+    if (!run.length) return
+    out.push(...run.filter((s) => s.kind === 'contents'), ...run.filter((s) => s.kind === 'products'))
+    run = []
+  }
+  for (const s of skeleton) {
+    if (isSlotKind(s.kind)) {
+      run.push(s)
+      continue
+    }
+    flushRun()
+    out.push(s)
+  }
+  flushRun()
   return out
 }
 
@@ -107,8 +132,9 @@ export function planGroupsOf(skeleton: PlanSkeletonSectionGen[]): PlanGroup[] {
       current.slots[s.kind].push(i)
       current.text += normalizeText([s.title, s.reason])
       if (runOpen) {
-        current.insertAt.contents = i + 1
-        if (s.kind === 'products') current.insertAt.products = i + 1
+        // 상품 끼움 위치는 구간 끝을 따라가고, 콘텐츠 끼움 위치는 콘텐츠 자리 뒤까지만(상품 자리 앞에 머문다)
+        current.insertAt.products = i + 1
+        if (s.kind === 'contents') current.insertAt.contents = i + 1
       }
       return
     }
@@ -217,8 +243,11 @@ export class GeneratedIndexAllocator {
   private readonly placer: PlanPlacer
   private extras = 0
 
-  constructor(private readonly skeleton: PlanSkeletonSectionGen[]) {
-    this.placer = new PlanPlacer(skeleton)
+  private readonly skeleton: PlanSkeletonSectionGen[]
+
+  constructor(rawSkeleton: PlanSkeletonSectionGen[]) {
+    this.skeleton = orderSkeletonSlots(rawSkeleton)
+    this.placer = new PlanPlacer(this.skeleton)
   }
 
   next(section: PlacedSectionLike): number {
@@ -235,9 +264,10 @@ export type ComposedPlan = {
 }
 
 /** 최종 병합(자리 유지판) — 뼈대 순서를 지키며 검색 섹션을 배정된 자리에 넣고, 자리 없이 배정된 섹션은 그 묶음의 연속
- * 구간에 끼운다(상품은 그 묶음의 상품 자리 뒤·없으면 안내 바로 뒤, 콘텐츠는 구간 끝 — 뼈대의 [안내 → 상품 → 콘텐츠] 순).
- * 안 채워진 자리는 null + pending */
-export function composePlanSections(skeleton: PlanSkeletonSectionGen[], generated: PlanSectionWire[]): ComposedPlan {
+ * 구간에 끼운다(콘텐츠는 그 묶음의 콘텐츠 자리 뒤·없으면 안내 바로 뒤 = 상품 앞, 상품은 구간 끝 — 뼈대의 [안내 → 콘텐츠 → 상품] 순).
+ * 뼈대는 orderSkeletonSlots 로 정규화해 쓴다(호출자가 이미 정규화했으면 그대로 — 멱등). 안 채워진 자리는 null + pending */
+export function composePlanSections(rawSkeleton: PlanSkeletonSectionGen[], generated: PlanSectionWire[]): ComposedPlan {
+  const skeleton = orderSkeletonSlots(rawSkeleton)
   const placer = new PlanPlacer(skeleton)
   const bySlot = new Map<number, PlanSectionWire>()
   const extras = new Map<number, Record<SlotKind, PlanSectionWire[]>>()
@@ -252,7 +282,7 @@ export function composePlanSections(skeleton: PlanSkeletonSectionGen[], generate
     bucket[section.kind].push(section)
     extras.set(placed.group, bucket)
   }
-  const insertBefore = new Map<number, PlanSectionWire[]>() // 뼈대 인덱스(이 앞) → 끼울 섹션들 (상품 먼저, 콘텐츠 다음)
+  const insertBefore = new Map<number, PlanSectionWire[]>() // 뼈대 인덱스(이 앞) → 끼울 섹션들 (콘텐츠 먼저, 상품 다음)
   const queueAt = (position: number, list: PlanSectionWire[]) => {
     if (!list.length) return
     insertBefore.set(position, [...(insertBefore.get(position) ?? []), ...list])
@@ -260,8 +290,8 @@ export function composePlanSections(skeleton: PlanSkeletonSectionGen[], generate
   for (const group of placer.groups) {
     const bucket = extras.get(group.index)
     if (!bucket) continue
-    queueAt(group.insertAt.products, bucket.products)
     queueAt(group.insertAt.contents, bucket.contents)
+    queueAt(group.insertAt.products, bucket.products)
   }
   const sections: (PlanSectionWire | null)[] = []
   const pending: number[] = []
