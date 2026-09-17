@@ -780,6 +780,8 @@ try {
     console.log('\n[14] 내재화 카탈로그 — 수확·시딩·후보 주입')
     const before = await fetch(BFF + '/api/admin/catalog').then((r) => r.json())
     ok(before.available === true, '카탈로그 현황 조회 (available)')
+    const migrated = await fetch(BFF + '/api/admin/catalog/migrate', { method: 'POST', headers: plain }).then((r) => r.json())
+    ok(migrated.created === false && migrated.catalog?.available === true, '표 만들기(멱등) — 이미 있으면 created=false + 현황')
     ok(before.stats.products.total >= 1 && before.stats.contents.total >= 1, `지난 계획에서 수확된 행이 있다 (상품 ${before.stats.products.total} · 콘텐츠 ${before.stats.contents.total})`)
     const seedRows = [
       { id: 'gm-9900000001', mall: '지마켓', mallProductId: '9900000001', name: '모의 밀착 세미매트 쿠션 15g', brand: '모의랩', price: 24900, url: 'https://item.gmarket.co.kr/Item?goodscode=9900000001', imageUrl: 'https://gdimg.gmarket.co.kr/9900000001/still/280', tags: ['쿠션', '지속력', '세미매트'], category: '쿠션', source: 'manual', verified: true, status: 'active', meta: { reviews: 120 }, recommendCount: 0 },

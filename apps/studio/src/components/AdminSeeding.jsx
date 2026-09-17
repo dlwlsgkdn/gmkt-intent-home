@@ -5,6 +5,7 @@ import {
   fetchSeedJob,
   harvestAdminCatalog,
   importAdminCatalog,
+  migrateAdminCatalog,
   pauseSeedJob,
   resumeSeedJob,
   startSeedJob,
@@ -229,6 +230,21 @@ export default function AdminSeeding({ api }) {
         <section className="sb-admin-card sb-seeding__card">
           <h2>카탈로그 표가 아직 없어요</h2>
           <p>{wire.note || 'core 마이그레이션(0005_catalog_internalize)을 적용하면 이 페이지가 살아납니다.'}</p>
+          <div className="sb-seeding__row">
+            <button
+              type="button"
+              className="sb-btn sb-btn--primary sb-btn--small"
+              disabled={Boolean(busy)}
+              onClick={() => run('표 만들기', async () => {
+                const r = await migrateAdminCatalog()
+                setWire(r.catalog)
+                return r.created ? '카탈로그 표를 만들었어요 (마이그레이션 0005 적용, drizzle 이력 기록).' : '카탈로그 표가 이미 있었어요 — 현황을 다시 읽었어요.'
+              })}
+            >
+              {busy === '표 만들기' ? '만드는 중…' : '여기서 표 만들기'}
+            </button>
+            <span>core 가 자기 DB 연결로 표 2개·인덱스·pg_trgm 확장을 만들고 drizzle 이력에 남깁니다. 터미널에서 하려면:</span>
+          </div>
           <code className="sb-seeding__code">npm run db:migrate --workspace=apps/core</code>
         </section>
       )}

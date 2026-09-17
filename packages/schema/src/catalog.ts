@@ -282,3 +282,11 @@ export const AdminCatalogWire = z.object({
   note: z.string().optional(),
 })
 export type AdminCatalogWire = z.infer<typeof AdminCatalogWire>
+
+/** 표 만들기 — core 가 마이그레이션 0005 DDL 을 멱등 적용한 결과 + 적용 뒤 현황 */
+export const AdminCatalogMigrateResult = z.object({
+  /** 이번 호출로 표가 새로 생겼는가 (이미 있었으면 false) */
+  created: z.boolean(),
+  catalog: AdminCatalogWire,
+})
+export type AdminCatalogMigrateResult = z.infer<typeof AdminCatalogMigrateResult>

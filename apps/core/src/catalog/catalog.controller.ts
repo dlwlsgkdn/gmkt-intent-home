@@ -82,6 +82,12 @@ export class CatalogController {
     return this.catalog.listForVerify(mall, Math.min(Math.max(limit, 1), 200))
   }
 
+  @Post('ensure-schema')
+  @ApiOperation({ summary: '표 만들기 — 마이그레이션 0005 DDL 을 멱등 적용 + drizzle 이력 기록 (로컬 Node 없이 운영 콘솔에서)' })
+  ensureSchema() {
+    return this.catalog.ensureSchema()
+  }
+
   @Get('stats')
   @ApiOperation({ summary: '카탈로그 현황 — 개수·몰별·출처별·검증·dead' })
   @ApiOkResponse({ schema: toOpenApi(CatalogStatsWire) })

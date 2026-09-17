@@ -265,3 +265,5 @@ export function stepSeedJob() { return req('POST', '/catalog/seed-job/step') }
 export function pauseSeedJob() { return req('POST', '/catalog/seed-job/pause') }
 export function resumeSeedJob() { return req('POST', '/catalog/seed-job/resume') }
 export function clearSeedJob() { return req('DELETE', '/catalog/seed-job') }
+/** 표 만들기 — core 가 마이그레이션 0005 를 멱등 적용 → { created, catalog: AdminCatalogWire } */
+export function migrateAdminCatalog() { return req('POST', '/catalog/migrate') }

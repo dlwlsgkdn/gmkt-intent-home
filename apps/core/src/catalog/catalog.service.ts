@@ -30,6 +30,58 @@ const normalizeText = (parts: (string | null | undefined)[]) =>
 const productSearchText = (row: CatalogProductRow) => normalizeText([row.name, row.brand, ...(row.tags ?? []), row.category, row.mall])
 const contentSearchText = (row: CatalogContentRow) => normalizeText([row.title, row.source, ...(row.tags ?? []), row.snippet?.slice(0, 200)])
 
+/** 마이그레이션 0005 (drizzle/0005_catalog_internalize.sql) 와 같은 DDL — 멱등(IF NOT EXISTS). 파일을 고치면 여기와 아래 hash 도 같이 */
+const CATALOG_SCHEMA_DDL: readonly string[] = [
+  'CREATE EXTENSION IF NOT EXISTS "pg_trgm"',
+  `CREATE TABLE IF NOT EXISTS "catalog_products" (
+	"id" text PRIMARY KEY NOT NULL,
+	"mall" text NOT NULL,
+	"mall_product_id" text,
+	"name" text NOT NULL,
+	"brand" text DEFAULT '' NOT NULL,
+	"price" integer DEFAULT 0 NOT NULL,
+	"url" text NOT NULL,
+	"image_url" text,
+	"tags" text[] DEFAULT '{}'::text[] NOT NULL,
+	"category" text,
+	"source" text NOT NULL,
+	"verified" boolean DEFAULT false NOT NULL,
+	"status" text DEFAULT 'active' NOT NULL,
+	"meta" jsonb,
+	"recommend_count" integer DEFAULT 0 NOT NULL,
+	"search_text" text DEFAULT '' NOT NULL,
+	"last_seen_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+)`,
+  `CREATE TABLE IF NOT EXISTS "catalog_contents" (
+	"id" text PRIMARY KEY NOT NULL,
+	"type" text NOT NULL,
+	"source" text DEFAULT '' NOT NULL,
+	"title" text NOT NULL,
+	"url" text NOT NULL,
+	"image_url" text,
+	"meta" text,
+	"snippet" text,
+	"duration" text,
+	"tags" text[] DEFAULT '{}'::text[] NOT NULL,
+	"year" integer,
+	"verified" boolean DEFAULT true NOT NULL,
+	"status" text DEFAULT 'active' NOT NULL,
+	"recommend_count" integer DEFAULT 0 NOT NULL,
+	"search_text" text DEFAULT '' NOT NULL,
+	"last_seen_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+)`,
+  'CREATE INDEX IF NOT EXISTS "catalog_products_mall_idx" ON "catalog_products" USING btree ("mall","verified")',
+  'CREATE INDEX IF NOT EXISTS "catalog_products_search_trgm_idx" ON "catalog_products" USING gin ("search_text" gin_trgm_ops)',
+  'CREATE INDEX IF NOT EXISTS "catalog_contents_type_idx" ON "catalog_contents" USING btree ("type","verified")',
+  'CREATE INDEX IF NOT EXISTS "catalog_contents_search_trgm_idx" ON "catalog_contents" USING gin ("search_text" gin_trgm_ops)',
+]
+/** 저널 항목(meta/_journal.json idx 5)의 when 과 SQL 파일 sha256 — ensureSchema 가 drizzle 이력에 남기는 값 */
+const CATALOG_MIGRATION = { when: 1789000000000, hash: 'c34a00428750fb1c3019a1cffba4bb0eda257adc328934737c997bcd8ee88b5d' } as const
+
 /** ILIKE 패턴용 이스케이프 — %·_·\ 를 문자 그대로 */
 const like = (term: string) => `%${term.toLowerCase().replace(/\s+/g, '').replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`
 
@@ -311,6 +363,31 @@ export class CatalogService {
       .orderBy(asc(catalogProducts.lastSeenAt), asc(catalogProducts.id))
       .limit(limit)
     return { items: rows.map((r) => this.productWire(r)) }
+  }
+
+  /** 표 만들기 — 마이그레이션 0005 와 같은 DDL 을 멱등(IF NOT EXISTS)으로 적용하고 drizzle 이력에도 남긴다. 로컬 Node 없이 운영 콘솔에서
+   * 카탈로그 표를 세우는 길 (2026-09-17). 이미 있으면 아무것도 바꾸지 않는다. 이후 `db:migrate` 는 이력 덕에 0005 를 건너뛴다.
+   * Neon HTTP 드라이버는 문장 하나씩만 보내므로 순서대로 실행한다 */
+  async ensureSchema(): Promise<{ ok: true; created: boolean }> {
+    const db = this.conn()
+    // neon-http 드라이버의 execute 는 { rows } 를 돌려준다 (배열 직접이 아님) — 형태가 바뀌어도 받게 둘 다 본다
+    const rowsOf = <T,>(res: unknown): T[] => (Array.isArray(res) ? (res as T[]) : ((res as { rows?: T[] })?.rows ?? []))
+    const existed = Boolean(rowsOf<{ t: string | null }>(await db.execute(sql`select to_regclass('public.catalog_products') as t`))[0]?.t)
+    for (const statement of CATALOG_SCHEMA_DDL) await db.execute(sql.raw(statement))
+    // drizzle 이력 — migrate.mjs --baseline 과 같은 표/행 형식 (created_at = 저널 when, hash = SQL 파일 sha256)
+    await db.execute(sql`CREATE SCHEMA IF NOT EXISTS "drizzle"`)
+    await db.execute(
+      sql`CREATE TABLE IF NOT EXISTS "drizzle"."__drizzle_migrations" (id SERIAL PRIMARY KEY, hash text NOT NULL, created_at bigint)`,
+    )
+    const row = rowsOf<{ n: number }>(
+      await db.execute(sql`select count(*)::int as n from "drizzle"."__drizzle_migrations" where created_at = ${CATALOG_MIGRATION.when}`),
+    )[0]
+    if (!Number(row?.n)) {
+      await db.execute(
+        sql`insert into "drizzle"."__drizzle_migrations" (hash, created_at) values (${CATALOG_MIGRATION.hash}, ${CATALOG_MIGRATION.when})`,
+      )
+    }
+    return { ok: true, created: !existed }
   }
 
   async stats(): Promise<CatalogStatsWire> {

@@ -31,6 +31,7 @@ import {
   AdminCatalogHarvestResult,
   AdminCatalogImportBody,
   AdminCatalogImportResult,
+  AdminCatalogMigrateResult,
   AdminCatalogSeedSearchBody,
   AdminCatalogSeedSearchResult,
   AdminCatalogVerifyResult,
@@ -232,6 +233,28 @@ export class AdminController {
         },
       }
     }
+  }
+
+  @Post('catalog/migrate')
+  @ApiOperation({
+    summary: '카탈로그 표 만들기 — core 가 마이그레이션 0005(pg_trgm + catalog_* 표 + 인덱스)를 멱등 적용하고 drizzle 이력에 남긴다',
+    description: '로컬 Node·DATABASE_URL 없이 운영 콘솔에서 표를 세우는 길. 이미 있으면 created=false 로 아무것도 바꾸지 않는다. 응답에 적용 뒤 현황을 싣는다.',
+  })
+  @ApiOkResponse({ schema: toOpenApi(AdminCatalogMigrateResult) })
+  async catalogMigrate(): Promise<AdminCatalogMigrateResult> {
+    const { created } = await this.core.ensureCatalogSchema()
+    const catalog = await this.catalogStats()
+    await this.appendChange({
+      area: 'knowledge',
+      action: created ? 'create' : 'update',
+      targetId: 'catalog',
+      targetLabel: '내재화 카탈로그',
+      summary: created ? '카탈로그 표 생성 (마이그레이션 0005 적용)' : '카탈로그 표 확인 — 이미 있음',
+      before: null,
+      after: null,
+      restorable: false,
+    })
+    return { created, catalog }
   }
 
   @Post('catalog/import')

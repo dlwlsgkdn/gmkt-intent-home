@@ -622,6 +622,7 @@ const server = http.createServer(async (req, res) => {
       const mallQ = new URLSearchParams(url.split('?')[1] || '').get('mall') || '*'
       return send(200, { items: [...catalogProducts.values()].filter((r) => (mallQ === '*' || r.mall === mallQ) && r.status !== 'dead').slice(0, 50) })
     }
+    if (url === '/internal/catalog/ensure-schema' && req.method === 'POST') return send(200, { ok: true, created: false })
     if (url === '/internal/catalog/stats' && req.method === 'GET') {
       const count = (table, pred) => [...table.values()].filter(pred).length
       const group = (table, key) => {

@@ -246,6 +246,7 @@ admin: 프롬프트 카탈로그에 `plan-contents` 추가, 지식 목록에 gua
 | 메서드 | 경로 | 설명 |
 |---|---|---|
 | GET | `/api/admin/catalog` | 현황 `AdminCatalogWire` — `{ stats: CatalogStatsWire, available, note? }` (표 없음·core 미연결이면 available=false) |
+| POST | `/api/admin/catalog/migrate` | **표 만들기** — core `POST /internal/catalog/ensure-schema` 가 마이그레이션 0005 와 같은 DDL(pg_trgm·표 2개·인덱스)을 멱등 적용하고 drizzle 이력(created_at = 저널 when, hash = SQL sha256)에 남긴다 → `{ created, catalog }`. 로컬 Node·DATABASE_URL 없이 운영 콘솔 「데이터 시딩」의 「여기서 표 만들기」가 부른다 |
 | GET/POST/DELETE | `/api/admin/catalog/seed-job` · POST `…/step` · `…/pause` · `…/resume` | **시딩 잡** — 상태는 core KV `catalog-seed-job`(`CatalogSeedJob`: facets·types·dense·total·cursor·retry·failed·products·verified·webSearchRequests·history[≤40]·lockUntil·lastError). POST 시작(`StartCatalogSeedJobBody`, 진행 중 잡이 있으면 reset 없이 409) → 드라이버(콘솔 「이 탭에서 돌리기」·`apps/bff/scripts/seed-search.mjs`)가 `step` 을 반복 호출해 8단위씩 전진(서버리스 300초 안, 회차 잠금 270초 — 다른 드라이버는 `busy`), 본 회차 뒤 실패 단위 재시도 회차 1번, 끝나면 `done`. 콘솔 「데이터 시딩」 메뉴가 진행 바·회차 기록·결과를 본다(드라이버가 없으면 10초 조회) |
 | POST | `/api/admin/catalog/seed-search` | **시딩 웹 검색 배치(잡 없이 1회차)** `{ keywords?[≤8] }`(유형만) 또는 `{ queries?: [{ keyword, query? }][≤8], dense? }`(대량 — 유형×조건) → `{ keywords, failed[], products, verified, webSearchRequests }` — 검색 단위마다 LLM+web_search 1회(동시 3, dense 는 검색 4회·16개), 실패 단위는 failed 로(초점 문구, 다시 돌리면 됨), 결과는 멱등 upsert |
 | POST | `/api/admin/catalog/import` | 가져오기 `{ products?[≤500], contents?[≤500] }` — 올리브영 사내 Mongo 내보내기 JSON 등 행 파일을 500개씩 올린다 (멱등) |

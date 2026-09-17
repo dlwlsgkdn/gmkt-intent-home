@@ -154,6 +154,10 @@ export class CoreClientService {
   catalogStats() {
     return this.req<CatalogStatsWire>('GET', '/internal/catalog/stats')
   }
+  /** 표 만들기 — core 가 자기 DATABASE_URL 로 마이그레이션 0005 DDL 을 멱등 적용 (운영 콘솔 「표 만들기」) */
+  ensureCatalogSchema() {
+    return this.req<{ ok: true; created: boolean }>('POST', '/internal/catalog/ensure-schema')
+  }
 
   /** 설정 KV — 없는 키는 null (404를 삼킨다) */
   async getSetting(key: string): Promise<SettingWire | null> {
