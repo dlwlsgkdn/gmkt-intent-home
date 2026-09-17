@@ -362,7 +362,7 @@ export function livePlanItems(page, opts = {}) {
               duration: c.duration || '',
               url: c.url || '', // 카드 클릭 = 새 탭 (registry videoCard의 openExternal)
               imageUrl: c.imageUrl || '', // 없으면 유튜브 URL 자동 썸네일 → 폴백 이미지
-              note: c.why || '', // 5c 콘텐츠 단계가 답변을 인용해 적은 "왜 이 콘텐츠인지" (옛 페이지엔 없음)
+              // 5c 가 적는 고른 이유(why)는 카드에 싣지 않는다 (2026-09-17 요청 — 카드는 출처·제목만. why 는 와이어·심사 요청에는 그대로 남는다)
             },
           })
         } else {
@@ -376,7 +376,6 @@ export function livePlanItems(page, opts = {}) {
               author: c.meta || '',
               url: c.url || '',
               imageUrl: c.imageUrl || '',
-              note: c.why || '',
             },
           })
         }
