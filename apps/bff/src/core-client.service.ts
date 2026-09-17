@@ -1,6 +1,10 @@
 import { HttpException, Injectable, ServiceUnavailableException } from '@nestjs/common'
 import type {
+  CatalogContentListWire,
+  CatalogContentRow,
   CatalogContentSearchWire,
+  CatalogListQuery,
+  CatalogProductListWire,
   CatalogProductRow,
   CatalogProductSearchWire,
   CatalogSearchQuery,
@@ -29,6 +33,14 @@ import type {
   UpdateThreadBody,
   UpsertStepBody,
 } from '@ddak/schema'
+
+/** 둘러보기 쿼리 → 쿼리 문자열 (빈 값 생략) */
+const listQs = (query: CatalogListQuery): string => {
+  const q = new URLSearchParams()
+  for (const [k, v] of Object.entries(query)) if (v !== undefined && v !== null && v !== '') q.set(k, String(v))
+  const s = q.toString()
+  return s ? `?${s}` : ''
+}
 
 /** backend core internal API 클라이언트 — 계약 타입은 @ddak/schema 공유 */
 @Injectable()
@@ -141,6 +153,16 @@ export class CoreClientService {
   }
   upsertCatalogContents(body: UpsertCatalogContentsBody) {
     return this.req<UpsertCatalogResult>('PUT', '/internal/catalog/contents', body)
+  }
+  /** 둘러보기 (운영 콘솔 표) — 쿼리를 그대로 넘긴다 */
+  listCatalogProducts(query: CatalogListQuery) {
+    return this.req<CatalogProductListWire>('GET', `/internal/catalog/products${listQs(query)}`)
+  }
+  listCatalogContents(query: CatalogListQuery) {
+    return this.req<CatalogContentListWire>('GET', `/internal/catalog/contents${listQs(query)}`)
+  }
+  patchCatalogContent(id: string, body: PatchCatalogRowBody) {
+    return this.req<CatalogContentRow>('PATCH', `/internal/catalog/contents/${encodeURIComponent(id)}`, body)
   }
   patchCatalogProduct(id: string, body: PatchCatalogRowBody) {
     return this.req<CatalogProductRow>('PATCH', `/internal/catalog/products/${encodeURIComponent(id)}`, body)

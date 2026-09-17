@@ -1,7 +1,8 @@
 import { Inject, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common'
-import { and, asc, desc, eq, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, sql, type SQL } from 'drizzle-orm'
 import type {
   CatalogContentRow,
+  CatalogListQuery,
   CatalogProductRow,
   CatalogSearchQuery,
   CatalogStatsWire,
@@ -82,6 +83,16 @@ const CATALOG_SCHEMA_DDL: readonly string[] = [
 /** 저널 항목(meta/_journal.json idx 5)의 when 과 SQL 파일 sha256 — ensureSchema 가 drizzle 이력에 남기는 값 */
 const CATALOG_MIGRATION = { when: 1789000000000, hash: 'c34a00428750fb1c3019a1cffba4bb0eda257adc328934737c997bcd8ee88b5d' } as const
 
+/** 둘러보기 커서 `<updatedAt ISO>|<id>` → 값. 깨진 커서는 첫 페이지 */
+const parseCursor = (raw?: string): { at: string; id: string } | null => {
+  if (!raw) return null
+  const i = raw.indexOf('|')
+  if (i <= 0) return null
+  const at = raw.slice(0, i)
+  const id = raw.slice(i + 1)
+  return Number.isNaN(Date.parse(at)) || !id ? null : { at, id }
+}
+
 /** ILIKE 패턴용 이스케이프 — %·_·\ 를 문자 그대로 */
 const like = (term: string) => `%${term.toLowerCase().replace(/\s+/g, '').replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`
 
@@ -113,6 +124,7 @@ export class CatalogService {
       meta: row.meta,
       recommendCount: row.recommendCount,
       lastSeenAt: row.lastSeenAt?.toISOString() ?? null,
+      createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
       ...(score !== undefined ? { score } : {}),
     }
@@ -135,8 +147,84 @@ export class CatalogService {
       status: row.status as CatalogContentRow['status'],
       recommendCount: row.recommendCount,
       lastSeenAt: row.lastSeenAt?.toISOString() ?? null,
+      createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
       ...(score !== undefined ? { score } : {}),
+    }
+  }
+
+  /** 둘러보기 — 운영 콘솔 표. updated_at 내림차순 키셋 커서(`<updatedAt ISO>|<id>`), 검색과 달리 미검증·dead 도 보인다 */
+  async listProducts(q: CatalogListQuery) {
+    const db = this.conn()
+    const conds: SQL[] = []
+    if (q.q?.trim()) conds.push(sql`${catalogProducts.searchText} ILIKE ${like(q.q)}`)
+    if (q.mall) conds.push(eq(catalogProducts.mall, q.mall))
+    if (q.source) conds.push(eq(catalogProducts.source, q.source))
+    if (q.verified) conds.push(eq(catalogProducts.verified, q.verified === 'true'))
+    if (q.status) conds.push(eq(catalogProducts.status, q.status))
+    const pageConds = [...conds]
+    const cursor = parseCursor(q.cursor)
+    if (cursor) {
+      pageConds.push(
+        sql`(date_trunc('milliseconds', ${catalogProducts.updatedAt}), ${catalogProducts.id}) < (${cursor.at}::timestamptz, ${cursor.id})`,
+      )
+    }
+    const limit = q.limit ?? 40
+    const [rows, [{ total }]] = await Promise.all([
+      db
+        .select()
+        .from(catalogProducts)
+        .where(pageConds.length ? and(...pageConds) : undefined)
+        .orderBy(desc(catalogProducts.updatedAt), desc(catalogProducts.id))
+        .limit(limit + 1),
+      db
+        .select({ total: sql<number>`count(*)::int` })
+        .from(catalogProducts)
+        .where(conds.length ? and(...conds) : undefined),
+    ])
+    const items = rows.slice(0, limit)
+    const last = items[items.length - 1]
+    return {
+      items: items.map((r) => this.productWire(r)),
+      nextCursor: rows.length > limit && last ? `${last.updatedAt.toISOString()}|${last.id}` : null,
+      total: Number(total),
+    }
+  }
+
+  async listContents(q: CatalogListQuery) {
+    const db = this.conn()
+    const conds: SQL[] = []
+    if (q.q?.trim()) conds.push(sql`${catalogContents.searchText} ILIKE ${like(q.q)}`)
+    if (q.source) conds.push(eq(catalogContents.source, q.source))
+    if (q.type) conds.push(eq(catalogContents.type, q.type))
+    if (q.verified) conds.push(eq(catalogContents.verified, q.verified === 'true'))
+    if (q.status) conds.push(eq(catalogContents.status, q.status))
+    const pageConds = [...conds]
+    const cursor = parseCursor(q.cursor)
+    if (cursor) {
+      pageConds.push(
+        sql`(date_trunc('milliseconds', ${catalogContents.updatedAt}), ${catalogContents.id}) < (${cursor.at}::timestamptz, ${cursor.id})`,
+      )
+    }
+    const limit = q.limit ?? 40
+    const [rows, [{ total }]] = await Promise.all([
+      db
+        .select()
+        .from(catalogContents)
+        .where(pageConds.length ? and(...pageConds) : undefined)
+        .orderBy(desc(catalogContents.updatedAt), desc(catalogContents.id))
+        .limit(limit + 1),
+      db
+        .select({ total: sql<number>`count(*)::int` })
+        .from(catalogContents)
+        .where(conds.length ? and(...conds) : undefined),
+    ])
+    const items = rows.slice(0, limit)
+    const last = items[items.length - 1]
+    return {
+      items: items.map((r) => this.contentWire(r)),
+      nextCursor: rows.length > limit && last ? `${last.updatedAt.toISOString()}|${last.id}` : null,
+      total: Number(total),
     }
   }
 

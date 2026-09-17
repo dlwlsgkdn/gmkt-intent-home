@@ -12,6 +12,7 @@ import {
   stepSeedJob,
   verifyAdminCatalog,
 } from '../lib/adminApi.js'
+import AdminCatalogBrowse from './AdminCatalogBrowse.jsx'
 import {
   CATALOG_SEED_COST_PER_QUERY_USD,
   CATALOG_SEED_FACETS,
@@ -28,6 +29,7 @@ import {
  *     다른 탭이나 배치 스크립트(apps/bff/scripts/seed-search.mjs)가 돌려도 여기서 같은 것을 본다(드라이버가 없으면 10초마다 조회).
  *  ③ 그 밖의 재료 — 지난 쓰레드 계획 수확(백필, 실주행은 7단계가 자동), 올리브영 사내 Mongo 내보내기·다른 몰 행 JSON 가져오기
  *  ④ 점검 — 상품 링크 점검(지마켓 썸네일·그 밖 몰 상품 주소 HEAD → dead/verified, 올리브영·쿠팡은 확인 불가라 건너뜀) + 이 화면의 작업 로그
+ *  ⑤ 둘러보기 — 쌓인 상품·콘텐츠 행 표(무한 스크롤, 행 클릭 = 전 컬럼 상세, AdminCatalogBrowse.jsx)
  * 스튜디오 SRP 스냅샷·데모 카탈로그는 시딩 재료가 아니다. core 표가 없으면(마이그레이션 0005 전) 안내만 보인다.
  */
 const CHUNK = 500
@@ -417,6 +419,8 @@ export default function AdminSeeding({ api }) {
           </section>
         </div>
       </div>
+
+      <AdminCatalogBrowse available={available} malls={mallOptions.filter((m) => m !== '*')} onLog={pushLog} />
     </div>
   )
 }

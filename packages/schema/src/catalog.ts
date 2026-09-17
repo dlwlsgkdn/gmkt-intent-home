@@ -42,6 +42,7 @@ export const CatalogProductRow = z.object({
   /** 계획에 실린 횟수 — 수확 때마다 +1 (검색 순위 보조) */
   recommendCount: z.number().int().nonnegative().optional(),
   lastSeenAt: z.string().nullable().optional(),
+  createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
 })
 export type CatalogProductRow = z.infer<typeof CatalogProductRow>
@@ -68,6 +69,7 @@ export const CatalogContentRow = z.object({
   status: CatalogRowStatus.optional(),
   recommendCount: z.number().int().nonnegative().optional(),
   lastSeenAt: z.string().nullable().optional(),
+  createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
 })
 export type CatalogContentRow = z.infer<typeof CatalogContentRow>
@@ -96,6 +98,36 @@ export const CatalogContentSearchWire = z.object({
   total: z.number().int(),
 })
 export type CatalogContentSearchWire = z.infer<typeof CatalogContentSearchWire>
+
+/** 둘러보기 목록 — 운영 콘솔 「데이터 시딩」의 상품·콘텐츠 표 (무한 스크롤). updated_at 내림차순 키셋 커서(`<updatedAt ISO>|<id>`).
+ * q 는 search_text 부분 일치, verified 는 'true'|'false'(없으면 전부), 검색과 달리 미검증·dead 행도 보인다 */
+export const CatalogListQuery = z.object({
+  q: z.string().max(80).optional(),
+  mall: z.string().max(40).optional(),
+  source: z.string().max(20).optional(),
+  verified: z.enum(['true', 'false']).optional(),
+  status: CatalogRowStatus.optional(),
+  /** 콘텐츠 전용 — video | article */
+  type: CatalogContentType.optional(),
+  cursor: z.string().max(200).optional(),
+  limit: z.number().int().min(1).max(100).optional(),
+})
+export type CatalogListQuery = z.infer<typeof CatalogListQuery>
+
+export const CatalogProductListWire = z.object({
+  items: z.array(CatalogProductRow),
+  nextCursor: z.string().nullable(),
+  /** 필터를 적용한 전체 개수 */
+  total: z.number().int(),
+})
+export type CatalogProductListWire = z.infer<typeof CatalogProductListWire>
+
+export const CatalogContentListWire = z.object({
+  items: z.array(CatalogContentRow),
+  nextCursor: z.string().nullable(),
+  total: z.number().int(),
+})
+export type CatalogContentListWire = z.infer<typeof CatalogContentListWire>
 
 /** 일괄 upsert — id 충돌이면 덮되 recommendCount 는 더한다(수확이 누적되게) */
 export const UpsertCatalogProductsBody = z.object({

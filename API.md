@@ -249,6 +249,8 @@ admin: 프롬프트 카탈로그에 `plan-contents` 추가, 지식 목록에 gua
 | 메서드 | 경로 | 설명 |
 |---|---|---|
 | GET | `/api/admin/catalog` | 현황 `AdminCatalogWire` — `{ stats: CatalogStatsWire, available, note? }` (표 없음·core 미연결이면 available=false) |
+| GET | `/api/admin/catalog/products` · `/api/admin/catalog/contents` | **둘러보기** (`CatalogListQuery` → `Catalog*ListWire`) — 「데이터 시딩」의 표(무한 스크롤). q(search_text 부분 일치)·mall·source·type(콘텐츠)·verified(true/false)·status 필터, updated_at 내림차순 키셋 커서 `<updatedAt>|<id>`, limit ≤100, total 은 필터 적용 개수. 검색과 달리 미검증·dead 도 보인다. core `GET /internal/catalog/{products,contents}` |
+| PATCH | `/api/admin/catalog/products/:id` · `/api/admin/catalog/contents/:id` | 행 표시 `PatchCatalogRowBody` `{ verified?, status? }` — 상세 다이얼로그의 「검증됨으로」·「내려감 표시」 |
 | POST | `/api/admin/catalog/migrate` | **표 만들기** — core `POST /internal/catalog/ensure-schema` 가 마이그레이션 0005 와 같은 DDL(pg_trgm·표 2개·인덱스)을 멱등 적용하고 drizzle 이력(created_at = 저널 when, hash = SQL sha256)에 남긴다 → `{ created, catalog }`. 로컬 Node·DATABASE_URL 없이 운영 콘솔 「데이터 시딩」의 「여기서 표 만들기」가 부른다 |
 | GET/POST/DELETE | `/api/admin/catalog/seed-job` · POST `…/step` · `…/pause` · `…/resume` | **시딩 잡** — 상태는 core KV `catalog-seed-job`(`CatalogSeedJob`: facets·types·dense·total·cursor·retry·failed·products·verified·webSearchRequests·history[≤40]·lockUntil·lastError). POST 시작(`StartCatalogSeedJobBody`, 진행 중 잡이 있으면 reset 없이 409) → 드라이버(콘솔 「이 탭에서 돌리기」·`apps/bff/scripts/seed-search.mjs`)가 `step` 을 반복 호출해 4단위씩 한 라운드로 전진(4병렬·호출당 220초 상한 — 서버리스 300초 안, 회차 잠금 270초 — 다른 드라이버는 `busy`), 본 회차 뒤 실패 단위 재시도 회차 1번, 끝나면 `done`. 콘솔 「데이터 시딩」 메뉴가 진행 바·회차 기록·결과를 본다(드라이버가 없으면 10초 조회) |
 | POST | `/api/admin/catalog/seed-search` | **시딩 웹 검색 배치(잡 없이 1회차)** `{ keywords?[≤8] }`(유형만) 또는 `{ queries?: [{ keyword, query? }][≤8], dense? }`(대량 — 유형×조건) → `{ keywords, failed[], products, verified, webSearchRequests }` — 검색 단위마다 LLM+web_search 1회(4병렬, 호출당 220초 상한, dense 는 검색 4회·16개), 실패 단위는 failed 로(초점 문구, 다시 돌리면 됨), 결과는 멱등 upsert |
@@ -280,6 +282,7 @@ Base: `https://ddak-core.vercel.app` · 인증: **`Authorization: Bearer <CORE_S
 | POST | `/internal/catalog/products/search` · `/internal/catalog/contents/search` | **내재화 카탈로그** 검색 (`CatalogSearchQuery` → `Catalog*SearchWire`) — search_text 부분 일치 점수순, 기본 verified·active 만 (§1-4) |
 | PUT | `/internal/catalog/products` · `/internal/catalog/contents` | 일괄 upsert (≤500) — `bump=true` 면 수확(노출 횟수 누적·출처/검증/상태 보존·태그 합집합) |
 | PATCH | `/internal/catalog/products/:id` · `/internal/catalog/contents/:id` | `verified`·`status` 표시 (`PatchCatalogRowBody`) |
+| GET | `/internal/catalog/products?…` · `/internal/catalog/contents?…` | **둘러보기** (`CatalogListQuery` → `Catalog*ListWire`) — 필터 + updated_at 키셋 커서, 미검증·dead 포함 (운영 콘솔 표) |
 | GET | `/internal/catalog/products/verify-list?mall=&limit=` · `/internal/catalog/stats` | 점검 대상(오래 안 본 순) · 현황 (`CatalogStatsWire`) |
 | GET | `/healthz` | 헬스체크 (가드 밖) |
 

@@ -267,3 +267,15 @@ export function resumeSeedJob() { return req('POST', '/catalog/seed-job/resume')
 export function clearSeedJob() { return req('DELETE', '/catalog/seed-job') }
 /** 표 만들기 — core 가 마이그레이션 0005 를 멱등 적용 → { created, catalog: AdminCatalogWire } */
 export function migrateAdminCatalog() { return req('POST', '/catalog/migrate') }
+/* 둘러보기 — 「데이터 시딩」의 상품·콘텐츠 표 (무한 스크롤). params: { q, mall, source, type, verified, status, cursor, limit } → { items, nextCursor, total } */
+const listQs = (params = {}) => {
+  const q = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null && v !== '') q.set(k, String(v))
+  const s = q.toString()
+  return s ? `?${s}` : ''
+}
+export function fetchCatalogProducts(params) { return req('GET', `/catalog/products${listQs(params)}`) }
+export function fetchCatalogContents(params) { return req('GET', `/catalog/contents${listQs(params)}`) }
+/** 행 표시 — { verified?, status? } */
+export function patchCatalogProduct(id, body) { return req('PATCH', `/catalog/products/${encodeURIComponent(id)}`, body) }
+export function patchCatalogContent(id, body) { return req('PATCH', `/catalog/contents/${encodeURIComponent(id)}`, body) }

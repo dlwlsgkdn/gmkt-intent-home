@@ -61,6 +61,7 @@ npm run db:migrate --workspace=apps/core -- --baseline
 | POST | `/internal/catalog/products/search` · `/internal/catalog/contents/search` | **내재화 카탈로그** 검색 — `{ terms[], typeTerms?, limit?, verifiedOnly?, mall? }`, search_text 부분 일치 점수순 (2026-09-17) |
 | PUT | `/internal/catalog/products` · `/internal/catalog/contents` | 일괄 upsert (≤500) — `bump=true` 면 수확(노출 횟수 누적·출처/검증/상태 보존·태그 합집합) |
 | PATCH | `/internal/catalog/products/:id` · `/internal/catalog/contents/:id` | `verified`·`status(active\|dead)` 표시 |
+| GET | `/internal/catalog/products?…` · `/internal/catalog/contents?…` | **둘러보기** — q·mall·source·type·verified·status 필터, updated_at 내림차순 키셋 커서 `<updatedAt>|<id>`(`cursor`), limit ≤100 → `{ items, nextCursor, total }` (운영 콘솔 「데이터 시딩」 표 — 미검증·dead 포함) |
 | GET | `/internal/catalog/products/verify-list?mall=&limit=` · `/internal/catalog/stats` | 점검 대상(오래 안 본 순) · 현황 |
 | POST | `/internal/catalog/ensure-schema` | 표 만들기 — 마이그레이션 0005 와 같은 DDL 멱등 적용 + drizzle 이력 기록 (운영 콘솔 「여기서 표 만들기」, 로컬 Node 없이). SQL 파일을 고치면 `catalog.service.ts` 의 DDL·hash 도 같이 |
 | GET | `/healthz` | 헬스체크 (가드 밖) |

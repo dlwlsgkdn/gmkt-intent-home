@@ -36,7 +36,11 @@ import {
   AdminCatalogSeedSearchResult,
   AdminCatalogVerifyResult,
   AdminCatalogWire,
+  CatalogContentListWire,
+  CatalogListQuery,
+  CatalogProductListWire,
   CatalogSeedJobWire,
+  PatchCatalogRowBody,
   StartCatalogSeedJobBody,
   AdminDryRunBody,
   AdminChangesWire,
@@ -79,6 +83,7 @@ import {
   type Profile,
   type SurveyPageWire,
 } from '@ddak/schema'
+import { z } from 'zod'
 import { CoreClientService } from '../core-client.service'
 import { ServiceTokenGuard } from '../common/service-token.guard'
 import { ParseThreadIdPipe } from '../common/thread-id.pipe'
@@ -127,6 +132,15 @@ const THREAD_ID_PARAM = {
   description: '스노우플레이크 threadId (19자리 십진 문자열)',
   example: '2195943212345678901',
 } as const
+
+/** 둘러보기 쿼리 — 문자열로 오는 limit 을 숫자로, 빈 문자열은 필터 없음 (core 컨트롤러와 같은 규칙) */
+const CatalogListQueryParams = CatalogListQuery.extend({
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+  q: z.string().max(80).optional().transform((v) => (v?.trim() ? v : undefined)),
+  mall: z.string().max(40).optional().transform((v) => (v ? v : undefined)),
+  source: z.string().max(20).optional().transform((v) => (v ? v : undefined)),
+  cursor: z.string().max(200).optional().transform((v) => (v ? v : undefined)),
+})
 
 const PROMPT_HISTORY_LIMIT = 12
 const promptHistorySettingKey = (id: string) => `llm-prompt-history-${id}`
@@ -233,6 +247,38 @@ export class AdminController {
         },
       }
     }
+  }
+
+  /* ── 둘러보기·표시 — 운영 콘솔 「데이터 시딩」의 상품·콘텐츠 표(무한 스크롤 + 상세) ── */
+
+  @Get('catalog/products')
+  @ApiOperation({ summary: '카탈로그 상품 둘러보기 — q·mall·source·verified·status, updated_at 내림차순 키셋 커서(≤100)' })
+  @ApiOkResponse({ schema: toOpenApi(CatalogProductListWire) })
+  catalogProducts(@Query(new ZodValidationPipe(CatalogListQueryParams)) query: CatalogListQuery): Promise<CatalogProductListWire> {
+    return this.core.listCatalogProducts(query)
+  }
+
+  @Get('catalog/contents')
+  @ApiOperation({ summary: '카탈로그 콘텐츠 둘러보기 — q·type·verified·status, 키셋 커서' })
+  @ApiOkResponse({ schema: toOpenApi(CatalogContentListWire) })
+  catalogContents(@Query(new ZodValidationPipe(CatalogListQueryParams)) query: CatalogListQuery): Promise<CatalogContentListWire> {
+    return this.core.listCatalogContents(query)
+  }
+
+  @Patch('catalog/products/:id')
+  @ApiOperation({ summary: '상품 행 표시 — verified(검증됨 승격/내림)·status(active|dead)' })
+  @ApiParam({ name: 'id' })
+  @ApiBody({ schema: toOpenApi(PatchCatalogRowBody) })
+  catalogPatchProduct(@Param('id') id: string, @Body(new ZodValidationPipe(PatchCatalogRowBody)) body: PatchCatalogRowBody) {
+    return this.core.patchCatalogProduct(id, body)
+  }
+
+  @Patch('catalog/contents/:id')
+  @ApiOperation({ summary: '콘텐츠 행 표시 — verified·status' })
+  @ApiParam({ name: 'id' })
+  @ApiBody({ schema: toOpenApi(PatchCatalogRowBody) })
+  catalogPatchContent(@Param('id') id: string, @Body(new ZodValidationPipe(PatchCatalogRowBody)) body: PatchCatalogRowBody) {
+    return this.core.patchCatalogContent(id, body)
   }
 
   @Post('catalog/migrate')

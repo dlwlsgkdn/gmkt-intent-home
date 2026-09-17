@@ -623,6 +623,31 @@ const server = http.createServer(async (req, res) => {
       return send(200, { items: [...catalogProducts.values()].filter((r) => (mallQ === '*' || r.mall === mallQ) && r.status !== 'dead').slice(0, 50) })
     }
     if (url === '/internal/catalog/ensure-schema' && req.method === 'POST') return send(200, { ok: true, created: false })
+    // 둘러보기 — 필터 + 커서(offset 근사) 페이지
+    if ((m = url.match(/^\/internal\/catalog\/(products|contents)(?:\?(.*))?$/)) && req.method === 'GET') {
+      const params = new URLSearchParams(m[2] || '')
+      const table = m[1] === 'products' ? catalogProducts : catalogContents
+      const q = (params.get('q') || '').toLowerCase().replace(/\s+/g, '')
+      let rows = [...table.values()].filter((r) => {
+        if (q && !(m[1] === 'products' ? productText(r) : contentText(r)).includes(q)) return false
+        if (params.get('mall') && r.mall !== params.get('mall')) return false
+        if (params.get('source') && r.source !== params.get('source')) return false
+        if (params.get('type') && r.type !== params.get('type')) return false
+        if (params.get('verified') && String(Boolean(r.verified)) !== params.get('verified')) return false
+        if (params.get('status') && (r.status || 'active') !== params.get('status')) return false
+        return true
+      })
+      const limit = Number(params.get('limit') || 40)
+      const offset = Number(params.get('cursor') || 0)
+      const page = rows.slice(offset, offset + limit)
+      return send(200, { items: page, nextCursor: offset + limit < rows.length ? String(offset + limit) : null, total: rows.length })
+    }
+    if ((m = url.match(/^\/internal\/catalog\/contents\/([^/?]+)$/)) && req.method === 'PATCH') {
+      const row = catalogContents.get(decodeURIComponent(m[1]))
+      if (!row) return send(404, { message: 'no content' })
+      Object.assign(row, body)
+      return send(200, row)
+    }
     if (url === '/internal/catalog/stats' && req.method === 'GET') {
       const count = (table, pred) => [...table.values()].filter(pred).length
       const group = (table, key) => {

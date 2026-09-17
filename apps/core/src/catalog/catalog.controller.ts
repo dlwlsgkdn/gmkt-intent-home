@@ -1,7 +1,11 @@
 import { Body, Controller, Get, Param, Patch, Post, Put, Query, UseGuards, DefaultValuePipe, ParseIntPipe } from '@nestjs/common'
 import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger'
+import { z } from 'zod'
 import {
+  CatalogContentListWire,
   CatalogContentSearchWire,
+  CatalogListQuery,
+  CatalogProductListWire,
   CatalogProductSearchWire,
   CatalogSearchQuery,
   CatalogStatsWire,
@@ -15,7 +19,17 @@ import { ZodValidationPipe } from '../common/zod-validation.pipe'
 import { toOpenApi } from '../common/openapi'
 import { CatalogService } from './catalog.service'
 
-/** 내재화 카탈로그 internal API (BFF 전용) — 저장·검색·점검 (API.md §2-1) */
+/** 쿼리 문자열은 전부 문자열로 오므로 limit 만 숫자로 바꿔 계약에 맞춘다 */
+const CatalogListQueryParams = CatalogListQuery.extend({
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+  // 빈 문자열은 필터 없음
+  q: z.string().max(80).optional().transform((v) => (v?.trim() ? v : undefined)),
+  mall: z.string().max(40).optional().transform((v) => (v ? v : undefined)),
+  source: z.string().max(20).optional().transform((v) => (v ? v : undefined)),
+  cursor: z.string().max(200).optional().transform((v) => (v ? v : undefined)),
+})
+
+/** 내재화 카탈로그 internal API (BFF 전용) — 저장·검색·점검·둘러보기 (API.md §2-1) */
 @ApiTags('internal-catalog')
 @ApiBearerAuth()
 @Controller('internal/catalog')
@@ -37,6 +51,33 @@ export class CatalogController {
   @ApiOkResponse({ schema: toOpenApi(CatalogContentSearchWire) })
   searchContents(@Body(new ZodValidationPipe(CatalogSearchQuery)) body: CatalogSearchQuery) {
     return this.catalog.searchContents(body)
+  }
+
+  @Get('products')
+  @ApiOperation({ summary: '상품 둘러보기 — updated_at 내림차순 키셋 커서, 미검증·dead 포함 (운영 콘솔 표)' })
+  @ApiQuery({ name: 'q', required: false })
+  @ApiQuery({ name: 'mall', required: false })
+  @ApiQuery({ name: 'source', required: false })
+  @ApiQuery({ name: 'verified', required: false, enum: ['true', 'false'] })
+  @ApiQuery({ name: 'status', required: false, enum: ['active', 'dead'] })
+  @ApiQuery({ name: 'cursor', required: false })
+  @ApiQuery({ name: 'limit', required: false, type: 'integer', example: 40 })
+  @ApiOkResponse({ schema: toOpenApi(CatalogProductListWire) })
+  listProducts(@Query(new ZodValidationPipe(CatalogListQueryParams)) query: CatalogListQuery) {
+    return this.catalog.listProducts(query)
+  }
+
+  @Get('contents')
+  @ApiOperation({ summary: '콘텐츠 둘러보기 — updated_at 내림차순 키셋 커서' })
+  @ApiQuery({ name: 'q', required: false })
+  @ApiQuery({ name: 'type', required: false, enum: ['video', 'article'] })
+  @ApiQuery({ name: 'verified', required: false, enum: ['true', 'false'] })
+  @ApiQuery({ name: 'status', required: false, enum: ['active', 'dead'] })
+  @ApiQuery({ name: 'cursor', required: false })
+  @ApiQuery({ name: 'limit', required: false, type: 'integer', example: 40 })
+  @ApiOkResponse({ schema: toOpenApi(CatalogContentListWire) })
+  listContents(@Query(new ZodValidationPipe(CatalogListQueryParams)) query: CatalogListQuery) {
+    return this.catalog.listContents(query)
   }
 
   @Put('products')
