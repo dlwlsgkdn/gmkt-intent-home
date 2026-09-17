@@ -169,6 +169,11 @@ try {
   ok(!!sk && sk.pending?.length === 1 && sk.pending[0] === 1, `skeleton 조기 확정 + pending [1] (${JSON.stringify(sk?.pending)})`)
   const secFinal = plan.filter((e) => e.event === 'section' && e.data.final)
   ok(secFinal.some((e) => e.data.index === 1 && e.data.section.kind === 'products'), '검색 섹션이 자리 index 1에 final 도착')
+  ok(
+    secFinal.some((e) => e.data.section.kind === 'contents' && e.data.index === 3 && e.data.before === 1),
+    `자리 없는 콘텐츠 섹션은 뼈대 길이 뒤 index(3) + 끼울 위치 before(1 — 안내 뒤·상품 자리 앞)로 도착 — FE 가 단계 안에 그린다 (${JSON.stringify(secFinal.filter((e) => e.data.section.kind === 'contents').map((e) => [e.data.index, e.data.before]))})`,
+  )
+  ok(secFinal.filter((e) => e.data.index === 1).every((e) => e.data.before === undefined), '자리를 받은 섹션에는 before 가 없다')
   ok(!last(plan, 'error'), '오류 없음')
 
   let calls = await llmCalls()

@@ -168,7 +168,7 @@ export class GraphEngineService {
         stream.onSkeleton?.(chunk.data.page, chunk.data.pending)
         break
       case 'section':
-        stream.onSection?.(chunk.data.section, chunk.data.index, chunk.data.final)
+        stream.onSection?.(chunk.data.section, chunk.data.index, chunk.data.final, chunk.data.before ?? null)
         break
       case 'search':
         stream.onSearch?.(chunk.data.query)

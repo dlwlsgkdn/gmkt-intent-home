@@ -218,3 +218,52 @@ test('orderSkeletonSlots — 연속 구간 안에서 콘텐츠 자리가 상품 
   assert.deepEqual(once.map((s) => s.title), ['A', 'cA', 'pA', 'B', '비교', 'cB', 'pB1', 'pB2', '순서'])
   assert.deepEqual(orderSkeletonSlots(once), once)
 })
+
+test('orderSkeletonSlots — 모든 자리는 단계 안에: 첫 안내 앞 자리는 첫 단계 구간 끝으로, 사용 순서 뒤 자리는 그 단계 구간 끝(사용 순서 앞)으로', () => {
+  const skeleton = [
+    { kind: 'look', title: '룩', desc: '', tone: 'coral', points: [] },
+    { kind: 'products', title: '이 룩에 쓸 상품', reason: '' }, // 첫 안내 앞 — 계획 머리에 서던 자리
+    { kind: 'guide', title: 'A', subtitle: '', body: '' },
+    { kind: 'contents', title: 'cA', reason: '' },
+    { kind: 'guide', title: 'B', subtitle: '', body: '' },
+    { kind: 'compare', title: '비교', alt: { badge: '', name: 'x', short: '' }, pick: { badge: '', name: 'y', short: '' }, rows: [] },
+    { kind: 'products', title: 'pB', reason: '' },
+    { kind: 'steps', title: '순서', steps: ['x'] },
+    { kind: 'contents', title: 'cB', reason: '' }, // 사용 순서 뒤 — 단계 밖에 매달리던 자리
+    { kind: 'products', title: 'pB2', reason: '' },
+  ]
+  const once = orderSkeletonSlots(skeleton)
+  assert.deepEqual(once.map((s) => s.title), ['룩', 'A', 'cA', '이 룩에 쓸 상품', 'B', '비교', 'cB', 'pB', 'pB2', '순서'])
+  assert.deepEqual(orderSkeletonSlots(once), once) // 멱등
+  // 정규화 뒤에는 앞머리 묶음에 자리가 없다 — 배정기가 첫 안내 앞으로 보낼 길이 없다
+  const groups = planGroupsOf(once)
+  assert.deepEqual(groups[0].slots, { products: [], contents: [] })
+  assert.deepEqual(groups[1].slots, { products: [3], contents: [2] })
+  assert.deepEqual(groups[2].slots, { products: [7, 8], contents: [6] })
+  assert.deepEqual(groups[2].insertAt, { products: 9, contents: 7 }) // 사용 순서 앞
+})
+
+test('orderSkeletonSlots — 안내가 없는 뼈대는 붙일 단계가 없어 제자리(콘텐츠 → 상품 정렬만)', () => {
+  const skeleton = [
+    { kind: 'look', title: '룩', desc: '', tone: 'coral', points: [] },
+    { kind: 'products', title: 'p', reason: '' },
+    { kind: 'contents', title: 'c', reason: '' },
+    { kind: 'steps', title: '순서', steps: ['x'] },
+  ]
+  assert.deepEqual(orderSkeletonSlots(skeleton).map((s) => s.title), ['룩', 'c', 'p', '순서'])
+})
+
+test('스트리밍 배정 allocate — 자리 없는 섹션은 뼈대 길이 뒤 index + 끼울 위치 before(최종 병합이 끼우는 자리), 자리를 받으면 before null', () => {
+  const skeleton = makeupSkeleton()
+  const allocator = new GeneratedIndexAllocator(skeleton)
+  const [p1, p2, c1, c2] = makeupGenerated()
+  // 1단계엔 상품 자리가 없다 → 뼈대 길이 뒤 index, before = 1단계 구간 끝(콘텐츠 자리 2 뒤 = 3) — FE 가 그 단계 안에 그린다
+  assert.deepEqual(allocator.allocate(p1), { index: skeleton.length, before: 3 })
+  assert.deepEqual(allocator.allocate(c1), { index: 2, before: null })
+  assert.deepEqual(allocator.allocate(p2), { index: 5, before: null })
+  assert.deepEqual(allocator.allocate(c2), { index: 4, before: null })
+  // 최종 병합도 같은 자리 — before(3) 앞 = 콘텐츠 자리(2) 뒤에 1단계 상품이 선다
+  const { sections } = composePlanSections(skeleton, makeupGenerated())
+  assert.equal(sections[3].kind, 'products')
+  assert.ok(sections[3].title.startsWith('1단계'))
+})

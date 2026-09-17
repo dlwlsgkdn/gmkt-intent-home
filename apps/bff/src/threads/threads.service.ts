@@ -17,6 +17,7 @@ import type { LookRenderBody, LookRenderResult } from '@ddak/schema'
 import {
   ContentsSectionGen,
   GeneratedIndexAllocator,
+  type GeneratedPlacement,
   PlanSearchSectionGen,
   partialSkeletonSection,
   PlanSkeletonSectionGen,
@@ -71,7 +72,8 @@ export type PlanStreamHandlers = {
   onSkeleton?: (page: PlanSkeletonPageWire, pending: number[]) => void
   /** final=false는 자라는 중인 재전송(상품·콘텐츠 항목 단위 증분) — FE는 최종본(final=true)
    * 이 올 때까지 그 자리를 pending(재생성 게이트)으로 유지한다 */
-  onSection?: (section: PlanSectionWire, index: number, final: boolean) => void
+  /** before = 자리 없이 배정된 섹션을 FE 가 끼울 뼈대 인덱스(그 단계 묶음 안 — @ddak/pipeline GeneratedPlacement). 자리를 받은 섹션은 null */
+  onSection?: (section: PlanSectionWire, index: number, final: boolean, before?: number | null) => void
   onSearch?: (query: string) => void
   /** 진행 안내 한 줄 (뼈대 재시도 등) — 컨트롤러가 SSE status 로 보낸다 */
   onStatus?: (message: string) => void
@@ -186,14 +188,15 @@ export class ThreadsService {
     // 검색 스트림 원소 index → 자리 index. 첫 방출(대개 partial)에 배정하고 재전송·최종본이 같은 자리를 쓴다.
     // 검색 스트림은 원소를 순차로 내보내므로 첫 방출 순서 = 완성 순서 — 도착 순 배정 규칙이 유지된다
     // 상품(5b)·콘텐츠(5c) 호출의 스트림 index 가 각자 0부터라 종류와 함께 키로 쓴다
-    const slotByStream = new Map<string, number>()
-    const slotFor = (streamIndex: number, section: PlanSectionWire): number => {
+    const slotByStream = new Map<string, GeneratedPlacement>()
+    const slotFor = (streamIndex: number, section: PlanSectionWire): GeneratedPlacement => {
       const slotKind = section.kind === 'contents' ? 'contents' : 'products'
       const key = `${slotKind}:${streamIndex}`
       let slot = slotByStream.get(key)
       if (slot === undefined) {
-        // 제목·reason 으로 단계 묶음을 골라 자리를 받는다 (@ddak/pipeline merge.ts PlanPlacer — 최종 병합과 같은 배정)
-        slot = (allocator as GeneratedIndexAllocator).next(section)
+        // 제목·reason 으로 단계 묶음을 골라 자리를 받는다 (@ddak/pipeline merge.ts PlanPlacer — 최종 병합과 같은 배정).
+        // 자리가 없으면 before = 그 묶음에 끼울 뼈대 인덱스 — FE 가 result 전에도 그 단계 안에 그린다
+        slot = (allocator as GeneratedIndexAllocator).allocate(section)
         slotByStream.set(key, slot)
       }
       return slot
@@ -203,7 +206,8 @@ export class ThreadsService {
       if (!allocator || !stream?.onSection) return
       while (emitted < arrivedSections.length) {
         const { section, streamIndex } = arrivedSections[emitted]
-        stream.onSection(section, slotFor(streamIndex, section), true)
+        const { index, before } = slotFor(streamIndex, section)
+        stream.onSection(section, index, true, before)
         emitted += 1
       }
     }
@@ -297,7 +301,10 @@ export class ThreadsService {
             gen.kind === 'contents'
               ? this.resolveContentsSection(gen, true, guard)
               : this.resolveProductsSection(gen, index, true, guard)
-          if (section) stream.onSection(section, slotFor(index, section), false)
+          if (section) {
+            const placed = slotFor(index, section)
+            stream.onSection(section, placed.index, false, placed.before)
+          }
         },
         onSearch: stream.onSearch,
       },
@@ -330,7 +337,10 @@ export class ThreadsService {
             const gen = completeSearchSection(element)
             if (!gen || gen.kind !== 'contents') return
             const section = this.resolveContentsSection(gen, true, guard)
-            if (section) stream.onSection(section, slotFor(index, section), false)
+            if (section) {
+              const placed = slotFor(index, section)
+              stream.onSection(section, placed.index, false, placed.before)
+            }
           },
           onSearch: stream.onSearch,
         },

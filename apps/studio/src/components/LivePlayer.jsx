@@ -415,7 +415,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         setStageKey('plan')
         scrollScreenTo(0)
       },
-      onSection: (section, index, final = true) => {
+      onSection: (section, index, final = true, before = null) => {
         if (!active()) return
         if (skeletonDoneRef.current) {
           // 조기 확정 뒤 도착한 상품·콘텐츠 — 확정 페이지의 자리를 직접 채운다 (등장 페이드인).
@@ -426,7 +426,10 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
             if (!prev) return prev
             const sections = [...(prev.sections || [])]
             sections[index] = section
-            return { ...prev, sections }
+            // 자리 없이 배정된 섹션(index 가 뼈대 길이 뒤)은 끼울 위치(before)를 함께 기억한다 — livePage 투영이
+            // 그 단계 묶음 안에 그린다(result 가 최종 순서로 갈아끼운다). 자리를 받은 섹션은 힌트가 없다
+            const placement = before == null ? prev.placement : { ...(prev.placement || {}), [index]: before }
+            return placement ? { ...prev, sections, placement } : { ...prev, sections }
           })
           // pending은 재생성 게이트(저장 경합 방지) — 자라는 중에는 유지하고 최종본에서만 푼다.
           // 로딩 카드는 섹션이 채워지는 즉시 사라진다 (livePlanItems가 null 자리에만 그린다)

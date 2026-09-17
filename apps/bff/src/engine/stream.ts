@@ -1,5 +1,6 @@
 import {
   GeneratedIndexAllocator,
+  type GeneratedPlacement,
   isSlotKind,
   skeletonSectionWire,
   type PlanSkeletonGen,
@@ -18,7 +19,7 @@ export type GraphStreamChunk =
   | { event: 'head'; data: Record<string, string> }
   | { event: 'question'; data: { index: number; question: SurveyQuestionWire } }
   | { event: 'skeleton'; data: { page: PlanSkeletonPageWire; pending: number[] } }
-  | { event: 'section'; data: { index: number; section: PlanSectionWire; final: boolean } }
+  | { event: 'section'; data: { index: number; section: PlanSectionWire; final: boolean; before?: number } }
   | { event: 'search'; data: { query: string } }
   | { event: 'status'; data: { message: string } }
 
@@ -34,7 +35,7 @@ export type ChunkWriter = (chunk: GraphStreamChunk) => void
 export class PlanStreamCoordinator {
   private emit: ChunkWriter | null = null
   private allocator: GeneratedIndexAllocator | null = null
-  private readonly slotByStream = new Map<string, number>()
+  private readonly slotByStream = new Map<string, GeneratedPlacement>()
   private readonly arrived: { section: PlanSectionWire; streamIndex: number }[] = []
   private emitted = 0
 
@@ -47,8 +48,9 @@ export class PlanStreamCoordinator {
     this.emit?.({ event: 'head', data: patch })
   }
 
-  section(section: PlanSectionWire, index: number, final: boolean) {
-    this.emit?.({ event: 'section', data: { index, section, final } })
+  /** before = 자리 없이 배정된 섹션을 FE 가 끼울 뼈대 인덱스(그 단계 묶음 안, API.md §1) — 자리를 받은 섹션은 싣지 않는다 */
+  section(section: PlanSectionWire, index: number, final: boolean, before: number | null = null) {
+    this.emit?.({ event: 'section', data: before == null ? { index, section, final } : { index, section, final, before } })
   }
 
   search(query: string) {
@@ -88,17 +90,19 @@ export class PlanStreamCoordinator {
   /** 자라는 중인 검색 섹션 증분 — 뼈대 확정(자리 카드) 전 조각은 버린다 (완성본은 대기열이 보전) */
   searchPartial(section: PlanSectionWire, streamIndex: number) {
     if (!this.allocator) return
-    this.section(section, this.slotFor(streamIndex, section), false)
+    const { index, before } = this.slotFor(streamIndex, section)
+    this.section(section, index, false, before)
   }
 
   /** 자리 배정 — 상품(5b)·콘텐츠(5c) 호출의 스트림 index 가 각자 0부터라 종류와 함께 키로 쓴다 */
-  private slotFor(streamIndex: number, section: PlanSectionWire): number {
+  private slotFor(streamIndex: number, section: PlanSectionWire): GeneratedPlacement {
     const slotKind = section.kind === 'contents' ? 'contents' : 'products'
     const key = `${slotKind}:${streamIndex}`
     let slot = this.slotByStream.get(key)
     if (slot === undefined) {
-      // 제목·reason 으로 단계 묶음을 골라 자리를 받는다 (@ddak/pipeline merge.ts PlanPlacer — verify 노드의 최종 병합과 같은 배정)
-      slot = (this.allocator as GeneratedIndexAllocator).next(section)
+      // 제목·reason 으로 단계 묶음을 골라 자리를 받는다 (@ddak/pipeline merge.ts PlanPlacer — verify 노드의 최종 병합과 같은 배정).
+      // 자리가 없으면 before = 그 묶음에 끼울 뼈대 인덱스 — FE 가 result 전에도 그 단계 안에 그린다
+      slot = (this.allocator as GeneratedIndexAllocator).allocate(section)
       this.slotByStream.set(key, slot)
     }
     return slot
@@ -108,7 +112,8 @@ export class PlanStreamCoordinator {
     if (!this.allocator || !this.emit) return
     while (this.emitted < this.arrived.length) {
       const { section, streamIndex } = this.arrived[this.emitted]
-      this.section(section, this.slotFor(streamIndex, section), true)
+      const { index, before } = this.slotFor(streamIndex, section)
+      this.section(section, index, true, before)
       this.emitted += 1
     }
   }

@@ -531,7 +531,10 @@ export default function PipelineStudio({ api }) {
             if (!prev) return prev
             const sections = [...(prev.sections || [])]
             sections[c.data.index] = c.data.section
-            return { ...prev, sections }
+            // 자리 없이 배정된 섹션의 끼울 위치(before) — LivePlayer 와 같은 규칙으로 그 단계 묶음 안에 그린다
+            const before = typeof c.data.before === 'number' ? c.data.before : null
+            const placement = before == null ? prev.placement : { ...(prev.placement || {}), [c.data.index]: before }
+            return placement ? { ...prev, sections, placement } : { ...prev, sections }
           })
           if (c.data.final) setFlowPendingSlots((prev) => prev.filter((i) => i !== c.data.index))
         } else {

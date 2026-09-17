@@ -50,7 +50,7 @@ event: status   → { message: "질문을 구성하고 있어요…" }         (
 event: head     → { intro } | { headline } | { summary }         (머리 필드 — 자라는 값 반복 발송 + 완성본)
 event: question → { index, question: SurveyQuestionWire }        (설문 — 자라는 질문을 같은 index로 반복 발송)
 event: skeleton → { page, pending: number[] }                    (계획 — 뼈대 조기 확정: page.sections의 상품·콘텐츠 자리는 null, pending이 그 인덱스)
-event: section  → { index, section: PlanSectionWire, final }     (계획 — 자라는 섹션을 같은 index로 반복 발송, final:true·생략=최종본)
+event: section  → { index, section: PlanSectionWire, final, before? } (계획 — 자라는 섹션을 같은 index로 반복 발송, final:true·생략=최종본. before = 자리 없이 배정된 섹션(index 가 뼈대 길이 뒤)을 끼울 뼈대 인덱스(이 앞, 그 단계 묶음 안 — 최종 병합이 끼우는 자리와 같다). FE 는 result 전에도 이 힌트로 그 단계 안에 그린다, 2026-09-18)
 event: result   → { page: SurveyPageWire | PlanPageWire }        (완성 페이지 — 권위·저장 기준, 종료)
 event: error    → { code, message, retryable }                   (실패 안내 — 종료)
 ```

@@ -22,7 +22,10 @@ import type { PlanSkeletonSectionGen } from '../schemas'
  *   - 고른 묶음에 빈자리가 있으면 그 자리(뼈대 인덱스)를 차지하고, 없으면 묶음 연속 구간 끝에 **끼워 넣는다**
  *     (더는 steps 뒤에 매달리지 않는다). 채워지지 않은 자리는 최종에서 빠진다(빈 섹션을 보여주지 않는다).
  *   - 스트리밍 인덱스(GeneratedIndexAllocator)도 같은 배정을 쓴다: 자리를 받은 섹션은 그 뼈대 인덱스, 끼워 넣을 섹션은
- *     뼈대 길이 뒤 도착 순 인덱스(FE 엔 끝에 보였다가 result 에서 제자리로 — 옛 "끝에 덧붙임"과 같은 표시 방식).
+ *     뼈대 길이 뒤 도착 순 인덱스 + 끼울 위치 `before`(그 묶음의 뼈대 인덱스 앞 — FE 가 그 단계 안에 그린다, 2026-09-18.
+ *     이전엔 before 가 없어 result 까지 계획 끝에 보였다).
+ *   - 뼈대 자체도 정규화한다(orderSkeletonSlots): 첫 안내 앞·닫는 섹션(steps·look) 뒤의 자리를 단계 구간 안으로 옮기고
+ *     구간 안에서 콘텐츠 → 상품 순 — 어느 경로로든 추천 카드는 단계 컴포넌트 밖에 서지 않는다.
  *   배정은 (뼈대, 같은 kind 의 순서, 제목·reason)만의 함수라 부분 스트림과 result 가 같은 자리를 쓴다 — 증분 조각은
  *   title·reason 이 완성된 뒤에만 나간다(partial.ts completeSearchSection — 항목 배열이 열린 뒤라 앞 키는 닫혀 있다).
  */
@@ -79,11 +82,8 @@ const bigramsOf = (text: string): Set<string> => {
   return out
 }
 
-/** 뼈대의 자리 순서 정규화 (2026-09-17) — 단계 묶음의 연속 구간 안에서 **콘텐츠 자리가 상품 자리보다 앞**에 오도록 안정 정렬한다
- * (텍스트 섹션·구간 밖 섹션은 제자리, 같은 종류끼리 순서 유지). 뼈대 프롬프트가 [안내 → 콘텐츠 → 상품] 을 요구하지만 모델·옛 재정의
- * 프롬프트가 [안내 → 상품 → 콘텐츠] 로 내도 화면 규칙(참고 콘텐츠가 상품 위)이 지켜지도록 5a 완료 직후(스트림 skeleton 이벤트·
- * 배정기·최종 병합 전) 한 번 적용한다 — 그 뒤 모든 인덱스는 정규화된 뼈대 기준이다. 멱등 */
-export function orderSkeletonSlots<T extends PlanSkeletonSectionGen>(skeleton: T[]): T[] {
+/** 연속 구간 안 자리 정렬 — 이어지는 자리 섹션들 안에서 콘텐츠가 상품보다 앞(같은 종류끼리 순서 유지), 텍스트 섹션은 제자리 */
+function sortSlotRuns<T extends PlanSkeletonSectionGen>(skeleton: T[]): T[] {
   const out: T[] = []
   let run: T[] = [] // 현재 연속 구간의 자리 섹션들
   const flushRun = () => {
@@ -101,6 +101,46 @@ export function orderSkeletonSlots<T extends PlanSkeletonSectionGen>(skeleton: T
   }
   flushRun()
   return out
+}
+
+/** 뼈대의 자리 순서 정규화 (2026-09-17, 2026-09-18 확장) — 5a 완료 직후(스트림 skeleton 이벤트·배정기·최종 병합 전) 한 번 적용하고,
+ * 그 뒤 모든 인덱스는 정규화된 뼈대 기준이다. 멱등. 두 규칙:
+ *   ① **모든 자리는 단계 안에 있다** — 상품·콘텐츠 자리는 언제나 어떤 단계 안내(guide) 뒤, 그 단계를 닫는 섹션(사용 순서 steps·룩 look)
+ *      앞의 연속 구간에 선다. 첫 안내 앞에 둔 자리(룩 뒤 "이 룩에 쓸 상품" 같은)는 첫 단계 구간 끝으로, 닫는 섹션 뒤에 둔 자리(사용 순서
+ *      뒤 상품)는 그 단계 구간 끝(닫는 섹션 앞)으로 옮긴다 — 화면에서 추천 카드가 단계 컴포넌트 밖(계획 머리·사용 순서 아래)에 서지
+ *      않게. 안내가 하나도 없는 뼈대는 붙일 단계가 없으니 제자리(②만 적용)
+ *   ② 연속 구간 안에서 **콘텐츠 자리가 상품 자리보다 앞**(같은 종류끼리 순서 유지, 텍스트 섹션 제자리) — 뼈대 프롬프트가 [안내 → 콘텐츠
+ *      → 상품] 을 요구하지만 모델·옛 재정의 프롬프트가 반대로 내도 화면 규칙(참고 콘텐츠가 상품 위)이 지켜진다 */
+export function orderSkeletonSlots<T extends PlanSkeletonSectionGen>(skeleton: T[]): T[] {
+  const firstGuide = skeleton.findIndex((s) => s.kind === 'guide')
+  if (firstGuide < 0) return sortSlotRuns(skeleton)
+  const out: T[] = []
+  // 첫 안내 앞 — 텍스트 섹션(룩 등)은 제자리, 자리는 첫 단계 구간으로 미룬다
+  let carried: T[] = skeleton.slice(0, firstGuide).filter((s) => isSlotKind(s.kind))
+  out.push(...skeleton.slice(0, firstGuide).filter((s) => !isSlotKind(s.kind)))
+  let i = firstGuide
+  while (i < skeleton.length) {
+    // 한 단계 = 안내 + 다음 안내 앞까지
+    const guide = skeleton[i]
+    let j = i + 1
+    while (j < skeleton.length && skeleton[j].kind !== 'guide') j += 1
+    const body: T[] = [] // 닫는 섹션 앞 연속 구간(자리·비교표·주의 성분)
+    const orphans: T[] = [] // 닫는 섹션 뒤에 둔 자리 — 구간 끝으로 옮긴다
+    const tail: T[] = [] // 닫는 섹션과 그 뒤 텍스트 섹션 — 제자리
+    let closed = false
+    for (const s of skeleton.slice(i + 1, j)) {
+      if (isSlotKind(s.kind)) (closed ? orphans : body).push(s)
+      else if (isStepBodyKind(s.kind) && !closed) body.push(s)
+      else {
+        closed = true
+        tail.push(s)
+      }
+    }
+    out.push(guide, ...body, ...carried, ...orphans, ...tail)
+    carried = []
+    i = j
+  }
+  return sortSlotRuns(out)
 }
 
 /** 뼈대 → 단계 묶음 목록 (첫 원소는 언제나 앞머리 묶음 index -1, 이어서 guide 순서대로 0, 1, …) */
@@ -237,8 +277,15 @@ export class PlanPlacer {
   }
 }
 
+/** 스트리밍 섹션의 자리 — index 는 FE 가 페이지 배열에 쓰는 키(자리를 받은 섹션은 그 뼈대 인덱스, 자리 없는 섹션은 뼈대 길이 뒤
+ * 도착 순), before 는 자리 없는 섹션을 **화면에서 끼울 위치**(그 단계 묶음의 뼈대 인덱스 앞 — 최종 병합 composePlanSections 이
+ * 끼우는 자리와 같다). 자리를 받은 섹션은 before 가 null */
+export type GeneratedPlacement = { index: number; before: number | null }
+
 /** 검색 단계 섹션의 스트리밍 인덱스 배정 — 자리를 받으면 그 뼈대 인덱스, 자리 없이 끼워 넣을 섹션은 뼈대 길이 뒤에
- * 도착 순서대로. 최종 병합(composePlanSections)과 같은 배정기(PlanPlacer)를 쓴다 */
+ * 도착 순서대로 + 끼울 위치(before). 최종 병합(composePlanSections)과 같은 배정기(PlanPlacer)를 쓴다.
+ * 2026-09-18 이전엔 before 가 없어 자리 없는 섹션이 result 까지 계획 끝(사용 순서 아래)에 보였다 — 이제 FE(livePage
+ * orderedPlanSections)가 before 로 그 단계 안에 그린다 */
 export class GeneratedIndexAllocator {
   private readonly placer: PlanPlacer
   private extras = 0
@@ -250,9 +297,16 @@ export class GeneratedIndexAllocator {
     this.placer = new PlanPlacer(this.skeleton)
   }
 
-  next(section: PlacedSectionLike): number {
+  allocate(section: PlacedSectionLike): GeneratedPlacement {
     const placed = this.placer.place(section)
-    return placed.slot ?? this.skeleton.length + this.extras++
+    if (placed.slot != null) return { index: placed.slot, before: null }
+    const kind: SlotKind = section.kind === 'contents' ? 'contents' : 'products'
+    const group = this.placer.groups[placed.group + 1]
+    return { index: this.skeleton.length + this.extras++, before: group.insertAt[kind] }
+  }
+
+  next(section: PlacedSectionLike): number {
+    return this.allocate(section).index
   }
 }
 

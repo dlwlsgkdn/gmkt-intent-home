@@ -14,6 +14,46 @@ import { joinTextList } from './store.js'
  * lib/cart.js 가 단계(guide) 목록에 같은 id 를 실어, 담은 상품 시트의 파트 → 계획 단계 앵커 스크롤이 이 id 로 래퍼를 찾는다 */
 export const livePlanSectionId = (index) => `live-plan-s${index}`
 
+/** 계획 섹션의 화면 순서 — `[{ index, section }]` (index = page.sections 인덱스 = 투영 아이템 id 의 재료). 투영(livePlanItems)과
+ * 담은 상품 시트의 단계 묶기(lib/cart.js productLookupFromPlanPage)가 같은 순서를 본다.
+ * 보통은 배열 순서 그대로다 — 빈 자리(null)도 방문한다(스트리밍 중 희소 배열의 구멍 = 아직 안 온 상품·콘텐츠 자리, 로딩 카드).
+ * 스트리밍 중 **자리 없이 배정된 섹션**(BFF 가 뼈대 길이 뒤 index 로 보내는 섹션)은 `page.placement[index]` = 끼울 뼈대 인덱스(이 앞)를
+ * 갖고, 그 위치에서 그린다 — 같은 위치는 콘텐츠 먼저·상품 다음(최종 병합 @ddak/pipeline composePlanSections 과 같은 순서), 같은
+ * 종류는 도착 순. 이전(2026-09-18 전)엔 이런 섹션이 result 까지 계획 끝(사용 순서 아래)에 보였다. result(최종본)엔 placement 가 없다 */
+export function orderedPlanSections(page) {
+  const sections = (page && page.sections) || []
+  const placement = (page && page.placement) || null
+  const out = []
+  if (!placement) {
+    for (let i = 0; i < sections.length; i += 1) out.push({ index: i, section: sections[i] })
+    return out
+  }
+  const extrasBefore = new Map() // 끼울 뼈대 인덱스 → 그 앞에 그릴 섹션들(도착 순)
+  const extraIndexes = new Set()
+  for (let i = 0; i < sections.length; i += 1) {
+    const before = placement[i]
+    if (typeof before !== 'number' || !sections[i]) continue
+    extraIndexes.add(i)
+    const list = extrasBefore.get(before) || []
+    list.push({ index: i, section: sections[i] })
+    extrasBefore.set(before, list)
+  }
+  const byKind = (list) => [...list.filter((e) => e.section.kind === 'contents'), ...list.filter((e) => e.section.kind !== 'contents')]
+  for (let i = 0; i < sections.length; i += 1) {
+    if (extraIndexes.has(i)) continue
+    const list = extrasBefore.get(i)
+    if (list) {
+      out.push(...byKind(list))
+      extrasBefore.delete(i)
+    }
+    out.push({ index: i, section: sections[i] })
+  }
+  // 뼈대 끝 위치(마지막 단계에 닫는 섹션이 없을 때)·모르는 위치 — 끝에, 위치 순
+  const rest = [...extrasBefore.entries()].sort((a, b) => a[0] - b[0])
+  for (const [, list] of rest) out.push(...byKind(list))
+  return out
+}
+
 /** 사진 질문의 와이어 답 — @ddak/schema PHOTO_ANSWER와 같은 문자열이어야 한다.
  * 사진 원본은 기기에 남고 서버로는 이 표식만 간다 (데이터 URL은 스텝·프롬프트에 실을 것이 못 된다) */
 export const PHOTO_ANSWER = '사진 제출됨'
@@ -171,15 +211,15 @@ export function livePlanItems(page, opts = {}) {
     })
   }
   const sections = page.sections || []
-  /* forEach가 아니라 인덱스 순회다 — 스트리밍 중 partial.sections는 도착한 인덱스에만 값이
+  /* forEach가 아니라 orderedPlanSections 의 화면 순서 순회다 — 스트리밍 중 partial.sections는 도착한 인덱스에만 값이
      있는 희소 배열이고, forEach는 그 구멍을 아예 건너뛴다. 아직 안 온 자리에 로딩 카드를
-     제자리에 그리려면 구멍도 방문해야 한다 (렌더 여부는 pendingSlots가 정한다) */
+     제자리에 그리려면 구멍도 방문해야 한다 (렌더 여부는 pendingSlots가 정한다). 자리 없이 배정된 섹션(page.placement)은
+     배열 끝이 아니라 그 단계 묶음 안에서 방문한다 — 추천 카드가 단계 컴포넌트 밖에 서지 않는다 */
   // 단계 하위 연쇄 — 직전 섹션이 단계 안내(guide)이거나, 그 단계에 붙은 상품·콘텐츠 섹션(빈 자리 포함)이면
-  // 이번 섹션도 같은 단계에 속한다. 뼈대(v20)가 단계마다 [안내 → 상품 자리 → 콘텐츠 자리]를 이어 두므로
+  // 이번 섹션도 같은 단계에 속한다. 뼈대(v20)가 단계마다 [안내 → 콘텐츠 자리 → 상품 자리]를 이어 두므로
   // 콘텐츠 카드가 계획 끝이 아니라 단계 본문 사이에 서고, LivePlayer가 stepSub로 간격만 당겨 붙인다
   let chain = false
-  for (let i = 0; i < sections.length; i += 1) {
-    const section = sections[i]
+  for (const { index: i, section } of orderedPlanSections(page)) {
     // 상품·콘텐츠(빈 자리 포함)와 단계 본문 섹션(성분 비교표·주의 성분)만 단계 하위가 될 수 있다 — 다음 단계 안내·사용 순서는 연쇄를 끊는다
     const isSubKind = !section || ['products', 'contents', 'compare', 'caution'].includes(section.kind)
     const stepSub = chain && isSubKind
@@ -339,7 +379,7 @@ export function livePlanItems(page, opts = {}) {
     } else if (section.kind === 'contents') {
       // 참고 콘텐츠 — 웹 검색으로 확인한 게시글·영상. 스튜디오 미디어 카드 렌더러를 재사용한다
       if (section.reason) {
-        items.push({ id: `${base}-reason`, type: 'textBlock', props: { kicker: '', title: '', body: section.reason } })
+        items.push({ id: `${base}-reason`, type: 'textBlock', stepSub, props: { kicker: '', title: '', body: section.reason } })
       }
       /* Figma [PP1K] 계획 2-2·4-1 의 VideoCard 는 단계 본문 안 전폭 카드 한 장이다 — 콘텐츠가 하나면 트랙 없이 최상위
          전폭 카드로(섹션 id `base` 를 카드가 그대로 받아 피드백 말풍선 앵커·늦은 도착 페이드인 규칙이 섹션과 같다),

@@ -244,8 +244,11 @@ async function consumeSse(res, handlers) {
       if (handlers.onSkeleton && payload.page) handlers.onSkeleton(payload.page, payload.pending || [])
     } else if (event === 'section') {
       // final !== false = 최종본 (플래그 없는 구버전 BFF 포함) — 자라는 중 증분(final:false)은
-      // 같은 index로 반복 도착하며, 자리(pending) 해제는 최종본에서만 한다
-      if (handlers.onSection && payload.section) handlers.onSection(payload.section, payload.index, payload.final !== false)
+      // 같은 index로 반복 도착하며, 자리(pending) 해제는 최종본에서만 한다.
+      // before = 자리 없이 배정된 섹션을 끼울 뼈대 인덱스(그 단계 묶음 안) — index 는 뼈대 길이 뒤라 이 힌트로 제자리에 그린다
+      if (handlers.onSection && payload.section) {
+        handlers.onSection(payload.section, payload.index, payload.final !== false, typeof payload.before === 'number' ? payload.before : null)
+      }
     } else if (event === 'result') {
       terminal = true
       handlers.onResult(payload.page)
