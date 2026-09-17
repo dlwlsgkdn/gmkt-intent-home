@@ -244,8 +244,9 @@ export class CatalogService {
       if (!res.nextCursor) break
       cursor = res.nextCursor
     }
-    for (let i = 0; i < patched.length; i += 500) {
-      await this.core.upsertCatalogProducts({ items: patched.slice(i, i + 500) })
+    // 100행씩 — 행에 태그·검색 텍스트가 실려 500행이면 core 의 JSON 본문 상한(기본 100kb)을 넘겼다(운영 413, 2026-09-18 — core 상한도 4mb 로 올렸다)
+    for (let i = 0; i < patched.length; i += 100) {
+      await this.core.upsertCatalogProducts({ items: patched.slice(i, i + 100) })
     }
     out.filled = patched.length
     return out
