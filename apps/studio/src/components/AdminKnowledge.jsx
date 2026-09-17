@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { fetchAdminPipeline, putAdminKnowledge } from '../lib/adminApi.js'
+import TrendDashboard from './TrendDashboard.jsx'
 import {
   TREND_KEYWORDS,
   TREND_LEVEL_DEFS,
@@ -9,6 +10,7 @@ import {
 
 /*
  * 운영 지식 — 트렌드 키워드 사전 한 벌 (담당자 엑셀 이관본, lib/trendKeywords.js).
+ * 기본 화면은 TrendDashboard: 같은 allRows로 버블·신규 목록을 그리고 빠른 추가도 오버레이에 기록.
  * 시트처럼 바로 편집한다: 행 추가·키워드/설명/상품/입력자 인라인 입력, 구분·관련은 칩 팝오버.
  * 관련 배열 순서는 추천 연결 우선순위라 화면 번호와 위·아래 이동으로 그대로 관리한다.
  * 편집은 코드 원본 위 오버레이(패치·추가·삭제)로 이 기기(localStorage)에 저장된다 —
@@ -43,6 +45,16 @@ export default function AdminKnowledge({ api }) {
   const [trendQuery, setTrendQuery] = useState('')
   const [overlay, setOverlay] = useState(loadOverlay)
   const [pop, setPop] = useState(null) // { key, field: 'levels' | 'related' } — 열린 칩 팝오버
+  const [view, setView] = useState('dashboard')
+
+  // 같은 브라우저의 다른 사전 창에서 저장해도 열린 대시보드에 바로 반영한다.
+  useEffect(() => {
+    const sync = (event) => {
+      if (event.storageArea === localStorage && (event.key === OVERLAY_KEY || event.key === null)) setOverlay(loadOverlay())
+    }
+    window.addEventListener('storage', sync)
+    return () => window.removeEventListener('storage', sync)
+  }, [])
 
   const commitOverlay = (next) => {
     setOverlay(next)
@@ -98,12 +110,25 @@ export default function AdminKnowledge({ api }) {
   }
 
   const addRow = () => {
-    const row = { key: `add-${Date.now()}`, no: null, author: '', word: '', levels: [], related: [], desc: '', brands: '' }
+    const row = { key: `add-${crypto.randomUUID()}`, createdAt: Date.now(), no: null, author: '', word: '', levels: [], related: [], desc: '', brands: '' }
     commitOverlay({ ...overlay, added: [...overlay.added, row] })
     setTrendLevel('all')
     setTrendQuery('')
     setPop({ key: row.key, field: 'levels' })
     api.showToast('표 맨 위에 새 항목을 만들었어요. 각 칸을 바로 입력하세요.')
+  }
+
+  const addKeyword = ({ word, level, desc }) => {
+    const cleanWord = word.trim()
+    if (!cleanWord) return false
+    if (allRows.some((row) => row.word.trim().toLocaleLowerCase() === cleanWord.toLocaleLowerCase())) {
+      api.showToast('이미 사전에 있는 키워드예요. 검색해서 확인해 주세요.')
+      return false
+    }
+    const row = { key: `add-${crypto.randomUUID()}`, createdAt: Date.now(), no: null, author: '', word: cleanWord, levels: level ? [level] : [], related: [], desc: desc.trim(), brands: '' }
+    commitOverlay({ ...overlay, added: [...overlay.added, row] })
+    api.showToast(`‘${cleanWord}’ 키워드를 추가했어요.`)
+    return true
   }
 
   const removeRow = (row) => {
@@ -221,11 +246,21 @@ export default function AdminKnowledge({ api }) {
   return (
     <div className="sb-admin-knowledge">
       <header className="sb-admin-pagehead">
-        <div><p className="sb-admin-pagehead__eyebrow">추천 품질의 기준 데이터</p><h1>트렌드 사전</h1><p>담당자 수집 뷰티 트렌드 키워드 — 시트처럼 바로 추가·태깅하고, 필터 결과를 생성 파이프라인에 싣습니다.</p></div>
+        <div><p className="sb-admin-pagehead__eyebrow">뷰티 키워드 모으는 곳</p><h1>트렌드 사전 <span className="sb-trend-title-heart" aria-hidden="true">♡</span></h1><p>눈에 띈 키워드 하나, 여기에 톡.</p></div>
         <span className="sb-admin-health is-lab"><i /> {draftCount > 0 ? `이 기기 편집 초안 ${draftCount}건` : '코드 이관본 · 전 기기 공통'}</span>
       </header>
 
-      <section className="sb-admin-card">
+      <div className="sb-admin-subtabs" role="group" aria-label="트렌드 사전 보기">
+        <button type="button" className={view === 'dashboard' ? 'is-on' : ''} aria-pressed={view === 'dashboard'} onClick={() => { setView('dashboard'); setPop(null) }}>버블 대시보드</button>
+        <button type="button" className={view === 'table' ? 'is-on' : ''} aria-pressed={view === 'table'} onClick={() => setView('table')}>사전 편집</button>
+      </div>
+      {view === 'dashboard' && <TrendDashboard rows={allRows} onAdd={addKeyword} onEdit={(row) => {
+        setTrendLevel('all')
+        setTrendQuery(row?.word || '')
+        setView('table')
+      }} />}
+
+      {view === 'table' && <section className="sb-admin-card">
         <details className="sb-admin-trend-defs">
           <summary>트렌드 등급 정의</summary>
           <ul>
@@ -337,7 +372,7 @@ export default function AdminKnowledge({ api }) {
             })}
           </tbody>
         </table>{trendRows.length === 0 && <p className="sb-table__empty">조건에 맞는 키워드가 없어요.</p>}</div></div>
-      </section>
+      </section>}
 
       {pop && <div className="sb-admin-trend-pop-backdrop" onClick={() => setPop(null)} aria-hidden="true" />}
     </div>

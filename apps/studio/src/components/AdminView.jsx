@@ -299,7 +299,7 @@ export default function AdminView({ api, tab, studioScenarioId, threadId }) {
     {/* 파이프라인 탭은 3컬럼(지식·다이어그램·플레이그라운드)이라 넓은 컨테이너 변형을 쓴다 */}
     <main className={
       'sb-admin'
-      + (tab === 'pipeline' || tab === 'tagging' || tab === 'prompts' ? ' sb-admin--wide' : '')
+      + (tab === 'pipeline' || tab === 'tagging' || tab === 'prompts' || tab === 'knowledge' ? ' sb-admin--wide' : '')
       + (studioFullView ? ' sb-admin--studio-editor' : '')
     }>
 
