@@ -43,6 +43,8 @@ export const ThreadGraphState = Annotation.Root({
   contentSections: Annotation<ContentsSectionGen[] | null>(),
   contentsMeta: Annotation<LlmMeta | null>(),
   contentsFailed: Annotation<string | null>(),
+  /** 5c 호출 횟수 — 2 면 첫 호출이 빈 결과라 검색어를 바꿔 한 번 더 부른 것 (verify 가 dropLog 에 정보 기록) */
+  contentsAttempts: Annotation<number | null>(),
   page: Annotation<PlanPageWire | null>(),
   /** 검증 게이트 드롭 사유 (최종 검증 기준) — plan 스텝 payload.dropLog로 기록 (전략 문서 p.11) */
   dropLog: Annotation<GroundingDrop[] | null>(),

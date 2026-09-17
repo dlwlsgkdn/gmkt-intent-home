@@ -24,6 +24,7 @@ import {
   buildLookRenderPrompt,
   buildSurveyPage,
   completeSearchSection,
+  catalogFallbackSections,
   consolidateSmallProductSections,
   groundContentsSection,
   groundProductsSection,
@@ -37,6 +38,7 @@ import {
 import { CoreClientService } from '../core-client.service'
 import { LlmService } from '../llm/llm.service'
 import { LLM_STAGE_RETRY_DELAY_MS, retryLlmStage } from '../llm/retry'
+import { generatePlanContentsRobust } from '../llm/contents-retry'
 import { ImageEditService } from '../image/image-edit.service'
 import { EnrichService } from './enrich.service'
 import { EngineFlagService } from '../engine/engine-flag.service'
@@ -291,33 +293,44 @@ export class ThreadsService {
       revision,
     )
 
-    // 5c 참고 콘텐츠 — 상품 검색과 분리된 웹 검색 예산으로 병렬 (2026-09). 자리 배정은 종류별 큐라 상품과 섞이지 않는다
-    const contentsPromise = this.llm.generatePlanContents(
-      intent,
-      survey,
-      answers,
-      profile,
-      stream && {
-        arrayKey: 'sections',
-        onElement: (element, index) => {
-          const parsed = PlanSearchSectionGen.safeParse(element)
-          if (!parsed.success || parsed.data.kind !== 'contents') return
-          const section = this.resolveContentsSection(parsed.data)
-          if (section) {
-            arrivedSections.push({ section, streamIndex: index })
-            flushGenerated()
-          }
+    // 5c 참고 콘텐츠 — 상품 검색과 분리된 웹 검색 예산으로 병렬 (2026-09). 자리 배정은 종류별 큐라 상품과 섞이지 않는다.
+    // 첫 호출이 항목을 하나도 못 찾으면 검색어를 바꿔 한 번 더 (llm/contents-retry.ts — 그래프 경로와 같은 규칙)
+    const contentsPromise = generatePlanContentsRobust(
+      (opts) => this.llm.generatePlanContents(
+        intent,
+        survey,
+        answers,
+        profile,
+        stream && {
+          arrayKey: 'sections',
+          onElement: (element, index) => {
+            const parsed = PlanSearchSectionGen.safeParse(element)
+            if (!parsed.success || parsed.data.kind !== 'contents') return
+            const section = this.resolveContentsSection(parsed.data)
+            if (section) {
+              arrivedSections.push({ section, streamIndex: index })
+              flushGenerated()
+            }
+          },
+          onElementPartial: (element, index) => {
+            if (!allocator || !stream.onSection) return
+            const gen = completeSearchSection(element)
+            if (!gen || gen.kind !== 'contents') return
+            const section = this.resolveContentsSection(gen, true)
+            if (section) stream.onSection(section, slotFor(index, section), false)
+          },
+          onSearch: stream.onSearch,
         },
-        onElementPartial: (element, index) => {
-          if (!allocator || !stream.onSection) return
-          const gen = completeSearchSection(element)
-          if (!gen || gen.kind !== 'contents') return
-          const section = this.resolveContentsSection(gen, true)
-          if (section) stream.onSection(section, slotFor(index, section), false)
+        revision,
+        undefined,
+        opts,
+      ),
+      {
+        onRetry: () => {
+          this.logger.warn('계획 참고 콘텐츠 첫 호출이 빈 결과 — 검색어를 바꿔 한 번 더')
+          stream?.onStatus?.('참고할 영상·게시글을 다른 검색어로 다시 찾고 있어요…')
         },
-        onSearch: stream.onSearch,
       },
-      revision,
     )
 
     const [skeletonSettled, searchSettled, contentsSettled] = await Promise.allSettled([skeletonPromise, searchPromise, contentsPromise])
@@ -330,9 +343,10 @@ export class ThreadsService {
     let contentsMeta: LlmMeta | null = null
     let contentSections: PlanSectionWire[] = []
     if (contentsSettled.status === 'fulfilled') {
-      contentsMeta = contentsSettled.value.meta
-      await this.enrich.enrichContents(contentsSettled.value.content.sections)
-      contentSections = contentsSettled.value.content.sections
+      const { result } = contentsSettled.value
+      contentsMeta = result.meta
+      await this.enrich.enrichContents(result.content.sections)
+      contentSections = result.content.sections
         .map((s) => this.resolveContentsSection(s))
         .filter((s): s is PlanSectionWire => s !== null)
     } else {
@@ -355,6 +369,12 @@ export class ThreadsService {
       )
     }
 
+    // 상품 검색이 상품 섹션을 하나도 못 만들었으면 뼈대 자리를 카탈로그 매칭으로 채운다 (그래프 verify 와 같은 결정적 폴백)
+    if (!generatedSections.some((s) => s.kind === 'products')) {
+      const fallback = catalogFallbackSections(skeleton.content.sections)
+      if (fallback.note) this.logger.warn(fallback.note.message)
+      generatedSections.push(...fallback.sections)
+    }
     const sections = consolidateSmallProductSections(
       mergePlanSections(skeleton.content.sections, [...generatedSections, ...contentSections]),
     )

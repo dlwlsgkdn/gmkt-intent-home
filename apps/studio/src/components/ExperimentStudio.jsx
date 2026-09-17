@@ -588,7 +588,7 @@ export default function ExperimentStudio() {
                             <span className="sb-admin-prompt-chip sb-admin-prompt-chip--custom">임시 프롬프트</span>
                           )}
                           <span className="sb-admin__muted">{metaLine(r.meta)}</span>
-                          <span className="sb-admin__muted">드롭 {(r.dropLog || []).length}</span>
+                          <span className="sb-admin__muted">드롭 {(r.dropLog || []).filter((d) => !['contents-empty-retry', 'catalog-fallback'].includes(d.code)).length}</span>
                           <span className="sb-admin__muted">{timeShort(r.createdAt)}</span>
                         </div>
                         {r.page && (

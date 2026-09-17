@@ -388,7 +388,15 @@ const server = http.createServer(async (req, res) => {
       return streamAnthropic(res, output, { delayMs: 2, chunkSize: 40 })
     }
     if (system.includes('참고 콘텐츠 수집')) {
-      llmCalls.push({ type: 'contents', system, user })
+      // 「빈 콘텐츠」 의도의 첫 호출은 확인된 콘텐츠가 없는 척 빈 배열을 돌려준다 — bff 가 검색어를 바꾸라는 힌트(CONTENTS_RETRY_HINT
+      // 「직전 시도에서는」)를 붙여 한 번 더 부르면 그때 정상 콘텐츠를 준다 (llm/contents-retry.ts 검증)
+      const retry = user.includes('직전 시도에서는')
+      llmCalls.push({ type: 'contents', system, user, retry })
+      if (user.includes('빈 콘텐츠')) {
+        if (!retry) return streamAnthropic(res, JSON.stringify({ sections: [] }), { delayMs: 2, chunkSize: 40 })
+        // 재시도 결과는 앞 쓰레드들이 이미 보여준 모의 URL 과 겹치지 않게(검증 게이트 duplicate-recent) 주소를 바꿔 준다
+        return streamAnthropic(res, CONTENTS_JSON.replace(/mock0001/g, 'retry0001').replace(/blog\.example\.com\//g, 'blog.example.com/retry-'), { delayMs: 6, chunkSize: 40 })
+      }
       return streamAnthropic(res, CONTENTS_JSON, { delayMs: 6, chunkSize: 40 })
     }
     if (system.includes('productIds')) {

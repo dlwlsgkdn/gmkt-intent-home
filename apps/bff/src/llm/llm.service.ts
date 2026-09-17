@@ -77,8 +77,10 @@ const MODEL_CACHE_MS = 30_000
 const WEB_SEARCH_BASIC_MODELS = new Set(['claude-haiku-4-5'])
 /** 생성 1회당 웹 검색 상한 — 상품·콘텐츠 확인용 소수 검색만 허용 (비용·지연 가드) */
 const WEB_SEARCH_MAX_USES = 4
-/** 참고 콘텐츠 단계(5c)의 검색 예산 — 영상 1회 + 게시글 1회 + 보완 1회 */
-const WEB_SEARCH_CONTENTS_MAX_USES = 3
+/** 참고 콘텐츠 단계(5c)의 검색 예산 — 영상 1회 + 게시글 1회 + 보완 2회 (2026-09-17: 3→4. 운영 계획의 44% 가 콘텐츠 0개였고
+ * 재현에서 같은 검색어를 되풀이해 예산을 태운 뒤 빈 배열을 돌려줬다 — 프롬프트 v27 이 검색어 중복을 금하고 확인 기준을 낮췄다).
+ * dry-run 도 같은 값을 쓴다 */
+export const WEB_SEARCH_CONTENTS_MAX_USES = 4
 /** 서버 도구 루프가 pause_turn으로 멈췄을 때 이어붙이는 최대 횟수 */
 const MAX_CONTINUATIONS = 3
 
@@ -370,11 +372,13 @@ export class LlmService implements LlmPort {
     stream?: LlmStreamHandlers,
     revision?: PlanRevisionContext,
     ledger?: ConstraintLedger | null,
+    /** retry = 첫 호출이 콘텐츠를 못 찾아 검색어를 바꿔 다시 부르는 2회차 (가변부에 CONTENTS_RETRY_HINT — 시스템 고정·캐시 유지) */
+    opts: { retry?: boolean } = {},
   ): Promise<GenResult<PlanContentsGen>> {
-    return this.generate('계획 참고 콘텐츠 생성', PlanContentsGen, {
+    return this.generate(opts.retry ? '계획 참고 콘텐츠 생성(재시도)' : '계획 참고 콘텐츠 생성', PlanContentsGen, {
       system: await this.resolveSystem('plan-contents'),
       effort: 'medium' as const,
-      user: buildPlanContentsRequest(intent, survey, answers, profile, revision, ledger),
+      user: buildPlanContentsRequest(intent, survey, answers, profile, revision, ledger, opts),
       webSearch: true,
       webSearchMaxUses: WEB_SEARCH_CONTENTS_MAX_USES,
       stream,

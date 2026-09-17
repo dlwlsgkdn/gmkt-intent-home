@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { composePlanSections } from '../../../../packages/pipeline/src/guards/merge.ts'
+import { isInfoDrop } from '../../../../packages/pipeline/src/guards/grounding.ts'
 import {
   deleteAdminKnowledgeSource,
   dryRunStage,
@@ -91,7 +92,8 @@ const STATE_CHANNELS = [
     label: '최종 페이지 (6)',
     sum: (v) => (v ? `${v.headline ?? ''} · 섹션 ${v.sections?.length ?? 0}` : null),
   },
-  { key: 'dropLog', label: '드롭 로그 (6)', sum: (v) => (Array.isArray(v) ? `${v.length}건` : null) },
+  // 정보 기록(재시도·카탈로그 폴백)은 드롭이 아니라 따로 센다
+  { key: 'dropLog', label: '드롭 로그 (6)', sum: (v) => (Array.isArray(v) ? `${v.filter((d) => !isInfoDrop(d)).length}건${v.some(isInfoDrop) ? ` · 보정 ${v.filter(isInfoDrop).length}` : ''}` : null) },
 ]
 
 /** 상태 값 한 줄 표시 — 요약자 우선, 문자열은 그대로(말줄임은 CSS), 그 밖은 타입 표시 */
@@ -819,7 +821,7 @@ export default function PipelineStudio({ api }) {
             lines: [
               [metaLine(skResult?.meta), metaLine(prodResult?.meta), metaLine(contResult?.meta)].filter(Boolean).join(' ∥ ') || null,
               prodResult || contResult
-                ? `검증 게이트 — 상품 ${(prodResult?.sections || []).length}·콘텐츠 ${(contResult?.sections || []).length} 섹션 통과 · ${(prodResult?.dropLog || []).length + (contResult?.dropLog || []).length}건 드롭`
+                ? `검증 게이트 — 상품 ${(prodResult?.sections || []).length}·콘텐츠 ${(contResult?.sections || []).length} 섹션 통과 · ${[...(prodResult?.dropLog || []), ...(contResult?.dropLog || [])].filter((d) => !isInfoDrop(d)).length}건 드롭`
                 : '상품·참고 콘텐츠 미실행 — 자리가 비어 있어요',
             ].filter(Boolean),
             ledger: previewLedger,
@@ -852,13 +854,13 @@ export default function PipelineStudio({ api }) {
     if (skResult) map['plan-skeleton'] = { meta: skResult.meta, custom: skResult.promptCustom, prompt: skResult.prompt }
     if (prodResult) {
       map['plan-products'] = { meta: prodResult.meta, custom: prodResult.promptCustom, prompt: prodResult.prompt }
-      map.verify = { pass: (prodResult.sections || []).length, drops: (prodResult.dropLog || []).length }
+      map.verify = { pass: (prodResult.sections || []).length, drops: (prodResult.dropLog || []).filter((d) => !isInfoDrop(d)).length }
     }
     if (contResult) {
       map['plan-contents'] = { meta: contResult.meta, custom: contResult.promptCustom, prompt: contResult.prompt }
       map.verify = {
         pass: (map.verify?.pass || 0) + (contResult.sections || []).length,
-        drops: (map.verify?.drops || 0) + (contResult.dropLog || []).length,
+        drops: (map.verify?.drops || 0) + (contResult.dropLog || []).filter((d) => !isInfoDrop(d)).length,
       }
     }
     for (const [id, s] of Object.entries(flowRunStages)) {

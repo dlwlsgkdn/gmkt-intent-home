@@ -202,6 +202,8 @@ FE(`apps/studio/src/lib/liveApi.js` `routeSearch`/`suggestSearch`)는 실패 시
 
 와이어 변화: `CatalogProduct.priceUnknown?`(판매가 미확인 — price 0), `PlanContentItem.why?`. 검증 게이트 드롭 코드 추가: `catalog-low-match`·`catalog-overflow`·`already-in-cart`·`stale-content`·`low-trust-source`·`duplicate-source`·`duplicate-recent`. 원장(`ledger`)에 `budgetMinKrw`(예산 하한 — 드롭 기준 아님)·`recentRecommended`·`recentContentUrls`(같은 사용자 최근 3개 쓰레드) 추가.
 
+**v27(2026-09-17)**: 5c 참고 콘텐츠가 빈 결과면 BFF 가 검색어를 바꾸라는 힌트로 한 번 더 부른다(SSE `status` 「참고할 영상·게시글을 다른 검색어로 다시 찾고 있어요…」, plan 스텝 `dropLog` 에 정보 기록 `contents-empty-retry`). 상품 검색(5b)이 상품 섹션을 하나도 못 만들면 뼈대의 상품 자리를 카탈로그 매칭(60% 이상, 자리당 3개) 상품으로 채운다(`dropLog` `catalog-fallback`). 둘 다 드롭이 아니라 정보 기록이다.
+
 admin: 프롬프트 카탈로그에 `plan-contents` 추가, 지식 목록에 guard 행 `guard-content-hosts`(콘텐츠 저신뢰 출처 도메인, 줄바꿈 구분·접미 일치) 추가, dry-run `stageId` 에 `plan-contents` 추가(응답은 `sections`·`dropLog`), `GET /api/admin/metrics/engines` 엔진별 `avgContentsMs`·`quality`(비율 0~1·평균, quality 요약이 있는 표본만). 썸네일 보강(`EnrichService`, og:image)은 BFF 환경변수 `ENRICH_FETCH=0` 으로 끌 수 있다(오프라인 e2e).
 
 ## 2. Core — internal API (BFF 전용, 비공개)

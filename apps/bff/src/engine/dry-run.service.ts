@@ -25,8 +25,9 @@ import {
   type ResolvedSystem,
 } from '@ddak/pipeline'
 import { KnowledgeService } from '../llm/knowledge.service'
-import { LlmService } from '../llm/llm.service'
+import { LlmService, WEB_SEARCH_CONTENTS_MAX_USES } from '../llm/llm.service'
 import { retryLlmStage } from '../llm/retry'
+import { generatePlanContentsRobust } from '../llm/contents-retry'
 import { EnrichService } from '../threads/enrich.service'
 
 /*
@@ -150,19 +151,29 @@ export class PipelineDryRunService {
     }
     if (body.stageId === 'plan-contents') {
       const contentsSystem = await this.systemFor('plan-contents', body.promptOverride)
-      const contentsUser = buildPlanContentsRequest(body.intent, body.survey, body.answers, body.profile, undefined, ledger)
-      const contents = await this.llm.generate('계획 참고 콘텐츠 생성(dry-run)', PlanContentsGen, {
-        system: contentsSystem,
-        effort: this.effortOf('plan-contents', 'medium'),
-        user: contentsUser,
-        webSearch: true,
-        webSearchMaxUses: 3,
-        stream: events.onStatus
-          ? { arrayKey: 'sections', onSearch: (query) => events.onStatus?.(`웹에서 "${query}" 검색 중…`) }
-          : undefined,
-      })
+      const survey = body.survey
+      const answers = body.answers
+      let contentsUser = ''
+      // 운영 경로와 같은 「빈 결과 재시도」 (llm/contents-retry.ts) — 플레이그라운드가 운영과 다른 성공률을 보이지 않게
+      const { result: contents, attempts } = await generatePlanContentsRobust(
+        (opts) => {
+          contentsUser = buildPlanContentsRequest(body.intent, survey, answers, body.profile, undefined, ledger, opts)
+          return this.llm.generate(opts.retry ? '계획 참고 콘텐츠 생성(dry-run 재시도)' : '계획 참고 콘텐츠 생성(dry-run)', PlanContentsGen, {
+            system: contentsSystem,
+            effort: this.effortOf('plan-contents', 'medium'),
+            user: contentsUser,
+            webSearch: true,
+            webSearchMaxUses: WEB_SEARCH_CONTENTS_MAX_USES,
+            stream: events.onStatus
+              ? { arrayKey: 'sections', onSearch: (query) => events.onStatus?.(`웹에서 "${query}" 검색 중…`) }
+              : undefined,
+          })
+        },
+        { onRetry: () => events.onStatus?.('참고할 영상·게시글을 다른 검색어로 다시 찾고 있어요…') },
+      )
       await this.enrich.enrichContents(contents.content.sections)
       const contentsDrops: GroundingDrop[] = []
+      if (attempts > 1) contentsDrops.push({ code: 'contents-empty-retry', message: '참고 콘텐츠 첫 호출이 빈 결과라 검색어를 바꿔 한 번 더 불렀다' })
       const contentSections = contents.content.sections
         .map((s) => {
           const { section, drops } = groundContentsSection(s, guard)

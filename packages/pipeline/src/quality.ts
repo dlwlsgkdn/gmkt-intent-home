@@ -1,4 +1,5 @@
 import type { PlanPageWire, PlanQuality } from '@ddak/schema'
+import { isInfoDrop } from './guards/grounding'
 
 /*
  * 계획 품질 요약 — 기록 시점(7단계)에 최종 페이지·드롭 로그에서 결정적으로 센다. llmMeta.quality 로 plan 스텝에 남아
@@ -18,7 +19,8 @@ export function planQualityOf(page: PlanPageWire, dropLog: { code: string }[] = 
     contentSections: 0,
     contentItems: 0,
     contentThumbnails: 0,
-    drops: dropLog.length,
+    // 정보 기록(contents-empty-retry·catalog-fallback)은 드롭이 아니다 — KPI 에서 뺀다
+    drops: dropLog.filter((d) => !isInfoDrop(d)).length,
   }
   for (const s of page.sections) {
     if (s.kind === 'products') {

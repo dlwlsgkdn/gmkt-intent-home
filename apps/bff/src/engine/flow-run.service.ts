@@ -13,6 +13,7 @@ import {
   type ConstraintLedger,
   type GroundingDrop,
   type PromptDefId,
+  isInfoDrop,
 } from '@ddak/pipeline'
 import { CoreClientService } from '../core-client.service'
 import { KnowledgeService } from '../llm/knowledge.service'
@@ -304,12 +305,16 @@ class FlowStageEmitter {
         return patch.contentsFailed
           ? { summary: `실패 — 콘텐츠 없이 진행: ${patch.contentsFailed}` }
           : { meta: patch.contentsMeta ?? undefined, summary: `콘텐츠 섹션 ${patch.contentSections?.length ?? 0}` }
-      case 's6-verify':
+      case 's6-verify': {
+        // 정보 기록(재시도·카탈로그 폴백)은 드롭이 아니다 — 개수에서 빼고 요약에 따로 적는다
+        const drops = (patch.dropLog ?? []).filter((d) => !isInfoDrop(d)).length
+        const notes = (patch.dropLog ?? []).filter(isInfoDrop).map((d) => d.code)
         return {
           pass: patch.page?.sections.length ?? 0,
-          drops: patch.dropLog?.length ?? 0,
-          summary: `병합 ${patch.page?.sections.length ?? 0}섹션 · 드롭 ${patch.dropLog?.length ?? 0}`,
+          drops,
+          summary: `병합 ${patch.page?.sections.length ?? 0}섹션 · 드롭 ${drops}${notes.length ? ` · 보정 ${notes.join(', ')}` : ''}`,
         }
+      }
       case 's7-record':
         return { summary: this.recordNote }
       default:

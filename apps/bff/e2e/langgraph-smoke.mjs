@@ -724,6 +724,55 @@ try {
     ok(delta('skeleton') === 1 && delta('products') === 1 && delta('contents') === 1, `성공 호출만 기록 — skeleton ${delta('skeleton')}·products ${delta('products')}·contents ${delta('contents')}`)
     ok(stageOf(rp.filter((e) => e.event === 'stage').map((e) => e.data), 'plan-skeleton', 'done'), '재시도 뒤 뼈대 stage done')
   }
+
+  // ── 12. 참고 콘텐츠 빈 결과 재시도 — 5c 첫 호출이 `sections: []` 를 돌려주면(운영 44% 사례) bff 가 검색어를 바꾸라는 힌트를 붙여
+  //    한 번 더 부르고, 두 번째 결과로 콘텐츠 섹션이 선다. dropLog 에 정보 기록(contents-empty-retry)
+  console.log('12) 참고 콘텐츠 빈 결과 재시도')
+  {
+    const before = await llmCalls()
+    const rs = await sse('/api/admin/pipeline/flow-run', { phase: 'survey', intent: '빈 콘텐츠 재시도 시험 쿠션' }, plain)
+    const rsResult = last(rs, 'result')?.data
+    ok(Boolean(rsResult?.flowId), '빈 콘텐츠 플로우 — 설문 구간')
+    const rp = await sse(
+      '/api/admin/pipeline/flow-run',
+      { phase: 'plan', flowId: rsResult.flowId, intent: '빈 콘텐츠 재시도 시험 쿠션', survey: rsResult.survey, answers: [{ questionId: 'q1', choices: ['지성'] }] },
+      plain,
+    )
+    const page = last(rp, 'result')?.data?.page
+    const after = await llmCalls()
+    const contentsCalls = after.slice(before.length).filter((c) => c.type === 'contents')
+    ok(contentsCalls.length === 2 && contentsCalls[0].retry === false && contentsCalls[1].retry === true, `콘텐츠 호출 2회 — 두 번째에 재시도 힌트 (${contentsCalls.map((c) => c.retry).join(',')})`)
+    ok(contentsCalls[1]?.user?.includes('검색어를 완전히 바꿔'), '재시도 가변부에 검색 전략 변경 지시')
+    ok(page?.sections?.some((s) => s.kind === 'contents' && s.items?.length > 0), '재시도 결과로 콘텐츠 섹션이 선다')
+    ok(rp.some((e) => e.event === 'status' && /다른 검색어로/.test(e.data?.message ?? '')), '재시도 안내 status 이벤트')
+    ok((last(rp, 'result')?.data?.dropLog ?? []).some((d) => d.code === 'contents-empty-retry'), 'dropLog 에 contents-empty-retry 정보 기록')
+    ok(!last(rp, 'error'), '오류 없음')
+  }
+
+  // ── 13. 상품 검색 실패 → 카탈로그 폴백 — 5b 가 529 를 4연속 받아 실패하면(productsFailed) verify 가 뼈대의 상품 자리를
+  //    원장 대조 매칭율 60% 이상 카탈로그 상품으로 채운다(피부타입 민감성 → 민감성 태그 상품). dropLog 에 catalog-fallback
+  console.log('13) 상품 검색 실패 → 카탈로그 폴백')
+  {
+    const profile = [{ label: '피부타입', value: '민감성' }]
+    const rs = await sse('/api/admin/pipeline/flow-run', { phase: 'survey', intent: '카탈로그 폴백 시험 쿠션', profile }, plain)
+    const rsResult = last(rs, 'result')?.data
+    ok(Boolean(rsResult?.flowId), '폴백 플로우 — 설문 구간')
+    await fetch(MOCK + '/internal/mock/llm-fail', { method: 'PUT', headers: plain, body: JSON.stringify({ count: 4, status: 529, only: 'products' }) })
+    const rp = await sse(
+      '/api/admin/pipeline/flow-run',
+      { phase: 'plan', flowId: rsResult.flowId, intent: '카탈로그 폴백 시험 쿠션', profile, survey: rsResult.survey, answers: [{ questionId: 'q1', choices: ['지성'] }] },
+      plain,
+    )
+    const result = last(rp, 'result')?.data
+    const failState = await fetch(MOCK + '/internal/mock/llm-fail').then((r) => r.json())
+    ok(failState.failed === 4 && failState.count === 0, `상품 호출 529 4회 소진 (failed ${failState.failed})`)
+    const productSecs = (result?.page?.sections ?? []).filter((s) => s.kind === 'products')
+    const ids = productSecs.flatMap((s) => s.products.map((p) => p.id))
+    ok(productSecs.length >= 1 && ids.length >= 1 && ids.every((id) => /^p-\d+$/.test(id)), `상품 자리를 카탈로그 상품으로 채움 (${ids.join(',')})`)
+    ok(productSecs.every((s) => s.products.every((p) => (p.match?.score ?? 0) >= 60)), '폴백 상품은 전부 매칭율 60% 이상')
+    ok((result?.dropLog ?? []).some((d) => d.code === 'catalog-fallback'), 'dropLog 에 catalog-fallback 정보 기록')
+    ok(!last(rp, 'error'), '오류 없음')
+  }
 } finally {
   shutdown()
 }

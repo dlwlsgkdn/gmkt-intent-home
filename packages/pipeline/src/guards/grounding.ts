@@ -1,10 +1,10 @@
 import type { CatalogProduct, PlanContentItem, PlanSectionWire } from '@ddak/schema'
-import type { ContentsSectionGen, ProductRatingGen, ProductsSectionGen } from '../schemas'
+import type { ContentsSectionGen, PlanSkeletonSectionGen, ProductRatingGen, ProductsSectionGen } from '../schemas'
 import type { ConstraintLedger } from '../ledger'
 import { cartedNames } from '../ledger'
-import { CATALOG_BY_ID } from '../catalog'
+import { CATALOG, CATALOG_BY_ID } from '../catalog'
 import { findMedicalClaim } from './claims'
-import { scoreProductMatch } from './match'
+import { scoreProductMatch, withMatchFactor } from './match'
 
 /*
  * 검증 게이트(전략 문서 6단계)의 그라운딩 가드 — LLM이 만든 상품·콘텐츠 섹션을
@@ -37,6 +37,10 @@ export type GroundingDrop = {
     | 'low-trust-source'
     | 'duplicate-source'
     | 'duplicate-recent'
+    /** 정보 기록(드롭 아님) — 5c 첫 호출이 콘텐츠를 못 찾아 검색어를 바꿔 한 번 더 불렀다 */
+    | 'contents-empty-retry'
+    /** 정보 기록(드롭 아님) — 상품 검색(5b)이 상품 섹션을 하나도 못 만들어 뼈대 자리를 카탈로그 매칭으로 채웠다 */
+    | 'catalog-fallback'
   message: string
 }
 
@@ -275,6 +279,70 @@ export function groundProductsSection(
   return {
     section: products.length ? { kind: 'products', title: s.title, reason: s.reason, products } : null,
     drops,
+  }
+}
+
+/** 정보 기록 코드 — 드롭이 아니라 「이런 보정이 있었다」는 표식. 품질 KPI(planQualityOf drops)·드롭 개수 집계에서 뺀다 */
+export const INFO_DROP_CODES: ReadonlySet<GroundingDrop['code']> = new Set(['contents-empty-retry', 'catalog-fallback'])
+export const isInfoDrop = (d: { code: string }): boolean => INFO_DROP_CODES.has(d.code as GroundingDrop['code'])
+
+const normalizeText = (text: string) => String(text ?? '').replace(/\s+/g, '').toLowerCase()
+
+/** 상품 자리(제목+기준) 텍스트와 겹치는 상품 태그·이름 단어 — 자리 용도 적합의 근거 */
+export function slotOverlap(product: CatalogProduct, slotText: string): string[] {
+  const hay = normalizeText(slotText)
+  if (!hay) return []
+  const words = [...(product.tags ?? []), ...String(product.name ?? '').split(/[\s()+·,]+/)]
+  const hits = words.map((w) => w.trim()).filter((w) => w.length >= 2 && /[가-힣a-z]/i.test(w) && hay.includes(normalizeText(w)))
+  return [...new Set(hits)]
+}
+
+/** 상품 검색(5b)이 상품 섹션을 **하나도** 못 만들었을 때의 결정적 폴백 (2026-09-17) — 뼈대의 상품 자리(제목·기준)마다
+ * 카탈로그(지마켓)에서 **자리 제목과 태그·이름이 겹치는 상품만**(용도 적합 — 클렌저 자리에 크림을 넣지 않는다) 골라, 제목·기준
+ * 겹침을 고민·목적 항목의 근거(1개 겹침 4/5, 2개 이상 5/5)로 삼은 매칭율이 CATALOG_MIN_MATCH 이상인 것을 매칭율 순으로
+ * CATALOG_MAX_PER_SECTION 개까지 채운다(확장 게이트·담기 제외는 guard 가 있을 때 그대로, 자리 사이 중복 없음). 원장(guard.ledger)이
+ * 없어도(legacy) 자리 겹침만으로 동작한다. 자리 제목을 그대로 쓰므로 병합 배정이 그 자리에 앉힌다. 겹치는 상품이 없는 자리는
+ * 비운다(용도와 무관한 상품으로 채우지 않는다 — 옛 catalog-overflow 교훈). 5b 가 섹션을 하나라도 만들었으면 쓰지 않는다 —
+ * 그 경우의 카탈로그 보충은 groundProductsSection 이 섹션 안에서 한다 */
+export function catalogFallbackSections(
+  skeleton: ReadonlyArray<PlanSkeletonSectionGen>,
+  guard?: GuardContext,
+): { sections: PlanSectionWire[]; note: GroundingDrop | null } {
+  const slots = skeleton.filter((s): s is Extract<PlanSkeletonSectionGen, { kind: 'products' }> => s.kind === 'products')
+  if (!slots.length) return { sections: [], note: null }
+  const carted = new Set(cartedNames(guard?.ledger).map(normalizeName))
+  const used = new Set<string>()
+  const sections: PlanSectionWire[] = []
+  for (const slot of slots) {
+    // 용도 판정은 **제목**(제품 유형)과의 겹침이 필수 — 기준(reason)은 "민감성이라 약산성"처럼 피부 조건 단어가 섞여 있어
+    // 겹침만으로는 크림을 클렌저 자리에 앉힐 수 있다. reason 겹침은 근거 개수(4/5→5/5)에만 더한다
+    const picked = CATALOG.filter((p) => p.url && !used.has(p.id))
+      .filter((p) => !productGuardDrop(p, guard, carted))
+      .map((p) => {
+        const titleHits = slotOverlap(p, slot.title)
+        return { product: p, hits: [...new Set([...titleHits, ...slotOverlap(p, slot.reason)])], titleHits }
+      })
+      .filter(({ titleHits }) => titleHits.length > 0)
+      .map(({ product, hits }) => {
+        const base = scoreProductMatch(product, undefined, guard?.ledger)
+        const match = withMatchFactor(base, 'concern', hits.length >= 2 ? 100 : 75, `상품 자리 기준과 겹치는 태그: ${hits.join(', ')} (자동 대조)`)
+        return { ...product, match }
+      })
+      .filter((p) => (p.match?.score ?? 0) >= CATALOG_MIN_MATCH)
+      .sort((a, b) => (b.match?.score ?? 0) - (a.match?.score ?? 0))
+      .slice(0, CATALOG_MAX_PER_SECTION)
+    if (!picked.length) continue
+    picked.forEach((p) => used.add(p.id))
+    sections.push({ kind: 'products', title: slot.title, reason: slot.reason, products: picked })
+  }
+  if (!sections.length) return { sections: [], note: null }
+  const count = sections.reduce((n, s) => n + (s.kind === 'products' ? s.products.length : 0), 0)
+  return {
+    sections,
+    note: {
+      code: 'catalog-fallback',
+      message: `상품 검색이 상품 섹션을 만들지 못해 뼈대 자리 ${sections.length}개를 카탈로그 매칭(${CATALOG_MIN_MATCH}% 이상) 상품 ${count}개로 채웠다`,
+    },
   }
 }
 

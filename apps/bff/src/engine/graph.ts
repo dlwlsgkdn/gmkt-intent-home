@@ -11,6 +11,7 @@ import {
   buildSurveyPage,
   checkObjective,
   completeSearchSection,
+  catalogFallbackSections,
   consolidateSmallProductSections,
   groundContentsSection,
   groundProductsSection,
@@ -27,6 +28,7 @@ import type { CoreClientService } from '../core-client.service'
 import type { KnowledgeService } from '../llm/knowledge.service'
 import type { LlmService } from '../llm/llm.service'
 import { LLM_STAGE_RETRY_DELAY_MS, retryLlmStage } from '../llm/retry'
+import { generatePlanContentsRobust } from '../llm/contents-retry'
 import type { EnrichService } from '../threads/enrich.service'
 import { SEQ, combineMeta } from '../threads/thread-io'
 import { ThreadGraphState, type ThreadGraphStateType } from './state'
@@ -269,36 +271,46 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
       ? { feedback: state.feedback, prevPlan: state.prevPlan ?? null }
       : undefined
     try {
-      const result = await deps.llm.generatePlanContents(
-        state.intent,
-        state.survey as SurveyPageWire,
-        state.answers as Answer[],
-        state.profile ?? undefined,
-        coord && {
-          arrayKey: 'sections',
-          onElement: (element, index) => {
-            const parsed = PlanSearchSectionGen.safeParse(element)
-            if (!parsed.success || parsed.data.kind !== 'contents') return
-            const section = groundLogged(parsed.data, index, false, guardOf(state))
-            if (section) coord.searchArrived(section, index)
+      // 첫 호출이 항목을 하나도 못 찾으면 검색어를 바꿔 한 번 더 (llm/contents-retry.ts — 같은 스트림 핸들러: 첫 호출은 index 를 안 썼다)
+      const { result, attempts } = await generatePlanContentsRobust(
+        (opts) => deps.llm.generatePlanContents(
+          state.intent,
+          state.survey as SurveyPageWire,
+          state.answers as Answer[],
+          state.profile ?? undefined,
+          coord && {
+            arrayKey: 'sections',
+            onElement: (element, index) => {
+              const parsed = PlanSearchSectionGen.safeParse(element)
+              if (!parsed.success || parsed.data.kind !== 'contents') return
+              const section = groundLogged(parsed.data, index, false, guardOf(state))
+              if (section) coord.searchArrived(section, index)
+            },
+            onElementPartial: (element, index) => {
+              const gen = completeSearchSection(element)
+              if (!gen || gen.kind !== 'contents') return
+              const section = groundLogged(gen, index, true, guardOf(state))
+              if (section) coord.searchPartial(section, index)
+            },
+            onSearch: (query) => coord.search(query),
           },
-          onElementPartial: (element, index) => {
-            const gen = completeSearchSection(element)
-            if (!gen || gen.kind !== 'contents') return
-            const section = groundLogged(gen, index, true, guardOf(state))
-            if (section) coord.searchPartial(section, index)
+          revision,
+          state.ledger,
+          opts,
+        ),
+        {
+          onRetry: () => {
+            logger.warn('계획 참고 콘텐츠 첫 호출이 빈 결과 — 검색어를 바꿔 한 번 더')
+            coord?.status('참고할 영상·게시글을 다른 검색어로 다시 찾고 있어요…')
           },
-          onSearch: (query) => coord.search(query),
         },
-        revision,
-        state.ledger,
       )
       await deps.enrich.enrichContents(result.content.sections)
-      return { contentSections: result.content.sections, contentsMeta: result.meta, contentsFailed: null }
+      return { contentSections: result.content.sections, contentsMeta: result.meta, contentsFailed: null, contentsAttempts: attempts }
     } catch (e) {
       const message = (e as Error)?.message ?? String(e)
       logger.warn(`계획 참고 콘텐츠 단계 실패 — 콘텐츠 없이 계획 반환: ${message}`)
-      return { contentSections: [], contentsMeta: null, contentsFailed: message }
+      return { contentSections: [], contentsMeta: null, contentsFailed: message, contentsAttempts: null }
     }
   }
 
@@ -308,12 +320,21 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
     const skeleton = state.skeleton
     if (!skeleton) throw new Error('계획 뼈대가 없습니다 — skeleton 노드가 실패했는데 verify에 도달했습니다')
     const dropLog: GroundingDrop[] = []
+    if ((state.contentsAttempts ?? 1) > 1) {
+      dropLog.push({ code: 'contents-empty-retry', message: '참고 콘텐츠 첫 호출이 빈 결과라 검색어를 바꿔 한 번 더 불렀다' })
+    }
     const contents = state.contentSections ?? []
     // 5c 가 콘텐츠를 만들었으면 상품 호출(옛 재정의 프롬프트)이 덧붙인 콘텐츠 섹션은 버린다 — 자리는 5c 가 채운다
     const fromProducts = (state.searchSections ?? []).filter((s) => !(contents.length && s.kind === 'contents'))
     const generated = [...fromProducts, ...contents]
       .map((s, i) => groundLogged(s, i, false, guardOf(state), (d) => dropLog.push(d)))
       .filter((s): s is PlanSectionWire => s !== null)
+    // 상품 검색이 상품 섹션을 하나도 못 만들었으면(실패·빈 결과·전부 드롭) 뼈대 자리를 카탈로그 매칭으로 채운다 — 결정적 폴백
+    if (!generated.some((s) => s.kind === 'products')) {
+      const fallback = catalogFallbackSections(skeleton.sections, guardOf(state))
+      if (fallback.note) dropLog.push(fallback.note)
+      generated.push(...fallback.sections)
+    }
     // 1개짜리 상품 섹션은 이웃 상품 섹션에 합친다 (카드 한 장짜리 트랙 방지)
     const sections = consolidateSmallProductSections(mergePlanSections(skeleton.sections, generated))
     if (!sections.length) {

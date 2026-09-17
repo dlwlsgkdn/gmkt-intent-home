@@ -85,6 +85,13 @@ const FACT_SOURCES: Record<'skin' | 'concern' | 'preference', LedgerFact['source
   preference: ['answer'],
 }
 
+/** 항목 하나를 덮어쓰고 총점을 다시 합산한다 — 카탈로그 폴백이 「상품 자리 기준과 겹치는 태그」를 고민·목적 항목의 근거로 쓸 때 */
+export function withMatchFactor(match: ProductMatch, key: MatchDimensionKey, score: number, note: string): ProductMatch {
+  const factors = match.factors.map((f) => (f.key === key ? { ...f, score: Math.min(100, Math.max(0, Math.round(score))), note } : f))
+  const total = Math.round(factors.reduce((sum, f) => sum + (f.weight * f.score) / 100, 0))
+  return { ...match, factors, score: Math.min(100, Math.max(0, total)) }
+}
+
 /** 상품 하나의 매칭율 — LLM 평가(있으면)와 원장으로 항목 5개를 채우고 가중 합산한다 */
 export function scoreProductMatch(
   product: CatalogProduct,
