@@ -239,7 +239,8 @@ export class CatalogService {
         out.scanned += 1
         if (row.imageUrl) continue
         const thumb = mallThumbnailOf(row.url)
-        if (thumb) patched.push({ ...row, imageUrl: thumb })
+        // tags 는 수확 bump 합집합으로 계약 상한(30)을 넘긴 행이 있어 잘라 보낸다(운영 400, 2026-09-18)
+        if (thumb) patched.push({ ...row, imageUrl: thumb, tags: (row.tags ?? []).slice(0, 30) })
       }
       if (!res.nextCursor) break
       cursor = res.nextCursor

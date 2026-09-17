@@ -266,7 +266,8 @@ export class CatalogService {
               price: sql`excluded.price`,
               url: sql`excluded.url`,
               imageUrl: sql`coalesce(excluded.image_url, ${existing.imageUrl})`,
-              tags: sql`(SELECT ARRAY(SELECT DISTINCT t FROM unnest(${existing.tags} || excluded.tags) AS t))`,
+              // 합집합은 처음 본 순서로 계약 상한(30)까지만 — 무한정 자라면 행을 다시 upsert 할 때 계약 검증(400)에 걸린다(운영 2026-09-18)
+              tags: sql`(SELECT ARRAY(SELECT t FROM unnest(${existing.tags} || excluded.tags) WITH ORDINALITY AS u(t, ord) GROUP BY t ORDER BY min(ord) LIMIT 30))`,
               verified: sql`${existing.verified} OR excluded.verified`,
               recommendCount: sql`${existing.recommendCount} + excluded.recommend_count`,
               // 검색 재료 = 새 값(이름·브랜드·이번 태그) + 기존 태그 집합 — 매번 기존 값에서 다시 만들어 무한히 자라지 않는다
@@ -331,7 +332,8 @@ export class CatalogService {
               meta: sql`coalesce(excluded.meta, ${existing.meta})`,
               snippet: sql`coalesce(excluded.snippet, ${existing.snippet})`,
               duration: sql`coalesce(excluded.duration, ${existing.duration})`,
-              tags: sql`(SELECT ARRAY(SELECT DISTINCT t FROM unnest(${existing.tags} || excluded.tags) AS t))`,
+              // 합집합은 처음 본 순서로 계약 상한(40)까지만 (상품과 같은 이유)
+              tags: sql`(SELECT ARRAY(SELECT t FROM unnest(${existing.tags} || excluded.tags) WITH ORDINALITY AS u(t, ord) GROUP BY t ORDER BY min(ord) LIMIT 40))`,
               year: sql`coalesce(excluded.year, ${existing.year})`,
               verified: sql`${existing.verified} OR excluded.verified`,
               recommendCount: sql`${existing.recommendCount} + excluded.recommend_count`,
