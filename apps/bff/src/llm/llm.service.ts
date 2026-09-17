@@ -17,6 +17,8 @@ import {
   type SurveyPageWire,
 } from '@ddak/schema'
 import {
+  CATALOG_SEED_SYSTEM,
+  CatalogSeedGen,
   HOME_PERSONALIZE_SYSTEM,
   HomePersonalizeGen,
   IntentGen,
@@ -31,6 +33,7 @@ import {
   SearchSuggestGen,
   StructuredStreamParser,
   SurveyGen,
+  buildCatalogSeedRequest,
   buildHomePersonalizeRequest,
   buildIntentRequest,
   buildPlanContentsRequest,
@@ -42,6 +45,7 @@ import {
   hasPhotoAnswer,
   planSkeletonGenFor,
   renderSystemTemplate,
+  type CatalogCandidates,
   type ConstraintLedger,
   type GenResult,
   type LlmGenerateRequest,
@@ -75,14 +79,20 @@ const MODEL_CACHE_MS = 30_000
 
 /** 동적 필터링 web_search_20260209 미지원 모델 — 기본 변형(20250305)으로 호출한다 */
 const WEB_SEARCH_BASIC_MODELS = new Set(['claude-haiku-4-5'])
-/** 생성 1회당 웹 검색 상한 — 상품·콘텐츠 확인용 소수 검색만 허용 (비용·지연 가드) */
-const WEB_SEARCH_MAX_USES = 4
+/** 생성 1회당 웹 검색 상한 — 상품·콘텐츠 확인용 소수 검색만 허용 (비용·지연 가드). 내부 후보가 넉넉하면 webSearchBudget 이 1 줄인다 */
+export const WEB_SEARCH_MAX_USES = 4
 /** 참고 콘텐츠 단계(5c)의 검색 예산 — 영상 1회 + 게시글 1회 + 보완 2회 (2026-09-17: 3→4. 운영 계획의 44% 가 콘텐츠 0개였고
  * 재현에서 같은 검색어를 되풀이해 예산을 태운 뒤 빈 배열을 돌려줬다 — 프롬프트 v27 이 검색어 중복을 금하고 확인 기준을 낮췄다).
  * dry-run 도 같은 값을 쓴다 */
 export const WEB_SEARCH_CONTENTS_MAX_USES = 4
 /** 서버 도구 루프가 pause_turn으로 멈췄을 때 이어붙이는 최대 횟수 */
 const MAX_CONTINUATIONS = 3
+/** 내부 카탈로그 후보가 넉넉할 때의 웹 검색 예산 — 후보가 절반을 채우니 검색은 외부몰·보완 몫만 (v29, 지연 단축).
+ * 상품 후보 6개 이상 / 콘텐츠 후보 4개 이상이면 상한을 1 줄인다 (catalog.service RICH_*). 후보가 없으면 예전 예산 그대로 */
+const WEB_SEARCH_RICH_REDUCTION = 1
+export const RICH_PRODUCT_CANDIDATES = 6
+export const RICH_CONTENT_CANDIDATES = 4
+export const webSearchBudget = (base: number, rich: boolean) => (rich ? Math.max(2, base - WEB_SEARCH_RICH_REDUCTION) : base)
 
 /** API 오류를 운영자용 한 줄로 — 상태 코드·오류 타입·문구·request-id (SDK 오류는 status 를, 그 밖은 message 만).
  * SDK 의 APIError.error 는 응답 본문 `{ type: 'error', error: { type, message } }` 그대로다 */
@@ -140,7 +150,7 @@ export class LlmService implements LlmPort {
 
   /** 지금 생성에 쓸 시스템 프롬프트 — core 설정(llm-prompt-<id>) 재정의 우선, 없거나 조회
    * 실패면 코드 기본값. 모델과 같은 30s 캐시. 재정의·기본값 모두 자리표시자 치환
-   * (renderSystemTemplate — {{CATALOG}} + 지식 4종 {{VOCAB}}/{{RULES}}/{{CRITERIA}}/{{FEWSHOT}})을
+   * (renderSystemTemplate — 지식 4종 {{VOCAB}}/{{RULES}}/{{CRITERIA}}/{{FEWSHOT}} + 옛 재정의 호환 {{CATALOG}})을
    * 거치며, 저장값·지식 KV가 고정인 한 결과도 바이트 고정이라 프롬프트 캐시는 계속 적중한다 */
   async resolveSystem(id: PromptDefId): Promise<ResolvedSystem> {
     const cached = this.promptCache.get(id)
@@ -211,6 +221,18 @@ export class LlmService implements LlmPort {
       user: buildSearchSuggestRequest(query, profile),
     })
   }
+  /** 내재화 카탈로그 시딩 — 제품 유형 하나의 판매 상품을 웹 검색(2~3회)으로 모은다 (2026-09-17). 운영 콘솔 배치가 유형마다 1회 부른다.
+   * 실패는 호출자가 그 유형만 건너뛰고 다음으로 간다 */
+  async collectCatalogProducts(keyword: string, opts: { query?: string; dense?: boolean } = {}): Promise<GenResult<CatalogSeedGen>> {
+    return this.generate(`카탈로그 수집(${opts.query && opts.query !== keyword ? opts.query : keyword})`, CatalogSeedGen, {
+      system: { text: CATALOG_SEED_SYSTEM, custom: false },
+      effort: 'medium' as const,
+      user: buildCatalogSeedRequest(keyword, opts),
+      webSearch: true,
+      webSearchMaxUses: opts.dense ? 4 : 3,
+    })
+  }
+
   /** 홈 개인화 — 인사말 + 개인화 추천 검색어(보라 칩). 작고 빠른 구조화 호출(스트리밍 없음). 실패 처리는 호출자(휴리스틱 대체) */
   async personalizeHome(input: Parameters<typeof buildHomePersonalizeRequest>[0]): Promise<GenResult<HomePersonalizeGen>> {
     return this.generate('홈 개인화', HomePersonalizeGen, {
@@ -351,13 +373,15 @@ export class LlmService implements LlmPort {
     stream?: LlmStreamHandlers,
     revision?: PlanRevisionContext,
     ledger?: ConstraintLedger | null,
+    /** 내부 카탈로그 후보 (v29) — 가변부 표로 실린다. 후보가 넉넉하면 웹 검색 예산을 4→3 으로 줄인다(지연 단축) */
+    candidates?: CatalogCandidates | null,
   ): Promise<GenResult<PlanProductsGen>> {
     return this.generate('계획 상품 생성', PlanProductsGen, {
       system: await this.resolveSystem('plan-products'),
       effort: 'high' as const,
-      user: buildPlanProductsRequest(intent, survey, answers, profile, revision, ledger),
+      user: buildPlanProductsRequest(intent, survey, answers, profile, revision, ledger, candidates),
       webSearch: true,
-      webSearchMaxUses: WEB_SEARCH_MAX_USES,
+      webSearchMaxUses: webSearchBudget(WEB_SEARCH_MAX_USES, (candidates?.products.length ?? 0) >= RICH_PRODUCT_CANDIDATES),
       stream,
     })
   }
@@ -374,13 +398,15 @@ export class LlmService implements LlmPort {
     ledger?: ConstraintLedger | null,
     /** retry = 첫 호출이 콘텐츠를 못 찾아 검색어를 바꿔 다시 부르는 2회차 (가변부에 CONTENTS_RETRY_HINT — 시스템 고정·캐시 유지) */
     opts: { retry?: boolean } = {},
+    /** 내부 콘텐츠 후보 (v29) — 가변부 표로 실린다. 후보가 넉넉하면 웹 검색 예산을 4→3 으로 줄인다 */
+    candidates?: CatalogCandidates | null,
   ): Promise<GenResult<PlanContentsGen>> {
     return this.generate(opts.retry ? '계획 참고 콘텐츠 생성(재시도)' : '계획 참고 콘텐츠 생성', PlanContentsGen, {
       system: await this.resolveSystem('plan-contents'),
       effort: 'medium' as const,
-      user: buildPlanContentsRequest(intent, survey, answers, profile, revision, ledger, opts),
+      user: buildPlanContentsRequest(intent, survey, answers, profile, revision, ledger, opts, candidates),
       webSearch: true,
-      webSearchMaxUses: WEB_SEARCH_CONTENTS_MAX_USES,
+      webSearchMaxUses: webSearchBudget(WEB_SEARCH_CONTENTS_MAX_USES, (candidates?.contents.length ?? 0) >= RICH_CONTENT_CANDIDATES),
       stream,
     })
   }

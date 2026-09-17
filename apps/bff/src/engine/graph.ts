@@ -31,6 +31,7 @@ import type { LlmService } from '../llm/llm.service'
 import { LLM_STAGE_RETRY_DELAY_MS, retryLlmStage } from '../llm/retry'
 import { generatePlanContentsRobust } from '../llm/contents-retry'
 import type { EnrichService } from '../threads/enrich.service'
+import type { CatalogService } from '../catalog/catalog.service'
 import { SEQ, combineMeta } from '../threads/thread-io'
 import { ThreadGraphState, type ThreadGraphStateType } from './state'
 import type { ChunkWriter, PlanStreamCoordinator } from './stream'
@@ -52,7 +53,14 @@ import type { ChunkWriter, PlanStreamCoordinator } from './stream'
 /** awaitAnswers interrupt의 재개 값 — 계획 요청 본문이 그대로 실린다 */
 export type PlanResume = { answers: Answer[]; profile?: Profile; feedback?: ThreadStageFeedback }
 
-export type GraphDeps = { llm: LlmService; core: CoreClientService; knowledge: KnowledgeService; enrich: EnrichService }
+export type GraphDeps = {
+  llm: LlmService
+  core: CoreClientService
+  knowledge: KnowledgeService
+  enrich: EnrichService
+  /** 내재화 카탈로그 (v29) — 후보 조회(s2)·수확(s7) */
+  catalog: CatalogService
+}
 
 const logger = new Logger('ThreadGraph')
 
@@ -91,7 +99,12 @@ function groundLogged(
 
 /** 상태에서 확장 게이트 컨텍스트 구성 — 스트리밍(products)과 최종 검증(verify)이 같은 값을 본다 */
 function guardOf(state: ThreadGraphStateType): GuardContext {
-  return { blocklist: state.blocklist ?? [], ledger: state.ledger ?? null, contentBlockHosts: state.contentBlockHosts ?? [] }
+  return {
+    blocklist: state.blocklist ?? [],
+    ledger: state.ledger ?? null,
+    contentBlockHosts: state.contentBlockHosts ?? [],
+    candidates: state.candidates ?? null,
+  }
 }
 
 export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSaver) {
@@ -124,20 +137,32 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
       deps.knowledge.contentBlockHosts(),
       deps.knowledge.recentSelectionsFor(state.userId, state.threadId),
     ])
+    const ledger = assembleLedger({
+      profile: state.profile ?? undefined,
+      survey: state.survey ?? undefined,
+      answers: state.answers ?? undefined,
+      intentProfile: state.intentProfile ?? undefined,
+      trendKeywords,
+      recentFeedback,
+      selectionSignals: selections.selectionSignals,
+      recentRecommended: selections.recentRecommended,
+      recentContentUrls: selections.recentContentUrls,
+    })
+    // 4단계 근거 수집(v29) — 내부 카탈로그 후보. 답변이 굳은 뒤(s2-ledger-update)의 검색어가 정확하지만 첫 조립에서도 의도만으로 조회해 둔다
+    // (조회 실패·표 없음은 데모 카탈로그로 대체 — 계획을 막지 않는다)
+    const candidates = await deps.catalog.candidatesFor({
+      intent: state.intent,
+      survey: state.survey,
+      answers: state.answers,
+      profile: state.profile,
+      ledger,
+    })
     return {
-      ledger: assembleLedger({
-        profile: state.profile ?? undefined,
-        survey: state.survey ?? undefined,
-        answers: state.answers ?? undefined,
-        intentProfile: state.intentProfile ?? undefined,
-        trendKeywords,
-        recentFeedback,
-        selectionSignals: selections.selectionSignals,
-        recentRecommended: selections.recentRecommended,
-        recentContentUrls: selections.recentContentUrls,
-      }),
+      ledger,
       blocklist,
       contentBlockHosts,
+      candidates: { products: candidates.products, contents: candidates.contents },
+      catalogTerms: candidates.terms.terms,
     }
   }
 
@@ -256,6 +281,7 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
         },
         revision,
         state.ledger,
+        state.candidates,
       )
       // 썸네일 보강(og:image, 예산 3초) — 최종본에만 실린다 (스트림 조각은 이미 나갔다)
       await deps.enrich.enrichProducts(result.content.sections.filter((s) => s.kind === 'products'))
@@ -301,6 +327,7 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
           revision,
           state.ledger,
           opts,
+          state.candidates,
         ),
         {
           onRetry: () => {
@@ -365,6 +392,8 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
       }),
       deps.core.updateThread(state.threadId, { status: 'planning' }),
     ])
+    // 내재화 수확(v29) — 검증 게이트를 지난 상품·콘텐츠를 카탈로그에 올린다 (실패는 로그만, 응답 전에 끝낸다 — 서버리스 동결 대비)
+    if (state.page) await deps.catalog.harvest(state.page, state.catalogTerms ?? [])
     return {}
   }
 

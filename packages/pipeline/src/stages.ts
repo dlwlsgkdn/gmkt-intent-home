@@ -77,7 +77,7 @@ export const PIPELINE_STAGES: PipelineStageDef[] = [
     label: '근거 수집',
     kind: 'deterministic',
     status: 'planned',
-    note: '원장 필터로 후보 20~50개 확보. 현재는 5b의 web_search 서버 도구가 병행 수행 — 자체 검색 교체는 페이즈 7.',
+    note: '내부 카탈로그 후보 조회(v29, 2026-09-17) — 의도·답변·프로필에서 뽑은 검색어로 core DB(지마켓 스냅샷·지난 계획 수확 상품·콘텐츠)를 조회해 상품 24·콘텐츠 12개를 5b·5c 가변부 표로 싣는다. 그래프에서는 2단계 원장 노드(s2-ledger·s2-ledger-update) 안에서 돈다(별도 노드 없음). 나머지 절반은 5b·5c 의 web_search 가 채운다.',
   },
   {
     id: 'plan-skeleton',

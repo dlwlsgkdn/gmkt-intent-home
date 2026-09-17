@@ -206,6 +206,54 @@ FE(`apps/studio/src/lib/liveApi.js` `routeSearch`/`suggestSearch`)는 실패 시
 
 admin: 프롬프트 카탈로그에 `plan-contents` 추가, 지식 목록에 guard 행 `guard-content-hosts`(콘텐츠 저신뢰 출처 도메인, 줄바꿈 구분·접미 일치) 추가, dry-run `stageId` 에 `plan-contents` 추가(응답은 `sections`·`dropLog`), `GET /api/admin/metrics/engines` 엔진별 `avgContentsMs`·`quality`(비율 0~1·평균, quality 요약이 있는 표본만). 썸네일 보강(`EnrichService`, og:image)은 BFF 환경변수 `ENRICH_FETCH=0` 으로 끌 수 있다(오프라인 e2e).
 
+## 1-4. 내재화 카탈로그 — 내부 DB 절반 + 웹 검색 절반 (v29, 2026-09-17)
+
+추천 상품·참고 콘텐츠를 core DB(Neon `catalog_products`·`catalog_contents`)에 쌓고, 계획 생성이 **내부 후보 절반 + 웹 검색 절반**으로 고른다.
+목적은 둘 — 빠른 응답(내부 후보가 절반을 채우니 5b·5c 웹 검색 상한이 4→3, 지마켓 검색 불필요)과 정확한 PDP(내부 행은 상품 번호로 주소·썸네일이
+결정되는 검증 상품이고, 모델은 **id 만** 적어 주소를 되받아 적지 않는다).
+
+- **후보 조회(4단계 근거 수집의 첫 실구현)**: 의도·답변·프로필에서 검색어를 뽑아(`@ddak/pipeline catalogTermsOf` — 제품 유형 어휘 `PRODUCT_TYPE_VOCAB`
+  + 조사·상투어를 뗀 낱말) core `POST /internal/catalog/{products,contents}/search` 로 상품 24·콘텐츠 12개를 받는다(BFF `CatalogService.candidatesFor`).
+  그래프는 s2 원장 노드(첫 조립·답변 뒤 갱신 둘 다)에서, legacy 는 계획 생성 직전에, dry-run 도 같은 조회. 표가 비었거나(마이그레이션·시딩 전) core
+  미연결이면 데모 카탈로그 14종으로 대신한다(옛 `{{CATALOG}}` 와 같은 상품) — 계획을 막지 않는다.
+- **주입**: 후보는 시스템 프롬프트가 아니라 **가변부(사용자 메시지) 표**로 실린다(`productCandidatesBlock`·`contentCandidatesBlock` — 시스템은 바이트
+  고정·캐시 유지). 5b 는 `productIds`(≤8)+`catalogRatings` 로, 5c 는 새 필드 `catalogIds`(≤6) 로 id 만 적는다. `PLAN_PRODUCTS_SYSTEM` v29 에는 정적
+  `{{CATALOG}}` 블록이 없다(재정의 프롬프트에 남아 있으면 데모 14종으로 치환은 되지만 후보 표와 겹친다).
+- **검증 게이트**: `GuardContext.candidates` — productIds·catalogIds 는 이 요청의 후보 목록(+데모 카탈로그)에서만 해석(`catalog-miss`), 내부 상품은
+  근거 신뢰 100·id 접두가 `web-` 이 아니면 내부(품질 KPI `webProducts` 도 접두 기준), 웹 상품이 후보와 같은 지마켓 상품 번호면 후보 값으로 대체
+  (`duplicate-candidate` 정보 기록), 섹션당 내부 상한 `CATALOG_MAX_PER_SECTION` 3→4. **PDP 보정** `repairPdpUrl`: 아는 몰인데 상품 번호 형식이 어긋난
+  주소(지마켓 goodscode 없음·올리브영 goodsNo 가 `A`+12자리 아님·쿠팡 `/vp/products/<번호>` 아님)는 몰 검색 링크(`urlKind=search`, 근거 25)로 바꿔
+  싣는다(`repaired-url` 정보 기록) — 깨진 상세보기 대신 검색 결과가 열린다. 카탈로그 폴백 풀도 후보+데모.
+- **수확**: 7단계 기록 직후 최종 페이지의 상품·콘텐츠를 `harvestRowsOf` 로 행으로 만들어 `PUT …?bump` upsert. **몰은 가리지 않는다** — 웹 지마켓
+  `gm-<번호>`, 올리브영 `oy-<goodsNo>`, 쿠팡 `cp-<번호>` 는 상품 번호 형식이 맞으면 verified(주소가 번호로 결정된다 — `pdpKeyOf`/`pdpVerified`),
+  그 밖의 몰 `web-<url 해시>` 는 썸네일(og:image)을 받아 왔으면 verified(페이지가 실제로 열렸다) 아니면 unverified(운영자 표시로 승격), 검색 링크
+  상품은 제외, 콘텐츠는 `ct-<url 해시>`(verified). 태그 = 이 계획의 검색어 + 섹션 제목의 제품 유형 → 다음 검색이 이 행을 찾는다. 웹 상품이
+  후보와 같은 정체 키(지마켓·올리브영·쿠팡 번호)면 후보로 대체된다.
+- **시딩 재료는 셋이다(2026-09-17 결정 — 스튜디오 SRP 스냅샷·데모 카탈로그는 시딩에 쓰지 않는다)**: ① **시딩 실행 시 실제 웹 검색 배치** —
+  운영 콘솔 카드 「✦ 웹 검색으로 시딩」이 제품 유형 어휘(`CATALOG_SEED_KEYWORDS`, 42개)를 8개씩 `POST /api/admin/catalog/seed-search` 로 보내고,
+  BFF 가 유형마다 LLM+web_search 1회(`CATALOG_SEED_SYSTEM`, 검색 2~3회, PROMPT_DEFS 밖)로 실제 판매 상품 8~12개를 모아 `seedProductRowsOf` 로
+  행(source `search`)을 만든다 — 몰별 상품 번호 형식이면 verified, 검색 페이지 주소·주소 없는 상품은 버림, 유형만이면 42 검색 약 $5.
+  **대량 시딩**은 검색 단위를 유형 × 조건 축(`catalogSeedQueries` — 피부 타입 4·고민 6·가격대 2·몰 3, `CATALOG_SEED_FACETS`)으로 펼친다:
+  실행은 **서버 시딩 잡**(위 표 `seed-job`)이다 — 상태·진행·회차 기록·결과가 core KV 에 있어 운영 콘솔 카드가 실시간으로 보고, 드라이버는
+  콘솔 탭(「✦ 웹 검색 시딩 시작」 뒤 그 탭이 step 을 돌린다 · 「이 탭에서 돌리기」로 이어받기 · 일시정지/재개)이든 배치 스크립트
+  `npm run seed:search --workspace=apps/bff -- --bff <BFF 주소> --token <BFF_SERVICE_TOKEN> --facets skin,concern [--dense] [--resume|--reset] [--status] [--dry-run]`
+  이든 같은 잡을 민다(Ctrl+C 해도 잡은 남고 다시 실행하면 이어 돈다). 단위당 약 $0.14(dense $0.18) — 네 축 전부면 672 단위 ≈ $95, 상품 5,000~8,000개. ② **지난 쓰레드의 계획**
+  — `POST /api/admin/catalog/harvest` 백필(실주행은 7단계가 자동). ③ **올리브영 사내 Mongo 내보내기** `npm run export:catalog
+  --workspace=apps/tagging-api -- --out oy.json`(태깅 스튜디오와 같은 문서 → 행, goodsNo 형식이면 verified, 태그 = 세부유형·제형·성분·피부 타입·
+  고민·결과·대분류, source `manual`) → `npm run seed:catalog --workspace=apps/core -- --file oy.json` 또는 카드 「JSON 가져오기」. 그 밖의 몰도
+  같은 행 형식의 JSON 을 가져오기로. admin API:
+
+| 메서드 | 경로 | 설명 |
+|---|---|---|
+| GET | `/api/admin/catalog` | 현황 `AdminCatalogWire` — `{ stats: CatalogStatsWire, available, note? }` (표 없음·core 미연결이면 available=false) |
+| GET/POST/DELETE | `/api/admin/catalog/seed-job` · POST `…/step` · `…/pause` · `…/resume` | **시딩 잡** — 상태는 core KV `catalog-seed-job`(`CatalogSeedJob`: facets·types·dense·total·cursor·retry·failed·products·verified·webSearchRequests·history[≤40]·lockUntil·lastError). POST 시작(`StartCatalogSeedJobBody`, 진행 중 잡이 있으면 reset 없이 409) → 드라이버(콘솔 「이 탭에서 돌리기」·`apps/bff/scripts/seed-search.mjs`)가 `step` 을 반복 호출해 8단위씩 전진(서버리스 300초 안, 회차 잠금 270초 — 다른 드라이버는 `busy`), 본 회차 뒤 실패 단위 재시도 회차 1번, 끝나면 `done`. 콘솔 카드가 진행 바·회차 기록·결과를 본다(드라이버가 없으면 10초 조회) |
+| POST | `/api/admin/catalog/seed-search` | **시딩 웹 검색 배치(잡 없이 1회차)** `{ keywords?[≤8] }`(유형만) 또는 `{ queries?: [{ keyword, query? }][≤8], dense? }`(대량 — 유형×조건) → `{ keywords, failed[], products, verified, webSearchRequests }` — 검색 단위마다 LLM+web_search 1회(동시 3, dense 는 검색 4회·16개), 실패 단위는 failed 로(초점 문구, 다시 돌리면 됨), 결과는 멱등 upsert |
+| POST | `/api/admin/catalog/import` | 가져오기 `{ products?[≤500], contents?[≤500] }` — 올리브영 사내 Mongo 내보내기 JSON 등 행 파일을 500개씩 올린다 (멱등) |
+| POST | `/api/admin/catalog/harvest?limit=` | 지난 쓰레드 계획에서 수확(백필) — 최신 N개 쓰레드의 plan 스텝을 실주행과 같은 규칙으로 |
+| POST | `/api/admin/catalog/verify?limit=&mall=` | 상품 링크 점검 — 오래 안 본 순 N개(mall 기본 `*` 전체): 지마켓은 썸네일(gdimg)·그 밖의 몰은 상품 주소에 HEAD, 404 → `dead`, 200 → `verified`. 올리브영·쿠팡은 Node 에서 닿지 못해 건너뜀(번호 형식으로 verified) |
+
+e2e: `langgraph-smoke.mjs` 14절(모의 core 가 인메모리 카탈로그 — 수확·시딩·5b 가변부 후보 표 주입 확인), 단위 `packages/pipeline/test/catalog.test.mjs`.
+
 ## 2. Core — internal API (BFF 전용, 비공개)
 
 Base: `https://ddak-core.vercel.app` · 인증: **`Authorization: Bearer <CORE_SERVICE_TOKEN>`** (healthz·docs 제외)
@@ -225,6 +273,10 @@ Base: `https://ddak-core.vercel.app` · 인증: **`Authorization: Bearer <CORE_S
 | POST/GET | `/internal/eval/cases/:id/runs` · GET/PATCH `/internal/eval/runs/:id` | 실행 기록 저장·조회·사람 채점(score·comment·components) (`eval_runs`, 케이스 cascade) — core는 내용 해석 안 함. 단건 GET은 `{ run, case }`(자동 채점이 케이스 입력을 함께 쓴다) |
 | PUT | `/internal/eval/runs/:id/judge` | 자동 채점 판정 저장 (`{ judge: EvalJudgeVerdict }`) — 사람 채점 필드는 불변 (source 축 분리) |
 | GET | `/internal/settings/:key` · PUT · DELETE | 운영 설정 KV (jsonb — core는 해석 안 함). 예: `llm-model` |
+| POST | `/internal/catalog/products/search` · `/internal/catalog/contents/search` | **내재화 카탈로그** 검색 (`CatalogSearchQuery` → `Catalog*SearchWire`) — search_text 부분 일치 점수순, 기본 verified·active 만 (§1-4) |
+| PUT | `/internal/catalog/products` · `/internal/catalog/contents` | 일괄 upsert (≤500) — `bump=true` 면 수확(노출 횟수 누적·출처/검증/상태 보존·태그 합집합) |
+| PATCH | `/internal/catalog/products/:id` · `/internal/catalog/contents/:id` | `verified`·`status` 표시 (`PatchCatalogRowBody`) |
+| GET | `/internal/catalog/products/verify-list?mall=&limit=` · `/internal/catalog/stats` | 점검 대상(오래 안 본 순) · 현황 (`CatalogStatsWire`) |
 | GET | `/healthz` | 헬스체크 (가드 밖) |
 
 **스텝 seq 규약** (BFF가 부여 — 쓰레드 1개의 이벤트 소싱 로그):

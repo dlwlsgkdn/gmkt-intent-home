@@ -267,12 +267,12 @@ export const ProductsSectionGen = z.object({
   kind: z.literal('products'),
   title: z.string(),
   reason: z.string().describe('이 상품들을 고른 이유 한두 문장 — 답변을 근거로'),
-  productIds: z.array(z.string()).max(4).describe('카탈로그에서 고른 상품 id (없으면 빈 배열)'),
+  productIds: z.array(z.string()).max(8).describe('요청 본문의 내부 카탈로그 후보 표에서 고른 상품 id — 섹션 상품의 절반(3~4개) 몫 (맞는 후보가 없으면 빈 배열)'),
   // 웹 검색 그라운딩: 검색 결과에서 확인한 상품만 — url은 BFF가 http(s)+PDP 검증 후 채택한다
   webProducts: z.array(WebProductGen).max(10).describe('웹 검색으로 찾은 상품 — 섹션당 6~8개를 브랜드·가격대·제형 다양하게 (없으면 빈 배열)'),
   catalogRatings: z
     .array(CatalogRatingGen)
-    .max(4)
+    .max(8)
     .optional()
     .describe('productIds 각 상품의 매칭 평가 (productIds 가 비었으면 빈 배열)'),
 })
@@ -299,6 +299,8 @@ export const ContentsSectionGen = z.object({
   title: z.string(),
   reason: z.string().describe('이 콘텐츠들을 고른 이유 한두 문장 — 답변을 근거로'),
   items: z.array(ContentItemGen).min(1).max(8).describe('웹 검색으로 확인한 실제 게시글·영상 — 영상 2~3 + 게시글 2~3 으로 5~6개를 목표로 (검색해도 하나도 확인 못 했을 때만 섹션 생략)'),
+  /** 내부 콘텐츠 후보(가변부 표)에서 고른 id — v29. 후보 표가 없으면 빈 배열·생략. 검증 게이트가 후보 목록으로 되돌려 items 앞에 싣는다 */
+  catalogIds: z.array(z.string()).max(6).optional().describe('요청 본문의 내부 콘텐츠 후보 표에서 고른 id — 섹션 항목의 절반 몫 (후보 표가 없거나 맞는 게 없으면 빈 배열)'),
 })
 export type ContentsSectionGen = z.infer<typeof ContentsSectionGen>
 
@@ -498,8 +500,26 @@ export const PlanSearchSectionPartialGen = z.object({
   webProducts: z.array(z.unknown()).optional(),
   catalogRatings: z.array(z.unknown()).optional(),
   items: z.array(z.unknown()).optional(),
+  catalogIds: z.array(z.unknown()).optional(),
 })
 export type PlanSearchSectionPartialGen = z.infer<typeof PlanSearchSectionPartialGen>
+
+/* ── 내재화 카탈로그 시딩 — 제품 유형 하나의 판매 상품을 웹 검색으로 모으는 배치 출력 (2026-09-17) ── */
+export const CatalogSeedProductGen = z.object({
+  name: z.string().describe('상품명 — 프로모션 대괄호·브랜드 중복 없이 상품 자체 이름'),
+  brand: z.string().describe('브랜드'),
+  price: z.number().int().describe('판매가(원) — 확인 못 했으면 0'),
+  mall: z.string().describe('판매처 — 지마켓·올리브영·쿠팡·무신사 등'),
+  url: z.string().describe('상품 상세 페이지(PDP) 주소 — 검색 결과에 실린 것 그대로 (지마켓 goodscode·올리브영 goodsNo·쿠팡 products 번호가 든 주소만)'),
+  imageUrl: z.string().describe('썸네일 주소 — 검색 결과에서 확인한 것만, 없으면 빈 문자열'),
+  tags: z.array(z.string()).max(6).describe('특징 태그 3~6개 — 제형·피부 타입·고민·마감·용량'),
+})
+export type CatalogSeedProductGen = z.infer<typeof CatalogSeedProductGen>
+
+export const CatalogSeedGen = z.object({
+  products: z.array(CatalogSeedProductGen).max(16).describe('검색으로 확인한 실제 판매 상품 8~12개 (확인 못 하면 그만큼만)'),
+})
+export type CatalogSeedGen = z.infer<typeof CatalogSeedGen>
 
 /* ── 홈 검색창 — 진입 분기(라우터)와 AI 검색어 추천 (짧은 구조화 호출, 스트리밍 없음) ── */
 export const SearchRouteGen = z.object({

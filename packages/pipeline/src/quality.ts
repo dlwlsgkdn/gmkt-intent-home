@@ -28,7 +28,8 @@ export function planQualityOf(page: PlanPageWire, dropLog: { code: string }[] = 
       if (s.products.length === 1) q.singleProductSections += 1
       for (const p of s.products) {
         q.products += 1
-        if (p.mall) {
+        // 웹 검색 상품은 id 접두 `web-` — 내부 카탈로그 후보(gm-·oy-·p-)는 mall 이 있어도 웹 상품이 아니다 (v29)
+        if (p.id.startsWith('web-')) {
           q.webProducts += 1
           if (p.urlKind !== 'search') q.pdpProducts += 1
         }

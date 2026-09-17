@@ -43,7 +43,9 @@ export function completeSearchSection(element: unknown): PlanSearchSectionGen | 
   const items = settled('items', s.items)
     .map((v) => ContentItemGen.safeParse(v))
     .flatMap((r) => (r.success ? [r.data] : []))
-  return items.length ? { kind: 'contents', title: s.title, reason: s.reason, items } : null
+  // 내부 콘텐츠 후보 id (v29) — 완성된 것만. 항목이 아직 없어도 후보 id 가 있으면 섹션을 내보낸다(게이트가 후보를 항목으로 되돌린다)
+  const catalogIds = settled('catalogIds', s.catalogIds).filter((v): v is string => typeof v === 'string')
+  return items.length || catalogIds.length ? { kind: 'contents', title: s.title, reason: s.reason, items, catalogIds } : null
 }
 
 /** 자라는 중인 뼈대 섹션 조각 → 부분 와이어 섹션 (guide·steps·compare·caution) — 제목이 나오기 시작하면 토큰 단위로

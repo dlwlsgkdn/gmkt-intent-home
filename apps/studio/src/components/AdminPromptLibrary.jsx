@@ -208,7 +208,7 @@ export default function AdminPromptLibrary({ api }) {
       </section>
 
       <div className="sb-admin-callout sb-admin-prompt-safety">
-        <span>!</span><p><b>저장은 새로 만드는 결과부터 적용됩니다.</b> 기존 고객 결과는 바뀌지 않아요. 괄호가 두 겹인 표시(예: {'{{CATALOG}}'})는 지우지 마세요.</p>
+        <span>!</span><p><b>저장은 새로 만드는 결과부터 적용됩니다.</b> 기존 고객 결과는 바뀌지 않아요. 괄호가 두 겹인 표시(예: {'{{CRITERIA}}'})는 지우지 마세요.</p>
       </div>
       {error && <div className="sb-admin-card"><p className="sb-admin-gate__error">{error}</p><button type="button" className="sb-btn sb-btn--ghost sb-btn--small" onClick={load}>다시 시도</button></div>}
       {!wire && !error && <div className="sb-admin-card"><p className="sb-admin__muted">프롬프트를 불러오는 중…</p></div>}

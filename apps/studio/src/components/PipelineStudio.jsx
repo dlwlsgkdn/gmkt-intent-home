@@ -1769,7 +1769,9 @@ export default function PipelineStudio({ api }) {
                 const isDefaultText = promptText === stagePrompt.defaultText
                 const saved = stagePrompt.configured ?? stagePrompt.defaultText
                 const dirtyPrompt = promptText !== saved
-                const missingCatalog = stagePrompt.id === 'plan-products' && !promptText.includes('{{CATALOG}}')
+                // v29: 상품 카탈로그는 시스템 자리표시자({{CATALOG}})가 아니라 요청별 가변부 표(내부 카탈로그 후보)로 실린다 —
+                // 옛 재정의에 남은 {{CATALOG}} 는 데모 14종으로 치환은 되지만 후보 표와 겹치니 떼라고 안내한다
+                const staleCatalog = stagePrompt.id === 'plan-products' && promptText.includes('{{CATALOG}}')
                 return (
                   <>
                     <div className="sb-stage-dialog__prompt-head">
@@ -1794,9 +1796,9 @@ export default function PipelineStudio({ api }) {
                       {!isDefaultText && stagePrompt.configured && !dirtyPrompt && (
                         <span className="sb-admin-prompt-chip sb-admin-prompt-chip--custom">재정의 사용 중</span>
                       )}
-                      {missingCatalog && (
+                      {staleCatalog && (
                         <span className="sb-admin-prompt-chip sb-admin-prompt-chip--warn">
-                          {'{{CATALOG}}'} 자리표시자가 없어요 — 상품 카탈로그 목록이 프롬프트에서 빠져요
+                          {'{{CATALOG}}'} 자리표시자는 옛 방식이에요 — 상품 후보는 요청마다 내부 카탈로그 표로 실리니 이 줄은 빼도 돼요
                         </span>
                       )}
                     </div>

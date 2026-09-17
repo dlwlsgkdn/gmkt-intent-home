@@ -1,5 +1,14 @@
 import { HttpException, Injectable, ServiceUnavailableException } from '@nestjs/common'
 import type {
+  CatalogContentSearchWire,
+  CatalogProductRow,
+  CatalogProductSearchWire,
+  CatalogSearchQuery,
+  CatalogStatsWire,
+  PatchCatalogRowBody,
+  UpsertCatalogContentsBody,
+  UpsertCatalogProductsBody,
+  UpsertCatalogResult,
   CreateEvalCaseBody,
   CreateEvalRunBody,
   CreateThreadBody,
@@ -118,6 +127,32 @@ export class CoreClientService {
   /** 실주행 plan 스텝 llmMeta — 전환 판정 계기판의 원천 */
   listPlanMetas(limit?: number) {
     return this.req<PlanMetasWire>('GET', `/internal/plan-metas${limit ? `?limit=${limit}` : ''}`)
+  }
+
+  /* ── 내재화 카탈로그 (2026-09-17, API.md §2-1) — 저장·검색·점검. 조회 실패는 호출자(CatalogService)가 삼킨다 */
+  searchCatalogProducts(query: CatalogSearchQuery) {
+    return this.req<CatalogProductSearchWire>('POST', '/internal/catalog/products/search', query)
+  }
+  searchCatalogContents(query: CatalogSearchQuery) {
+    return this.req<CatalogContentSearchWire>('POST', '/internal/catalog/contents/search', query)
+  }
+  upsertCatalogProducts(body: UpsertCatalogProductsBody) {
+    return this.req<UpsertCatalogResult>('PUT', '/internal/catalog/products', body)
+  }
+  upsertCatalogContents(body: UpsertCatalogContentsBody) {
+    return this.req<UpsertCatalogResult>('PUT', '/internal/catalog/contents', body)
+  }
+  patchCatalogProduct(id: string, body: PatchCatalogRowBody) {
+    return this.req<CatalogProductRow>('PATCH', `/internal/catalog/products/${encodeURIComponent(id)}`, body)
+  }
+  catalogVerifyList(mall: string, limit: number) {
+    return this.req<{ items: CatalogProductRow[] }>(
+      'GET',
+      `/internal/catalog/products/verify-list?mall=${encodeURIComponent(mall)}&limit=${limit}`,
+    )
+  }
+  catalogStats() {
+    return this.req<CatalogStatsWire>('GET', '/internal/catalog/stats')
   }
 
   /** 설정 KV — 없는 키는 null (404를 삼킨다) */

@@ -4077,3 +4077,43 @@
 @media (prefers-reduced-motion: reduce) {
   .sb-trend-bubble, .sb-trend-bubble.is-fresh, .sb-trend-bubble__float, .sb-trend-loose.is-fresh { animation: none; }
 }
+
+/* ── 내재화 카탈로그 카드 (운영 콘솔 트렌드 사전 탭 머리, v29) ── */
+.sb-catalog-card { margin-bottom: 14px; }
+.sb-catalog-card__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.sb-catalog-card__head h2 { margin: 0; font-size: var(--sb-t-title); font-weight: 500; }
+.sb-catalog-card__head p { margin: 2px 0 0; color: var(--sb-muted); font-size: var(--sb-t-caption); }
+.sb-catalog-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.sb-catalog-stat { background: var(--sb-n-50); border-radius: var(--sb-r-md); padding: 10px 12px; }
+.sb-catalog-stat b { display: block; font-size: 20px; font-weight: 500; color: var(--sb-ink); }
+.sb-catalog-stat span { font-size: var(--sb-t-caption); color: var(--sb-muted); }
+.sb-catalog-stat small { display: block; margin-top: 4px; font-size: var(--sb-t-micro); color: var(--sb-subtle); }
+.sb-catalog-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.sb-catalog-note { margin: 0; font-size: var(--sb-t-caption); color: var(--sb-muted); }
+.sb-catalog-note.is-warn { color: var(--sb-warn); }
+.sb-catalog-log { margin: 0; font-size: var(--sb-t-caption); color: var(--sb-ink-2); }
+.sb-catalog-actions label.sb-btn { cursor: pointer; }
+.sb-catalog-actions label.sb-btn.is-disabled { opacity: 0.5; pointer-events: none; }
+.sb-catalog-seedopts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: var(--sb-t-caption); color: var(--sb-muted); }
+.sb-catalog-seedopts__label { color: var(--sb-ink-2); font-weight: 500; }
+.sb-catalog-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border: 1px solid var(--sb-n-200); border-radius: var(--sb-r-pill); cursor: pointer; color: var(--sb-ink-2); background: var(--sb-n-0); }
+.sb-catalog-chip.is-on { border-color: var(--sb-accent); color: var(--sb-accent); background: var(--sb-accent-soft, var(--sb-n-50)); }
+.sb-catalog-chip input { margin: 0; }
+.sb-catalog-seedopts__est { color: var(--sb-ink-2); }
+.sb-catalog-seedopts__hint { flex-basis: 100%; color: var(--sb-subtle); }
+.sb-catalog-seedopts__hint code { font-family: ui-monospace, monospace; font-size: var(--sb-t-micro); }
+
+/* 시딩 잡 패널 — 진행 바·회차 기록 */
+.sb-seedjob { border: 1px solid var(--sb-n-200); border-radius: var(--sb-r-lg); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; background: var(--sb-n-50); }
+.sb-seedjob__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: var(--sb-t-caption); color: var(--sb-ink-2); }
+.sb-seedjob__head b { font-weight: 500; color: var(--sb-ink); }
+.sb-seedjob__bar { height: 6px; border-radius: var(--sb-r-pill); background: var(--sb-n-200); overflow: hidden; }
+.sb-seedjob__bar i { display: block; height: 100%; background: var(--sb-accent); transition: width var(--sb-dur) var(--sb-ease); }
+.sb-seedjob__bar.is-running i { background: var(--sb-ai, var(--sb-accent)); }
+.sb-seedjob__stats { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: var(--sb-t-caption); color: var(--sb-muted); }
+.sb-seedjob__stats b { font-weight: 500; color: var(--sb-ink); }
+.sb-seedjob__actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.sb-seedjob__history { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; font-size: var(--sb-t-micro); color: var(--sb-muted); max-height: 160px; overflow: auto; }
+.sb-seedjob__history li b { font-weight: 500; color: var(--sb-ink-2); }
+.sb-seedjob__history li.is-fail { color: var(--sb-danger); }
+.sb-seedjob__error { margin: 0; font-size: var(--sb-t-caption); color: var(--sb-danger); }

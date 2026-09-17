@@ -9,6 +9,7 @@ import { SEQ, intentOf } from '../threads/thread-io'
 import type { PlanStreamHandlers, SurveyStreamHandlers } from '../threads/threads.service'
 import { buildThreadGraph, type PlanResume, type ThreadGraph } from './graph'
 import { EnrichService } from '../threads/enrich.service'
+import { CatalogService } from '../catalog/catalog.service'
 import { getCheckpointer } from './checkpointer'
 import { PlanStreamCoordinator, type GraphStreamChunk } from './stream'
 
@@ -33,12 +34,16 @@ export class GraphEngineService {
     private readonly llm: LlmService,
     private readonly knowledge: KnowledgeService,
     private readonly enrich: EnrichService,
+    private readonly catalog: CatalogService,
   ) {}
 
   private getGraph(): Promise<ThreadGraph> {
     if (!this.compiledP) {
       this.compiledP = getCheckpointer().then((checkpointer) =>
-        buildThreadGraph({ llm: this.llm, core: this.core, knowledge: this.knowledge, enrich: this.enrich }, checkpointer),
+        buildThreadGraph(
+          { llm: this.llm, core: this.core, knowledge: this.knowledge, enrich: this.enrich, catalog: this.catalog },
+          checkpointer,
+        ),
       )
     }
     return this.compiledP

@@ -1,4 +1,5 @@
-import { index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
+import { boolean, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 import type { LlmMeta, StepStage, ThreadSource, ThreadStatus } from '@ddak/schema'
 
 /*
@@ -86,8 +87,81 @@ export const evalRuns = pgTable(
   (t) => [index('eval_runs_case_idx').on(t.caseId, t.createdAt)],
 )
 
+/* ── 내재화 카탈로그 (2026-09-17) — 추천 상품·참고 콘텐츠의 내부 표. 계약은 @ddak/schema catalog.ts, 배경은 API.md §2-1.
+ * core 는 저장·검색만 한다: 검색은 search_text(이름·브랜드·태그·카테고리를 소문자·공백 제거로 이어 붙인 문자열)의 부분 일치 개수로
+ * 순위를 매긴다 — 한국어 형태소 분석 없이 어휘 표(@ddak/pipeline PRODUCT_TYPE_VOCAB)가 그 몫을 하고, pg_trgm GIN 인덱스가
+ * ILIKE 를 받는다(마이그레이션 0005 가 확장을 켠다 — Neon 은 CREATE EXTENSION pg_trgm 을 지원한다). 수천~수만 행 규모에서 한 자리
+ * ms 대 조회이며, 의미 검색이 필요해지면 pgvector 임베딩 컬럼을 더한다(Neon 지원) — 그때도 이 표가 원천이다 */
+
+export const catalogProducts = pgTable(
+  'catalog_products',
+  {
+    /** `gm-<상품번호>`(지마켓) · `oy-<goodsNo>`(올리브영) · `p-001`(데모) · `web-<해시>` — BFF/@ddak/pipeline 이 만든다 */
+    id: text('id').primaryKey(),
+    mall: text('mall').notNull(),
+    mallProductId: text('mall_product_id'),
+    name: text('name').notNull(),
+    brand: text('brand').notNull().default(''),
+    price: integer('price').notNull().default(0),
+    url: text('url').notNull(),
+    imageUrl: text('image_url'),
+    tags: text('tags').array().notNull().default(sql`'{}'::text[]`),
+    category: text('category'),
+    /** snapshot | catalog | thread | manual */
+    source: text('source').notNull(),
+    /** PDP 가 확인된 상품 — 검색은 기본으로 이 행만 돌려준다 */
+    verified: boolean('verified').notNull().default(false),
+    /** active | dead (점검에서 리스팅이 내려간 것으로 확인) */
+    status: text('status').notNull().default('active'),
+    meta: jsonb('meta').$type<Record<string, unknown> | null>(),
+    /** 계획에 실린 횟수 — 수확 upsert 가 더한다 (검색 순위 보조) */
+    recommendCount: integer('recommend_count').notNull().default(0),
+    /** 검색 재료 — 이름·브랜드·태그·카테고리 정규화 연결 (앱이 만든다) */
+    searchText: text('search_text').notNull().default(''),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('catalog_products_mall_idx').on(t.mall, t.verified),
+    index('catalog_products_search_trgm_idx').using('gin', sql`${t.searchText} gin_trgm_ops`),
+  ],
+)
+
+export const catalogContents = pgTable(
+  'catalog_contents',
+  {
+    /** `ct-<url 해시>` */
+    id: text('id').primaryKey(),
+    /** video | article */
+    type: text('type').notNull(),
+    source: text('source').notNull().default(''),
+    title: text('title').notNull(),
+    url: text('url').notNull(),
+    imageUrl: text('image_url'),
+    meta: text('meta'),
+    snippet: text('snippet'),
+    duration: text('duration'),
+    tags: text('tags').array().notNull().default(sql`'{}'::text[]`),
+    year: integer('year'),
+    verified: boolean('verified').notNull().default(true),
+    status: text('status').notNull().default('active'),
+    recommendCount: integer('recommend_count').notNull().default(0),
+    searchText: text('search_text').notNull().default(''),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('catalog_contents_type_idx').on(t.type, t.verified),
+    index('catalog_contents_search_trgm_idx').using('gin', sql`${t.searchText} gin_trgm_ops`),
+  ],
+)
+
 export type ThreadRow = typeof threads.$inferSelect
 export type ThreadStepRow = typeof threadSteps.$inferSelect
 export type SettingRow = typeof settings.$inferSelect
 export type EvalCaseRow = typeof evalCases.$inferSelect
 export type EvalRunRow = typeof evalRuns.$inferSelect
+export type CatalogProductDbRow = typeof catalogProducts.$inferSelect
+export type CatalogContentDbRow = typeof catalogContents.$inferSelect

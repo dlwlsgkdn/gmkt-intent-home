@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { fetchAdminPipeline, putAdminKnowledge } from '../lib/adminApi.js'
 import TrendDashboard from './TrendDashboard.jsx'
+import AdminCatalog from './AdminCatalog.jsx'
 import {
   TREND_KEYWORDS,
   TREND_LEVEL_DEFS,
@@ -249,6 +250,8 @@ export default function AdminKnowledge({ api }) {
         <div><p className="sb-admin-pagehead__eyebrow">뷰티 키워드 모으는 곳</p><h1>트렌드 사전 <span className="sb-trend-title-heart" aria-hidden="true">♡</span></h1><p>눈에 띈 키워드 하나, 여기에 톡.</p></div>
         <span className="sb-admin-health is-lab"><i /> {draftCount > 0 ? `이 기기 편집 초안 ${draftCount}건` : '코드 이관본 · 전 기기 공통'}</span>
       </header>
+
+      <AdminCatalog />
 
       <div className="sb-admin-subtabs" role="group" aria-label="트렌드 사전 보기">
         <button type="button" className={view === 'dashboard' ? 'is-on' : ''} aria-pressed={view === 'dashboard'} onClick={() => { setView('dashboard'); setPop(null) }}>버블 대시보드</button>

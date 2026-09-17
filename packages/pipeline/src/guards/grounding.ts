@@ -3,6 +3,7 @@ import type { ContentsSectionGen, PlanSkeletonSectionGen, ProductRatingGen, Prod
 import type { ConstraintLedger } from '../ledger'
 import { cartedNames } from '../ledger'
 import { CATALOG, CATALOG_BY_ID } from '../catalog'
+import { oliveyoungGoodsNoOf, pdpKeyOf, type CatalogCandidates } from '../catalog-candidates'
 import { findMedicalClaim } from './claims'
 import { scoreProductMatch, withMatchFactor } from './match'
 
@@ -41,6 +42,10 @@ export type GroundingDrop = {
     | 'contents-empty-retry'
     /** 정보 기록(드롭 아님) — 상품 검색(5b)이 상품 섹션을 하나도 못 만들어 뼈대 자리를 카탈로그 매칭으로 채웠다 */
     | 'catalog-fallback'
+    /** 정보 기록(드롭 아님) — 웹 상품의 PDP 주소가 그 몰의 상품 번호 형식이 아니라 몰 검색 링크(urlKind=search)로 바꿔 실었다 (v29) */
+    | 'repaired-url'
+    /** 정보 기록(드롭 아님) — 웹 검색 상품이 내부 카탈로그 후보와 같은 상품(지마켓 상품 번호 일치)이라 후보 쪽(검증된 값)으로 실었다 (v29) */
+    | 'duplicate-candidate'
   message: string
 }
 
@@ -52,6 +57,8 @@ export type GuardContext = {
   contentBlockHosts?: string[]
   /** 콘텐츠 신선도 기준 연도 — 기본은 오늘 (테스트에서 고정) */
   referenceYear?: number
+  /** 이 요청의 내부 카탈로그 후보 (v29) — productIds·catalogIds 는 이 목록(+데모 카탈로그)에서만 해석된다 */
+  candidates?: CatalogCandidates | null
 }
 
 /** 블록리스트 KV 저장 키 — 쓰레드 피드백에서 증류한 상품명(줄바꿈 구분, 정확 매칭) */
@@ -61,8 +68,8 @@ export const GUARD_CONTENT_HOSTS_SETTING_KEY = 'guard-content-hosts'
 
 /** 카탈로그 보충 상품의 최소 매칭율 — 이 아래면 용도가 안 맞는 것으로 보고 드롭 */
 export const CATALOG_MIN_MATCH = 60
-/** 섹션당 카탈로그 보충 상한 (프롬프트 규칙과 한 벌) */
-export const CATALOG_MAX_PER_SECTION = 3
+/** 섹션당 내부 카탈로그 상한 (프롬프트 규칙 「내부 절반 3~4개」와 한 벌 — v29 에서 3→4) */
+export const CATALOG_MAX_PER_SECTION = 4
 /** 참고 콘텐츠 신선도 — 이 햇수를 넘은 콘텐츠는 드롭 */
 export const CONTENT_MAX_AGE_YEARS = 3
 /** 섹션당 같은 출처(도메인) 상한 */
@@ -179,6 +186,29 @@ export function isSearchLikeUrl(url: URL): boolean {
   return false
 }
 
+/** 몰별 검색 결과 주소 — PDP 를 못 믿을 때 대신 싣는 링크 (프롬프트 v21 규칙과 같은 주소) */
+export function mallSearchUrl(url: URL, query: string): string | null {
+  const q = encodeURIComponent(query.trim())
+  if (!q) return null
+  const host = url.hostname
+  if (/(^|\.)gmarket\.co\.kr$/i.test(host)) return `https://browse.gmarket.co.kr/search?keyword=${q}`
+  if (/(^|\.)oliveyoung\.co\.kr$/i.test(host)) return `https://www.oliveyoung.co.kr/store/search/getSearchMain.do?query=${q}`
+  if (/(^|\.)coupang\.com$/i.test(host)) return `https://www.coupang.com/np/search?q=${q}`
+  return null
+}
+
+/** PDP 주소 유효성 보정 (v29, 2026-09-17 — 「PDP 주소가 유효하지 않은 상품이 많다」): 아는 몰인데 상품 번호 형식이 어긋난 주소
+ * (지마켓 goodscode 없음 · 올리브영 goodsNo 가 A+12자리가 아님 · 쿠팡 /vp/products/<번호> 아님)는 모델이 지어내거나 조합한 것일 가능성이
+ * 높다 — 상세보기가 깨진 페이지로 열리지 않게 그 몰의 검색 결과 링크(urlKind=search, 근거 점수 25)로 바꿔 싣는다. 형식이 맞는 주소·모르는
+ * 몰의 주소는 손대지 않는다(존재 여부까지는 오프라인에서 알 수 없다 — 지마켓은 상품 번호가 있으면 썸네일 HEAD 로 점검 작업이 따로 본다) */
+export function repairPdpUrl(url: URL, label: string): string | null {
+  const host = url.hostname
+  if (/(^|\.)gmarket\.co\.kr$/i.test(host)) return gmarketGoodsCodeOf(url) ? null : mallSearchUrl(url, label)
+  if (/(^|\.)oliveyoung\.co\.kr$/i.test(host)) return oliveyoungGoodsNoOf(url.toString()) ? null : mallSearchUrl(url, label)
+  if (/(^|\.)coupang\.com$/i.test(host)) return /\/vp\/products\/\d{5,}/.test(url.pathname) ? null : mallSearchUrl(url, label)
+  return null
+}
+
 /** 상품 섹션 그라운딩 — 카탈로그 밖 id는 버리고, 웹 상품은 URL(http/https+PDP 또는 urlKind=search) 검증 통과분만 채택.
  * 상세 페이지(url) 없는 상품은 카탈로그 상품이라도 추천하지 않는다 — 상세보기가 열리는 상품만 싣는다.
  * guard가 있으면 확장 게이트(블록리스트·의학 단정·원장 역대조·담은 상품)를 상품 단위로 추가 대조한다.
@@ -192,16 +222,26 @@ export function groundProductsSection(
 ): GroundingResult {
   const drops: GroundingDrop[] = []
   const carted = new Set(cartedNames(guard?.ledger).map(normalizeName))
+  // 내부 카탈로그 id 해석 — 이 요청의 후보 목록(DB 조회, v29) 먼저, 없으면 데모 카탈로그 14종 (옛 프롬프트·재정의 호환)
+  const candidateById = new Map((guard?.candidates?.products ?? []).map((p) => [p.id, p]))
+  const resolveCatalog = (id: string): CatalogProduct | undefined => candidateById.get(id) ?? CATALOG_BY_ID.get(id)
   const catalogProducts: CatalogProduct[] = s.productIds
-    .map((id) => CATALOG_BY_ID.get(id))
-    .filter((p): p is NonNullable<ReturnType<typeof CATALOG_BY_ID.get>> => Boolean(p && p.url))
+    .map((id) => resolveCatalog(id))
+    .filter((p): p is CatalogProduct => Boolean(p && p.url))
   if (catalogProducts.length < s.productIds.length) {
     drops.push({
       code: 'catalog-miss',
-      message: `카탈로그 밖이거나 PDP url 없는 상품 id ${s.productIds.length - catalogProducts.length}건 드롭`,
+      message: `카탈로그 후보 밖이거나 PDP url 없는 상품 id ${s.productIds.length - catalogProducts.length}건 드롭`,
     })
   }
-  // 외부몰 우선 정책: 웹 상품(올리브영 등)을 앞에 싣고 카탈로그(지마켓)는 뒤에 보조로 붙인다.
+  // 웹 상품이 내부 후보와 같은 상품(지마켓·올리브영·쿠팡 상품 번호 일치 — pdpKeyOf)이면 후보 쪽(검증된 값)으로 싣는다 — 같은 카드가 둘 서지 않게
+  const candidateByCode = new Map<string, CatalogProduct>()
+  for (const p of candidateById.values()) {
+    const key = p.url ? pdpKeyOf(p.url) : null
+    if (key) candidateByCode.set(key, p)
+  }
+  const catalogExtra: { product: CatalogProduct; rating?: ProductRatingGen }[] = []
+  // 외부몰 우선 정책: 웹 상품(올리브영 등)을 앞에 싣고 카탈로그(내부 후보)는 뒤에 붙인다.
   // 통과한 상품에는 매칭율(항목 점수·가중 합산)을 붙여 페이지에 그대로 남긴다 — LLM 평가(rating)가 없으면 폴백 대조
   const products: CatalogProduct[] = []
   const admit = (product: CatalogProduct, rating?: ProductRatingGen): CatalogProduct | null => {
@@ -218,15 +258,33 @@ export function groundProductsSection(
       drops.push({ code: 'invalid-url', message: `웹 상품 URL 검증 실패로 드롭: ${w.name} (${w.url})` })
       return
     }
+    const label = `${w.brand.trim()} ${normalizeWebProductName(w.name, w.brand)}`.trim()
+    const dupKey = pdpKeyOf(url.toString())
+    const dup = dupKey ? candidateByCode.get(dupKey) : undefined
+    if (dup) {
+      drops.push({ code: 'duplicate-candidate', message: `웹 상품이 내부 후보와 같은 상품이라 후보 값으로 실음: ${label} → ${dup.id}` })
+      if (!s.productIds.includes(dup.id)) catalogExtra.push({ product: dup, rating: w.match })
+      return
+    }
     // 검색/목록 페이지 주소는 상품이 그렇다고 표시한 경우(urlKind=search — PDP 를 못 찾은 대체 링크)만 통과시킨다.
     // PDP 라고 하면서 검색 페이지를 준 것은 예전처럼 드롭 — "PDP 만" 정책은 표시 없는 링크에 그대로 남는다 (2026-09)
-    const searchLink = w.urlKind === 'search'
+    let searchLink = w.urlKind === 'search'
+    let productUrl = w.url
     if (!searchLink && isSearchLikeUrl(url)) {
       drops.push({
         code: 'search-like-url',
         message: `웹 상품 URL이 검색/목록 페이지로 보여 드롭 (PDP 또는 urlKind=search 만 허용): ${w.name} (${w.url})`,
       })
       return
+    }
+    // PDP 형식 보정 (v29) — 아는 몰인데 상품 번호 형식이 어긋난 주소는 몰 검색 링크로 바꿔 싣는다 (깨진 상세보기 대신 검색 결과)
+    if (!searchLink) {
+      const repaired = repairPdpUrl(url, label)
+      if (repaired) {
+        drops.push({ code: 'repaired-url', message: `PDP 주소 형식이 어긋나 몰 검색 링크로 바꿈: ${label} (${w.url})` })
+        productUrl = repaired
+        searchLink = true
+      }
     }
     // 썸네일도 http(s) 검증 통과분만 — 실패해도 상품은 싣는다 (FE가 이모지 목업 폴백). 프로토콜 생략(//…)은 https 로 받고,
     // 지마켓 상품은 상품 번호로 gdimg 썸네일을 결정적으로 채운다 (썸네일 보강 fetch 가 실패해도 지마켓 몫은 언제나 그림이 있다)
@@ -241,7 +299,7 @@ export function groundProductsSection(
         price: priceUnknown ? 0 : w.price,
         ...(priceUnknown ? { priceUnknown: true } : {}),
         tags: w.tags,
-        url: w.url,
+        url: productUrl,
         mall: normalizeMallName(w.mall, url),
         ...(searchLink ? { urlKind: 'search' as const } : {}),
         ...(imageUrl ? { imageUrl } : {}),
@@ -250,10 +308,14 @@ export function groundProductsSection(
     )
     if (admitted) products.push(admitted)
   })
-  // 카탈로그 보충 — 매칭율 기준 미달은 드롭, 순위 상위 3개까지
+  // 카탈로그 보충 — 매칭율 기준 미달은 드롭, 순위 상위 CATALOG_MAX_PER_SECTION 개까지
   const catalogAdmitted: CatalogProduct[] = []
-  for (const product of catalogProducts) {
-    const rating = s.catalogRatings?.find((r) => r.id === product.id)?.match
+  const catalogQueue = [
+    ...catalogProducts.map((product) => ({ product, rating: s.catalogRatings?.find((r) => r.id === product.id)?.match })),
+    ...catalogExtra,
+  ]
+  for (const { product, rating } of catalogQueue) {
+    if (catalogAdmitted.some((p) => p.id === product.id)) continue
     const admitted = admit(product, rating)
     if (!admitted) continue
     const score = admitted.match?.score ?? 0
@@ -283,7 +345,12 @@ export function groundProductsSection(
 }
 
 /** 정보 기록 코드 — 드롭이 아니라 「이런 보정이 있었다」는 표식. 품질 KPI(planQualityOf drops)·드롭 개수 집계에서 뺀다 */
-export const INFO_DROP_CODES: ReadonlySet<GroundingDrop['code']> = new Set(['contents-empty-retry', 'catalog-fallback'])
+export const INFO_DROP_CODES: ReadonlySet<GroundingDrop['code']> = new Set([
+  'contents-empty-retry',
+  'catalog-fallback',
+  'repaired-url',
+  'duplicate-candidate',
+])
 export const isInfoDrop = (d: { code: string }): boolean => INFO_DROP_CODES.has(d.code as GroundingDrop['code'])
 
 const normalizeText = (text: string) => String(text ?? '').replace(/\s+/g, '').toLowerCase()
@@ -313,10 +380,13 @@ export function catalogFallbackSections(
   const carted = new Set(cartedNames(guard?.ledger).map(normalizeName))
   const used = new Set<string>()
   const sections: PlanSectionWire[] = []
+  // 폴백 풀 = 이 요청의 내부 후보(DB, v29) + 데모 카탈로그 (id 중복은 후보 우선)
+  const pool: CatalogProduct[] = []
+  for (const p of [...(guard?.candidates?.products ?? []), ...CATALOG]) if (!pool.some((x) => x.id === p.id)) pool.push(p)
   for (const slot of slots) {
     // 용도 판정은 **제목**(제품 유형)과의 겹침이 필수 — 기준(reason)은 "민감성이라 약산성"처럼 피부 조건 단어가 섞여 있어
     // 겹침만으로는 크림을 클렌저 자리에 앉힐 수 있다. reason 겹침은 근거 개수(4/5→5/5)에만 더한다
-    const picked = CATALOG.filter((p) => p.url && !used.has(p.id))
+    const picked = pool.filter((p) => p.url && !used.has(p.id))
       .filter((p) => !productGuardDrop(p, guard, carted))
       .map((p) => {
         const titleHits = slotOverlap(p, slot.title)
@@ -366,7 +436,33 @@ export function groundContentsSection(s: ContentsSectionGen, guard?: GuardContex
   const blockHosts = (guard?.contentBlockHosts ?? []).map((h) => h.trim().toLowerCase().replace(/^(www|m)\./, '')).filter(Boolean)
   const recent = new Set((guard?.ledger?.recentContentUrls ?? []).map((u) => u.trim()))
   const perHost = new Map<string, number>()
-  s.items.forEach((c) => {
+  // 내부 콘텐츠 후보 id (v29) → 항목. 후보 밖 id 는 catalog-miss. 후보 항목도 아래 웹 항목과 같은 게이트(최근 중복·출처 상한)를 지난다 —
+  // 후보를 먼저 실어 웹 항목의 같은 출처 상한이 후보를 밀어내지 않게 한다
+  const candidateById = new Map((guard?.candidates?.contents ?? []).map((c) => [c.id, c]))
+  const ids = s.catalogIds ?? []
+  const fromCatalog: ContentsSectionGen['items'] = []
+  for (const id of ids) {
+    const c = candidateById.get(id)
+    if (!c) {
+      drops.push({ code: 'catalog-miss', message: `내부 콘텐츠 후보 밖 id 드롭: ${id}` })
+      continue
+    }
+    fromCatalog.push({
+      type: c.type,
+      source: c.source,
+      title: c.title,
+      url: c.url,
+      imageUrl: c.imageUrl ?? '',
+      meta: c.meta ?? '',
+      snippet: c.snippet ?? '',
+      duration: c.duration ?? '',
+      why: '',
+    })
+  }
+  const seenUrls = new Set<string>()
+  ;[...fromCatalog, ...s.items].forEach((c) => {
+    if (seenUrls.has(c.url.trim())) return // 후보로 실린 것을 웹 항목이 다시 적은 경우
+    seenUrls.add(c.url.trim())
     const url = parseHttpUrl(c.url)
     if (!url || isSearchLikeUrl(url)) {
       drops.push({

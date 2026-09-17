@@ -8,7 +8,8 @@
     "build": "nest build",
     "start": "node dist/main.js",
     "start:dev": "nest start --watch",
-    "e2e:mock": "node e2e/langgraph-smoke.mjs"
+    "e2e:mock": "node e2e/langgraph-smoke.mjs",
+    "seed:search": "node scripts/seed-search.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

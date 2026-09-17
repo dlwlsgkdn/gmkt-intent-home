@@ -35,6 +35,7 @@ import {
   planQualityOf,
   surveyStreamHandlers,
   orderSkeletonSlots,
+  type GuardContext,
 } from '@ddak/pipeline'
 import { CoreClientService } from '../core-client.service'
 import { LlmService } from '../llm/llm.service'
@@ -42,6 +43,7 @@ import { LLM_STAGE_RETRY_DELAY_MS, retryLlmStage } from '../llm/retry'
 import { generatePlanContentsRobust } from '../llm/contents-retry'
 import { ImageEditService } from '../image/image-edit.service'
 import { EnrichService } from './enrich.service'
+import { CatalogService } from '../catalog/catalog.service'
 import { EngineFlagService } from '../engine/engine-flag.service'
 import { GraphEngineService } from '../engine/graph-engine.service'
 import { SEQ, combineMeta, intentOf } from './thread-io'
@@ -86,6 +88,7 @@ export class ThreadsService {
     private readonly engineFlag: EngineFlagService,
     private readonly graphEngine: GraphEngineService,
     private readonly enrich: EnrichService,
+    private readonly catalog: CatalogService,
   ) {}
 
   /** 쓰레드 시작 — 생성 + 탐색 스텝(의도·프로필) 기록 */
@@ -172,6 +175,11 @@ export class ThreadsService {
             null,
         }
       : undefined
+
+    // 내부 카탈로그 후보(v29) — 의도·답변 검색어로 core 를 조회해 5b·5c 가변부 표로 싣고, 게이트가 같은 목록으로 id 를 해석한다.
+    // core 왕복 1회(수백 ms) — 조회 실패·표 없음은 데모 카탈로그로 대신한다 (계획을 막지 않는다)
+    const candidates = await this.catalog.candidatesFor({ intent, survey, answers, profile })
+    const guard: GuardContext = { candidates }
 
     let allocator: GeneratedIndexAllocator | null = null // null = 뼈대 미완 — 검색 섹션은 대기열에 쌓인다
     const arrivedSections: { section: PlanSectionWire; streamIndex: number }[] = [] // 그라운딩 통과분 (도착 순)
@@ -271,8 +279,8 @@ export class ThreadsService {
           // 스트림 조각도 최종과 같은 그라운딩을 통과시킨다 — 결정적이라 result와 어긋나지 않는다
           const section =
             parsed.data.kind === 'contents'
-              ? this.resolveContentsSection(parsed.data)
-              : this.resolveProductsSection(parsed.data, index)
+              ? this.resolveContentsSection(parsed.data, false, guard)
+              : this.resolveProductsSection(parsed.data, index, false, guard)
           if (section) {
             arrivedSections.push({ section, streamIndex: index })
             flushGenerated()
@@ -287,13 +295,15 @@ export class ThreadsService {
           if (!gen) return
           const section =
             gen.kind === 'contents'
-              ? this.resolveContentsSection(gen, true)
-              : this.resolveProductsSection(gen, index, true)
+              ? this.resolveContentsSection(gen, true, guard)
+              : this.resolveProductsSection(gen, index, true, guard)
           if (section) stream.onSection(section, slotFor(index, section), false)
         },
         onSearch: stream.onSearch,
       },
       revision,
+      undefined,
+      candidates,
     )
 
     // 5c 참고 콘텐츠 — 상품 검색과 분리된 웹 검색 예산으로 병렬 (2026-09). 자리 배정은 종류별 큐라 상품과 섞이지 않는다.
@@ -309,7 +319,7 @@ export class ThreadsService {
           onElement: (element, index) => {
             const parsed = PlanSearchSectionGen.safeParse(element)
             if (!parsed.success || parsed.data.kind !== 'contents') return
-            const section = this.resolveContentsSection(parsed.data)
+            const section = this.resolveContentsSection(parsed.data, false, guard)
             if (section) {
               arrivedSections.push({ section, streamIndex: index })
               flushGenerated()
@@ -319,7 +329,7 @@ export class ThreadsService {
             if (!allocator || !stream.onSection) return
             const gen = completeSearchSection(element)
             if (!gen || gen.kind !== 'contents') return
-            const section = this.resolveContentsSection(gen, true)
+            const section = this.resolveContentsSection(gen, true, guard)
             if (section) stream.onSection(section, slotFor(index, section), false)
           },
           onSearch: stream.onSearch,
@@ -327,6 +337,7 @@ export class ThreadsService {
         revision,
         undefined,
         opts,
+        candidates,
       ),
       {
         onRetry: () => {
@@ -350,7 +361,7 @@ export class ThreadsService {
       contentsMeta = result.meta
       await this.enrich.enrichContents(result.content.sections)
       contentSections = result.content.sections
-        .map((s) => this.resolveContentsSection(s))
+        .map((s) => this.resolveContentsSection(s, false, guard))
         .filter((s): s is PlanSectionWire => s !== null)
     } else {
       this.logger.warn(
@@ -364,7 +375,7 @@ export class ThreadsService {
       generatedSections = raw
         // 5c 가 콘텐츠를 만들었으면 상품 호출(옛 재정의 프롬프트)이 덧붙인 콘텐츠 섹션은 버린다
         .filter((s) => !(contentSections.length && s.kind === 'contents'))
-        .map((s, i) => (s.kind === 'contents' ? this.resolveContentsSection(s) : this.resolveProductsSection(s, i)))
+        .map((s, i) => (s.kind === 'contents' ? this.resolveContentsSection(s, false, guard) : this.resolveProductsSection(s, i, false, guard)))
         .filter((s): s is PlanSectionWire => s !== null)
     } else {
       this.logger.warn(
@@ -374,7 +385,7 @@ export class ThreadsService {
 
     // 상품 검색이 상품 섹션을 하나도 못 만들었으면 뼈대 자리를 카탈로그 매칭으로 채운다 (그래프 verify 와 같은 결정적 폴백)
     if (!generatedSections.some((s) => s.kind === 'products')) {
-      const fallback = catalogFallbackSections(skeleton.content.sections)
+      const fallback = catalogFallbackSections(skeleton.content.sections, guard)
       if (fallback.note) this.logger.warn(fallback.note.message)
       generatedSections.push(...fallback.sections)
     }
@@ -399,21 +410,24 @@ export class ThreadsService {
       }),
       this.core.updateThread(threadId, { status: 'planning' }),
     )
+    // 내재화 수확(v29) — 검증 게이트를 지난 상품·콘텐츠를 카탈로그에 올린다 (실패는 로그만, 응답 전에 끝낸다)
+    await this.catalog.harvest(page, candidates.terms.terms)
     return page
   }
 
   /** 상품 섹션 그라운딩 검증 — 가드(@ddak/pipeline groundProductsSection)에 위임하고 드롭 사유를 로깅한다.
    * 결정적이라 스트림 조각과 최종 결과가 일치한다 (§4-3). quiet=부분 스트리밍 재호출(로그 중복 방지).
+   * guard 는 legacy 에서 내부 카탈로그 후보(v29)만 싣는다 — 원장·블록리스트 확장 게이트는 그래프 엔진 몫.
    * 드롭 사유의 스텝 payload(dropLog) 기록은 페이즈 3 */
-  private resolveProductsSection(s: ProductsSectionGen, sectionIndex: number, quiet = false): PlanSectionWire | null {
-    const { section, drops } = groundProductsSection(s, sectionIndex)
+  private resolveProductsSection(s: ProductsSectionGen, sectionIndex: number, quiet = false, guard?: GuardContext): PlanSectionWire | null {
+    const { section, drops } = groundProductsSection(s, sectionIndex, guard)
     if (!quiet) drops.forEach((d) => this.logger.warn(d.message))
     return section
   }
 
   /** 참고 콘텐츠 섹션 그라운딩 검증 — 가드(@ddak/pipeline groundContentsSection) 위임 + 드롭 사유 로깅 */
-  private resolveContentsSection(s: ContentsSectionGen, quiet = false): PlanSectionWire | null {
-    const { section, drops } = groundContentsSection(s)
+  private resolveContentsSection(s: ContentsSectionGen, quiet = false, guard?: GuardContext): PlanSectionWire | null {
+    const { section, drops } = groundContentsSection(s, guard)
     if (!quiet) drops.forEach((d) => this.logger.warn(d.message))
     return section
   }

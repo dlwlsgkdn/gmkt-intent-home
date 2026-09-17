@@ -10,9 +10,11 @@
     "start:dev": "nest start --watch",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node scripts/migrate.mjs",
+    "seed:catalog": "node scripts/seed-catalog.mjs",
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
+    "@ddak/pipeline": "*",
     "@ddak/schema": "*",
     "@neondatabase/serverless": "^0.10.4",
     "@nestjs/common": "^11.0.0",

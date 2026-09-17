@@ -58,7 +58,31 @@ npm run db:migrate --workspace=apps/core -- --baseline
 | PUT | `/internal/threads/:id/steps/:seq` | 스텝 멱등 upsert |
 | GET | `/internal/threads/:id` | 쓰레드 + 스텝 전체 (이어보기) |
 | GET | `/internal/users/:uid/threads?cursor=&limit=` | 목록 (updatedAt 키셋 커서) |
+| POST | `/internal/catalog/products/search` · `/internal/catalog/contents/search` | **내재화 카탈로그** 검색 — `{ terms[], typeTerms?, limit?, verifiedOnly?, mall? }`, search_text 부분 일치 점수순 (2026-09-17) |
+| PUT | `/internal/catalog/products` · `/internal/catalog/contents` | 일괄 upsert (≤500) — `bump=true` 면 수확(노출 횟수 누적·출처/검증/상태 보존·태그 합집합) |
+| PATCH | `/internal/catalog/products/:id` · `/internal/catalog/contents/:id` | `verified`·`status(active\|dead)` 표시 |
+| GET | `/internal/catalog/products/verify-list?mall=&limit=` · `/internal/catalog/stats` | 점검 대상(오래 안 본 순) · 현황 |
 | GET | `/healthz` | 헬스체크 (가드 밖) |
+
+## 내재화 카탈로그 (2026-09-17)
+
+`catalog_products`·`catalog_contents` — 추천 상품·참고 콘텐츠의 내부 표. 계획 생성(BFF 5b·5c)이 의도·답변 검색어로 여기서 후보를 받아
+**내부 절반 + 웹 검색 절반**으로 고른다(계약 `@ddak/schema` catalog.ts, 배선 `apps/bff/src/catalog/catalog.service.ts`). core 는 저장·검색만:
+검색은 `search_text`(이름·브랜드·태그·카테고리 정규화 연결)에 검색어가 부분 일치하는 개수 — 제품 유형 낱말은 2점 — 로 점수를 매기고
+`pg_trgm` GIN 인덱스가 ILIKE 를 받는다(마이그레이션 0005 가 `CREATE EXTENSION pg_trgm` — Neon 지원). 수천~수만 행에서 한 자리 ms 대라
+LLM 호출 앞에 붙여도 지연이 없고, 의미 검색이 필요해지면 pgvector 컬럼(Neon 지원)을 이 표에 더한다.
+
+```bash
+npm run db:migrate --workspace=apps/core      # 0005_catalog_internalize (pg_trgm + 표 2개)
+npm run export:catalog --workspace=apps/tagging-api -- --out oy.json   # (사내망) 올리브영 Mongo → 행 JSON
+npm run seed:catalog --workspace=apps/core -- --file oy.json           # 그 파일(또는 다른 몰의 같은 형식 JSON) 을 DB 에 직접 upsert — 멱등
+```
+
+시딩 재료는 셋이다(2026-09-17): ① 운영 콘솔(트렌드 사전 탭 머리 「내재화 카탈로그」 카드)의 「✦ 웹 검색으로 시딩」 — 제품 유형 42개마다
+BFF 가 LLM+web_search 로 실제 판매 상품을 모아 올린다(유형만 약 $5·몇 분. 대량은 조건 칩(피부 타입·고민·가격대·몰)으로 유형×조건까지 펼치거나
+`npm run seed:search --workspace=apps/bff -- --bff <BFF 주소> --token <토큰> --facets skin,concern` 배치 스크립트로 — 단위당 약 $0.14, 중단·재개 가능) ② 같은 카드의 「쓰레드에서 수확」 — 지난 계획의 검증 통과 상품·콘텐츠
+백필(실주행은 7단계 기록이 자동 수확) ③ 위 올리브영 Mongo 내보내기 JSON — 이 스크립트 또는 카드의 「JSON 가져오기」. 스튜디오 SRP 스냅샷·데모
+카탈로그는 시딩에 쓰지 않는다. 상품 링크 점검(지마켓 썸네일·그 밖 몰 상품 주소 HEAD 로 내려간 리스팅을 dead 표시)도 그 카드가 부른다.
 
 ## Vercel 배포 (신규 프로젝트)
 

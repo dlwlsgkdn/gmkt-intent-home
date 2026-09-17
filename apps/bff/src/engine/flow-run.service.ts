@@ -10,6 +10,7 @@ import {
   buildPlanSkeletonRequest,
   buildSurveyRequest,
   isSlotKind,
+  type CatalogCandidates,
   type ConstraintLedger,
   type GroundingDrop,
   type PromptDefId,
@@ -20,6 +21,7 @@ import { KnowledgeService } from '../llm/knowledge.service'
 import { LlmService } from '../llm/llm.service'
 import type { DryRunPromptTrace } from './dry-run.service'
 import { EnrichService } from '../threads/enrich.service'
+import { CatalogService } from '../catalog/catalog.service'
 import { buildThreadGraph, type ThreadGraph } from './graph'
 import { PlanStreamCoordinator, type GraphStreamChunk } from './stream'
 import type { ThreadGraphStateType } from './state'
@@ -133,6 +135,8 @@ class FlowStageEmitter {
     ledger: ConstraintLedger | null
     survey: SurveyPageWire | null
     answers: Answer[] | null
+    /** 내부 카탈로그 후보(v29) — s2 노드 패치에서 받아 5b·5c 프롬프트 재구성에 싣는다 */
+    candidates: CatalogCandidates | null
   }
 
   constructor(
@@ -142,7 +146,7 @@ class FlowStageEmitter {
     /** s7-record 완료 요약 — 실제 저장 여부(쓰레드 id)를 실행 시점에 확정해 받는다 */
     private readonly recordNote: string,
   ) {
-    this.acc = { ledger: null, ...seed }
+    this.acc = { ledger: null, candidates: null, ...seed }
   }
 
   /** LLM 노드의 실행 직전 프롬프트 재구성 — 노드가 소비하는 것과 같은 빌더·같은 입력 */
@@ -178,6 +182,7 @@ class FlowStageEmitter {
                 this.acc.profile ?? undefined,
                 undefined,
                 this.acc.ledger,
+                this.acc.candidates,
               )
             : null,
       },
@@ -192,6 +197,8 @@ class FlowStageEmitter {
                 this.acc.profile ?? undefined,
                 undefined,
                 this.acc.ledger,
+                {},
+                this.acc.candidates,
               )
             : null,
       },
@@ -214,6 +221,7 @@ class FlowStageEmitter {
   seedState(node: string, patch: Record<string, unknown>) {
     const p = patch as StatePatch
     if (p.ledger) this.acc.ledger = p.ledger
+    if (p.candidates) this.acc.candidates = p.candidates
     if (p.survey) this.acc.survey = p.survey
     if (p.answers) this.acc.answers = p.answers
     if (p.profile) this.acc.profile = p.profile
@@ -245,6 +253,7 @@ class FlowStageEmitter {
       if (!(node in NODE_STAGE)) continue
       const patch = (rawPatch ?? {}) as StatePatch
       if (patch.ledger) this.acc.ledger = patch.ledger
+      if (patch.candidates) this.acc.candidates = patch.candidates
       if (patch.survey) this.acc.survey = patch.survey
       if (patch.answers) this.acc.answers = patch.answers
       if (patch.profile) this.acc.profile = patch.profile
@@ -280,7 +289,7 @@ class FlowStageEmitter {
       case 's2-ledger-update':
         return patch.ledger
           ? {
-              summary: `사실 ${patch.ledger.facts.length} · 키워드 ${patch.ledger.trendKeywords.length} · 기피 ${patch.ledger.avoid.length}`,
+              summary: `사실 ${patch.ledger.facts.length} · 키워드 ${patch.ledger.trendKeywords.length} · 기피 ${patch.ledger.avoid.length} · 내부 후보 상품 ${patch.candidates?.products.length ?? 0}·콘텐츠 ${patch.candidates?.contents.length ?? 0}`,
             }
           : {}
       case 's3-survey':
@@ -333,6 +342,7 @@ export class PipelineFlowRunService {
     private readonly knowledge: KnowledgeService,
     private readonly core: CoreClientService,
     private readonly enrich: EnrichService,
+    private readonly catalog: CatalogService,
   ) {}
 
   /** 플로우 전용 그래프 — core 기록은 실제(그래프 persistAll이 실패를 삼켜 core 미연결에도
@@ -341,7 +351,10 @@ export class PipelineFlowRunService {
    * 폴백을 탄다 — 진실 원천은 언제나 core 스텝) */
   private getGraph(): ThreadGraph {
     if (!this.graph) {
-      this.graph = buildThreadGraph({ llm: this.llm, core: this.core, knowledge: this.knowledge, enrich: this.enrich }, new MemorySaver())
+      this.graph = buildThreadGraph(
+        { llm: this.llm, core: this.core, knowledge: this.knowledge, enrich: this.enrich, catalog: this.catalog },
+        new MemorySaver(),
+      )
     }
     return this.graph
   }

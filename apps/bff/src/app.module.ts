@@ -15,6 +15,8 @@ import { PopularSearchesService } from './search/popular-searches.service'
 import { WeatherService } from './search/weather.service'
 import { ThreadsService } from './threads/threads.service'
 import { EnrichService } from './threads/enrich.service'
+import { CatalogService } from './catalog/catalog.service'
+import { CatalogSeedJobService } from './catalog/seed-job.service'
 
 @ApiTags('app')
 @Controller()
@@ -52,6 +54,8 @@ export class AppController {
     PipelineFlowRunService,
     ThreadsService,
     EnrichService,
+    CatalogService,
+    CatalogSeedJobService,
     WeatherService,
     PopularSearchesService,
   ],

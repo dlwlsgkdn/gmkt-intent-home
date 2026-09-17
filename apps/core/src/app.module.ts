@@ -4,6 +4,7 @@ import { DbModule } from './db/db.module'
 import { ThreadsModule } from './threads/threads.module'
 import { SettingsModule } from './settings/settings.module'
 import { EvalModule } from './eval/eval.module'
+import { CatalogModule } from './catalog/catalog.module'
 
 /** 헬스체크·루트 — 가드 밖 (배포 확인·모니터링용) */
 @Controller()
@@ -21,7 +22,7 @@ export class AppController {
 }
 
 @Module({
-  imports: [DbModule, ThreadsModule, SettingsModule, EvalModule],
+  imports: [DbModule, ThreadsModule, SettingsModule, EvalModule, CatalogModule],
   controllers: [AppController],
 })
 export class AppModule {}

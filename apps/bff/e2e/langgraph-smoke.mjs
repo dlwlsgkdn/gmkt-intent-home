@@ -437,7 +437,7 @@ try {
   const assisted = await assistRes.json()
   ok(assistRes.status === 201, `Claude 지시서 수정안 응답 (${assistRes.status})`)
   ok(assisted?.proposedText?.includes('세 문장 이하'), '자연어 요청이 수정안에 반영')
-  ok(assisted?.proposedText?.includes('{{CATALOG}}'), '수정안이 필수 자리표시자 보존')
+  ok(assisted?.proposedText?.includes('{{CRITERIA}}'), '수정안이 필수 자리표시자 보존 (v29 — 상품 후보는 가변부라 {{CATALOG}} 는 더 이상 시스템에 없다)')
   const savedPrompts = await fetch(BFF + '/api/admin/prompts/plan-products', {
     method: 'PUT',
     headers: plain,
@@ -772,6 +772,65 @@ try {
     ok(productSecs.every((s) => s.products.every((p) => (p.match?.score ?? 0) >= 60)), '폴백 상품은 전부 매칭율 60% 이상')
     ok((result?.dropLog ?? []).some((d) => d.code === 'catalog-fallback'), 'dropLog 에 catalog-fallback 정보 기록')
     ok(!last(rp, 'error'), '오류 없음')
+  }
+
+  // ── 14. 내재화 카탈로그 (v29) — 앞선 계획들의 7단계 수확이 표를 채웠고, 관리 가져오기(시딩)로 넣은 상품이 다음 계획의
+  //    5b 가변부에 「내부 카탈로그 후보」 표로 실리며, 검증 게이트가 그 id 를 후보 목록에서 해석한다 ──
+  {
+    console.log('\n[14] 내재화 카탈로그 — 수확·시딩·후보 주입')
+    const before = await fetch(BFF + '/api/admin/catalog').then((r) => r.json())
+    ok(before.available === true, '카탈로그 현황 조회 (available)')
+    ok(before.stats.products.total >= 1 && before.stats.contents.total >= 1, `지난 계획에서 수확된 행이 있다 (상품 ${before.stats.products.total} · 콘텐츠 ${before.stats.contents.total})`)
+    const seedRows = [
+      { id: 'gm-9900000001', mall: '지마켓', mallProductId: '9900000001', name: '모의 밀착 세미매트 쿠션 15g', brand: '모의랩', price: 24900, url: 'https://item.gmarket.co.kr/Item?goodscode=9900000001', imageUrl: 'https://gdimg.gmarket.co.kr/9900000001/still/280', tags: ['쿠션', '지속력', '세미매트'], category: '쿠션', source: 'manual', verified: true, status: 'active', meta: { reviews: 120 }, recommendCount: 0 },
+      { id: 'oy-a000000214358', mall: '올리브영', mallProductId: 'A000000214358', name: '모의 수분 진정 토너 300ml', brand: '모의랩', price: 15900, url: 'https://www.oliveyoung.co.kr/store/goods/getGoodsDetail.do?goodsNo=A000000214358', imageUrl: null, tags: ['토너', '수분'], category: '토너', source: 'manual', verified: true, status: 'active', recommendCount: 0 },
+    ]
+    const imported = await fetch(BFF + '/api/admin/catalog/import', { method: 'POST', headers: plain, body: JSON.stringify({ products: seedRows }) }).then((r) => r.json())
+    ok(imported.products === 2, '관리 가져오기 — 상품 2행 upsert')
+    const profileC = [{ label: '피부타입', value: '지성' }]
+    const startC = await fetch(BFF + '/api/threads', { method: 'POST', headers: plain, body: JSON.stringify({ query: '여름 지성 쿠션 추천해줘', profile: profileC }) }).then((r) => r.json())
+    await sse(`/api/threads/${startC.threadId}/survey`, { profile: profileC }, plain)
+    const planC = await sse(`/api/threads/${startC.threadId}/plan`, { answers: [{ questionId: 'q1', choices: ['지성'] }], profile: profileC }, plain)
+    const pageC = last(planC, 'result')?.data?.page
+    ok(Boolean(pageC), '내부 후보가 있는 상태에서 계획 생성 (legacy)')
+    const calls = await llmCalls()
+    const productsCall = [...calls].reverse().find((c) => c.system.includes('productIds'))
+    ok(productsCall?.user.includes('내부 카탈로그 후보') && productsCall.user.includes('gm-9900000001'), '5b 가변부에 내부 카탈로그 후보 표(시딩한 쿠션)가 실린다')
+    ok(!productsCall?.system.includes('p-001 |'), '시스템 프롬프트에는 더 이상 정적 카탈로그 목록이 없다 (후보는 가변부)')
+    const after = await fetch(BFF + '/api/admin/catalog').then((r) => r.json())
+    ok(after.stats.products.total >= before.stats.products.total + 2, `시딩 뒤 상품 행이 늘었다 (${before.stats.products.total} → ${after.stats.products.total})`)
+    // 시딩 웹 검색 배치 — 유형 2개 → 유형마다 LLM+web_search 1회, 지마켓·올리브영 행은 검증됨, 검색 페이지 주소는 버려진다
+    const seeded = await fetch(BFF + '/api/admin/catalog/seed-search', { method: 'POST', headers: plain, body: JSON.stringify({ keywords: ['선크림', '립밤'] }) }).then((r) => r.json())
+    ok(seeded.keywords === 2 && seeded.failed?.length === 0, `웹 검색 시딩 — 유형 2개 (실패 ${seeded.failed?.length})`)
+    ok(seeded.products === 3 && seeded.verified === 3, `웹 검색 시딩 — 상품 ${seeded.products}(검증 ${seeded.verified}) — 올영 행은 두 유형에 겹쳐 한 행, 검색 페이지 주소는 버림`)
+    const seedCalls = (await llmCalls()).filter((c) => c.type === 'catalog-seed')
+    ok(seedCalls.length === 2 && seedCalls.some((c) => c.user.includes('제품 유형: 선크림')), '유형마다 카탈로그 수집 호출 1회')
+    // 대량 형식 — 유형×조건 검색 단위(queries)·dense: 검색 초점이 가변부에 실리고 실패 라벨은 초점 문구다
+    const seededQ = await fetch(BFF + '/api/admin/catalog/seed-search', { method: 'POST', headers: plain, body: JSON.stringify({ queries: [{ keyword: '쿠션', query: '지성 피부 쿠션' }], dense: true }) }).then((r) => r.json())
+    ok(seededQ.keywords === 1 && seededQ.products >= 1, `대량 형식(queries) 시딩 — 상품 ${seededQ.products}`)
+    const focusCall = (await llmCalls()).filter((c) => c.type === 'catalog-seed').at(-1)
+    ok(focusCall?.user.includes('검색 초점: 지성 피부 쿠션') && focusCall.user.includes('4회'), '검색 초점·dense 가 가변부에 실린다')
+    // 시딩 잡 — 서버(core KV)가 상태를 갖고 드라이버가 step 으로 전진: 유형 1개 → 회차 1번에 done, 회차 기록·결과가 GET 에서 보인다
+    const started = await fetch(BFF + '/api/admin/catalog/seed-job', { method: 'POST', headers: plain, body: JSON.stringify({ types: ['토너'], facets: [], reset: true }) }).then((r) => r.json())
+    ok(started.job?.status === 'running' && started.job.total === 1, `시딩 잡 시작 (검색 단위 ${started.job?.total})`)
+    const stepped = await fetch(BFF + '/api/admin/catalog/seed-job/step', { method: 'POST', headers: plain }).then((r) => r.json())
+    ok(stepped.job?.status === 'done' && stepped.busy === false && stepped.job.cursor === 1 && stepped.job.products >= 1, `step 1회로 완료 — 상품 ${stepped.job?.products}`)
+    ok(stepped.job?.history?.length === 1 && stepped.job.history[0].queries[0] === '토너' && stepped.job.history[0].pass === 'main', '회차 기록 1건')
+    const jobRead = await fetch(BFF + '/api/admin/catalog/seed-job').then((r) => r.json())
+    ok(jobRead.job?.id === started.job.id && jobRead.job.finishedAt, '잡 상태가 KV 에 남아 GET 으로 같은 진행·결과를 본다 (콘솔 카드 원천)')
+    const conflict = await fetch(BFF + '/api/admin/catalog/seed-job', { method: 'POST', headers: plain, body: JSON.stringify({ types: ['토너'] }) })
+    ok(conflict.status === 201 || conflict.status === 200, '끝난 잡 위에는 reset 없이도 새 잡 시작 가능')
+    const paused = await fetch(BFF + '/api/admin/catalog/seed-job/pause', { method: 'POST', headers: plain }).then((r) => r.json())
+    const idle = await fetch(BFF + '/api/admin/catalog/seed-job/step', { method: 'POST', headers: plain }).then((r) => r.json())
+    ok(paused.job?.status === 'paused' && idle.job?.status === 'paused' && idle.job.cursor === 0, '일시정지면 step 이 처리하지 않는다')
+    const conflict2 = await fetch(BFF + '/api/admin/catalog/seed-job', { method: 'POST', headers: plain, body: JSON.stringify({ types: ['토너'] }) })
+    ok(conflict2.status === 409, '진행 중 잡이 있으면 reset 없이 새 시작은 409')
+    await fetch(BFF + '/api/admin/catalog/seed-job', { method: 'DELETE', headers: plain })
+    ok((await fetch(BFF + '/api/admin/catalog/seed-job').then((r) => r.json())).job === null, '잡 기록 지우기')
+    const afterSeed = await fetch(BFF + '/api/admin/catalog').then((r) => r.json())
+    ok(afterSeed.stats.products.bySource.some((s) => s.source === 'search' && s.count >= 3), '시딩 행의 source=search')
+    const verified = await fetch(BFF + '/api/admin/catalog/verify?limit=5', { method: 'POST', headers: plain }).then((r) => r.json())
+    ok(typeof verified.checked === 'number', `상품 링크 점검 응답 (checked ${verified.checked} · skipped ${verified.skipped})`)
   }
 } finally {
   shutdown()

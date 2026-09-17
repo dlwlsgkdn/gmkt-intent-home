@@ -1,6 +1,6 @@
 import { Annotation } from '@langchain/langgraph'
 import type { Answer, LlmMeta, PlanPageWire, Profile, SurveyPageWire, ThreadStageFeedback } from '@ddak/schema'
-import type { ConstraintLedger, ContentsSectionGen, GroundingDrop, IntentGen, PlanSearchSectionGen, PlanSkeletonGen } from '@ddak/pipeline'
+import type { CatalogCandidates, ConstraintLedger, ContentsSectionGen, GroundingDrop, IntentGen, PlanSearchSectionGen, PlanSkeletonGen } from '@ddak/pipeline'
 
 /*
  * 쓰레드 그래프 상태 (DESIGN-PIPELINE-LANGGRAPH.md §1) — 체크포인트로 직렬화되므로
@@ -25,6 +25,10 @@ export const ThreadGraphState = Annotation.Root({
   blocklist: Annotation<string[] | null>(),
   /** 콘텐츠 저신뢰 출처 도메인 (KV guard-content-hosts) — 같은 규칙 */
   contentBlockHosts: Annotation<string[] | null>(),
+  /** 내부 카탈로그 후보 (v29) — s2 원장 노드가 의도·답변 검색어로 core 를 조회해 굳힌다. 5b·5c 가변부 표와 6단계 후보 대조가 같은 목록을 본다 */
+  candidates: Annotation<CatalogCandidates | null>(),
+  /** 이 계획의 카탈로그 검색어 — 7단계 수확이 상품·콘텐츠 태그로 남긴다 */
+  catalogTerms: Annotation<string[] | null>(),
   survey: Annotation<SurveyPageWire | null>(),
   surveyMeta: Annotation<LlmMeta | null>(),
   answers: Annotation<Answer[] | null>(),

@@ -246,3 +246,22 @@ export function fetchEngineMetrics() {
 
 export function assistPromptFlow(body) { return req('POST', '/prompt-flow/assist', body) }
 export function applyPromptFlow(body) { return req('PUT', '/prompt-flow', body) }
+
+/* ── 내재화 카탈로그 (v29, 2026-09-17) — 현황·시딩·수확·점검 (API.md §1-1) ── */
+/** 현황 — { stats: { products, contents, updatedAt }, available, note? } (available=false 면 core 표 없음/미연결) */
+export function fetchAdminCatalog() { return req('GET', '/catalog') }
+/** 가져오기 — 올리브영 사내 Mongo 내보내기 JSON 등 { products?: CatalogProductRow[], contents?: CatalogContentRow[] } (≤500/요청, 멱등 upsert) → { products, contents } */
+export function importAdminCatalog(body) { return req('POST', '/catalog/import', body) }
+/** 지난 쓰레드 계획에서 수확(백필) → { threads, plans, products, contents } */
+export function harvestAdminCatalog(limit = 100) { return req('POST', `/catalog/harvest?limit=${limit}`) }
+/** 상품 링크 점검(지마켓 썸네일·그 밖 몰 상품 주소 HEAD, mall 기본 전체) → { checked, alive, dead, skipped } */
+export function verifyAdminCatalog(limit = 50) { return req('POST', `/catalog/verify?limit=${limit}`) }
+/** 시딩 웹 검색 배치 — { keywords?: string[≤8] } 또는 { queries?: [{keyword, query}][≤8], dense? } → { keywords, failed, products, verified, webSearchRequests } */
+export function seedSearchAdminCatalog(body) { return req('POST', '/catalog/seed-search', Array.isArray(body) ? { keywords: body } : body) }
+/* 시딩 잡 — 서버(core KV)가 상태를 갖고 드라이버가 step 으로 전진시킨다. 응답은 { job, busy? } */
+export function fetchSeedJob() { return req('GET', '/catalog/seed-job') }
+export function startSeedJob(body) { return req('POST', '/catalog/seed-job', body) }
+export function stepSeedJob() { return req('POST', '/catalog/seed-job/step') }
+export function pauseSeedJob() { return req('POST', '/catalog/seed-job/pause') }
+export function resumeSeedJob() { return req('POST', '/catalog/seed-job/resume') }
+export function clearSeedJob() { return req('DELETE', '/catalog/seed-job') }

@@ -9,6 +9,8 @@ const threads = new Map() // id -> { thread, steps: Map<seq, step> }
 const settings = new Map() // key -> value (core 설정 KV 모의 — 지식·가드·엔진 플래그)
 const evalCases = new Map() // id -> case row
 const evalRuns = new Map() // id -> run row
+const catalogProducts = new Map() // id -> 내재화 카탈로그 상품 행 (v29 — 시딩·수확 검증)
+const catalogContents = new Map() // id -> 내재화 카탈로그 콘텐츠 행
 let nextId = 2195943212345678900n
 export const llmCalls = [] // { type, system, user } — e2e가 프롬프트 주입을 검증한다
 /* 모의 LLM 실패 주입 — `PUT /internal/mock/llm-fail {count, status, only}`: 다음 count 번의 /v1/messages 를 status(기본 529)로
@@ -196,7 +198,7 @@ const PRODUCTS_JSON = JSON.stringify({
           brand: '모의브랜드',
           price: 19900,
           mall: '올리브영',
-          url: 'https://www.oliveyoung.co.kr/store/goods/getGoodsDetail.do?goodsNo=A000000001',
+          url: 'https://www.oliveyoung.co.kr/store/goods/getGoodsDetail.do?goodsNo=A000000000001',
           urlKind: 'pdp',
           imageUrl: '',
           tags: ['지속력', '세미매트'],
@@ -211,7 +213,7 @@ const PRODUCTS_JSON = JSON.stringify({
           brand: '모의브랜드',
           price: 15000,
           mall: '올리브영',
-          url: 'https://www.oliveyoung.co.kr/store/goods/getGoodsDetail.do?goodsNo=A000000002',
+          url: 'https://www.oliveyoung.co.kr/store/goods/getGoodsDetail.do?goodsNo=A000000000002',
           urlKind: 'pdp',
           imageUrl: '',
           tags: ['진정'],
@@ -387,6 +389,19 @@ const server = http.createServer(async (req, res) => {
       })
       return streamAnthropic(res, output, { delayMs: 2, chunkSize: 40 })
     }
+    if (system.includes('카탈로그 수집기')) {
+      // 내재화 시딩 웹 검색 배치 (v29) — 유형마다 지마켓·올리브영·검색 페이지(버려짐) 상품 셋
+      llmCalls.push({ type: 'catalog-seed', system, user })
+      const kw = (user.match(/제품 유형: (.+)/) || [])[1]?.trim() || '상품'
+      const code = String(5500000000 + [...kw].reduce((n, ch) => n + ch.charCodeAt(0), 0))
+      return streamAnthropic(res, JSON.stringify({
+        products: [
+          { name: `모의 ${kw} 지마켓 A`, brand: '모의랩', price: 21000, mall: '지마켓', url: `https://item.gmarket.co.kr/Item?goodscode=${code}`, imageUrl: '', tags: [kw, '지속력'] },
+          { name: `[올영픽] 모의 ${kw} 올영 B`, brand: '모의랩', price: 0, mall: '올리브영', url: 'https://www.oliveyoung.co.kr/store/goods/getGoodsDetail.do?goodsNo=A000000009999', imageUrl: '', tags: [kw] },
+          { name: `검색 페이지 C`, brand: '모의랩', price: 1000, mall: '지마켓', url: 'https://browse.gmarket.co.kr/search?keyword=c', imageUrl: '', tags: [] },
+        ],
+      }), { delayMs: 2, chunkSize: 60 })
+    }
     if (system.includes('참고 콘텐츠 수집')) {
       // 「빈 콘텐츠」 의도의 첫 호출은 확인된 콘텐츠가 없는 척 빈 배열을 돌려준다 — bff 가 검색어를 바꾸라는 힌트(CONTENTS_RETRY_HINT
       // 「직전 시도에서는」)를 붙여 한 번 더 부르면 그때 정상 콘텐츠를 준다 (llm/contents-retry.ts 검증)
@@ -551,6 +566,74 @@ const server = http.createServer(async (req, res) => {
       if (!row) return send(404, { message: 'no run' })
       row.judge = body.judge
       return send(200, row)
+    }
+  }
+  // ── 내재화 카탈로그 (v29) — 인메모리 표. 검색은 search_text 부분 일치 개수(core 와 같은 규칙)로 점수 ──
+  if (url.startsWith('/internal/catalog/')) {
+    const norm = (parts) => parts.filter((p) => typeof p === 'string' && p.trim()).join(' ').toLowerCase().replace(/\s+/g, '')
+    const search = (table, textOf, q) => {
+      const typeSet = new Set((q.typeTerms ?? []).map((t) => t.toLowerCase().replace(/\s+/g, '')))
+      const items = [...table.values()]
+        .filter((row) => row.status !== 'dead' && (q.verifiedOnly === false || row.verified))
+        .map((row) => {
+          const text = textOf(row)
+          const score = (q.terms ?? []).reduce((n, t) => {
+            const key = t.toLowerCase().replace(/\s+/g, '')
+            return n + (text.includes(key) ? (typeSet.has(key) ? 2 : 1) : 0)
+          }, 0)
+          return { ...row, score }
+        })
+        .filter((row) => row.score > 0)
+        .sort((a, b) => b.score - a.score || (b.recommendCount ?? 0) - (a.recommendCount ?? 0) || (a.id < b.id ? -1 : 1))
+        .slice(0, q.limit ?? 24)
+      return { items, total: table.size }
+    }
+    const upsert = (table, items, bump) => {
+      for (const row of items) {
+        const prev = table.get(row.id)
+        if (prev && bump) {
+          table.set(row.id, {
+            ...prev,
+            name: row.name ?? prev.name,
+            price: row.price ?? prev.price,
+            imageUrl: row.imageUrl ?? prev.imageUrl,
+            tags: [...new Set([...(prev.tags ?? []), ...(row.tags ?? [])])],
+            verified: prev.verified || row.verified,
+            recommendCount: (prev.recommendCount ?? 0) + (row.recommendCount ?? 0),
+            lastSeenAt: row.lastSeenAt ?? prev.lastSeenAt,
+          })
+        } else table.set(row.id, { status: 'active', recommendCount: 0, ...row })
+      }
+      return { upserted: items.length }
+    }
+    const productText = (r) => norm([r.name, r.brand, ...(r.tags ?? []), r.category, r.mall])
+    const contentText = (r) => norm([r.title, r.source, ...(r.tags ?? []), (r.snippet ?? '').slice(0, 200)])
+    if (url === '/internal/catalog/products/search' && req.method === 'POST') return send(200, search(catalogProducts, productText, body))
+    if (url === '/internal/catalog/contents/search' && req.method === 'POST') return send(200, search(catalogContents, contentText, body))
+    if (url === '/internal/catalog/products' && req.method === 'PUT') return send(200, upsert(catalogProducts, body.items ?? [], body.bump))
+    if (url === '/internal/catalog/contents' && req.method === 'PUT') return send(200, upsert(catalogContents, body.items ?? [], body.bump))
+    if ((m = url.match(/^\/internal\/catalog\/products\/([^/?]+)$/)) && req.method === 'PATCH') {
+      const row = catalogProducts.get(decodeURIComponent(m[1]))
+      if (!row) return send(404, { message: 'no product' })
+      Object.assign(row, body)
+      return send(200, row)
+    }
+    if (url.startsWith('/internal/catalog/products/verify-list') && req.method === 'GET') {
+      const mallQ = new URLSearchParams(url.split('?')[1] || '').get('mall') || '*'
+      return send(200, { items: [...catalogProducts.values()].filter((r) => (mallQ === '*' || r.mall === mallQ) && r.status !== 'dead').slice(0, 50) })
+    }
+    if (url === '/internal/catalog/stats' && req.method === 'GET') {
+      const count = (table, pred) => [...table.values()].filter(pred).length
+      const group = (table, key) => {
+        const acc = new Map()
+        for (const r of table.values()) acc.set(r[key], (acc.get(r[key]) ?? 0) + 1)
+        return [...acc].map(([k, count]) => ({ [key]: k, count }))
+      }
+      return send(200, {
+        products: { total: catalogProducts.size, verified: count(catalogProducts, (r) => r.verified && r.status !== 'dead'), dead: count(catalogProducts, (r) => r.status === 'dead'), byMall: group(catalogProducts, 'mall'), bySource: group(catalogProducts, 'source') },
+        contents: { total: catalogContents.size, verified: count(catalogContents, (r) => r.verified && r.status !== 'dead'), dead: count(catalogContents, (r) => r.status === 'dead'), byType: group(catalogContents, 'type') },
+        updatedAt: new Date().toISOString(),
+      })
     }
   }
   if (url.startsWith('/internal/plan-metas') && req.method === 'GET') {
