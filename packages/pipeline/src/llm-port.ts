@@ -42,12 +42,18 @@ export type LlmGenerateRequest = {
 
 /** LLM 생성 실패 — 호출자(컨트롤러)가 SSE error 이벤트(실패 안내)로 변환한다 */
 export class LlmGenerationError extends Error {
+  /** 원인 한 줄(API 상태·오류 문구·파싱 실패 사유) — 사용자 안내(message)와 분리한 **운영자용** 진단 정보.
+   * 사용자 SSE 에는 싣지 않고, 관리 dry-run·flow-run 오류 이벤트와 로그에만 실린다 (2026-09-17 — 뼈대 호출이
+   * API 에 즉시 거절되는데 Vercel 로그를 볼 수 없어 원인을 며칠 못 본 사고) */
+  readonly detail?: string
   constructor(
     readonly code: 'llm_not_configured' | 'llm_refused' | 'llm_failed',
     message: string,
     readonly retryable: boolean,
+    opts: { detail?: string; cause?: unknown } = {},
   ) {
-    super(message)
+    super(message, opts.cause === undefined ? undefined : { cause: opts.cause })
+    if (opts.detail) this.detail = opts.detail
   }
 }
 

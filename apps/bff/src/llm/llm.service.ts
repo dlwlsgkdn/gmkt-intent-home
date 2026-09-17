@@ -25,7 +25,6 @@ import {
   PROMPT_VERSION,
   PlanContentsGen,
   PlanProductsGen,
-  PlanSkeletonGen,
   SEARCH_ROUTE_SYSTEM,
   SEARCH_SUGGEST_SYSTEM,
   SearchRouteGen,
@@ -40,6 +39,8 @@ import {
   buildSearchRouteRequest,
   buildSearchSuggestRequest,
   buildSurveyRequest,
+  hasPhotoAnswer,
+  planSkeletonGenFor,
   renderSystemTemplate,
   type ConstraintLedger,
   type GenResult,
@@ -47,6 +48,7 @@ import {
   type LlmPort,
   type LlmStreamHandlers,
   type PlanRevisionContext,
+  type PlanSkeletonGen,
   type PromptDefId,
   type ResolvedSystem,
 } from '@ddak/pipeline'
@@ -79,6 +81,18 @@ const WEB_SEARCH_MAX_USES = 4
 const WEB_SEARCH_CONTENTS_MAX_USES = 3
 /** 서버 도구 루프가 pause_turn으로 멈췄을 때 이어붙이는 최대 횟수 */
 const MAX_CONTINUATIONS = 3
+
+/** API 오류를 운영자용 한 줄로 — 상태 코드·오류 타입·문구·request-id (SDK 오류는 status 를, 그 밖은 message 만).
+ * SDK 의 APIError.error 는 응답 본문 `{ type: 'error', error: { type, message } }` 그대로다 */
+function describeLlmFailure(e: unknown): string {
+  if (e instanceof Anthropic.APIError) {
+    const body = (e as { error?: { error?: { type?: string; message?: string } } }).error?.error
+    const type = body?.type ? ` ${body.type}` : ''
+    const requestId = e.requestID ? ` (request-id ${e.requestID})` : ''
+    return `HTTP ${e.status ?? '?'}${type}: ${body?.message ?? e.message}${requestId}`
+  }
+  return e instanceof Error ? `${e.name}: ${e.message}` : String(e)
+}
 
 /*
  * Claude 호출 계층 — LlmPort의 1차(Anthropic) 구현. 구조화 출력(parse) + 프롬프트 캐싱 + refusal 처리.
@@ -305,7 +319,9 @@ export class LlmService implements LlmPort {
   }
 
   /** 계획 1단계 — 뼈대 (검색 없음·medium): 제목·요약·단계 안내·순서 + 상품/콘텐츠 자리. 수 초 안에 스트리밍된다.
-   * revision이 있으면 피드백 반영 재생성 — 직전 계획+피드백이 사용자 메시지에 실린다 */
+   * revision이 있으면 피드백 반영 재생성 — 직전 계획+피드백이 사용자 메시지에 실린다.
+   * 출력 스키마는 사진 답변 여부로 look 갈래 | compare·caution 갈래 중 하나만 싣는다(@ddak/pipeline planSkeletonGenFor —
+   * 전부 한 합집합에 실으면 구조화 출력 문법이 커져 API 가 400 으로 거절한다, 2026-09-17) */
   async generatePlanSkeleton(
     intent: string,
     survey: SurveyPageWire,
@@ -315,7 +331,7 @@ export class LlmService implements LlmPort {
     revision?: PlanRevisionContext,
     ledger?: ConstraintLedger | null,
   ): Promise<GenResult<PlanSkeletonGen>> {
-    return this.generate('계획 뼈대 생성', PlanSkeletonGen, {
+    return this.generate('계획 뼈대 생성', planSkeletonGenFor({ photo: hasPhotoAnswer(survey, answers) }), {
       system: await this.resolveSystem('plan-skeleton'),
       effort: 'medium' as const, // 속도가 목적 — 텍스트 뼈대는 medium으로 충분
       user: buildPlanSkeletonRequest(intent, survey, answers, profile, revision, ledger),
@@ -440,47 +456,61 @@ export class LlmService implements LlmPort {
           false,
         )
       }
-      this.logger.warn(`${label} 호출 실패: ${(e as Error).message}`)
+      // 원인은 운영자용 detail 로 따로 싣는다 — 사용자 안내는 그대로, 관리 dry-run·flow-run 오류 이벤트가 보여 준다
+      const detail = describeLlmFailure(e)
+      this.logger.warn(`${label} 호출 실패: ${detail}`)
       throw new LlmGenerationError(
         'llm_failed',
         `일시적인 문제로 ${label}에 실패했어요. 잠시 후 다시 시도해 주세요.`,
         true,
+        { detail, cause: e },
       )
     }
     if (response.stop_reason === 'refusal') {
       this.logger.warn(`${label} 거절 — category=${response.stop_details?.category ?? 'null'}`)
       throw new LlmGenerationError('llm_refused', '이 요청은 처리할 수 없어요. 다른 검색어로 시도해 주세요.', false)
     }
-    const content = this.parseOutput(schema, response)
-    if (!content) {
-      this.logger.warn(`${label} 결과 파싱 실패 — stop_reason=${response.stop_reason}`)
+    const parsed = this.parseOutput(schema, response)
+    if (!parsed.content) {
+      const detail = `결과 파싱 실패 — stop_reason=${response.stop_reason}${parsed.issue ? `: ${parsed.issue}` : ''}`
+      this.logger.warn(`${label} ${detail}`)
       throw new LlmGenerationError(
         'llm_failed',
         `일시적인 문제로 ${label}에 실패했어요. 잠시 후 다시 시도해 주세요.`,
         true,
+        { detail },
       )
     }
+    const content = parsed.content
     return { content, meta: this.meta(started, response, req.system.custom) }
   }
 
   /** 구조화 출력 텍스트 → 스키마 검증. JSON은 보통 마지막 텍스트 블록이지만,
-   * 도구 사용으로 블록이 쪼개진 경우를 대비해 전체 연결로 한 번 더 시도한다 */
+   * 도구 사용으로 블록이 쪼개진 경우를 대비해 전체 연결로 한 번 더 시도한다.
+   * 실패하면 마지막 후보의 사유(JSON 오류 또는 첫 zod 이슈 경로)를 진단용으로 돌려준다 */
   private parseOutput<S extends z.ZodTypeAny>(
     schema: S,
     response: Anthropic.Message,
-  ): S['_output'] | null {
+  ): { content: S['_output'] | null; issue?: string } {
     const texts = response.content
       .filter((block): block is Anthropic.TextBlock => block.type === 'text')
       .map((block) => block.text)
+    let issue: string | undefined
     for (const candidate of [texts[texts.length - 1], texts.join('')]) {
       if (!candidate) continue
+      let json: unknown
       try {
-        return schema.parse(JSON.parse(candidate)) as S['_output']
-      } catch {
-        /* 다음 후보 */
+        json = JSON.parse(candidate)
+      } catch (e) {
+        issue = `JSON 아님(${(e as Error).message})`
+        continue
       }
+      const result = schema.safeParse(json)
+      if (result.success) return { content: result.data as S['_output'] }
+      const first = result.error.issues[0]
+      issue = first ? `${first.path.join('.') || '(root)'}: ${first.message}` : result.error.message
     }
-    return null
+    return { content: null, issue: issue ?? (texts.length ? undefined : '텍스트 블록 없음') }
   }
 
   private meta(started: number, response: Anthropic.Message, customPrompt: boolean): LlmMeta {

@@ -297,6 +297,11 @@ try {
       `skeleton 조기 확정에 비교표·주의 성분 포함 + pending [3] (${JSON.stringify(skI?.pending)})`,
     )
     ok(!last(planI, 'error'), '오류 없음')
+    {
+      const skCallI = (await llmCalls()).filter((c) => c.type === 'skeleton').at(-1)
+      const kinds = (skCallI?.schemaKinds ?? []).join(',')
+      ok(kinds === 'guide,compare,caution,products,contents,steps', `사진 없는 뼈대 호출 스키마 = compare·caution 갈래 (look 없음) (${kinds})`)
+    }
     const detailI = await fetch(BFF + `/api/admin/threads/${startI.threadId}`, { headers: H }).then((r) => r.json())
     const planStepI = detailI?.steps?.find((s) => s.stage === 'plan')
     ok(planStepI?.payload?.page?.sections?.[1]?.kind === 'compare', 'core 기록에도 비교표 섹션이 남는다')
@@ -357,6 +362,8 @@ try {
     const skCall = (await llmCalls()).filter((c) => c.type === 'skeleton').at(-1)
     ok(skCall?.user?.includes('얼굴 사진을 올렸습니다'), '사진 제출이 계획 가변부에 말로 실림')
     ok(!skCall?.user?.includes('data:image'), '사진 원본은 프롬프트에 실리지 않는다')
+    const kinds = (skCall?.schemaKinds ?? []).join(',')
+    ok(kinds === 'guide,look,products,contents,steps', `사진 있는 뼈대 호출 스키마 = look 갈래 (compare·caution 없음) (${kinds})`)
   }
 
   // ── 8.7 가상 메이크업 정밀 렌더 (이미지 편집 모델) ──

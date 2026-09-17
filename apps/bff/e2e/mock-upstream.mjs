@@ -396,7 +396,12 @@ const server = http.createServer(async (req, res) => {
       return streamAnthropic(res, PRODUCTS_JSON, { delayMs: 10, chunkSize: 24 }) // 뼈대보다 늦게 끝나게
     }
     if (system.includes('뼈대')) {
-      llmCalls.push({ type: 'skeleton', system, user })
+      // 요청의 출력 스키마에 실린 섹션 종류 — 뼈대 호출은 look 갈래 | compare·caution 갈래 중 하나만 싣는다
+      // (전부 한 합집합에 실으면 실제 API 가 문법 크기 초과 400 으로 거절한다, 2026-09-17). SDK 는 판별자 const 를
+      // description 에 접어 보내므로 `{const: "look"}` 문구로 센다
+      const schemaText = JSON.stringify(body.output_config?.format?.schema ?? {})
+      const schemaKinds = ['guide', 'look', 'compare', 'caution', 'products', 'contents', 'steps'].filter((k) => schemaText.includes(`{const: \\"${k}\\"}`))
+      llmCalls.push({ type: 'skeleton', system, user, schemaKinds })
       // 사진을 받은 쓰레드면 가상 메이크업 결과(look)로 여는 뼈대를 돌려준다
       const lookPlan = user.includes('얼굴 사진을 올렸습니다')
       // 성분이 기준인 의도(면도 자극·성분 비교)면 성분 비교표·주의 성분이 든 뼈대를 돌려준다 (v26)

@@ -320,6 +320,8 @@ const ContentsSlotGen = z.object({
   reason: z.string().describe('어떤 게시글·영상을 볼지 기준 한두 문장 — 구체 콘텐츠 제목은 쓰지 않는다'),
 })
 
+/** 뼈대 섹션 전체 합집합 — 스트림 조각 검증·타입·기록의 기준. **API 호출에는 이 합집합을 그대로 보내지 않는다**
+ * (아래 planSkeletonGenFor) */
 export const PlanSkeletonSectionGen = z.discriminatedUnion('kind', [
   GuideSectionGen,
   LookSectionGen,
@@ -331,12 +333,52 @@ export const PlanSkeletonSectionGen = z.discriminatedUnion('kind', [
 ])
 export type PlanSkeletonSectionGen = z.infer<typeof PlanSkeletonSectionGen>
 
-export const PlanSkeletonGen = z.object({
-  headline: z.string().describe('계획 페이지 제목 — 설문 결과를 반영한 맞춤 문구'),
-  summary: z.string().describe('추천 방향 요약 두세 문장'),
-  sections: z.array(PlanSkeletonSectionGen).min(2).max(10),
-})
+const planSkeletonGenOf = <T extends z.ZodTypeAny>(sections: T) =>
+  z.object({
+    headline: z.string().describe('계획 페이지 제목 — 설문 결과를 반영한 맞춤 문구'),
+    summary: z.string().describe('추천 방향 요약 두세 문장'),
+    sections: z.array(sections).min(2).max(10),
+  })
+
+export const PlanSkeletonGen = planSkeletonGenOf(PlanSkeletonSectionGen)
 export type PlanSkeletonGen = z.infer<typeof PlanSkeletonGen>
+
+/*
+ * 뼈대 호출용 스키마는 **요청마다 둘 중 하나**다 (2026-09-17). 구조화 출력은 스키마를 문법으로 컴파일하는데
+ * 문법이 일정 크기를 넘으면 API 가 400(「The compiled grammar is too large」)으로 요청 자체를 거절한다 —
+ * v26 에서 compare·caution 두 갈래(객체 5종)를 look(사양 spec 객체 7종)과 한 합집합에 더하자 뼈대 호출이
+ * 즉시 실패해 계획이 전부 죽었다(운영 2026-09-16~17, 재시도로도 회복 불가). look 은 사진을 올린 쓰레드에서만,
+ * compare·caution 은 성분이 기준인 의도(사진과 무관)에서만 나오므로 **사진 답변 여부로 한쪽만 싣는다**:
+ *   - 사진 있음 → guide·look·products·contents·steps (v25 와 같은 문법 크기 — 운영 검증분)
+ *   - 사진 없음 → guide·compare·caution·products·contents·steps (look 이 빠져 v25 보다 작다)
+ * 어느 쪽이든 v25 보다 커지지 않는다. 사진을 올린 쓰레드는 성분 비교표를 못 받는 대신 계획이 산다.
+ * 새 섹션 종류를 더할 땐 반드시 이 분기 중 하나에만 넣고 `packages/pipeline/test/skeleton-schema.test.mjs` 로
+ * 갈래별 구성원을 확인할 것.
+ */
+export const PlanSkeletonPhotoSectionGen = z.discriminatedUnion('kind', [
+  GuideSectionGen,
+  LookSectionGen,
+  ProductsSlotGen,
+  ContentsSlotGen,
+  StepsSectionGen,
+])
+export const PlanSkeletonPlainSectionGen = z.discriminatedUnion('kind', [
+  GuideSectionGen,
+  CompareSectionGen,
+  CautionSectionGen,
+  ProductsSlotGen,
+  ContentsSlotGen,
+  StepsSectionGen,
+])
+export const PlanSkeletonPhotoGen = planSkeletonGenOf(PlanSkeletonPhotoSectionGen)
+export const PlanSkeletonPlainGen = planSkeletonGenOf(PlanSkeletonPlainSectionGen)
+/** 두 갈래의 출력 타입은 전체 합집합(PlanSkeletonGen)에 그대로 대입된다 — 소비자는 합집합 타입 하나만 안다 */
+export type PlanSkeletonGenSchema = typeof PlanSkeletonPhotoGen | typeof PlanSkeletonPlainGen
+
+/** 이번 요청의 뼈대 호출 스키마 — 사진을 올린 설문이면 look 갈래, 아니면 compare·caution 갈래 */
+export function planSkeletonGenFor(opts: { photo: boolean }): PlanSkeletonGenSchema {
+  return opts.photo ? PlanSkeletonPhotoGen : PlanSkeletonPlainGen
+}
 
 export const PlanProductsGen = z.object({
   sections: z

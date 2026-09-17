@@ -3,7 +3,6 @@ import type { AdminDryRunBody, LlmMeta, PlanSectionWire, SurveyPageWire } from '
 import {
   PlanContentsGen,
   PlanProductsGen,
-  PlanSkeletonGen,
   STAGE_BY_ID,
   SurveyGen,
   assembleLedger,
@@ -14,11 +13,14 @@ import {
   buildSurveyRequest,
   groundContentsSection,
   groundProductsSection,
+  hasPhotoAnswer,
+  planSkeletonGenFor,
   renderSystemTemplate,
   type ConstraintLedger,
   type GroundingDrop,
   type GuardContext,
   type LlmEffort,
+  type PlanSkeletonGen,
   type PromptDefId,
   type ResolvedSystem,
 } from '@ddak/pipeline'
@@ -123,8 +125,10 @@ export class PipelineDryRunService {
     if (body.stageId === 'plan-skeleton') {
       const system = await this.systemFor('plan-skeleton', body.promptOverride)
       const user = buildPlanSkeletonRequest(body.intent, body.survey, body.answers, body.profile, undefined, ledger)
-      // 그래프·legacy 와 같은 재시도 규칙 (llm/retry.ts) — 플레이그라운드도 같은 견고함으로
-      const { content, meta } = await retryLlmStage(() => this.llm.generate('계획 뼈대 생성(dry-run)', PlanSkeletonGen, {
+      // 그래프·legacy 와 같은 재시도 규칙 (llm/retry.ts) — 플레이그라운드도 같은 견고함으로.
+      // 스키마 갈래(look | compare·caution)도 운영 호출(LlmService.generatePlanSkeleton)과 같은 판정으로 고른다
+      const skeletonSchema = planSkeletonGenFor({ photo: hasPhotoAnswer(body.survey, body.answers) })
+      const { content, meta } = await retryLlmStage(() => this.llm.generate('계획 뼈대 생성(dry-run)', skeletonSchema, {
         system,
         effort: this.effortOf('plan-skeleton', 'medium'),
         user,

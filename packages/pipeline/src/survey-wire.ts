@@ -81,6 +81,18 @@ export function lookScopeFromAnswer(label: string | undefined | null): LookScope
   return 'makeup'
 }
 
+/** 사진 질문(kind=photo)에 답이 실렸는가 — 답의 원본은 기기에만 있고 와이어에는 표식뿐이라 **질문 종류로** 판정한다.
+ * 뼈대 프롬프트 가변부(planContext)가 「얼굴 사진을 올렸습니다」로 푸는 것과 **같은 조건**이어야 한다 — 프롬프트는
+ * 룩을 만들라 하는데 호출 스키마(planSkeletonGenFor)에 look 갈래가 없는 어긋남을 막기 위해서다 */
+export function hasPhotoAnswer(
+  survey: Pick<SurveyPageWire, 'questions'> | null | undefined,
+  answers: ReadonlyArray<{ questionId: string }> | null | undefined,
+): boolean {
+  if (!survey || !answers?.length) return false
+  const photoIds = new Set(survey.questions.filter((q) => q.kind === 'photo').map((q) => q.id))
+  return photoIds.size > 0 && answers.some((a) => photoIds.has(a.questionId))
+}
+
 /** 답변 목록에서 범위 — s1 답이 없으면 makeup */
 export function lookScopeOfAnswers(answers: ReadonlyArray<{ questionId: string; choices: string[] }> | undefined): LookScope {
   const a = (answers ?? []).find((x) => x.questionId === SCOPE_QUESTION_ID)

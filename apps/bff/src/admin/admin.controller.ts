@@ -879,7 +879,7 @@ export class AdminController {
       '그래프 노드와 같은 빌더·스키마·가드를 그대로 실행한다. promptOverride가 있으면 저장하지 않은 ' +
       '임시 프롬프트로 실행(what-if — 자리표시자 치환 동일). 지식 KV는 실제 값으로 주입된다. ' +
       'SSE: status(진행 문구) → result(DryRunResult — survey 페이지 | skeleton 원본 | 검증 통과 sections+dropLog, ' +
-      '공통으로 ledger·meta·promptCustom) 또는 error({ code, message, retryable }).',
+      '공통으로 ledger·meta·promptCustom) 또는 error({ code, message, retryable, detail? } — detail 은 운영자용 원인 한 줄).',
   })
   @ApiBody({ schema: toOpenApi(AdminDryRunBody) })
   @ApiProduces('text/event-stream')
@@ -906,7 +906,7 @@ export class AdminController {
       'phase=survey는 답변 대기 interrupt까지, phase=plan은 flowId로 재개(유실 시 body의 survey·answers 시딩 재실행). ' +
       'SSE: status → stage({ id, phase: start|done, meta?, prompt?(실제 시스템 전문·가변부), summary? }) ' +
       '→ content(설문·계획 스트림 조각) → state({ node, id, patch } — 노드가 덮은 그래프 상태 채널, ' +
-      'LastValue라 누적하면 스냅샷) → result(FlowRunResult) 또는 error.',
+      'LastValue라 누적하면 스냅샷) → result(FlowRunResult) 또는 error({ code, message, retryable, detail? }).',
   })
   @ApiBody({ schema: toOpenApi(AdminFlowRunBody) })
   @ApiProduces('text/event-stream')
@@ -928,10 +928,12 @@ export class AdminController {
     sseClose(res)
   }
 
+  /** 관리 SSE 의 실패 안내 — 운영자 화면이라 사용자 안내(message)에 더해 원인 한 줄(detail: API 상태·오류 문구·파싱 사유)을
+   * 싣는다. 사용자 쓰레드 SSE(threads.controller)에는 detail 을 싣지 않는다 */
   private sendSseFailure(res: SseRes, label: string, e: unknown) {
     if (e instanceof LlmGenerationError) {
-      this.logger.warn(`${label} 실패 안내 — code=${e.code}`)
-      sseSend(res, 'error', { code: e.code, message: e.message, retryable: e.retryable })
+      this.logger.warn(`${label} 실패 안내 — code=${e.code}${e.detail ? ` (${e.detail})` : ''}`)
+      sseSend(res, 'error', { code: e.code, message: e.message, retryable: e.retryable, ...(e.detail ? { detail: e.detail } : {}) })
     } else if (e instanceof BadRequestException) {
       sseSend(res, 'error', { code: 'bad_request', message: e.message, retryable: false })
     } else {

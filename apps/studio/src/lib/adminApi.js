@@ -174,8 +174,10 @@ async function ssePost(path, body, { onStatus, onEvent } = {}) {
     if (done) break
   }
   if (error) {
-    const e = new AdminApiError(0, error.message || '실행에 실패했어요.')
+    // detail = 운영자용 원인 한 줄(API 상태·오류 문구·파싱 사유) — 사용자 안내와 따로 오므로 메시지 뒤에 붙여 보인다
+    const e = new AdminApiError(0, error.detail ? `${error.message || '실행에 실패했어요.'} — 원인: ${error.detail}` : error.message || '실행에 실패했어요.')
     e.code = error.code
+    e.detail = error.detail
     throw e
   }
   if (!result) throw new AdminApiError(0, '결과를 받지 못했어요. 잠시 후 다시 시도해 주세요.')

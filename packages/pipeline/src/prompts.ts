@@ -2,7 +2,7 @@ import type { Answer, PlanPageWire, Profile, SurveyPageWire, ThreadStageFeedback
 import { CATALOG } from './catalog'
 import { cartedNames, type ConstraintLedger } from './ledger'
 import { lookSpecSummary } from './look'
-import { optionParts } from './survey-wire'
+import { hasPhotoAnswer, optionParts } from './survey-wire'
 
 export const PROMPT_VERSION = 'v26'
 
@@ -348,6 +348,16 @@ function feedbackBlock(revision: PlanRevisionContext): string {
 ${lines.join('\n')}`
 }
 
+/** 뼈대 호출 스키마 갈래에 맞춘 가변부 한 줄 (2026-09-17). 사진을 올린 요청은 look 갈래(compare·caution 없음)로 나가는데,
+ * 시스템 프롬프트의 compare·caution 규칙엔 사진 조건이 없고 SDK 가 판별자 const 를 문법에 싣지 않아 모델이 `kind: compare` 를
+ * 적으면 문법은 통과하고 파싱만 실패해 계획이 죽는다 — 시스템은 그대로 두고(캐시 유지) 가변부에서 막는다. 반대 방향(사진 없음 →
+ * look 금지)은 시스템 프롬프트가 이미 명시한다 */
+function skeletonBranchNote(survey: SurveyPageWire, answers: Answer[]): string {
+  return hasPhotoAnswer(survey, answers)
+    ? '\n\n이번 요청에서는 성분 비교표(compare)·주의 성분(caution) 섹션을 만들지 않습니다 — 성분 기준이 필요하면 단계 안내(guide) 본문에 녹입니다.'
+    : ''
+}
+
 export function buildPlanSkeletonRequest(
   intent: string,
   survey: SurveyPageWire,
@@ -356,16 +366,17 @@ export function buildPlanSkeletonRequest(
   revision?: PlanRevisionContext,
   ledger?: ConstraintLedger | null,
 ): string {
+  const branchNote = skeletonBranchNote(survey, answers)
   if (!revision) {
     return `${planContext(intent, survey, answers, profile, ledger)}
 
-이 응답에 맞는 쇼핑 계획 페이지의 뼈대를 만들어 주세요.`
+이 응답에 맞는 쇼핑 계획 페이지의 뼈대를 만들어 주세요.${branchNote}`
   }
   return `${planContext(intent, survey, answers, profile, ledger)}
 
 ${feedbackBlock(revision)}
 
-피드백을 반영해 쇼핑 계획 페이지의 뼈대를 다시 만들어 주세요. 안내·순서·섹션 구성에 대한 피드백을 고치고, 지적이 없던 부분의 구성은 유지합니다. 상품 자체에 대한 피드백은 상품 단계가 반영하니, 너는 상품 섹션의 제목·reason에 반영할 것만 손봅니다.`
+피드백을 반영해 쇼핑 계획 페이지의 뼈대를 다시 만들어 주세요. 안내·순서·섹션 구성에 대한 피드백을 고치고, 지적이 없던 부분의 구성은 유지합니다. 상품 자체에 대한 피드백은 상품 단계가 반영하니, 너는 상품 섹션의 제목·reason에 반영할 것만 손봅니다.${branchNote}`
 }
 
 /* ── 자동 채점 요청 — 케이스 입력(비교 기준) + 생성 결과 전문 + 검증 게이트 드롭 로그.
