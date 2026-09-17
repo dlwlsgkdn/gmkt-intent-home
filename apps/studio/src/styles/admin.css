@@ -4117,3 +4117,20 @@
 .sb-seedjob__history li b { font-weight: 500; color: var(--sb-ink-2); }
 .sb-seedjob__history li.is-fail { color: var(--sb-danger); }
 .sb-seedjob__error { margin: 0; font-size: var(--sb-t-caption); color: var(--sb-danger); }
+
+/* ── 데이터 시딩 페이지 (#ops/seeding) — 현황 타일 → 시딩 잡(왼쪽) ∥ 재료·점검(오른쪽) ── */
+.sb-seeding { display: flex; flex-direction: column; gap: 16px; }
+.sb-seeding__grid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr); gap: 16px; align-items: start; }
+@media (max-width: 1100px) { .sb-seeding__grid { grid-template-columns: 1fr; } }
+.sb-seeding__col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.sb-seeding__card h2 { margin: 0; font-size: var(--sb-t-title); font-weight: 500; }
+.sb-seeding__card > p { margin: 0; color: var(--sb-muted); font-size: var(--sb-t-caption); }
+.sb-seeding__row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: var(--sb-t-caption); color: var(--sb-muted); }
+.sb-seeding__row input[type='number'] { width: 72px; padding: 4px 8px; border: 1px solid var(--sb-n-200); border-radius: var(--sb-r-md); font: inherit; font-size: var(--sb-t-caption); }
+.sb-seeding__row select { padding: 4px 8px; border: 1px solid var(--sb-n-200); border-radius: var(--sb-r-md); font: inherit; font-size: var(--sb-t-caption); background: var(--sb-n-0); }
+.sb-seeding__log { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: var(--sb-t-caption); color: var(--sb-ink-2); }
+.sb-seeding__log li time { color: var(--sb-subtle); margin-right: 6px; font-size: var(--sb-t-micro); }
+.sb-seeding__log li.is-fail { color: var(--sb-danger); }
+.sb-seeding__code { display: block; margin: 6px 0 0; padding: 8px 10px; border-radius: var(--sb-r-md); background: var(--sb-n-900); color: var(--sb-n-0); font-family: ui-monospace, monospace; font-size: var(--sb-t-micro); white-space: pre-wrap; word-break: break-all; }
+.sb-seeding__steps { margin: 0; padding-left: 18px; font-size: var(--sb-t-caption); color: var(--sb-ink-2); display: flex; flex-direction: column; gap: 4px; }
+.sb-seedjob__history.is-full { max-height: 320px; }

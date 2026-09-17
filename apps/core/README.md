@@ -78,11 +78,11 @@ npm run export:catalog --workspace=apps/tagging-api -- --out oy.json   # (사내
 npm run seed:catalog --workspace=apps/core -- --file oy.json           # 그 파일(또는 다른 몰의 같은 형식 JSON) 을 DB 에 직접 upsert — 멱등
 ```
 
-시딩 재료는 셋이다(2026-09-17): ① 운영 콘솔(트렌드 사전 탭 머리 「내재화 카탈로그」 카드)의 「✦ 웹 검색으로 시딩」 — 제품 유형 42개마다
+시딩 재료는 셋이다(2026-09-17): ① 운영 콘솔 「데이터 시딩」 메뉴(`#ops/seeding`, 서비스 품질 그룹)의 「✦ 시딩 잡 시작」 — 제품 유형 42개마다
 BFF 가 LLM+web_search 로 실제 판매 상품을 모아 올린다(유형만 약 $5·몇 분. 대량은 조건 칩(피부 타입·고민·가격대·몰)으로 유형×조건까지 펼치거나
-`npm run seed:search --workspace=apps/bff -- --bff <BFF 주소> --token <토큰> --facets skin,concern` 배치 스크립트로 — 단위당 약 $0.14, 중단·재개 가능) ② 같은 카드의 「쓰레드에서 수확」 — 지난 계획의 검증 통과 상품·콘텐츠
-백필(실주행은 7단계 기록이 자동 수확) ③ 위 올리브영 Mongo 내보내기 JSON — 이 스크립트 또는 카드의 「JSON 가져오기」. 스튜디오 SRP 스냅샷·데모
-카탈로그는 시딩에 쓰지 않는다. 상품 링크 점검(지마켓 썸네일·그 밖 몰 상품 주소 HEAD 로 내려간 리스팅을 dead 표시)도 그 카드가 부른다.
+`npm run seed:search --workspace=apps/bff -- --bff <BFF 주소> --token <토큰> --facets skin,concern` 배치 스크립트로 — 단위당 약 $0.14, 중단·재개 가능) ② 같은 메뉴의 「쓰레드에서 수확」 — 지난 계획의 검증 통과 상품·콘텐츠
+백필(실주행은 7단계 기록이 자동 수확) ③ 위 올리브영 Mongo 내보내기 JSON — 이 스크립트 또는 메뉴의 「JSON 가져오기」. 스튜디오 SRP 스냅샷·데모
+카탈로그는 시딩에 쓰지 않는다. 상품 링크 점검(지마켓 썸네일·그 밖 몰 상품 주소 HEAD 로 내려간 리스팅을 dead 표시)도 그 메뉴에 있다.
 
 ## Vercel 배포 (신규 프로젝트)
 
