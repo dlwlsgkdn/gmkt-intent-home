@@ -3,6 +3,7 @@ import {
   clearSeedJob,
   fetchAdminCatalog,
   fetchSeedJob,
+  fillThumbsAdminCatalog,
   harvestAdminCatalog,
   importAdminCatalog,
   migrateAdminCatalog,
@@ -28,7 +29,7 @@ import {
  *     step 을 반복 호출해 4단위씩(한 라운드) 전진시킨다(단위마다 LLM+web_search 1회 — 비용 발생, 시작 전 확인). 상태·진행·회차 기록·결과는 서버에 있어
  *     다른 탭이나 배치 스크립트(apps/bff/scripts/seed-search.mjs)가 돌려도 여기서 같은 것을 본다(드라이버가 없으면 10초마다 조회).
  *  ③ 그 밖의 재료 — 지난 쓰레드 계획 수확(백필, 실주행은 7단계가 자동), 올리브영 사내 Mongo 내보내기·다른 몰 행 JSON 가져오기
- *  ④ 점검 — 상품 링크 점검(지마켓 썸네일·그 밖 몰 상품 주소 HEAD → dead/verified, 올리브영·쿠팡은 확인 불가라 건너뜀) + 이 화면의 작업 로그
+ *  ④ 점검 — 상품 링크 점검(지마켓 썸네일·그 밖 몰 상품 주소 HEAD → dead/verified, 올리브영은 CDN 썸네일 HEAD·쿠팡은 확인 불가라 건너뜀) + 썸네일 채우기(소급) + 이 화면의 작업 로그
  *  ⑤ 둘러보기 — 쌓인 상품·콘텐츠 행 표(무한 스크롤, 행 클릭 = 전 컬럼 상세, AdminCatalogBrowse.jsx)
  * 스튜디오 SRP 스냅샷·데모 카탈로그는 시딩 재료가 아니다. core 표가 없으면(마이그레이션 0005 전) 안내만 보인다.
  */
@@ -175,11 +176,17 @@ export default function AdminSeeding({ api }) {
       return `쓰레드 수확 — ${r.threads}개 중 계획 ${r.plans}건에서 상품 ${r.products} · 콘텐츠 ${r.contents}개를 올렸어요.`
     })
 
+  const fillThumbs = () =>
+    run('썸네일 채우기', async () => {
+      const r = await fillThumbsAdminCatalog()
+      return `썸네일 채우기 — 상품 ${n(r.scanned)}행 중 ${n(r.filled)}행에 지마켓·올리브영 썸네일을 넣었어요 (쿠팡은 규칙이 없어 그대로).`
+    })
+
   const verify = () =>
     run('점검', async () => {
       const limit = Math.min(Math.max(Number(verifyLimit) || 50, 1), 200)
       const r = await verifyAdminCatalog(limit, verifyMall)
-      return `상품 링크 점검(${verifyMall === '*' ? '전체' : verifyMall} ${limit}개) — 살아 있음 ${r.alive} · 내려감(dead) ${r.dead} · 건너뜀 ${r.skipped}${verifyMall === '*' ? ' (올리브영·쿠팡은 확인 불가라 건너뜀)' : ''}.`
+      return `상품 링크 점검(${verifyMall === '*' ? '전체' : verifyMall} ${limit}개) — 살아 있음 ${r.alive} · 내려감(dead) ${r.dead} · 건너뜀 ${r.skipped}${verifyMall === '*' ? ' (쿠팡은 확인 불가라 건너뜀)' : ''}.`
     })
 
   /* JSON 파일 가져오기 — 올리브영(사내 Mongo export: tagging-api scripts/export-catalog.mjs)·다른 몰의 행 파일.
@@ -280,7 +287,7 @@ export default function AdminSeeding({ api }) {
         <div className="sb-seeding__col">
           <section className="sb-admin-card sb-seeding__card" aria-label="웹 검색 시딩 잡">
             <h2>✦ 웹 검색으로 시딩</h2>
-            <p>제품 유형 {CATALOG_SEED_KEYWORDS.length}개마다(조건을 고르면 유형 × 조건마다) AI가 실제 웹 검색으로 판매 상품 8~12개를 모아 저장합니다. 지마켓·올리브영·쿠팡은 상품 번호로 주소가 확인된 것만, 검색 결과 페이지 주소는 버립니다.</p>
+            <p>제품 유형 {CATALOG_SEED_KEYWORDS.length}개마다(조건을 고르면 유형 × 조건마다) AI가 실제 웹 검색으로 판매 상품 8~12개를 모아 저장합니다. 지마켓·올리브영·쿠팡은 상품 번호로 주소가 확인된 것만, 검색 결과 페이지 주소는 버립니다. 썸네일은 지마켓·올리브영이 상품 번호로 자동으로 채워지고 쿠팡은 비어 있어요.</p>
             <div className="sb-catalog-seedopts">
               <span className="sb-catalog-seedopts__label">조건</span>
               {Object.entries(CATALOG_SEED_FACETS).map(([key, def]) => (
@@ -399,13 +406,17 @@ export default function AdminSeeding({ api }) {
 
           <section className="sb-admin-card sb-seeding__card" aria-label="상품 링크 점검">
             <h2>상품 링크 점검</h2>
-            <p>오래 안 본 상품부터 상세 페이지가 살아 있는지 봅니다. 지마켓은 썸네일 주소, 그 밖의 몰은 상품 주소에 HEAD를 보내 404면 내려감(dead)으로 표시해 추천에서 빠지고, 200이면 검증됨으로 올립니다. 올리브영·쿠팡은 서버에서 닿지 못해 건너뜁니다.</p>
+            <p>오래 안 본 상품부터 상세 페이지가 살아 있는지 봅니다. 지마켓은 썸네일 주소, 그 밖의 몰은 상품 주소에 HEAD를 보내 404면 내려감(dead)으로 표시해 추천에서 빠지고, 200이면 검증됨으로 올립니다. 올리브영은 상품 페이지 대신 썸네일 주소로 봅니다. 쿠팡은 서버에서 닿지 못해 건너뜁니다.</p>
             <div className="sb-seeding__row">
               <label>몰 <select value={verifyMall} onChange={(e) => setVerifyMall(e.target.value)} disabled={Boolean(busy)}>
                 {mallOptions.map((m) => <option key={m} value={m}>{m === '*' ? '전체' : m}</option>)}
               </select></label>
               <label><input type="number" min="1" max="200" value={verifyLimit} onChange={(e) => setVerifyLimit(e.target.value)} disabled={Boolean(busy)} />개</label>
               <button type="button" className="sb-btn sb-btn--ghost sb-btn--small" disabled={!available || Boolean(busy)} onClick={verify}>{busy === '점검' ? '점검 중…' : '점검'}</button>
+            </div>
+            <p>썸네일이 빈 상품에는 상품 번호로 정해지는 주소를 넣습니다 — 지마켓 gdimg, 올리브영 CDN 첫 이미지(실측 10건 중 9건 열림, 안 열리면 카드가 이모지로 받음). 쿠팡은 규칙이 없어 비워 둡니다. 새로 시딩·수확되는 행은 자동으로 채워져요.</p>
+            <div className="sb-seeding__row">
+              <button type="button" className="sb-btn sb-btn--ghost sb-btn--small" disabled={!available || Boolean(busy)} onClick={fillThumbs}>{busy === '썸네일 채우기' ? '채우는 중…' : '썸네일 채우기'}</button>
             </div>
           </section>
 

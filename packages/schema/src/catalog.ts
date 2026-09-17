@@ -199,7 +199,7 @@ export const AdminCatalogHarvestResult = z.object({
 })
 export type AdminCatalogHarvestResult = z.infer<typeof AdminCatalogHarvestResult>
 
-/** 상품 링크 점검 — 지마켓 썸네일(gdimg)·그 밖 몰 상품 주소 HEAD: 200 이면 살아 있음(verified), 404 면 dead. 올리브영·쿠팡은 건너뜀 */
+/** 상품 링크 점검 — 지마켓 썸네일(gdimg)·그 밖 몰 상품 주소 HEAD: 200 이면 살아 있음(verified), 404 면 dead. 올리브영은 CDN 썸네일에 HEAD, 쿠팡은 건너뜀 */
 export const AdminCatalogVerifyResult = z.object({
   checked: z.number().int(),
   alive: z.number().int(),
@@ -207,6 +207,13 @@ export const AdminCatalogVerifyResult = z.object({
   skipped: z.number().int(),
 })
 export type AdminCatalogVerifyResult = z.infer<typeof AdminCatalogVerifyResult>
+
+/** 썸네일 채우기 — 빈 imageUrl 행에 몰별 결정적 썸네일(지마켓 gdimg·올리브영 CDN)을 소급 적용. scanned = 훑은 행, filled = 채운 행 */
+export const AdminCatalogFillThumbsResult = z.object({
+  scanned: z.number().int(),
+  filled: z.number().int(),
+})
+export type AdminCatalogFillThumbsResult = z.infer<typeof AdminCatalogFillThumbsResult>
 
 /** 시딩 웹 검색 배치 — 제품 유형 몇 개(≤4/요청 — 4병렬 한 라운드, 서버리스 시간 한도)마다 LLM+web_search 1회로 판매 상품을 모아 행으로 upsert.
  * 운영 콘솔이 어휘 표(@ddak/pipeline CATALOG_SEED_KEYWORDS)를 잘라 여러 번 부른다 */

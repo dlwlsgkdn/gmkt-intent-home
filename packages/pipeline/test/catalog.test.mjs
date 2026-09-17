@@ -14,6 +14,8 @@ import {
   productCandidatesBlock,
   contentCandidatesBlock,
   oliveyoungGoodsNoOf,
+  oliveyoungThumb,
+  mallThumbnailOf,
   pdpKeyOf,
   pdpVerified,
 } from '../dist/catalog-candidates.js'
@@ -84,6 +86,22 @@ test('그라운딩 — productIds 는 이 요청의 후보 목록에서 해석�
   assert.equal(internal.mall, '지마켓')
   const q = planQualityOf({ headline: '', summary: '', sections: [section] })
   assert.equal(q.webProducts, 1, '품질 KPI 의 웹 상품은 id 접두 web- 만 센다')
+})
+
+test('썸네일 규칙 — 올리브영은 goodsNo 로 CDN 첫 이미지가 결정되고, 시딩·수확·게이트가 빈 썸네일에 쓴다', () => {
+  assert.equal(
+    oliveyoungThumb('A000000214921'),
+    'https://image.oliveyoung.co.kr/cfimages/cf-goods/uploads/images/thumbnails/10/0000/0021/A00000021492101ko.jpg',
+  )
+  assert.equal(mallThumbnailOf('https://m.oliveyoung.co.kr/m/goods/getGoodsDetail.do?goodsNo=a000000209578'), 'https://image.oliveyoung.co.kr/cfimages/cf-goods/uploads/images/thumbnails/10/0000/0020/A00000020957801ko.jpg')
+  assert.equal(mallThumbnailOf('https://item.gmarket.co.kr/Item?goodscode=4400000001'), 'https://gdimg.gmarket.co.kr/4400000001/still/280')
+  assert.equal(mallThumbnailOf('https://www.coupang.com/vp/products/123456'), null, '쿠팡은 규칙 없음')
+  const rows = seedProductRowsOf('핸드크림', [
+    { name: '올영 핸드크림', brand: '브랜드', price: 9000, mall: '올리브영', url: 'https://www.oliveyoung.co.kr/store/goods/getGoodsDetail.do?goodsNo=A000000214921', imageUrl: '', tags: [] },
+    { name: '쿠팡 핸드크림', brand: '브랜드', price: 9000, mall: '쿠팡', url: 'https://www.coupang.com/vp/products/123456', imageUrl: '', tags: [] },
+  ], '2026-09-18T00:00:00.000Z')
+  assert.ok(rows.find((r) => r.id === 'oy-a000000214921').imageUrl.endsWith('/A00000021492101ko.jpg'), '시딩 올영 행에 썸네일')
+  assert.equal(rows.find((r) => r.id === 'cp-123456').imageUrl, null, '쿠팡 행은 빈 채로')
 })
 
 test('PDP 보정 — 아는 몰인데 상품 번호 형식이 어긋난 주소는 몰 검색 링크(urlKind=search)로 바꿔 싣는다', () => {

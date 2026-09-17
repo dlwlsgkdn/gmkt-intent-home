@@ -256,6 +256,8 @@ export function importAdminCatalog(body) { return req('POST', '/catalog/import',
 export function harvestAdminCatalog(limit = 100) { return req('POST', `/catalog/harvest?limit=${limit}`) }
 /** 상품 링크 점검(지마켓 썸네일·그 밖 몰 상품 주소 HEAD, mall 기본 전체) → { checked, alive, dead, skipped } */
 export function verifyAdminCatalog(limit = 50, mall = '*') { return req('POST', `/catalog/verify?limit=${limit}&mall=${encodeURIComponent(mall)}`) }
+/** 썸네일 채우기(소급) — 빈 imageUrl 행에 지마켓·올리브영 결정적 썸네일 → { scanned, filled } */
+export function fillThumbsAdminCatalog() { return req('POST', '/catalog/fill-thumbnails') }
 /** 시딩 웹 검색 배치 — { keywords?: string[≤8] } 또는 { queries?: [{keyword, query}][≤8], dense? } → { keywords, failed, products, verified, webSearchRequests } */
 export function seedSearchAdminCatalog(body) { return req('POST', '/catalog/seed-search', Array.isArray(body) ? { keywords: body } : body) }
 /* 시딩 잡 — 서버(core KV)가 상태를 갖고 드라이버가 step 으로 전진시킨다. 응답은 { job, busy? } */

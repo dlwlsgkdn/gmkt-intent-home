@@ -298,6 +298,22 @@ export function pdpVerified(url: string, imageUrl?: string | null): boolean {
 
 export const gmarketPdpUrl = (code: string) => `https://item.gmarket.co.kr/Item?goodscode=${code}`
 export const gmarketThumb = (code: string) => `https://gdimg.gmarket.co.kr/${code}/still/280`
+/** 올리브영 썸네일 — 상품 번호로 결정되는 CDN 경로(2026-09-18 실측: 올리브영 30건 중 27건이 첫 등록 이미지 `01ko.jpg` 로 열린다, 나머지는 02·10 등 다른
+ * 번호 — 그런 상품은 카드의 이미지 로드 실패 폴백(이모지)이 받는다). image.oliveyoung.co.kr 은 봇 도전 페이지가 없어 브라우저·서버 모두 연다.
+ * 경로의 두 폴더는 goodsNo 숫자부 앞 4자리·다음 4자리: A000000214921 → thumbnails/10/0000/0021/A00000021492101ko.jpg */
+export const oliveyoungThumb = (goodsNo: string): string => {
+  const g = goodsNo.toUpperCase()
+  const d = g.slice(1)
+  return `https://image.oliveyoung.co.kr/cfimages/cf-goods/uploads/images/thumbnails/10/${d.slice(0, 4)}/${d.slice(4, 8)}/${g}01ko.jpg`
+}
+/** 몰별 결정적 썸네일 — 지마켓 gdimg·올리브영 CDN. 그 밖의 몰·형식이 안 맞는 주소는 null (검증 게이트·수확·시딩이 빈 썸네일에 쓴다) */
+export function mallThumbnailOf(raw: string): string | null {
+  const gm = goodsCodeOf(raw)
+  if (gm) return gmarketThumb(gm)
+  const oy = oliveyoungGoodsNoOf(raw)
+  if (oy) return oliveyoungThumb(oy)
+  return null
+}
 export const oliveyoungPdpUrl = (goodsNo: string) => `https://www.oliveyoung.co.kr/store/goods/getGoodsDetail.do?goodsNo=${goodsNo.toUpperCase()}`
 
 const tagsOf = (list: string[]) => [...new Set(list.map((t) => t.trim()).filter((t) => t.length >= 2))]
@@ -349,7 +365,7 @@ export function harvestProductRow(p: CatalogProduct, terms: string[], now: strin
       mall: '올리브영',
       mallProductId: goodsNo,
       url: oliveyoungPdpUrl(goodsNo),
-      imageUrl: p.imageUrl ?? null,
+      imageUrl: p.imageUrl ?? oliveyoungThumb(goodsNo),
       source: 'thread',
       verified: true,
       ...base,

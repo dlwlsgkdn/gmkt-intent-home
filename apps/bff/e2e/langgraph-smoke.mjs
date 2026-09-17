@@ -814,6 +814,10 @@ try {
     const seeded = await fetch(BFF + '/api/admin/catalog/seed-search', { method: 'POST', headers: plain, body: JSON.stringify({ keywords: ['선크림', '립밤'] }) }).then((r) => r.json())
     ok(seeded.keywords === 2 && seeded.failed?.length === 0, `웹 검색 시딩 — 유형 2개 (실패 ${seeded.failed?.length})`)
     ok(seeded.products === 3 && seeded.verified === 3, `웹 검색 시딩 — 상품 ${seeded.products}(검증 ${seeded.verified}) — 올영 행은 두 유형에 겹쳐 한 행, 검색 페이지 주소는 버림`)
+    const seededOy = await fetch(BFF + '/api/admin/catalog/products?mall=%EC%98%AC%EB%A6%AC%EB%B8%8C%EC%98%81&source=search&limit=10').then((r) => r.json())
+    ok(seededOy.items.length >= 1 && seededOy.items.every((p) => /^https://image.oliveyoung.co.kr/.*01ko.jpg$/.test(p.imageUrl || '')), '시딩 올리브영 행은 CDN 결정적 썸네일을 갖는다 (모델이 imageUrl 을 비워도)')
+    const filled = await fetch(BFF + '/api/admin/catalog/fill-thumbnails', { method: 'POST', headers: plain }).then((r) => r.json())
+    ok(typeof filled.scanned === 'number' && filled.scanned >= seededOy.total && typeof filled.filled === 'number', `썸네일 채우기(소급) — ${filled.scanned}행 훑고 ${filled.filled}행 채움`)
     const seedCalls = (await llmCalls()).filter((c) => c.type === 'catalog-seed')
     ok(seedCalls.length === 2 && seedCalls.some((c) => c.user.includes('제품 유형: 선크림')), '유형마다 카탈로그 수집 호출 1회')
     // 대량 형식 — 유형×조건 검색 단위(queries)·dense: 검색 초점이 가변부에 실리고 실패 라벨은 초점 문구다

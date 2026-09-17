@@ -3,7 +3,7 @@ import type { ContentsSectionGen, PlanSkeletonSectionGen, ProductRatingGen, Prod
 import type { ConstraintLedger } from '../ledger'
 import { cartedNames } from '../ledger'
 import { CATALOG, CATALOG_BY_ID } from '../catalog'
-import { oliveyoungGoodsNoOf, pdpKeyOf, type CatalogCandidates } from '../catalog-candidates'
+import { mallThumbnailOf, oliveyoungGoodsNoOf, pdpKeyOf, type CatalogCandidates } from '../catalog-candidates'
 import { findMedicalClaim } from './claims'
 import { scoreProductMatch, withMatchFactor } from './match'
 
@@ -287,9 +287,10 @@ export function groundProductsSection(
       }
     }
     // 썸네일도 http(s) 검증 통과분만 — 실패해도 상품은 싣는다 (FE가 이모지 목업 폴백). 프로토콜 생략(//…)은 https 로 받고,
-    // 지마켓 상품은 상품 번호로 gdimg 썸네일을 결정적으로 채운다 (썸네일 보강 fetch 가 실패해도 지마켓 몫은 언제나 그림이 있다)
+    // 지마켓·올리브영 상품은 상품 번호로 썸네일을 결정적으로 채운다(gdimg · 올리브영 CDN `01ko.jpg`, @ddak/pipeline mallThumbnailOf —
+    // 썸네일 보강 fetch 가 실패해도(올리브영은 서버가 403 이라 아예 안 받는다) 두 몰 몫은 그림이 있다, 2026-09-18)
     const rawImage = w.imageUrl.trim().startsWith('//') ? `https:${w.imageUrl.trim()}` : w.imageUrl
-    const imageUrl = parseHttpUrl(rawImage) ? rawImage : gmarketThumbnailOf(url) ?? undefined
+    const imageUrl = parseHttpUrl(rawImage) ? rawImage : mallThumbnailOf(url.toString()) ?? undefined
     const priceUnknown = !(Number.isFinite(w.price) && w.price > 0)
     const admitted = admit(
       {

@@ -34,6 +34,7 @@ import {
   AdminCatalogMigrateResult,
   AdminCatalogSeedSearchBody,
   AdminCatalogSeedSearchResult,
+  AdminCatalogFillThumbsResult,
   AdminCatalogVerifyResult,
   AdminCatalogWire,
   CatalogContentListWire,
@@ -476,7 +477,7 @@ export class AdminController {
 
   @Post('catalog/verify')
   @ApiOperation({
-    summary: '상품 링크 점검 — 오래 안 본 순 N개: 지마켓은 썸네일(gdimg)·그 밖의 몰은 상품 주소에 HEAD (404 → dead, 200 → verified). 올리브영·쿠팡은 건너뜀',
+    summary: '상품 링크 점검 — 오래 안 본 순 N개: 지마켓은 썸네일(gdimg)·그 밖의 몰은 상품 주소에 HEAD (404 → dead, 200 → verified). 올리브영은 CDN 썸네일에 HEAD, 쿠팡은 건너뜀',
   })
   @ApiQuery({ name: 'limit', required: false, type: 'integer', example: 50 })
   @ApiQuery({ name: 'mall', required: false, example: '*', description: "몰 이름 또는 '*'(전체, 기본)" })
@@ -486,6 +487,16 @@ export class AdminController {
     @Query('mall', new DefaultValuePipe('*')) mall: string,
   ): Promise<AdminCatalogVerifyResult> {
     return this.catalog.verifyProducts(mall, Math.min(Math.max(limit, 1), 200))
+  }
+
+  @Post('catalog/fill-thumbnails')
+  @ApiOperation({
+    summary: '썸네일 채우기(소급) — 빈 imageUrl 행에 지마켓 gdimg·올리브영 CDN 결정적 썸네일을 적용 (전 행 훑기 + 값 그대로 upsert)',
+    description: '웹 검색 시딩은 검색 결과에 이미지 주소가 없어 올리브영·쿠팡 행이 빈 채 쌓였다. 올리브영은 상품 번호로 CDN 첫 이미지(01ko.jpg)가 결정되므로 채우고, 쿠팡은 규칙이 없어 그대로 둔다.',
+  })
+  @ApiOkResponse({ schema: toOpenApi(AdminCatalogFillThumbsResult) })
+  catalogFillThumbnails(): Promise<AdminCatalogFillThumbsResult> {
+    return this.catalog.fillThumbnails()
   }
 
   /** 설정 변경 뒤 같은 core KV에 최신순으로 쌓는다. 설정 반영 자체를 로그 장애로 되돌리진 않는다. */

@@ -6,6 +6,7 @@ import {
   catalogTermsOf,
   gmarketThumb,
   harvestRowsOf,
+  mallThumbnailOf,
   seedProductRowsOf,
   staticCandidates,
   type CatalogCandidates,
@@ -20,8 +21,8 @@ import { LlmService } from '../llm/llm.service'
  *  - candidatesFor: 의도·답변·프로필 → 검색어(@ddak/pipeline catalogTermsOf) → core 검색 → 5b·5c 가변부 후보 표 + 검증 게이트 후보 목록.
  *    core 미연결·표 없음(마이그레이션 전)·조회 실패면 데모 카탈로그 14종으로 대신한다(옛 {{CATALOG}} 와 같은 상품) — 계획을 막지 않는다.
  *  - harvest: 7단계 기록 직후 최종 페이지의 상품·콘텐츠를 DB 에 올린다(bump upsert). 계획이 만들어질수록 표가 자란다.
- *  - verifyProducts: 지마켓은 썸네일(gdimg)·그 밖의 몰은 상품 주소에 HEAD 로 리스팅 생사를 안다(404 = 내려감 → dead). 올리브영·쿠팡은
- *    Node 에서 닿지 못해 건너뛴다(상품 번호 형식으로 verified). 운영 콘솔 점검 버튼이 부른다.
+ *  - verifyProducts: 지마켓은 썸네일(gdimg)·그 밖의 몰은 상품 주소에 HEAD 로 리스팅 생사를 안다(404 = 내려감 → dead). 올리브영은 CDN 썸네일에 HEAD,
+ *    쿠팡은 Node 에서 닿지 못해 건너뛴다(상품 번호 형식으로 verified). 운영 콘솔 점검 버튼이 부른다.
  *  - 몰 범위: 지마켓뿐 아니라 올리브영·쿠팡(상품 번호 형식)·그 밖의 몰(썸네일을 받아 온 것)도 verified 로 후보가 된다 (2026-09-17).
  *  - 시딩 재료(2026-09-17 결정): ① 올리브영 사내 Mongo 내보내기(JSON 가져오기 importRows) ② 지난 쓰레드의 계획(수확 — admin harvest 백필)
  *    ③ 시딩 실행 시 실제 웹 검색 배치(seedBySearch — 제품 유형마다 LLM+web_search). 스냅샷·데모 카탈로그 시딩은 뗐다.
@@ -182,7 +183,8 @@ export class CatalogService {
 
   /** 상품 행 점검 — 몰별로 닿을 수 있는 주소에 HEAD 를 보내 리스팅 생사를 본다 (404·410 = dead, 200 = verified 승격).
    *  - 지마켓: 썸네일(gdimg) — 상품 번호로 결정되고 항상 열린다
-   *  - 올리브영·쿠팡: Node 에서는 봇 도전(403)이라 닿지 못한다 → 건너뜀 (상품 번호 형식으로 이미 verified, 운영자 표시로만 내린다)
+   *  - 올리브영: 상품 페이지는 Node 에서 봇 도전(403)이지만 이미지 CDN 은 열린다 → 결정적 썸네일(image.oliveyoung.co.kr …01ko.jpg)에 HEAD (2026-09-18)
+   *  - 쿠팡: 페이지·이미지 모두 닿지 못한다 → 건너뜀 (상품 번호 형식으로 이미 verified, 운영자 표시로만 내린다)
    *  - 그 밖의 몰: 상품 주소 자체에 HEAD (모바일 UA)
    * mall='*' 면 전 몰을 오래 안 본 순으로 N개 */
   async verifyProducts(mall = '*', limit = 50): Promise<{ checked: number; alive: number; dead: number; skipped: number }> {
@@ -190,7 +192,9 @@ export class CatalogService {
     const out = { checked: 0, alive: 0, dead: 0, skipped: 0 }
     const targetOf = (row: CatalogProductRow): string | null => {
       if (row.mall === '지마켓') return row.mallProductId ? gmarketThumb(row.mallProductId) : null
-      if (row.mall === '올리브영' || row.mall === '쿠팡') return null
+      // 올리브영 — 상품 페이지는 서버에서 403 이지만 이미지 CDN 은 열린다(2026-09-18): 결정적 썸네일에 HEAD. 쿠팡은 둘 다 막혀 건너뜀
+      if (row.mall === '올리브영') return row.imageUrl && row.imageUrl.startsWith('https://image.oliveyoung.co.kr/') ? row.imageUrl : null
+      if (row.mall === '쿠팡') return null
       return row.url
     }
     await Promise.all(
@@ -219,6 +223,31 @@ export class CatalogService {
         }
       }),
     )
+    return out
+  }
+
+  /** 썸네일 채우기(소급) — 빈 imageUrl 행에 몰별 결정적 썸네일(지마켓 gdimg·올리브영 CDN `01ko.jpg`, @ddak/pipeline mallThumbnailOf)을 적용.
+   * 웹 검색 시딩은 모델이 검색 결과에서 이미지 주소를 못 얻어 올리브영·쿠팡 행이 전부 빈 채 쌓였다(2026-09-18 운영: 올리브영 278행 0장).
+   * 새 행은 seedProductRowsOf·harvestRowsOf 가 채우고, 이 함수는 그전에 쌓인 행을 둘러보기 페이지로 훑어 upsert(값 그대로) 한다 */
+  async fillThumbnails(): Promise<{ scanned: number; filled: number }> {
+    const out = { scanned: 0, filled: 0 }
+    let cursor: string | undefined
+    const patched: CatalogProductRow[] = []
+    for (let page = 0; page < 200; page += 1) {
+      const res = await this.core.listCatalogProducts({ limit: 100, ...(cursor ? { cursor } : {}) })
+      for (const row of res.items) {
+        out.scanned += 1
+        if (row.imageUrl) continue
+        const thumb = mallThumbnailOf(row.url)
+        if (thumb) patched.push({ ...row, imageUrl: thumb })
+      }
+      if (!res.nextCursor) break
+      cursor = res.nextCursor
+    }
+    for (let i = 0; i < patched.length; i += 500) {
+      await this.core.upsertCatalogProducts({ items: patched.slice(i, i + 500) })
+    }
+    out.filled = patched.length
     return out
   }
 }
