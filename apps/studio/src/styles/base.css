@@ -89,6 +89,25 @@
   --sb-ops-white-10: rgba(255, 255, 255, 0.1);
   --sb-ops-white-16: rgba(255, 255, 255, 0.16);
 
+  /* 트렌드 사전 — 로즈·라벤더 테마. 다른 운영 화면에는 적용하지 않는다. */
+  --sb-trend-bg: #fcfafb;
+  --sb-trend-ink: #514654;
+  --sb-trend-muted: #796d7b;
+  --sb-trend-line: #e9e0e7;
+  --sb-trend-rose: #a65f83;
+  --sb-trend-rose-line: #dfc1d0;
+  --sb-trend-rose-fill: #f4e3ec;
+  --sb-trend-rose-soft: #fbf4f7;
+  --sb-trend-purple: #826696;
+  --sb-trend-purple-line: #cfc1df;
+  --sb-trend-purple-fill: #eae2f1;
+  --sb-trend-purple-soft: #f6f3f9;
+  --sb-trend-lilac-fill: #eee5ed;
+  --sb-trend-grid: #eee7ed;
+  --sb-trend-shadow: 0 4px 16px rgba(105, 82, 122, .04);
+  --sb-trend-bubble-shadow: 0 2px 4px rgba(130, 100, 124, .07), inset 0 1px 0 rgba(255, 255, 255, .7);
+  --sb-trend-bubble-active-shadow: 0 3px 8px rgba(130, 100, 124, .1), 0 0 0 3px rgba(166, 95, 131, .07);
+
   /* 태깅 필드 식별 7색 — 필드(대분류~조건)마다 하나씩, 카드와 최종 태그가 공유 */
   --sb-tag-c1: #d6336c; /* 대분류 — 핑크(브랜드) */
   --sb-tag-c2: #7048e8; /* 세부유형 — 바이올렛 */
