@@ -321,3 +321,121 @@ body:has(.sb-search) .sb-fabbar { opacity: 0; pointer-events: none; }
 .sb-srp__skel-card { display: block; height: 300px; border-radius: 16px; background: linear-gradient(90deg, var(--dk-thumb) 25%, var(--dk-sunken) 50%, var(--dk-thumb) 75%); background-size: 200% 100%; animation: sb-srp-skel 1.2s linear infinite; }
 .sb-srp__skel-card--tall { aspect-ratio: 183 / 278; height: auto; }
 @keyframes sb-srp-skel { from { background-position: 200% 0 } to { background-position: -200% 0 } }
+
+/* ── 쇼츠·라이브 세로 플레이어 (SrpViewers.jsx ShortsViewer, 2026-09-17) ──
+   화면 안 검정 전면 층(z 240 — 상품 상세 250 아래). 영상 대신 스틸 사진에 12초 느린 줌 + 위 진행 바로 재생 인상, 탭 = 일시정지(줌·진행 멈춤).
+   슬라이드는 위/아래 전환 애니메이션, 본문(왼쪽 아래)·레일(오른쪽 아래)·이전/다음(오른쪽 가운데) */
+.sb-shorts { position: fixed; inset: 0; z-index: 240; overflow: hidden; background: #000; color: #fff; user-select: none; }
+.sb-shorts__progress { position: absolute; top: var(--sb-safe-top, 0px); left: 0; right: 0; z-index: 4; height: 2px; background: rgba(255, 255, 255, 0.25); }
+.sb-shorts__progress i { display: block; height: 100%; width: 0; background: #fff; animation: sb-shorts-progress 12s linear forwards; }
+@keyframes sb-shorts-progress { from { width: 0 } to { width: 100% } }
+.sb-shorts__top { position: absolute; top: calc(var(--sb-safe-top, 0px) + 6px); left: 0; right: 0; z-index: 4; display: flex; align-items: center; justify-content: space-between; padding: 0 8px; }
+.sb-shorts__title { font-family: var(--dk-font-display) !important; font-weight: 400; font-size: 16px; line-height: 21px; color: #fff; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.4); }
+.sb-shorts__iconbtn { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border: 0; background: none; color: #fff; cursor: pointer; filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.5)); }
+.sb-shorts__iconbtn svg { width: 24px; height: 24px; }
+.sb-shorts__slide { position: absolute; inset: 0; cursor: pointer; }
+.sb-shorts__slide--up { animation: sb-shorts-up 0.3s var(--sb-ease); }
+.sb-shorts__slide--down { animation: sb-shorts-down 0.3s var(--sb-ease); }
+@keyframes sb-shorts-up { from { transform: translateY(12%); opacity: 0.3 } to { transform: none; opacity: 1 } }
+@keyframes sb-shorts-down { from { transform: translateY(-12%); opacity: 0.3 } to { transform: none; opacity: 1 } }
+.sb-shorts__cover { display: block; width: 100%; height: 100%; object-fit: cover; animation: sb-shorts-zoom 12s ease-in-out forwards; }
+@keyframes sb-shorts-zoom { from { transform: scale(1) } to { transform: scale(1.08) } }
+.sb-shorts__bg { position: absolute; inset: -24px; background-size: cover; background-position: center; filter: blur(26px) brightness(0.5) saturate(1.2); }
+.sb-shorts__main { position: absolute; left: 10%; right: 10%; top: 14%; height: 56%; width: 80%; object-fit: contain; border-radius: 18px; animation: sb-shorts-zoom 12s ease-in-out forwards; }
+.sb-shorts__slide .sb-srp__photo-blank { position: absolute; inset: 0; width: auto; height: auto; }
+.sb-shorts__shade { position: absolute; left: 0; right: 0; bottom: 0; height: 58%; background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.35) 45%, rgba(0, 0, 0, 0.82) 100%); pointer-events: none; }
+.sb-shorts__pausemark { position: absolute; left: 50%; top: 50%; display: inline-flex; width: 64px; height: 64px; align-items: center; justify-content: center; border-radius: 50%; background: rgba(0, 0, 0, 0.45); transform: translate(-50%, -50%); animation: sb-search-in var(--sb-dur) var(--sb-ease); }
+.sb-shorts__pausemark svg { width: 34px; height: 34px; margin-left: 3px; color: #fff; }
+.sb-shorts.is-paused .sb-shorts__cover, .sb-shorts.is-paused .sb-shorts__main, .sb-shorts.is-paused .sb-shorts__progress i { animation-play-state: paused; }
+.sb-shorts__livebar { position: absolute; top: calc(var(--sb-safe-top, 0px) + 52px); left: 16px; z-index: 3; display: flex; align-items: center; gap: 8px; }
+.sb-shorts__livebar .sb-srp__live-badge { position: static; }
+.sb-shorts__viewers { padding: 0 8px; border-radius: var(--sb-r-pill); background: rgba(0, 0, 0, 0.45); font-size: 12px; font-weight: 500; line-height: 23px; }
+.sb-shorts__body { position: absolute; left: 16px; right: 76px; bottom: calc(var(--sb-safe-bottom, 0px) + 22px); z-index: 3; display: flex; flex-direction: column; gap: 10px; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.45); }
+.sb-shorts__chat { list-style: none; display: flex; flex-direction: column; gap: 6px; margin: 0 0 6px; padding: 0; }
+.sb-shorts__chat li { display: inline-flex; align-self: flex-start; gap: 6px; max-width: 100%; padding: 6px 10px; border-radius: 12px; background: rgba(0, 0, 0, 0.42); font-size: 12px; font-weight: 400; line-height: 16px; color: rgba(255, 255, 255, 0.92); text-shadow: none; animation: sb-shorts-chat 0.4s var(--sb-ease) both; }
+.sb-shorts__chat li b { flex: 0 0 auto; font-weight: 500; color: rgba(255, 255, 255, 0.72); }
+@keyframes sb-shorts-chat { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
+.sb-shorts__who { display: flex; align-items: center; gap: 8px; }
+.sb-srp__avatar--32 { width: 32px; height: 32px; border: 1.5px solid rgba(255, 255, 255, 0.85); box-sizing: border-box; }
+.sb-shorts__name { font-size: var(--sb-t-body); font-weight: 500; line-height: 20px; }
+.sb-shorts__follow { height: 28px; padding: 0 12px; border: 1px solid rgba(255, 255, 255, 0.85); border-radius: var(--sb-r-pill); background: none; color: #fff; font-size: var(--sb-t-caption); font-weight: 500; cursor: pointer; text-shadow: none; }
+.sb-shorts__follow.is-on { border-color: transparent; background: rgba(255, 255, 255, 0.22); }
+.sb-shorts__caption { margin: 0; font-size: var(--sb-t-body); font-weight: 400; line-height: 20px; word-break: keep-all; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.sb-shorts__tags { margin: 0; font-size: var(--sb-t-small); font-weight: 400; line-height: 18px; color: rgba(255, 255, 255, 0.88); }
+.sb-shorts__meta { margin: 0; font-size: var(--sb-t-caption); font-weight: 300; line-height: 17px; color: rgba(255, 255, 255, 0.7); }
+.sb-shorts__remind { display: inline-flex; align-self: flex-start; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border: 0; border-radius: var(--sb-r-pill); background: #fff; color: var(--dk-ink); font-size: var(--sb-t-small); font-weight: 500; cursor: pointer; text-shadow: none; }
+.sb-shorts__remind svg { width: 18px; height: 18px; }
+.sb-shorts__product { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px; border: 0; border-radius: 12px; background: rgba(255, 255, 255, 0.16); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); color: #fff; text-align: left; cursor: pointer; text-shadow: none; }
+.sb-shorts__product-thumb { flex: 0 0 auto; width: 44px; height: 44px; border-radius: 8px; overflow: hidden; background: #fff; }
+.sb-shorts__product-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.sb-shorts__product-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sb-shorts__product-name { font-size: var(--sb-t-caption); font-weight: 400; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sb-shorts__product-price { font-family: var(--dk-font-display) !important; font-weight: 400; font-size: var(--sb-t-small); line-height: 18px; }
+.sb-shorts__product-price em { margin-right: 5px; font-style: normal; color: #ffb3c1; }
+.sb-shorts__product-cta { flex: 0 0 auto; height: 30px; padding: 0 12px; border-radius: var(--sb-r-pill); background: #fff; color: var(--dk-ink); font-size: var(--sb-t-caption); font-weight: 500; line-height: 30px; }
+.sb-shorts__rail { position: absolute; right: 10px; bottom: calc(var(--sb-safe-bottom, 0px) + 30px); z-index: 3; display: flex; flex-direction: column; align-items: center; gap: 18px; }
+.sb-shorts__act { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0; border: 0; background: none; color: #fff; font-size: 12px; font-weight: 500; line-height: 15px; cursor: pointer; filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.5)); }
+.sb-shorts__act svg { width: 30px; height: 30px; transition: transform var(--sb-dur) var(--sb-ease); }
+.sb-shorts__act.is-on { color: var(--dk-coral); }
+.sb-shorts__act.is-on svg { transform: scale(1.15); }
+.sb-shorts__nav { position: absolute; right: 8px; top: 50%; z-index: 3; display: flex; flex-direction: column; align-items: center; gap: 4px; transform: translateY(-50%); }
+.sb-shorts__navbtn { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, 0.18); color: #fff; cursor: pointer; }
+.sb-shorts__navbtn:disabled { opacity: 0.25; cursor: default; }
+.sb-shorts__navbtn svg { width: 18px; height: 18px; transform: rotate(90deg); }
+.sb-shorts__navbtn:first-child svg { transform: rotate(-90deg); }
+.sb-shorts__navpos { font-size: 11px; font-weight: 400; color: rgba(255, 255, 255, 0.75); text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5); }
+
+/* ── 뷰티톡 글 화면 (SrpViewers.jsx BeautyTalkPost) — 흰 전면 페이지, 오른쪽에서 슬라이드. 상단 바 48 · 본문 스크롤 · 댓글 입력 바 고정 ── */
+.sb-post { position: fixed; inset: 0; z-index: 240; display: flex; flex-direction: column; background: var(--dk-surface); color: var(--dk-ink); animation: sb-post-in 0.26s var(--sb-ease); }
+@keyframes sb-post-in { from { transform: translateX(28px); opacity: 0.4 } to { transform: none; opacity: 1 } }
+.sb-post__bar { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; height: 48px; padding: 0 4px; border-bottom: 1px solid var(--dk-line-soft); }
+.sb-post__bartitle { font-family: var(--dk-font-display) !important; font-weight: 400; font-size: 16px; line-height: 21px; color: var(--dk-heading); }
+.sb-post__iconbtn { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: 0; background: none; color: var(--dk-ink); cursor: pointer; }
+.sb-post__iconbtn svg { width: 24px; height: 24px; }
+.sb-post__scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 20px 24px; }
+.sb-post__author { display: flex; align-items: center; gap: 10px; }
+.sb-srp__avatar--36 { width: 36px; height: 36px; }
+.sb-srp__avatar--28 { width: 28px; height: 28px; }
+.sb-post__author-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.sb-post__author-name { font-family: var(--dk-font-display) !important; font-weight: 400; font-size: var(--sb-t-body); line-height: 20px; color: var(--dk-ink); }
+.sb-post__author-ago { font-size: var(--sb-t-caption); font-weight: 300; line-height: 16px; color: var(--dk-subtle); }
+.sb-post__follow { height: 30px; padding: 0 12px; border: 1px solid var(--dk-brand); border-radius: var(--sb-r-pill); background: var(--dk-surface); color: var(--dk-brand); font-size: var(--sb-t-caption); font-weight: 500; cursor: pointer; }
+.sb-post__follow.is-on { border-color: var(--dk-line); background: var(--dk-thumb); color: var(--dk-muted); }
+.sb-post__body { margin: 14px 0 0; font-size: 15px; font-weight: 300; line-height: 24px; letter-spacing: -0.3px; color: var(--dk-ink); white-space: pre-line; word-break: keep-all; }
+.sb-post__img { margin-top: 14px; aspect-ratio: 4 / 3; border-radius: 12px; overflow: hidden; background: var(--dk-thumb); }
+.sb-post__img--product { aspect-ratio: 1; background: var(--dk-surface); border: 1px solid var(--dk-line-soft); }
+.sb-post__img img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.sb-post__product { display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 12px; padding: 10px; border: 1px solid var(--dk-line-soft); border-radius: 12px; background: var(--dk-sunken); text-align: left; cursor: pointer; }
+.sb-post__product-thumb { flex: 0 0 auto; width: 56px; height: 56px; border-radius: 8px; overflow: hidden; background: var(--dk-surface); border: 1px solid var(--dk-line-soft); }
+.sb-post__product-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.sb-post__product-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sb-post__product-brand { font-size: 11px; font-weight: 400; line-height: 14px; color: var(--dk-muted); }
+.sb-post__product-name { font-size: var(--sb-t-small); font-weight: 500; line-height: 18px; color: var(--dk-ink); word-break: keep-all; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.sb-post__product-price { font-family: var(--dk-font-display) !important; font-weight: 400; font-size: 14px; line-height: 20px; color: var(--dk-ink); }
+.sb-post__product-price em { margin-right: 5px; font-style: normal; color: var(--dk-brand-2); }
+.sb-post__product-cta { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 2px; font-size: var(--sb-t-caption); font-weight: 500; color: var(--dk-brand-deep); white-space: nowrap; }
+.sb-post__product-cta svg { width: 14px; height: 14px; }
+.sb-post__stats { display: flex; align-items: center; gap: 18px; margin-top: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--dk-line-soft); }
+.sb-post__stat { display: inline-flex; align-items: center; gap: 5px; padding: 0; border: 0; background: none; font-size: var(--sb-t-small); font-weight: 400; color: var(--dk-ink-2); cursor: pointer; }
+.sb-post__stat svg { width: 20px; height: 20px; }
+.sb-post__stat.is-on { color: var(--dk-coral); }
+.sb-post__comments { margin-top: 14px; }
+.sb-post__comments h4 { margin: 0 0 12px; font-family: var(--dk-font-display) !important; font-weight: 400; font-size: 14px; line-height: 20px; color: var(--dk-ink); }
+.sb-post__comments h4 span { margin-left: 4px; color: var(--dk-subtle); }
+.sb-post__comments ul { list-style: none; display: flex; flex-direction: column; gap: 14px; margin: 0; padding: 0; }
+.sb-post__comment { display: flex; align-items: flex-start; gap: 10px; }
+.sb-post__comment--author { padding-left: 24px; }
+.sb-post__comment-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.sb-post__comment-head { display: flex; align-items: center; gap: 6px; font-size: var(--sb-t-caption); font-weight: 300; line-height: 16px; color: var(--dk-subtle); }
+.sb-post__comment-head b { font-weight: 500; color: var(--dk-ink); }
+.sb-post__author-chip { padding: 0 5px; border-radius: 4px; background: var(--dk-brand-soft); font-size: 10px; font-weight: 500; line-height: 15px; color: var(--dk-brand-deep); }
+.sb-post__comment-body { font-size: var(--sb-t-small); font-weight: 300; line-height: 19px; letter-spacing: -0.2px; color: var(--dk-ink); word-break: keep-all; }
+.sb-post__comment-like { display: inline-flex; align-self: flex-start; align-items: center; gap: 3px; padding: 0; border: 0; background: none; font-size: 11px; font-weight: 400; color: var(--dk-subtle); cursor: pointer; }
+.sb-post__comment-like svg { width: 13px; height: 13px; }
+.sb-post__comment-like.is-on { color: var(--dk-coral); }
+.sb-post__me { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; background: var(--dk-brand-soft); font-size: 11px; font-weight: 500; color: var(--dk-brand-deep); }
+.sb-post__input { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 8px 12px calc(8px + var(--sb-safe-bottom, 0px)); border-top: 1px solid var(--dk-line-soft); background: var(--dk-surface); }
+.sb-post__input input { flex: 1; min-width: 0; height: 40px; padding: 0 14px; border: 0; border-radius: var(--sb-r-pill); background: var(--dk-thumb); font-size: var(--sb-t-body); font-weight: 400; color: var(--dk-ink); }
+.sb-post__input input::placeholder { color: var(--dk-subtle); font-weight: 300; }
+.sb-post__input button { flex: 0 0 auto; height: 36px; padding: 0 12px; border: 0; border-radius: var(--sb-r-pill); background: var(--dk-brand); color: #fff; font-size: var(--sb-t-small); font-weight: 500; cursor: pointer; }
+.sb-post__input button:disabled { background: var(--dk-line); color: var(--dk-disabled); cursor: default; }

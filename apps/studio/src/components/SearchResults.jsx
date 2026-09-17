@@ -4,6 +4,7 @@ import { viewerDeviceOf } from '../lib/store.js'
 import DeviceFrame from './DeviceFrame.jsx'
 import ProductDetailPanel from './ProductDetailPanel.jsx'
 import SearchOverlay, { BackIcon, SearchIcon } from './SearchOverlay.jsx'
+import { ShortsViewer, BeautyTalkPost, Photo, ChevronIcon, CloseIcon, HeartIcon, CommentFillIcon, TruckIcon, StarIcon, PlayIcon } from './SrpViewers.jsx'
 import { useSearchEntry } from '../hooks/useSearchEntry.js'
 import { scrollScreenTo } from '../lib/deviceScreen.js'
 import { loadSrpSnapshot, buildSrpResults, sortProducts, filterProducts, SORTS, won } from '../lib/srpMock.js'
@@ -16,57 +17,13 @@ import { loadSrpSnapshot, buildSrpResults, sortProducts, filterProducts, SORTS, 
  * 결과 조립은 `lib/srpMock.js`(2026-09-17): 상품은 **실제 지마켓 검색 결과 스냅샷**(`data/srpSnapshot.json` — 이름·브랜드·가격·할인·
  * 별점·리뷰·구매 수·배송·엠블럼·광고 표식, 썸네일·상세는 상품 번호로 결정)이고 쇼츠·라이브·뷰티톡은 카테고리별 문구 풀에서 검색어
  * 해시로 뽑아 같은 검색어면 같은 화면이 나온다. 탭은 전부 동작한다(전체 = 섹션 4개 미리보기, 나머지 탭 = 그 종류 전체, 추천 상품 =
- * 정렬·필터). 상품 카드 클릭 = 상세보기 패널(모바일 PDP iframe — Player 와 같은 ProductDetailPanel). 쇼츠·라이브·뷰티톡 클릭은 목업(토스트).
+ * 정렬·필터). 상품 카드 클릭 = 상세보기 패널(모바일 PDP iframe — Player 와 같은 ProductDetailPanel). 쇼츠·라이브 클릭 = 세로 플레이어,
+ * 뷰티톡 클릭 = 글 화면(`SrpViewers.jsx` — 둘 다 화면 안 fixed 층, 상품 칩·카드에서 같은 상세 패널을 연다).
  * Figma 에 없는 한 조각은 탭 아래 ✦ 「맞춤 계획 받기」 배너 — 같은 검색어로 DDAK(설문→계획)로 넘어가는 길이라 라우터가 잘못 갈랐어도
  * 여기서 복구된다
  */
 const TABS = ['전체', '뷰티톡', '쇼츠', '라이브', '추천 상품']
 const count = (n) => Number(n || 0).toLocaleString('ko-KR')
-
-const ChevronIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M9 6l6 6-6 6" />
-  </svg>
-)
-const CloseIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
-    <path d="M6 6l12 12M18 6L6 18" />
-  </svg>
-)
-const HeartIcon = () => (
-  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-    <path d="M12 20.5l-1.3-1.2C5.6 14.7 2.5 11.9 2.5 8.4 2.5 5.6 4.7 3.5 7.5 3.5c1.6 0 3.1.8 4.1 2 1-1.2 2.5-2 4.1-2 2.8 0 5 2.1 5 4.9 0 3.5-3.1 6.3-8.2 10.9L12 20.5z" />
-  </svg>
-)
-const CommentIcon = () => (
-  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-    <path d="M12 3C6.9 3 3 6.4 3 10.6c0 2.3 1.2 4.4 3.1 5.8L5.3 21l4.6-2.3c.7.1 1.4.2 2.1.2 5.1 0 9-3.4 9-7.6S17.1 3 12 3z" />
-  </svg>
-)
-const TruckIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M3 7h10v9H3zM13 10h4l3 3v3h-7z" />
-    <circle cx="7" cy="17.5" r="1.8" />
-    <circle cx="17" cy="17.5" r="1.8" />
-  </svg>
-)
-const StarIcon = () => (
-  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-    <path d="M12 2.8l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.7l-5.9 3.1 1.2-6.5L2.5 9.7l6.6-.9z" />
-  </svg>
-)
-const PlayIcon = () => (
-  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-    <path d="M8 5.5v13l10-6.5z" />
-  </svg>
-)
-
-function Photo({ src, alt = '' }) {
-  const [failed, setFailed] = useState(false)
-  useEffect(() => setFailed(false), [src])
-  if (!src || failed) return <span className="sb-srp__photo-blank" aria-hidden="true" />
-  return <img src={src} alt={alt} draggable={false} loading="lazy" onError={() => setFailed(true)} />
-}
 
 function SectionHead({ title, total, onMore }) {
   return (
@@ -120,8 +77,8 @@ function PostCard({ post, onPick }) {
       <p className="sb-srp__post-body">{post.body}</p>
       <div className={'sb-srp__post-img' + (post.product ? ' sb-srp__post-img--product' : '')}><Photo src={post.image} /></div>
       <div className="sb-srp__post-foot">
-        <span><HeartIcon />{post.likes}</span>
-        <span><CommentIcon />{post.comments}</span>
+        <span><HeartIcon filled />{post.likes}</span>
+        <span><CommentFillIcon />{post.comments}</span>
       </div>
     </article>
   )
@@ -216,6 +173,8 @@ export default function SearchResults({ api, query }) {
   const [sort, setSort] = useState('rank')
   const [filters, setFilters] = useState({})
   const [productDetail, setProductDetail] = useState(null)
+  const [player, setPlayer] = useState(null) // { kind: 'shorts' | 'lives', index } — 세로 플레이어
+  const [post, setPost] = useState(null) // 뷰티톡 글 화면
   const [snapshot, setSnapshot] = useState(null)
   const search = useSearchEntry(api, { onDdak: (q) => api.playLive(q) })
   const term = String(query || '').trim()
@@ -238,6 +197,7 @@ export default function SearchResults({ api, query }) {
 
   const mock = (what) => api.showToast(`${what}은(는) 목업이에요 — 상품 카드는 실제 지마켓 상세 페이지가 열려요.`)
   const openProduct = (p) => setProductDetail({ name: p.name, mall: p.mall, url: p.url })
+  const openViewer = (kind, index) => setPlayer({ kind, index })
   const goTab = (name) => {
     setTab(name)
     scrollScreenTo(0)
@@ -312,7 +272,7 @@ export default function SearchResults({ api, query }) {
               <SectionHead title="쇼츠" total={counts.shorts} onMore={tab === '전체' ? () => goTab('쇼츠') : null} />
               {!results ? <Skeleton tall /> : (
                 <div className="sb-srp__grid">
-                  {(tab === '전체' ? shorts.slice(0, 4) : shorts).map((item) => <MediaCard key={item.id} item={item} onPick={() => mock('쇼츠')} />)}
+                  {(tab === '전체' ? shorts.slice(0, 4) : shorts).map((item, i) => <MediaCard key={item.id} item={item} onPick={() => openViewer('shorts', i)} />)}
                 </div>
               )}
             </section>
@@ -323,7 +283,7 @@ export default function SearchResults({ api, query }) {
               <SectionHead title="라이브" total={counts.lives} onMore={tab === '전체' ? () => goTab('라이브') : null} />
               {!results ? <Skeleton tall /> : (
                 <div className="sb-srp__grid">
-                  {lives.map((item) => <MediaCard key={item.id} item={item} live onPick={() => mock('라이브')} />)}
+                  {lives.map((item, i) => <MediaCard key={item.id} item={item} live onPick={() => openViewer('lives', i)} />)}
                 </div>
               )}
             </section>
@@ -334,7 +294,7 @@ export default function SearchResults({ api, query }) {
               <SectionHead title="뷰티톡" total={counts.posts} onMore={tab === '전체' ? () => goTab('뷰티톡') : null} />
               {!results ? <Skeleton /> : (
                 <div className="sb-srp__grid sb-srp__grid--posts">
-                  {(tab === '전체' ? posts.slice(0, 4) : posts).map((post) => <PostCard key={post.id} post={post} onPick={() => mock('뷰티톡 글')} />)}
+                  {(tab === '전체' ? posts.slice(0, 4) : posts).map((item) => <PostCard key={item.id} post={item} onPick={() => setPost(item)} />)}
                 </div>
               )}
             </section>
@@ -386,6 +346,19 @@ export default function SearchResults({ api, query }) {
       {search.routing && !searchOpen ? (
         <div className="sb-search-routing" role="status">✦ 「{search.routing}」 — 어떤 화면이 맞을지 살펴보고 있어요…</div>
       ) : null}
+      {/* 쇼츠·라이브 세로 플레이어 / 뷰티톡 글 화면 — 화면 안 fixed 층, 상품 상세 패널이 그 위로 */}
+      {player && results ? (
+        <ShortsViewer
+          items={player.kind === 'lives' ? lives : shorts}
+          index={player.index}
+          live={player.kind === 'lives'}
+          onIndex={(index) => setPlayer((v) => ({ ...v, index }))}
+          onClose={() => setPlayer(null)}
+          onOpenProduct={openProduct}
+          onToast={api.showToast}
+        />
+      ) : null}
+      {post ? <BeautyTalkPost post={post} onClose={() => setPost(null)} onOpenProduct={openProduct} onToast={api.showToast} /> : null}
       {/* 상품 상세보기 — 지마켓 모바일 PDP iframe (Player 와 같은 패널, 기기 프레임 안) */}
       <ProductDetailPanel product={productDetail} onClose={() => setProductDetail(null)} />
       </DeviceFrame>

@@ -228,6 +228,44 @@ const TALKERS = [
 ]
 const LIVE_HOSTS = ['지마켓 뷰티 LIVE', '뷰티 MD 지은', '쇼호스트 하나', '브랜드 라이브', '뷰티 큐레이터 민']
 const AGO = ['1일 전', '2일 전', '3일 전', '4일 전', '6일 전', '1주 전', '2주 전', '3주 전']
+const AGO_SHORT = ['방금', '5분 전', '12분 전', '31분 전', '1시간 전', '3시간 전', '어제', '2일 전', '3일 전', '5일 전']
+
+/* 쇼츠 해시태그 — 묶음별 */
+const TAGS = {
+  base: ['#쿠션추천', '#베이스메이크업', '#지성피부', '#커버력', '#물광', '#데일리메이크업', '#내돈내산'],
+  sun: ['#선크림추천', '#자외선차단', '#톤업', '#무기자차', '#백탁없음', '#내돈내산'],
+  skin: ['#스킨케어루틴', '#속건조', '#진정', '#피부장벽', '#수분충전', '#내돈내산'],
+  cleanse: ['#클렌징', '#약산성', '#이중세안', '#모공케어', '#내돈내산'],
+  lip: ['#립추천', '#MLBB', '#발색', '#데일리립', '#웜톤', '#쿨톤'],
+  eye: ['#아이메이크업', '#음영', '#무쌍', '#워터프루프', '#데일리'],
+  cheek: ['#치크', '#블러셔', '#윤곽', '#하이라이터', '#데일리'],
+  body: ['#바디케어', '#보습', '#향좋은', '#내돈내산'],
+  hair: ['#두피케어', '#손상모', '#헤어루틴', '#내돈내산'],
+  scent: ['#향수추천', '#잔향', '#데일리향수', '#시향'],
+  default: ['#뷰티', '#내돈내산', '#솔직후기', '#추천'],
+}
+/* 라이브 채팅 — 방송 화면 왼쪽 아래 말풍선 */
+const LIVE_CHAT = [
+  '오늘 사은품 뭐예요?', '21호 vs 23호 고민이에요 ㅠ', '쿠폰 적용됐어요!', '지성인데 괜찮나요?', '방금 주문 완료 🙌', '재입고 언제 되나요',
+  '와 가격 미쳤다', '지난주에 샀는데 또 사고 싶네요', '발색 보여주세요~', '배송 언제 오나요?', '1+1 맞죠?', '이거 향 어때요?',
+]
+/* 뷰티톡 댓글 — {k} 어휘 · {p} 상품 */
+const COMMENTS = [
+  '저도 이거 쓰는데 완전 공감이에요 👍', '혹시 지성 피부에도 괜찮을까요?', '정보 감사해요! 담아갑니다 🙏', '오 저는 오후에 좀 무너지던데 픽서 뿌리시나요?',
+  '가격 대비 만족도 높은 것 같아요', '링크 타고 바로 샀어요 ㅋㅋ 후기 남길게요', '{k} 고민 중이었는데 도움 됐어요', '사진 색감 예쁘네요, 자연광인가요?',
+  '저는 향이 좀 강하게 느껴졌는데 다른 분들은 어떠셨어요?', '민감성인데 트러블 안 났어요 저도!', '이거 리필 구성이 더 이득이에요', '세일할 때 사면 좋을 듯요',
+  '혹시 건성도 괜찮을까요? 당김 없나요', '저는 2년째 재구매 중이에요 ㅎㅎ', '요즘 이거 품절 자주 나더라구요', '{p} 저도 써봤는데 발림이 진짜 좋아요',
+]
+const AUTHOR_REPLIES = [
+  '네! 저는 지성인데 괜찮았어요 😊', '세일가로 샀어요, 정가는 조금 더 비쌌던 걸로!', '자연광 맞아요 ☀️ 실내등에선 살짝 노랗게 나와요', '건성이면 살짝 촉촉한 타입이 나을 것 같아요',
+  '저도 처음엔 반신반의했는데 2주 지나니 확실히 달라요', '리필로 사는 게 훨씬 이득이에요!',
+]
+/* 뷰티톡 본문 뒷줄 — 카드에는 안 보이고 글 화면에서만 (사진·피부 타입·구매처 같은 덧말) */
+const POST_MORE = [
+  '사진은 자연광에서 찍었어요. 궁금한 거 있으면 댓글 남겨주세요 🙌', '참고로 제 피부는 지성 · 여름엔 무너짐 심한 편이에요.', '가격은 세일 때 샀고 정가는 조금 더 비싸요.',
+  '제 피부는 건성 · 민감성이라 성분표 먼저 보는 편이에요.', '내돈내산이고 광고 아니에요! 솔직하게 적었어요.', '용량 대비 가격 생각하면 리필 구성이 이득이에요.',
+  '2주 정도 써보고 적는 후기예요. 더 써보고 업데이트할게요.', '향은 거의 없는 편이라 향 싫어하시는 분도 괜찮을 듯해요.',
+]
 
 /* 쇼츠 제목 — {k} 검색어(어휘) · {b} 결과 상위 브랜드 · {p} 결과 상품 짧은 이름. 검색어를 안 쓰는 문장도 섞어 기계적으로 보이지 않게 */
 const SHORTS = {
@@ -511,14 +549,19 @@ export function buildSrpResults(query, snapshot, { recents = [] } = {}) {
   const shorts = sample(r, shortsPool, 8).map((tpl, i) => {
     const prod = productPool[(i * 3 + 1) % Math.max(1, productPool.length)]
     const useFace = i % 2 === 0 || !prod
+    // 상품 쇼츠는 제목의 브랜드·상품이 화면의 그 상품과 같아야 한다
+    const bound = useFace ? { ...ctx, b: brandOf() } : { ...ctx, b: prod.brand || brandOf(), p: () => shortName(prod) }
     return {
       id: `s${i}`,
-      title: fill(tpl, { ...ctx, b: brandOf() }),
+      title: fill(tpl, bound),
       image: useFace ? face((i / 2) * 3 + seed) : prod.imageUrl, // ×3 — 샘플 4종(남 2·여 2 인접)을 건너뛰며 돌아 이웃 카드가 다른 인상
       product: useFace ? null : prod,
       avatar: face(i + 1 + (seed >>> 3)),
       who: CREATORS[(i + seed) % CREATORS.length],
       views: compactCount(between(r, 1800, 980000)),
+      likes: compactCount(between(r, 120, 68000)),
+      comments: compactCount(between(r, 3, 2400)),
+      tags: sample(r, TAGS[group] || TAGS.default, 3),
       ago: pick(r, AGO),
     }
   })
@@ -528,16 +571,19 @@ export function buildSrpResults(query, snapshot, { recents = [] } = {}) {
     const prod = productPool[(i * 5 + 2) % Math.max(1, productPool.length)]
     const live = i < 2
     const hour = between(r, 12, 22)
+    const withProduct = i % 2 === 1 && !!prod
     return {
       id: `l${i}`,
-      title: fill(tpl, { ...ctx, b: brandOf() }),
-      image: i % 2 === 1 && prod ? prod.imageUrl : face(i * 3 + 2 + (seed >>> 5)),
-      product: i % 2 === 1 && prod ? prod : null,
+      title: fill(tpl, withProduct ? { ...ctx, b: prod.brand || brandOf(), p: () => shortName(prod) } : { ...ctx, b: brandOf() }),
+      image: withProduct ? prod.imageUrl : face(i * 3 + 2 + (seed >>> 5)),
+      product: withProduct ? prod : null,
       avatar: face(i + 3),
       who: pick(r, LIVE_HOSTS),
       live,
       viewers: live ? Number(between(r, 320, 8400)).toLocaleString('ko-KR') : '',
       startsAt: live ? '' : `${i === 2 ? '오늘' : '내일'} ${hour >= 12 ? '오후' : '오전'} ${hour > 12 ? hour - 12 : hour}시`,
+      likes: compactCount(between(r, 400, 120000)),
+      chat: sample(r, LIVE_CHAT, 4).map((body, j) => ({ name: TALKERS[(i * 5 + j * 3 + seed) % TALKERS.length], body })),
     }
   })
 
@@ -556,6 +602,24 @@ export function buildSrpResults(query, snapshot, { recents = [] } = {}) {
       likes: compactCount(between(r, 12, 42000)),
       comments: compactCount(between(r, 0, 1800)),
       ago: pick(r, AGO),
+      more: sample(r, POST_MORE, between(r, 1, 2)).join(' '),
+      // 댓글 3~5개 + 첫 댓글에 작성자 답글 — 글 화면에서만 쓴다
+      replies: (() => {
+        const author = TALKERS[(i * 3 + seed) % TALKERS.length]
+        const commenter = (j) => {
+          const n = TALKERS[(i * 7 + j * 5 + 1 + seed) % TALKERS.length]
+          return n === author ? TALKERS[(i * 7 + j * 5 + 2 + seed) % TALKERS.length] : n // 작성자와 겹치지 않게
+        }
+        const rows = sample(r, COMMENTS, between(r, 3, 5)).map((tpl, j) => ({
+          name: commenter(j),
+          avatar: face(i + j * 2 + 1),
+          body: fill(tpl, bound),
+          ago: AGO_SHORT[Math.min(AGO_SHORT.length - 1, j * 2 + between(r, 0, 2))],
+          likes: between(r, 0, 48),
+        }))
+        rows.splice(1, 0, { name: author, avatar: face(i + (seed >>> 7)), body: pick(r, AUTHOR_REPLIES), ago: AGO_SHORT[1 + between(r, 0, 2)], likes: between(r, 0, 12), author: true })
+        return rows
+      })(),
     }
   })
 

@@ -340,4 +340,7 @@
 }
 /* 상품 상세는 화면(폰 폭) 전체 — 창의 우측 사이드 패널은 화면보다 넓다 */
 .is-framed .sb-product-detail__panel { width: 100%; border-left: 0; }
+/* 뷰티톡 글 화면도 상태 바 아래에서 시작. 쇼츠·라이브 플레이어(검정 전면)가 열리면 상태 바를 흰 글자·투명 띠로 — 실기기의 다크 콘텐츠 위 상태 바처럼 */
+.is-framed .sb-post { padding-top: var(--sb-safe-top); box-sizing: border-box; }
+.sb-stage.is-framed:has(.sb-shorts) .sb-device__status { color: #fff; background: linear-gradient(180deg, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0)); -webkit-backdrop-filter: none; backdrop-filter: none; }
 .is-framed .sb-search-routing { bottom: calc(20px + var(--sb-safe-bottom)); }
