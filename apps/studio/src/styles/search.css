@@ -163,8 +163,9 @@ body:has(.sb-search) .sb-fabbar { opacity: 0; pointer-events: none; }
    → 섹션(위 20: 머리 패딩 0 20 — 제목 Gumi 16/21 + 개수 Gumi 12/17 tertiary · 「전체보기 ›」 12/17 secondary; 그리드 위 12, 패딩 0 8, 간격 8, 2열 = 카드 183)
    쇼츠·라이브 카드 183×278 r16: 사진 위 그라데이션 + 아바타 20 + 11/15 흰 + 제목 13/18 흰 2줄, LIVE 알약(coral, 흰 점 + 12/17) 좌상단 12
    뷰티톡 카드 bg accent-subtle r16 패딩 12: 아바타 24 + 이름 Gumi 10/13 · 본문 13/18 -0.3 · 사진 r8 · ♥ 23.5K 💬 1.2K Gumi 10/13 tertiary
-   상품 카드 r16 1px border/subtle: 사진 200 + 「슈퍼딜」(action/primary 12/17 흰, 2/8, r6) + 44px 원 썸네일(+) · 패딩 12: 제목 13/18 500 2줄 · 12% Gumi 14/20 action/primary + 가격 Gumi 14/20 · 🚚 무료배송 12/17 text/muted.
-   Figma 600 은 굵기 3단계 규칙대로 500 으로 옮겼다 */
+   상품 카드 r16 1px border/subtle: 사진 200 + 엠블럼 배지(Figma 「슈퍼딜」 자리 — 실제 스냅샷의 「빅세일」이 들어온다. action/primary 12/17 흰, 2/8, r6)
+   + 44px 원 썸네일(+, 옵션 묶음 상품만) · 패딩 12: 제목 13/18 500 2줄 · 12% Gumi 14/20 action/primary + 가격 Gumi 14/20 + 정가 취소선 11 · ★4.7(278) 구매 3,112 12/17
+   · 🚚 무료배송 12/17 text/muted + 오늘출발·스마일배송·공식 태그(2026-09-17 — 지마켓 모바일 카드의 정보 밀도). Figma 600 은 굵기 3단계 규칙대로 500 으로 옮겼다 */
 .sb-srp .sb-phone--player { padding: 0 0 40px; }
 .sb-srp__bar { display: flex; align-items: center; gap: 6px; padding: 8px 16px 4px 8px; }
 .sb-srp__field { gap: 0; padding: 0 6px 0 0; }
@@ -244,9 +245,18 @@ body:has(.sb-search) .sb-fabbar { opacity: 0; pointer-events: none; }
 /* 쇼츠·라이브 카드 */
 .sb-srp__media { position: relative; display: block; width: 100%; aspect-ratio: 183 / 278; padding: 0; border: 0; border-radius: 16px; overflow: hidden; background: var(--dk-thumb); text-align: left; cursor: pointer; }
 .sb-srp__media > img { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* 상품 클로즈업 쇼츠·라이브 — 지마켓 상품 사진은 흰 바닥 정사각이라 세로 카드에는 위쪽 72% 에 contain 으로 두고 아래 그라데이션에 글을 올린다 */
+.sb-srp__media--product { background: var(--dk-thumb-2); }
+.sb-srp__media--product > img { height: 72%; object-fit: contain; padding: 14px; box-sizing: border-box; }
+.sb-srp__media--product .sb-srp__media-shade { height: 62%; background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.72) 100%); }
+.sb-srp__media-views { position: absolute; top: 10px; left: 10px; display: inline-flex; align-items: center; gap: 2px; height: 22px; padding: 0 8px 0 5px; border-radius: var(--sb-r-pill); background: rgba(0, 0, 0, 0.45); color: #fff; font-size: 11px; font-weight: 500; line-height: 15px; letter-spacing: -0.2px; }
+.sb-srp__media-views svg { width: 12px; height: 12px; }
+.sb-srp__media-meta { font-size: 11px; font-weight: 400; line-height: 15px; color: rgba(255, 255, 255, 0.78); letter-spacing: -0.2px; }
 .sb-srp__media-shade { position: absolute; left: 0; right: 0; bottom: 0; height: 55%; background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.6) 100%); }
 .sb-srp__live-badge { position: absolute; top: 12px; left: 12px; display: inline-flex; align-items: center; gap: 4px; height: 23px; padding: 0 8px; border-radius: var(--sb-r-pill); background: var(--dk-coral); color: #fff; font-size: 12px; font-weight: 500; line-height: 17px; }
 .sb-srp__live-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #fff; }
+.sb-srp__live-badge--soon { background: rgba(0, 0, 0, 0.62); font-weight: 400; }
+.sb-srp__live-badge--soon::before { display: none; }
 .sb-srp__media-body { position: absolute; left: 12px; right: 12px; bottom: 12px; display: flex; flex-direction: column; gap: 6px; color: #fff; }
 .sb-srp__media-who { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 500; line-height: 15px; }
 .sb-srp__media-title { font-size: var(--sb-t-small); font-weight: 500; line-height: 18px; word-break: keep-all; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
@@ -255,6 +265,8 @@ body:has(.sb-search) .sb-fabbar { opacity: 0; pointer-events: none; }
 .sb-srp__post { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 16px; background: var(--dk-brand-soft); cursor: pointer; }
 .sb-srp__post-head { display: flex; align-items: center; gap: 6px; }
 .sb-srp__post-name { font-family: var(--dk-font-display) !important; font-weight: 400; font-size: 10px; line-height: 13px; color: var(--dk-ink); }
+.sb-srp__post-ago { margin-left: auto; font-size: 10px; font-weight: 300; line-height: 13px; color: var(--dk-subtle); white-space: nowrap; }
+.sb-srp__post-img--product { background: var(--dk-surface); }
 .sb-srp__post-body { margin: 0; font-size: var(--sb-t-small); font-weight: 400; line-height: 18px; letter-spacing: -0.3px; color: var(--dk-ink); word-break: keep-all; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
 .sb-srp__post-img { aspect-ratio: 159 / 120; border-radius: 8px; overflow: hidden; background: var(--dk-thumb); }
 .sb-srp__post:nth-child(2n) .sb-srp__post-img { aspect-ratio: 1; } /* Figma 의 엇갈린 높이(메이슨리) 흉내 */
@@ -267,6 +279,10 @@ body:has(.sb-search) .sb-fabbar { opacity: 0; pointer-events: none; }
 .sb-srp__thumb { position: relative; display: block; height: 200px; background: var(--dk-thumb); overflow: hidden; }
 .sb-srp__thumb > img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .sb-srp__deal { position: absolute; top: 8px; left: 8px; padding: 2px 8px; border-radius: 6px; background: var(--dk-brand-2); color: #fff; font-size: 12px; font-weight: 500; line-height: 17px; letter-spacing: -0.2px; }
+.sb-srp__ad { position: absolute; top: 8px; right: 8px; padding: 1px 5px; border-radius: 4px; background: rgba(255, 255, 255, 0.85); color: var(--dk-subtle); font-size: 10px; font-weight: 500; line-height: 14px; letter-spacing: 0.2px; }
+.sb-srp__soldout { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.55); color: var(--dk-danger); font-family: var(--dk-font-display) !important; font-weight: 400; font-size: 16px; }
+.sb-srp__card.is-soldout .sb-srp__thumb > img { filter: grayscale(0.4); }
+.sb-srp__card.is-soldout .sb-srp__name, .sb-srp__card.is-soldout .sb-srp__price { color: var(--dk-muted); }
 .sb-srp__mini { position: absolute; right: 8px; bottom: 8px; width: 44px; height: 44px; border: 2px solid #fff; border-radius: 50%; overflow: hidden; background: var(--dk-thumb); box-shadow: 0 1px 4px rgba(40, 30, 90, 0.16); }
 .sb-srp__mini img { width: 100%; height: 100%; object-fit: cover; }
 .sb-srp__mini-plus { position: absolute; right: 6px; bottom: 44px; width: 16px; height: 16px; border-radius: 50%; background: var(--dk-brand-2); color: #fff; font-size: 12px; line-height: 16px; text-align: center; }
@@ -275,5 +291,33 @@ body:has(.sb-search) .sb-fabbar { opacity: 0; pointer-events: none; }
 .sb-srp__price-row { display: flex; align-items: baseline; gap: 6px; font-family: var(--dk-font-display) !important; font-weight: 400; font-size: 14px; line-height: 20px; }
 .sb-srp__off { color: var(--dk-brand-2); }
 .sb-srp__price { color: var(--dk-ink); }
+.sb-srp__before { font-family: var(--sb-font-sans) !important; font-size: 11px; line-height: 15px; color: var(--dk-subtle); }
+.sb-srp__meta { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 400; line-height: 17px; letter-spacing: -0.2px; color: var(--dk-muted); }
+.sb-srp__star { display: inline-flex; align-items: center; gap: 2px; color: var(--dk-ink-2); }
+.sb-srp__star svg { width: 12px; height: 12px; color: var(--dk-amber); }
+.sb-srp__star em { font-style: normal; color: var(--dk-muted); }
+.sb-srp__tags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.sb-srp__tag { padding: 0 5px; border-radius: 4px; background: var(--dk-thumb); font-size: 10px; font-weight: 500; line-height: 16px; letter-spacing: -0.2px; color: var(--dk-muted-2); }
+.sb-srp__tag--today { background: var(--dk-info-soft); color: var(--dk-info); }
+.sb-srp__tag--smile { background: var(--dk-brand-soft); color: var(--dk-brand-deep); }
 .sb-srp__delivery { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 400; line-height: 17px; letter-spacing: -0.2px; color: var(--dk-muted-2); }
 .sb-srp__delivery svg { width: 16px; height: 16px; }
+/* 추천 상품 탭 — 개수 · 정렬(13px, 활성 ink 500) · 배송 필터 칩(32px 알약, 켜지면 연보라 면+보라 글) */
+.sb-srp__sortbar { display: flex; flex-direction: column; gap: 10px; padding: 12px 20px 0; }
+.sb-srp__sortbar-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sb-srp__sortbar-total { font-size: var(--sb-t-small); font-weight: 400; color: var(--dk-ink-2); white-space: nowrap; }
+.sb-srp__sorts { display: flex; gap: 12px; overflow-x: auto; scrollbar-width: none; }
+.sb-srp__sorts::-webkit-scrollbar { display: none; }
+.sb-srp__sort { flex: 0 0 auto; padding: 0; border: 0; background: none; font-size: var(--sb-t-small); font-weight: 300; line-height: 18px; color: var(--dk-muted); white-space: nowrap; cursor: pointer; }
+.sb-srp__sort.is-on { font-weight: 500; color: var(--dk-ink); }
+.sb-srp__filters { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+.sb-srp__filters::-webkit-scrollbar { display: none; }
+.sb-srp__filter { flex: 0 0 auto; height: 32px; padding: 0 12px; border: 1px solid var(--dk-line); border-radius: var(--sb-r-pill); background: var(--dk-surface); font-size: var(--sb-t-caption); font-weight: 400; color: var(--dk-ink-2); white-space: nowrap; cursor: pointer; }
+.sb-srp__filter.is-on { border-color: var(--dk-brand); background: var(--dk-brand-soft); color: var(--dk-brand-deep); }
+.sb-srp__loadmore { display: flex; align-items: center; justify-content: center; gap: 2px; width: calc(100% - 40px); height: 44px; margin: 16px 20px 0; border: 1px solid var(--dk-line); border-radius: 8px; background: var(--dk-surface); font-size: var(--sb-t-body); font-weight: 400; color: var(--dk-ink-2); cursor: pointer; }
+.sb-srp__loadmore svg { width: 16px; height: 16px; transform: rotate(90deg); }
+.sb-srp__empty { margin: 0; padding: 40px 24px; text-align: center; font-size: var(--sb-t-body); font-weight: 300; line-height: 1.5; color: var(--dk-muted); word-break: keep-all; }
+/* 스냅샷 청크 도착 전 한 박자 — 카드 자리 */
+.sb-srp__skel-card { display: block; height: 300px; border-radius: 16px; background: linear-gradient(90deg, var(--dk-thumb) 25%, var(--dk-sunken) 50%, var(--dk-thumb) 75%); background-size: 200% 100%; animation: sb-srp-skel 1.2s linear infinite; }
+.sb-srp__skel-card--tall { aspect-ratio: 183 / 278; height: auto; }
+@keyframes sb-srp-skel { from { background-position: 200% 0 } to { background-position: -200% 0 } }
