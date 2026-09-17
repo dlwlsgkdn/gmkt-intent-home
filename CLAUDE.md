@@ -23,7 +23,7 @@ legacy/            ← 옛 HTML 프로토타입 원본 (빌드 시 apps/studio/d
 - **배포 (주)**: Vercel `ddak-scenario-studio`가 GitHub main 푸시마다 **원격 빌드·배포**. `https://ddak-scenario-studio.vercel.app` — vercel.json이 루트에서 워크스페이스 전체를 설치하고 apps/studio를 빌드해 outputDirectory `apps/studio/dist`를 서빙한다. API(`api/state.js`)도 같은 프로젝트라, **로컬 Node 없이 소스 푸시만으로 배포된다**
 - **배포 (GitHub Pages)**: `.github/workflows/pages.yml`이 main 푸시마다 빌드해 아티팩트로 배포. `https://dlwlsgkdn.github.io/gmkt-intent-home/` (구 `…/docs/` 주소는 아티팩트 안 리다이렉트 스텁이 받는다). 커밋된 빌드 산출물은 더 이상 없다 — 두 배포 모두 push만 하면 각자 최신으로 빌드된다
 - **빌드/배포 절차**: 소스 커밋 → 사용자가 `git push origin main` (Claude는 푸시 못 함) → Vercel·Pages가 각각 자동 빌드
-- **배포 확장 규칙**: 새 앱(core·bff)은 같은 리포를 연결한 **별도 Vercel 프로젝트**(Root Directory=`apps/<앱>`)로 배포한다. 무관 커밋 스킵은 대시보드가 아니라 `apps/<앱>/vercel.json`의 `ignoreCommand`(`git diff --quiet HEAD^ HEAD -- ':(top)apps/<앱>' ':(top)packages' ':(top)package-lock.json'`)로 리포에 커밋한다 — Root Directory만 대시보드 설정
+- **배포 확장 규칙**: 새 앱(core·bff)은 같은 리포를 연결한 **별도 Vercel 프로젝트**(Root Directory=`apps/<앱>`)로 배포한다. 무관 커밋 스킵은 대시보드가 아니라 `apps/<앱>/vercel.json`의 `ignoreCommand`로 리포에 커밋한다 — Root Directory만 대시보드 설정. **비교 기준은 `HEAD^`가 아니라 마지막 성공 배포(`${VERCEL_GIT_PREVIOUS_SHA:-HEAD^}`)다**(2026-09-17): 머지 커밋을 푸시하면 `HEAD^`는 첫 부모(내 쪽)라 다른 쪽 커밋만 diff 에 잡혀 앱 수정이 든 푸시인데도 빌드를 건너뛰었다(bff 수정 91b3f02 + 스튜디오 커밋의 머지 ddce029 — bff 미배포). 이전 SHA 가 얕은 클론(depth 10) 밖이면 diff 가 실패해 빌드하는 쪽(안전)으로 떨어지고, 변수가 없으면 `HEAD^`로 폴백한다
 
 ## 명령어
 
