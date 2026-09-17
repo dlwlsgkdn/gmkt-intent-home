@@ -176,7 +176,7 @@ export const AdminCatalogVerifyResult = z.object({
 })
 export type AdminCatalogVerifyResult = z.infer<typeof AdminCatalogVerifyResult>
 
-/** 시딩 웹 검색 배치 — 제품 유형 몇 개(≤8/요청, 서버리스 시간 한도)마다 LLM+web_search 1회로 판매 상품을 모아 행으로 upsert.
+/** 시딩 웹 검색 배치 — 제품 유형 몇 개(≤4/요청 — 4병렬 한 라운드, 서버리스 시간 한도)마다 LLM+web_search 1회로 판매 상품을 모아 행으로 upsert.
  * 운영 콘솔이 어휘 표(@ddak/pipeline CATALOG_SEED_KEYWORDS)를 잘라 여러 번 부른다 */
 export const CatalogSeedQueryWire = z.object({
   /** 제품 유형(정식 이름) — 행의 category·태그 */
@@ -189,14 +189,14 @@ export type CatalogSeedQueryWire = z.infer<typeof CatalogSeedQueryWire>
 export const AdminCatalogSeedSearchBody = z
   .object({
     /** 유형만 (옛 형식) — queries 와 둘 중 하나 */
-    keywords: z.array(z.string().min(1).max(40)).max(8).optional(),
+    keywords: z.array(z.string().min(1).max(40)).max(4).optional(),
     /** 유형×조건 검색 단위 — 대량 시딩 */
-    queries: z.array(CatalogSeedQueryWire).max(8).optional(),
+    queries: z.array(CatalogSeedQueryWire).max(4).optional(),
     /** 검색 4회·16개까지 — 검색 1회당 비용이 조금 더 든다 */
     dense: z.boolean().optional(),
   })
   .refine((b) => (b.keywords?.length ?? 0) + (b.queries?.length ?? 0) > 0, { message: 'keywords 또는 queries 가 필요합니다' })
-  .refine((b) => (b.keywords?.length ?? 0) + (b.queries?.length ?? 0) <= 8, { message: '요청당 8개까지' })
+  .refine((b) => (b.keywords?.length ?? 0) + (b.queries?.length ?? 0) <= 4, { message: '요청당 4개까지' })
 export type AdminCatalogSeedSearchBody = z.infer<typeof AdminCatalogSeedSearchBody>
 
 export const AdminCatalogSeedSearchResult = z.object({
@@ -211,7 +211,7 @@ export const AdminCatalogSeedSearchResult = z.object({
 export type AdminCatalogSeedSearchResult = z.infer<typeof AdminCatalogSeedSearchResult>
 
 /* ── 시딩 잡 — 서버(core 설정 KV `catalog-seed-job`)가 관리하는 대량 웹 검색 시딩 (2026-09-17). 운영 콘솔 카드가 진행·결과를 보고,
- * 콘솔 탭이나 배치 스크립트(apps/bff/scripts/seed-search.mjs)가 `step` 을 반복 호출해 8단위씩 전진시킨다 — 서버리스라 서버가 스스로
+ * 콘솔 탭이나 배치 스크립트(apps/bff/scripts/seed-search.mjs)가 `step` 을 반복 호출해 4단위씩(한 라운드) 전진시킨다 — 서버리스라 서버가 스스로
  * 오래 돌 수 없어 「상태는 서버, 박자는 드라이버」로 나눴다. 어느 드라이버든 같은 잡을 이어 돌리고, 콘솔은 어디서 돌려도 같은 진행을 본다 */
 
 export const CatalogSeedJobStatus = z.enum(['running', 'paused', 'done'])

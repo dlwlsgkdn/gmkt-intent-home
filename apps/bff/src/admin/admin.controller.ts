@@ -313,7 +313,7 @@ export class AdminController {
 
   @Post('catalog/seed-job/step')
   @ApiOperation({
-    summary: '시딩 잡 한 회차 전진 (≤8단위, 서버리스 300초 안) — running 이 아니거나 다른 드라이버가 잠금 중이면 처리 없이 상태만',
+    summary: '시딩 잡 한 회차 전진 (4단위 병렬 한 라운드·호출당 220초 상한 — 서버리스 300초 안) — running 이 아니거나 다른 드라이버가 잠금 중이면 처리 없이 상태만',
   })
   @ApiOkResponse({ schema: toOpenApi(CatalogSeedJobWire) })
   seedJobStep(): Promise<CatalogSeedJobWire> {
@@ -340,9 +340,9 @@ export class AdminController {
 
   @Post('catalog/seed-search')
   @ApiOperation({
-    summary: '시딩 웹 검색 배치 — 검색 단위(유형 또는 유형×조건, ≤8/요청)마다 LLM+web_search 1회로 실제 판매 상품 8~12개(dense 12~16)를 모아 카탈로그에 upsert',
+    summary: '시딩 웹 검색 배치 — 검색 단위(유형 또는 유형×조건, ≤4/요청 — 4병렬 한 라운드)마다 LLM+web_search 1회로 실제 판매 상품 8~12개(dense 12~16)를 모아 카탈로그에 upsert',
     description:
-      '운영 콘솔·배치 스크립트(apps/bff/scripts/seed-search.mjs)가 검색 단위 목록(@ddak/pipeline catalogSeedQueries — 유형 42 × 조건 축)을 8개씩 잘라 여러 번 부른다. ' +
+      '운영 콘솔·배치 스크립트(apps/bff/scripts/seed-search.mjs)가 검색 단위 목록(@ddak/pipeline catalogSeedQueries — 유형 42 × 조건 축)을 4개씩 잘라 여러 번 부른다. ' +
       '검색 단위 하나당 약 $0.14(dense $0.18). 실패한 단위는 failed 로 돌려주고 나머지는 저장한다. keywords(유형만)·queries(유형×조건) 둘 다 받는다.',
   })
   @ApiBody({ schema: toOpenApi(AdminCatalogSeedSearchBody) })

@@ -31,9 +31,27 @@ export const PRODUCT_CANDIDATE_LIMIT = 24
 export const CONTENT_CANDIDATE_LIMIT = 12
 /** 웹 검색 예산 축소 기준(후보 개수)은 llm.service RICH_* 가 갖는다 */
 const VERIFY_TIMEOUT_MS = 2500
-/** 시딩 웹 검색 배치의 동시 LLM 호출 수 — 요청당 유형 ≤8 이라 서버리스 시간 한도(300초) 안에 끝난다 */
-const SEED_CONCURRENCY = 3
+/** 시딩 웹 검색 배치의 동시 LLM 호출 수 — 잡 회차(4단위)를 한 라운드로 돌린다. 호출 하나는 SEED_CALL_TIMEOUT_MS 를 넘기면 실패로
+ * 끊어 회차가 서버리스 300초 한도 안에 끝나게 한다(끊긴 단위는 재시도 회차로) — 2026-09-17 운영에서 8단위·3병렬이 한도를 넘겼다 */
+const SEED_CONCURRENCY = 4
+const SEED_CALL_TIMEOUT_MS = 220_000
 const VERIFY_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
+
+/** 약속에 시간 상한 — 넘기면 거부(원 호출은 버려진다; SDK 가 알아서 끝낸다) */
+const withTimeout = <T,>(p: Promise<T>, ms: number, message: string): Promise<T> =>
+  new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms)
+    p.then(
+      (v) => {
+        clearTimeout(timer)
+        resolve(v)
+      },
+      (e) => {
+        clearTimeout(timer)
+        reject(e)
+      },
+    )
+  })
 
 export type CatalogCandidatesResult = CatalogCandidates & {
   terms: CatalogTerms
@@ -121,7 +139,11 @@ export class CatalogService {
       for (let q = queue.shift(); q !== undefined; q = queue.shift()) {
         const label = q.query && q.query !== q.keyword ? q.query : q.keyword
         try {
-          const { content, meta } = await this.llm.collectCatalogProducts(q.keyword, { query: q.query, dense })
+          const { content, meta } = await withTimeout(
+            this.llm.collectCatalogProducts(q.keyword, { query: q.query, dense }),
+            SEED_CALL_TIMEOUT_MS,
+            `카탈로그 수집(${label}) ${SEED_CALL_TIMEOUT_MS / 1000}초 초과`,
+          )
           out.webSearchRequests += meta.usage?.webSearchRequests ?? 0
           rows.push(...seedProductRowsOf(q.keyword, content.products, now))
         } catch (e) {

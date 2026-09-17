@@ -14,7 +14,9 @@ import { CatalogService } from './catalog.service'
  * 회차 기록(history)은 최근 40개만 — KV 한 칸이 커지지 않게. 검색 단위 목록은 저장하지 않고 facets·types 에서 다시 만든다.
  */
 export const CATALOG_SEED_JOB_KEY = 'catalog-seed-job'
-const BATCH = 8
+/** 회차당 검색 단위 — 4개를 한꺼번에(catalog.service SEED_CONCURRENCY) 돌려 한 회차가 한 라운드다. 2026-09-17 운영: 8단위·3병렬은
+ * 세 라운드가 300초 서버리스 한도를 넘겨 회차가 죽고 같은 회차를 되풀이했다(cursor 8 에서 정지) */
+const BATCH = 4
 const LOCK_MS = 270_000
 const HISTORY_LIMIT = 40
 

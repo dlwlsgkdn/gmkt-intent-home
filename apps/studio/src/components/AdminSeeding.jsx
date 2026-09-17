@@ -24,14 +24,14 @@ import {
  * 계획 생성은 이 표 절반 + 웹 검색 절반으로 상품·콘텐츠를 고른다(API.md §1-4). 페이지는 네 덩어리다:
  *  ① 현황 타일 — 상품·콘텐츠 개수, 검증·dead, 몰별·출처별, 마지막 갱신 (BFF GET /api/admin/catalog)
  *  ② 웹 검색 시딩 잡 — 검색 단위(제품 유형 42 × 고른 조건 축)를 서버 잡(core KV `catalog-seed-job`)으로 시작하고, 이 탭이 드라이버가 되어
- *     step 을 반복 호출해 8단위씩 전진시킨다(단위마다 LLM+web_search 1회 — 비용 발생, 시작 전 확인). 상태·진행·회차 기록·결과는 서버에 있어
+ *     step 을 반복 호출해 4단위씩(한 라운드) 전진시킨다(단위마다 LLM+web_search 1회 — 비용 발생, 시작 전 확인). 상태·진행·회차 기록·결과는 서버에 있어
  *     다른 탭이나 배치 스크립트(apps/bff/scripts/seed-search.mjs)가 돌려도 여기서 같은 것을 본다(드라이버가 없으면 10초마다 조회).
  *  ③ 그 밖의 재료 — 지난 쓰레드 계획 수확(백필, 실주행은 7단계가 자동), 올리브영 사내 Mongo 내보내기·다른 몰 행 JSON 가져오기
  *  ④ 점검 — 상품 링크 점검(지마켓 썸네일·그 밖 몰 상품 주소 HEAD → dead/verified, 올리브영·쿠팡은 확인 불가라 건너뜀) + 이 화면의 작업 로그
  * 스튜디오 SRP 스냅샷·데모 카탈로그는 시딩 재료가 아니다. core 표가 없으면(마이그레이션 0005 전) 안내만 보인다.
  */
 const CHUNK = 500
-const SEED_BATCH = 8
+const SEED_BATCH = 4 // 서버 회차 = 4단위 한 라운드(약 2~3분)
 const POLL_MS = 10_000
 const BUSY_WAIT_MS = 15_000
 const LOG_LIMIT = 30
@@ -157,7 +157,7 @@ export default function AdminSeeding({ api }) {
       }
       if (
         !window.confirm(
-          `검색 단위 ${queries.length}개(유형 ${CATALOG_SEED_KEYWORDS.length} × 조건 ${facetLabel}${dense ? ' · 촘촘히' : ''})를 웹 검색으로 시딩합니다.\n단위마다 웹 검색 ${dense ? '4' : '2~3'}회 — 약 ${Math.ceil(queries.length / SEED_BATCH)}분, LLM·검색 비용 약 $${(queries.length * perQuery).toFixed(0)}. 시작 뒤 이 탭이 돌립니다(탭을 닫아도 진행은 서버에 남아요).`,
+          `검색 단위 ${queries.length}개(유형 ${CATALOG_SEED_KEYWORDS.length} × 조건 ${facetLabel}${dense ? ' · 촘촘히' : ''})를 웹 검색으로 시딩합니다.\n단위마다 웹 검색 ${dense ? '4' : '2~3'}회 — 약 ${Math.ceil((queries.length / SEED_BATCH) * 2.5)}분, LLM·검색 비용 약 $${(queries.length * perQuery).toFixed(0)}. 시작 뒤 이 탭이 돌립니다(탭을 닫아도 진행은 서버에 남아요).`,
         )
       )
         return ''
@@ -208,7 +208,7 @@ export default function AdminSeeding({ api }) {
   const otherDriving = job?.lockUntil && new Date(job.lockUntil) > new Date()
   const jobStatusLabel = !job ? '' : job.status === 'done' ? '완료' : job.status === 'paused' ? '일시정지' : driving ? '이 탭이 돌리는 중' : otherDriving ? '다른 드라이버가 돌리는 중' : '대기 — 돌리는 곳이 없어요'
   const remaining = job ? jobTotal - jobDone : 0
-  const eta = job && job.status === 'running' && remaining ? `약 ${Math.ceil(remaining / SEED_BATCH)}분 남음` : ''
+  const eta = job && job.status === 'running' && remaining ? `약 ${Math.ceil((remaining / SEED_BATCH) * 2.5)}분 남음` : ''
   const jobCost = job ? job.webSearchRequests * 0.01 + (job.cursor + job.retryCursor) * (job.dense ? 0.14 : 0.11) : 0
   const history = job?.history || []
   const visibleHistory = showAllHistory ? history : history.slice(0, 10)
@@ -293,7 +293,7 @@ export default function AdminSeeding({ api }) {
               </label>
             </div>
             <div className="sb-seeding__row">
-              <span>검색 단위 <b>{n(queries.length)}</b>개 · 예상 비용 약 <b>${(queries.length * perQuery).toFixed(0)}</b> · 약 {Math.ceil(queries.length / SEED_BATCH)}분</span>
+              <span>검색 단위 <b>{n(queries.length)}</b>개 · 예상 비용 약 <b>${(queries.length * perQuery).toFixed(0)}</b> · 약 {Math.ceil((queries.length / SEED_BATCH) * 2.5)}분</span>
               <button type="button" className="sb-btn sb-btn--ai sb-btn--small" disabled={!available || Boolean(busy) || driving} onClick={startJob}>
                 ✦ 시딩 잡 시작
               </button>
