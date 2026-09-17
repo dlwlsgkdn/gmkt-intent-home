@@ -237,7 +237,10 @@ admin: 프롬프트 카탈로그에 `plan-contents` 추가, 지식 목록에 gua
   실행은 **서버 시딩 잡**(위 표 `seed-job`)이다 — 상태·진행·회차 기록·결과가 core KV 에 있어 운영 콘솔 카드가 실시간으로 보고, 드라이버는
   콘솔 「데이터 시딩」 탭(「✦ 시딩 잡 시작」 뒤 그 탭이 step 을 돌린다 · 「이 탭에서 돌리기」로 이어받기 · 일시정지/재개)이든 배치 스크립트
   `npm run seed:search --workspace=apps/bff -- --bff <BFF 주소> --token <BFF_SERVICE_TOKEN> --facets skin,concern [--dense] [--resume|--reset] [--status] [--dry-run]`
-  이든 같은 잡을 민다(Ctrl+C 해도 잡은 남고 다시 실행하면 이어 돈다). 단위당 약 $0.14(dense $0.18) — 네 축 전부면 672 단위 ≈ $95, 상품 5,000~8,000개. ② **지난 쓰레드의 계획**
+  이든 같은 잡을 민다(Ctrl+C 해도 잡은 남고 다시 실행하면 이어 돈다). **드라이버 없이 서버에서 계속 돌리려면 GitHub Actions
+  `.github/workflows/seed-search.yml`** — Vercel 서버리스는 요청 300초 상한·hobby cron 하루 1회라 BFF 가 스스로 돌 수 없어 Actions 러너가
+  드라이버가 된다: 수동 실행(조건·유형·dense·reset 입력)은 새 잡을 시작해 끝까지(러너 6시간 안), 30분 schedule 틱은 `--tick` 으로 running 잡만
+  이어 돌린다. 저장소 시크릿 `BFF_URL`·`BFF_SERVICE_TOKEN` 필요. 단위당 약 $0.14(dense $0.18) — 네 축 전부면 672 단위 ≈ $95, 상품 5,000~8,000개. ② **지난 쓰레드의 계획**
   — `POST /api/admin/catalog/harvest` 백필(실주행은 7단계가 자동). ③ **올리브영 사내 Mongo 내보내기** `npm run export:catalog
   --workspace=apps/tagging-api -- --out oy.json`(태깅 스튜디오와 같은 문서 → 행, goodsNo 형식이면 verified, 태그 = 세부유형·제형·성분·피부 타입·
   고민·결과·대분류, source `manual`) → `npm run seed:catalog --workspace=apps/core -- --file oy.json` 또는 「데이터 시딩」 메뉴의 「JSON 가져오기」. 그 밖의 몰도

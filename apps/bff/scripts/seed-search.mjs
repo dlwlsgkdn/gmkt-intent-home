@@ -15,6 +15,7 @@
    --facets  skin(피부 타입 4)·concern(고민 6)·price(가격대 2)·mall(몰 3) 중 골라 쉼표로. 비우면 유형만
    --types   제품 유형 일부만 (@ddak/pipeline CATALOG_SEED_KEYWORDS 의 정식 이름)
    --dense   검색 4회·16개까지 (단위당 약 $0.18, 기본 $0.14)
+   --tick    정기 실행용 — 진행 중(running) 잡이 있으면 이어 돌리고 없으면 0 으로 조용히 끝난다 (GitHub Actions schedule)
    --resume  진행 중·일시정지 잡을 이어 돌린다. 없이 실행했는데 진행 중 잡이 있으면 묻지 않고 그 잡을 이어 돈다(진행을 날리지 않게) — 새로
              시작하려면 --reset
    --reset   진행 중 잡을 버리고 새로 시작
@@ -23,7 +24,7 @@
 import { CATALOG_SEED_COST_PER_QUERY_USD, CATALOG_SEED_FACETS, catalogSeedQueries } from '@ddak/pipeline'
 
 function parseArgs(argv) {
-  const out = { bff: '', token: process.env.BFF_SERVICE_TOKEN || '', facets: [], types: [], dense: false, resume: false, reset: false, status: false, dryRun: false }
+  const out = { bff: '', token: process.env.BFF_SERVICE_TOKEN || '', facets: [], types: [], dense: false, resume: false, tick: false, reset: false, status: false, dryRun: false }
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i]
     if (a === '--bff') out.bff = argv[++i]
@@ -32,6 +33,7 @@ function parseArgs(argv) {
     else if (a === '--types') out.types = String(argv[++i] || '').split(',').map((s) => s.trim()).filter(Boolean)
     else if (a === '--dense') out.dense = true
     else if (a === '--resume') out.resume = true
+    else if (a === '--tick') out.tick = true
     else if (a === '--reset') out.reset = true
     else if (a === '--status') out.status = true
     else if (a === '--dry-run') out.dryRun = true
@@ -80,12 +82,16 @@ if (args.status) {
   console.log(job ? line(job) : '시딩 잡 없음')
   process.exit(0)
 }
-if (job && job.status !== 'done' && !args.reset) {
+if (job && (job.status === 'running' || (job.status === 'paused' && !args.tick)) && !args.reset) {
   console.log(`진행 중인 잡을 이어 돌립니다 — ${line(job)} (새로 시작하려면 --reset)`)
   if (job.status === 'paused') {
     job = (await api('POST', '/seed-job/resume')).job
     console.log('일시정지 잡을 재개했어요')
   }
+} else if (args.tick) {
+  // 정기 틱(GitHub Actions schedule) — 돌릴 잡이 없으면 조용히 끝난다 (running 이면 위 분기에서 이어 돈다)
+  console.log(job ? `틱 — 잡 상태 ${job.status}, 돌릴 것 없음` : '틱 — 시딩 잡 없음')
+  process.exit(0)
 } else if (!args.resume) {
   const queries = catalogSeedQueries({ types: args.types, facets: args.facets })
   console.log(`새 잡 — 검색 단위 ${queries.length}개 (조건 ${args.facets.join('+') || '없음'}${args.dense ? ' · dense' : ''}) · 예상 비용 약 $${(queries.length * perQuery).toFixed(0)}`)

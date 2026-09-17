@@ -1,0 +1,72 @@
+# 내재화 카탈로그 — 웹 검색 시딩 잡을 서버(GitHub Actions 러너)에서 계속 돌린다 (2026-09-17).
+# Vercel 서버리스는 요청 하나가 300초를 넘길 수 없고 hobby 플랜 cron 은 하루 1회라, 잡을 8단위씩 밀어 주는 「드라이버」가
+# 밖에서 필요하다 — 이 워크플로가 그 드라이버다(잡 상태·진행·결과는 여전히 BFF/core KV 에 있고 운영 콘솔 「데이터 시딩」이 본다).
+#   - 수동 실행(workflow_dispatch): 조건 축·촘촘히·유형을 골라 새 잡을 시작하고 끝날 때까지 돈다 (러너 한도 6시간 안)
+#   - 정기 틱(schedule, 30분마다): 진행 중 잡이 있으면 이어 돌리고 없으면 바로 끝난다 — 수동 실행이 끊겨도 저절로 이어진다
+# 필요한 저장소 시크릿: BFF_URL(예: https://ddak-bff.vercel.app), BFF_SERVICE_TOKEN(BFF 관리 API 토큰)
+name: Catalog seed search
+
+on:
+  workflow_dispatch:
+    inputs:
+      facets:
+        description: '조건 축 (쉼표) — skin,concern,price,mall 중. 비우면 유형만(42 단위, 약 $6)'
+        required: false
+        default: ''
+      types:
+        description: '제품 유형 일부만 (쉼표, 정식 이름). 비우면 전체'
+        required: false
+        default: ''
+      dense:
+        description: '촘촘히 — 검색 4회·16개까지 (단위당 약 $0.18)'
+        type: boolean
+        default: false
+      reset:
+        description: '진행 중 잡을 버리고 새로 시작'
+        type: boolean
+        default: false
+  schedule:
+    - cron: '*/30 * * * *'
+
+permissions:
+  contents: read
+
+# 같은 잡을 두 러너가 동시에 밀지 않게 (서버 잠금도 있지만 러너 낭비를 막는다)
+concurrency:
+  group: catalog-seed-search
+  cancel-in-progress: false
+
+jobs:
+  drive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Drive seed job
+        env:
+          BFF_URL: ${{ secrets.BFF_URL }}
+          BFF_SERVICE_TOKEN: ${{ secrets.BFF_SERVICE_TOKEN }}
+          FACETS: ${{ github.event.inputs.facets }}
+          TYPES: ${{ github.event.inputs.types }}
+          DENSE: ${{ github.event.inputs.dense }}
+          RESET: ${{ github.event.inputs.reset }}
+        run: |
+          if [ -z "$BFF_URL" ] || [ -z "$BFF_SERVICE_TOKEN" ]; then
+            echo "저장소 시크릿 BFF_URL·BFF_SERVICE_TOKEN 이 필요합니다"; exit 1
+          fi
+          args="--bff $BFF_URL"
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            args="$args --tick"
+          else
+            [ -n "$FACETS" ] && args="$args --facets $FACETS"
+            [ -n "$TYPES" ] && args="$args --types $TYPES"
+            [ "$DENSE" = "true" ] && args="$args --dense"
+            [ "$RESET" = "true" ] && args="$args --reset"
+          fi
+          echo "node apps/bff/scripts/seed-search.mjs $args"
+          node apps/bff/scripts/seed-search.mjs $args
