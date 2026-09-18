@@ -206,14 +206,14 @@ FE(`apps/studio/src/lib/liveApi.js` `routeSearch`/`suggestSearch`)는 실패 시
 
 admin: 프롬프트 카탈로그에 `plan-contents` 추가, 지식 목록에 guard 행 `guard-content-hosts`(콘텐츠 저신뢰 출처 도메인, 줄바꿈 구분·접미 일치) 추가, dry-run `stageId` 에 `plan-contents` 추가(응답은 `sections`·`dropLog`), `GET /api/admin/metrics/engines` 엔진별 `avgContentsMs`·`quality`(비율 0~1·평균, quality 요약이 있는 표본만). 썸네일 보강(`EnrichService`, og:image)은 BFF 환경변수 `ENRICH_FETCH=0` 으로 끌 수 있다(오프라인 e2e).
 
-## 1-4. 내재화 카탈로그 — 내부 DB 절반 + 웹 검색 절반 (v29, 2026-09-17)
+## 1-4. 내재화 카탈로그 — 내부 DB 70% + 웹 검색 30% (v29 2026-09-17 절반씩 → v30 2026-09-18 70 : 30)
 
-추천 상품·참고 콘텐츠를 core DB(Neon `catalog_products`·`catalog_contents`)에 쌓고, 계획 생성이 **내부 후보 절반 + 웹 검색 절반**으로 고른다.
-목적은 둘 — 빠른 응답(내부 후보가 절반을 채우니 5b·5c 웹 검색 상한이 4→3, 지마켓 검색 불필요)과 정확한 PDP(내부 행은 상품 번호로 주소·썸네일이
+추천 상품·참고 콘텐츠를 core DB(Neon `catalog_products`·`catalog_contents`)에 쌓고, 계획 생성이 **내부 후보 70% + 웹 검색 30%**로 고른다(상품 섹션당 내부 4~6개 + 웹 1~2개, 콘텐츠 섹션당 내부 2~4개 + 웹 1~2개 — v30, 2026-09-18. v29 는 절반씩이었다).
+목적은 둘 — 빠른 응답(내부 후보가 70% 를 채우니 5b·5c 웹 검색 상한이 4→2, 지마켓 검색 불필요)과 정확한 PDP(내부 행은 상품 번호로 주소·썸네일이
 결정되는 검증 상품이고, 모델은 **id 만** 적어 주소를 되받아 적지 않는다).
 
 - **후보 조회(4단계 근거 수집의 첫 실구현)**: 의도·답변·프로필에서 검색어를 뽑아(`@ddak/pipeline catalogTermsOf` — 제품 유형 어휘 `PRODUCT_TYPE_VOCAB`
-  + 조사·상투어를 뗀 낱말) core `POST /internal/catalog/{products,contents}/search` 로 상품 24·콘텐츠 12개를 받는다(BFF `CatalogService.candidatesFor`).
+  + 조사·상투어를 뗀 낱말) core `POST /internal/catalog/{products,contents}/search` 로 상품 32·콘텐츠 16개를 받는다(BFF `CatalogService.candidatesFor` — v29 는 24·12).
   그래프는 s2 원장 노드(첫 조립·답변 뒤 갱신 둘 다)에서, legacy 는 계획 생성 직전에, dry-run 도 같은 조회. 표가 비었거나(마이그레이션·시딩 전) core
   미연결이면 데모 카탈로그 14종으로 대신한다(옛 `{{CATALOG}}` 와 같은 상품) — 계획을 막지 않는다.
 - **주입**: 후보는 시스템 프롬프트가 아니라 **가변부(사용자 메시지) 표**로 실린다(`productCandidatesBlock`·`contentCandidatesBlock` — 시스템은 바이트
@@ -221,7 +221,7 @@ admin: 프롬프트 카탈로그에 `plan-contents` 추가, 지식 목록에 gua
   `{{CATALOG}}` 블록이 없다(재정의 프롬프트에 남아 있으면 데모 14종으로 치환은 되지만 후보 표와 겹친다).
 - **검증 게이트**: `GuardContext.candidates` — productIds·catalogIds 는 이 요청의 후보 목록(+데모 카탈로그)에서만 해석(`catalog-miss`), 내부 상품은
   근거 신뢰 100·id 접두가 `web-` 이 아니면 내부(품질 KPI `webProducts` 도 접두 기준), 웹 상품이 후보와 같은 지마켓 상품 번호면 후보 값으로 대체
-  (`duplicate-candidate` 정보 기록), 섹션당 내부 상한 `CATALOG_MAX_PER_SECTION` 3→4. **PDP 보정** `repairPdpUrl`: 아는 몰인데 상품 번호 형식이 어긋난
+  (`duplicate-candidate` 정보 기록), 섹션당 내부 상한 `CATALOG_MAX_PER_SECTION` 3→4→6(v30). **PDP 보정** `repairPdpUrl`: 아는 몰인데 상품 번호 형식이 어긋난
   주소(지마켓 goodscode 없음·올리브영 goodsNo 가 `A`+12자리 아님·쿠팡 `/vp/products/<번호>` 아님)는 몰 검색 링크(`urlKind=search`, 근거 25)로 바꿔
   싣는다(`repaired-url` 정보 기록) — 깨진 상세보기 대신 검색 결과가 열린다. 카탈로그 폴백 풀도 후보+데모.
 - **수확**: 7단계 기록 직후 최종 페이지의 상품·콘텐츠를 `harvestRowsOf` 로 행으로 만들어 `PUT …?bump` upsert. **몰은 가리지 않는다** — 웹 지마켓

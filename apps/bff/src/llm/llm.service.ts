@@ -79,7 +79,7 @@ const MODEL_CACHE_MS = 30_000
 
 /** 동적 필터링 web_search_20260209 미지원 모델 — 기본 변형(20250305)으로 호출한다 */
 const WEB_SEARCH_BASIC_MODELS = new Set(['claude-haiku-4-5'])
-/** 생성 1회당 웹 검색 상한 — 상품·콘텐츠 확인용 소수 검색만 허용 (비용·지연 가드). 내부 후보가 넉넉하면 webSearchBudget 이 1 줄인다 */
+/** 생성 1회당 웹 검색 상한 — 상품·콘텐츠 확인용 소수 검색만 허용 (비용·지연 가드). 내부 후보가 넉넉하면 webSearchBudget 이 2 줄인다(v30 70 : 30) */
 export const WEB_SEARCH_MAX_USES = 4
 /** 참고 콘텐츠 단계(5c)의 검색 예산 — 영상 1회 + 게시글 1회 + 보완 2회 (2026-09-17: 3→4. 운영 계획의 44% 가 콘텐츠 0개였고
  * 재현에서 같은 검색어를 되풀이해 예산을 태운 뒤 빈 배열을 돌려줬다 — 프롬프트 v27 이 검색어 중복을 금하고 확인 기준을 낮췄다).
@@ -87,9 +87,9 @@ export const WEB_SEARCH_MAX_USES = 4
 export const WEB_SEARCH_CONTENTS_MAX_USES = 4
 /** 서버 도구 루프가 pause_turn으로 멈췄을 때 이어붙이는 최대 횟수 */
 const MAX_CONTINUATIONS = 3
-/** 내부 카탈로그 후보가 넉넉할 때의 웹 검색 예산 — 후보가 절반을 채우니 검색은 외부몰·보완 몫만 (v29, 지연 단축).
- * 상품 후보 6개 이상 / 콘텐츠 후보 4개 이상이면 상한을 1 줄인다 (catalog.service RICH_*). 후보가 없으면 예전 예산 그대로 */
-const WEB_SEARCH_RICH_REDUCTION = 1
+/** 내부 카탈로그 후보가 넉넉할 때의 웹 검색 예산 — 후보가 70% 를 채우니 검색은 외부몰 보완 몫만 (v29 절반→1 감축, v30 70 : 30 → 2 감축 = 4→2회, 지연 단축).
+ * 상품 후보 6개 이상 / 콘텐츠 후보 4개 이상이면 상한을 줄인다 (catalog.service RICH_*). 후보가 없으면 예전 예산 그대로. 하한 2회는 상품·콘텐츠 프롬프트의 「2회」와 한 벌 */
+const WEB_SEARCH_RICH_REDUCTION = 2
 export const RICH_PRODUCT_CANDIDATES = 6
 export const RICH_CONTENT_CANDIDATES = 4
 export const webSearchBudget = (base: number, rich: boolean) => (rich ? Math.max(2, base - WEB_SEARCH_RICH_REDUCTION) : base)

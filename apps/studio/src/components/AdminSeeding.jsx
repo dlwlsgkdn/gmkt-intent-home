@@ -23,7 +23,7 @@ import {
 
 /*
  * 데이터 시딩 (#ops/seeding, 서비스 품질 그룹 — 2026-09-17) — 내재화 카탈로그(추천 상품·참고 콘텐츠의 내부 표)를 채우고 돌보는 전용 메뉴.
- * 계획 생성은 이 표 절반 + 웹 검색 절반으로 상품·콘텐츠를 고른다(API.md §1-4). 페이지는 네 덩어리다:
+ * 계획 생성은 이 표 70% + 웹 검색 30% 로 상품·콘텐츠를 고른다(API.md §1-4, v30). 페이지는 네 덩어리다:
  *  ① 현황 타일 — 상품·콘텐츠 개수, 검증·dead, 몰별·출처별, 마지막 갱신 (BFF GET /api/admin/catalog)
  *  ② 웹 검색 시딩 잡 — 검색 단위(제품 유형 42 × 고른 조건 축)를 서버 잡(core KV `catalog-seed-job`)으로 시작하고, 이 탭이 드라이버가 되어
  *     step 을 반복 호출해 4단위씩(한 라운드) 전진시킨다(단위마다 LLM+web_search 1회 — 비용 발생, 시작 전 확인). 상태·진행·회차 기록·결과는 서버에 있어
@@ -229,7 +229,7 @@ export default function AdminSeeding({ api }) {
         <div>
           <p className="sb-admin-pagehead__eyebrow">내재화 카탈로그</p>
           <h1>데이터 시딩</h1>
-          <p>추천에 쓸 상품·참고 콘텐츠를 우리 DB에 쌓습니다. 계획 생성은 이 표 절반 + 웹 검색 절반으로 고르니, 표가 찰수록 응답이 빨라지고 상세 페이지 주소가 정확해집니다.</p>
+          <p>추천에 쓸 상품·참고 콘텐츠를 우리 DB에 쌓습니다. 계획 생성은 이 표에서 70%, 웹 검색에서 30% 를 고르니, 표가 찰수록 응답이 빨라지고 상세 페이지 주소가 정확해집니다.</p>
         </div>
         <span className={`sb-admin-health${available ? '' : ' is-lab'}`}><i /> {error ? '카탈로그 연결 안 됨' : available ? `카탈로그 연결됨${stats?.updatedAt ? ` · 갱신 ${fmtDateTime(stats.updatedAt)}` : ''}` : '카탈로그 표 없음'}</span>
       </header>

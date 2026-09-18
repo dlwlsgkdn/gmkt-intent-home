@@ -57,7 +57,7 @@ test('후보 표 — 가변부에 id 표로 실리고 시스템 프롬프트에�
   const user = buildPlanProductsRequest('쿠션', survey, answers, undefined, undefined, null, { products: [candidate('gm-4400000001')], contents: [] })
   assert.ok(user.includes('내부 카탈로그 후보') && user.includes('productIds'))
   assert.ok(!buildPlanProductsRequest('쿠션', survey, answers).includes('내부 카탈로그 후보'))
-  assert.ok(!PLAN_PRODUCTS_SYSTEM.includes('{{CATALOG}}') && PLAN_PRODUCTS_SYSTEM.includes('내부 카탈로그 절반 : 웹 검색 절반'))
+  assert.ok(!PLAN_PRODUCTS_SYSTEM.includes('{{CATALOG}}') && PLAN_PRODUCTS_SYSTEM.includes('내부 카탈로그 70% : 웹 검색 30%'))
   const contents = [{ id: 'ct-abc', type: 'video', source: '유튜브', title: '쿠션 바르는 법', url: 'https://www.youtube.com/watch?v=abc', meta: '2025년 5월' }]
   assert.ok(contentCandidatesBlock(contents).includes('ct-abc | 영상 | 유튜브 | 쿠션 바르는 법 | 2025년 5월'))
   assert.ok(buildPlanContentsRequest('쿠션', survey, answers, undefined, undefined, null, {}, { products: [], contents }).includes('catalogIds'))

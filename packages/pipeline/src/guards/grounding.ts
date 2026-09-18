@@ -68,8 +68,8 @@ export const GUARD_CONTENT_HOSTS_SETTING_KEY = 'guard-content-hosts'
 
 /** 카탈로그 보충 상품의 최소 매칭율 — 이 아래면 용도가 안 맞는 것으로 보고 드롭 */
 export const CATALOG_MIN_MATCH = 60
-/** 섹션당 내부 카탈로그 상한 (프롬프트 규칙 「내부 절반 3~4개」와 한 벌 — v29 에서 3→4) */
-export const CATALOG_MAX_PER_SECTION = 4
+/** 섹션당 내부 카탈로그 상한 (프롬프트 규칙 「내부 70% 4~6개」와 한 벌 — v29 에서 3→4, v30(70 : 30) 에서 4→6) */
+export const CATALOG_MAX_PER_SECTION = 6
 /** 참고 콘텐츠 신선도 — 이 햇수를 넘은 콘텐츠는 드롭 */
 export const CONTENT_MAX_AGE_YEARS = 3
 /** 섹션당 같은 출처(도메인) 상한 */

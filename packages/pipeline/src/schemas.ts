@@ -267,7 +267,7 @@ export const ProductsSectionGen = z.object({
   kind: z.literal('products'),
   title: z.string(),
   reason: z.string().describe('이 상품들을 고른 이유 한두 문장 — 답변을 근거로'),
-  productIds: z.array(z.string()).max(8).describe('요청 본문의 내부 카탈로그 후보 표에서 고른 상품 id — 섹션 상품의 절반(3~4개) 몫 (맞는 후보가 없으면 빈 배열)'),
+  productIds: z.array(z.string()).max(8).describe('요청 본문의 내부 카탈로그 후보 표에서 고른 상품 id — 섹션 상품의 70%(4~6개) 몫 (맞는 후보가 없으면 빈 배열)'),
   // 웹 검색 그라운딩: 검색 결과에서 확인한 상품만 — url은 BFF가 http(s)+PDP 검증 후 채택한다
   webProducts: z.array(WebProductGen).max(10).describe('웹 검색으로 찾은 상품 — 섹션당 6~8개를 브랜드·가격대·제형 다양하게 (없으면 빈 배열)'),
   catalogRatings: z
@@ -300,7 +300,7 @@ export const ContentsSectionGen = z.object({
   reason: z.string().describe('이 콘텐츠들을 고른 이유 한두 문장 — 답변을 근거로'),
   items: z.array(ContentItemGen).min(1).max(8).describe('웹 검색으로 확인한 실제 게시글·영상 — 영상 2~3 + 게시글 2~3 으로 5~6개를 목표로 (검색해도 하나도 확인 못 했을 때만 섹션 생략)'),
   /** 내부 콘텐츠 후보(가변부 표)에서 고른 id — v29. 후보 표가 없으면 빈 배열·생략. 검증 게이트가 후보 목록으로 되돌려 items 앞에 싣는다 */
-  catalogIds: z.array(z.string()).max(6).optional().describe('요청 본문의 내부 콘텐츠 후보 표에서 고른 id — 섹션 항목의 절반 몫 (후보 표가 없거나 맞는 게 없으면 빈 배열)'),
+  catalogIds: z.array(z.string()).max(6).optional().describe('요청 본문의 내부 콘텐츠 후보 표에서 고른 id — 섹션 항목의 70%(2~4개) 몫 (후보 표가 없거나 맞는 게 없으면 빈 배열)'),
 })
 export type ContentsSectionGen = z.infer<typeof ContentsSectionGen>
 

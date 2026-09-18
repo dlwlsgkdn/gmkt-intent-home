@@ -17,7 +17,7 @@ import { CoreClientService } from '../core-client.service'
 import { LlmService } from '../llm/llm.service'
 
 /*
- * 내재화 카탈로그 배관 (2026-09-17, v29) — 계획 생성의 상품·콘텐츠 원천을 「웹 검색만」에서 「내부 DB 절반 + 웹 검색 절반」으로.
+ * 내재화 카탈로그 배관 (2026-09-17, v29) — 계획 생성의 상품·콘텐츠 원천을 「웹 검색만」에서 「내부 DB 70% + 웹 검색 30%」(v30 — v29 는 절반씩)로.
  *  - candidatesFor: 의도·답변·프로필 → 검색어(@ddak/pipeline catalogTermsOf) → core 검색 → 5b·5c 가변부 후보 표 + 검증 게이트 후보 목록.
  *    core 미연결·표 없음(마이그레이션 전)·조회 실패면 데모 카탈로그 14종으로 대신한다(옛 {{CATALOG}} 와 같은 상품) — 계획을 막지 않는다.
  *  - harvest: 7단계 기록 직후 최종 페이지의 상품·콘텐츠를 DB 에 올린다(bump upsert). 계획이 만들어질수록 표가 자란다.
@@ -28,8 +28,8 @@ import { LlmService } from '../llm/llm.service'
  *    ③ 시딩 실행 시 실제 웹 검색 배치(seedBySearch — 제품 유형마다 LLM+web_search). 스냅샷·데모 카탈로그 시딩은 뗐다.
  * 응답 시간: 검색은 core 왕복 2회(상품·콘텐츠 병렬)로 수백 ms — 5b 웹 검색(수십 초)에 비하면 없는 셈이고 검색 횟수를 줄여 전체를 앞당긴다.
  */
-export const PRODUCT_CANDIDATE_LIMIT = 24
-export const CONTENT_CANDIDATE_LIMIT = 12
+export const PRODUCT_CANDIDATE_LIMIT = 32 // v30 70 : 30 — 섹션당 내부 4~6개 × 2~3섹션을 고를 여유 (v29 24)
+export const CONTENT_CANDIDATE_LIMIT = 16 // 섹션당 2~4개 × 2~3섹션 (v29 12)
 /** 웹 검색 예산 축소 기준(후보 개수)은 llm.service RICH_* 가 갖는다 */
 const VERIFY_TIMEOUT_MS = 2500
 /** 시딩 웹 검색 배치의 동시 LLM 호출 수 — 잡 회차(4단위)를 한 라운드로 돌린다. 호출 하나는 SEED_CALL_TIMEOUT_MS 를 넘기면 실패로
