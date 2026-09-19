@@ -3,6 +3,7 @@
 # 밖에서 필요하다 — 이 워크플로가 그 드라이버다(잡 상태·진행·결과는 여전히 BFF/core KV 에 있고 운영 콘솔 「데이터 시딩」이 본다).
 #   - 수동 실행(workflow_dispatch): 조건 축·촘촘히·유형을 골라 새 잡을 시작하고 끝날 때까지 돈다 (러너 한도 6시간 안)
 #   - 정기 틱(schedule, 30분마다): 진행 중 잡이 있으면 이어 돌리고 없으면 바로 끝난다 — 수동 실행이 끊겨도 저절로 이어진다
+#     ※ 2026-09-19 당분간 중지 — 네 축 672단위 시딩(상품 1,503)이 끝나 더 돌릴 잡이 없고 비용을 아낀다. 다시 켜려면 아래 schedule 주석을 푼다.
 # 필요한 저장소 시크릿: BFF_URL(예: https://ddak-bff.vercel.app), BFF_SERVICE_TOKEN(BFF 관리 API 토큰)
 name: Catalog seed search
 
@@ -25,8 +26,8 @@ on:
         description: '진행 중 잡을 버리고 새로 시작'
         type: boolean
         default: false
-  schedule:
-    - cron: '*/30 * * * *'
+  # schedule:
+  #   - cron: '*/30 * * * *'
 
 permissions:
   contents: read
