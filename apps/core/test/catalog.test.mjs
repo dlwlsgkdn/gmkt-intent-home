@@ -13,6 +13,8 @@ const {
   mergeProductDoc,
   mergeContentDoc,
   foldProductRows,
+  harvestDeltasOf,
+  harvestUpdateOf,
   parseListCursor,
   listCursorOf,
   compareProductHits,
@@ -239,4 +241,47 @@ test('catalogContentToWire — 문서 필드를 계약 이름 그대로 옮긴�
   assert.equal(w.duration, '12:30')
   assert.equal(w.score, 2)
   assert.equal(w.updatedAt, '2026-09-22T00:00:00.000Z')
+})
+
+/* ── 수확 원자성 (2026-09-23) ─────────────────────────────────────────────
+ * 병합 결과를 replaceOne 으로 쓰면 같은 상품을 두 계획이 동시에 수확할 때 +1 하나가 묻히고 검증 true 가 false 로 되돌아갈 수 있다.
+ * 그 둘만 연산자로 갈라 낸다. */
+
+test('harvestDeltasOf — 같은 id 가 여러 행으로 오면 횟수는 합, 검증은 OR', () => {
+  const deltas = harvestDeltasOf([
+    { id: 'gm-1', recommendCount: 1, verified: false },
+    { id: 'gm-1', recommendCount: 2, verified: true },
+    { id: 'gm-2', verified: false },
+  ])
+  assert.deepEqual(deltas.get('gm-1'), { count: 3, verified: true })
+  assert.deepEqual(deltas.get('gm-2'), { count: 0, verified: false })
+})
+
+test('harvestUpdateOf — 노출 횟수는 $inc, 생성 시각은 새 문서일 때만, 나머지는 $set', () => {
+  const doc = {
+    _id: 'gm-1',
+    name: '선크림',
+    tags: ['선크림'],
+    recommendCount: 9, // 병합 결과의 합계 — 갱신 문서에는 안 실린다($inc 로 대신)
+    verified: true,
+    createdAt: new Date('2026-09-01T00:00:00Z'),
+    updatedAt: new Date('2026-09-23T00:00:00Z'),
+  }
+  const u = harvestUpdateOf(doc, { count: 2, verified: true })
+  assert.deepEqual(u.$inc, { recommendCount: 2 })
+  assert.equal('recommendCount' in u.$set, false)
+  assert.equal('_id' in u.$set, false)
+  assert.equal(u.$set.name, '선크림')
+  assert.equal(u.$set.verified, true)
+  assert.deepEqual(u.$setOnInsert, { createdAt: doc.createdAt })
+})
+
+test('harvestUpdateOf — 이번 행이 미검증이면 verified 를 건드리지 않는다(읽은 뒤 바뀐 true 를 되돌리지 않게)', () => {
+  const doc = { _id: 'gm-1', recommendCount: 1, verified: false, createdAt: new Date(0), tags: [] }
+  const u = harvestUpdateOf(doc, { count: 1, verified: false })
+  assert.equal('verified' in u.$set, false)
+  assert.equal(u.$setOnInsert.verified, false)
+  // Mongo 는 같은 경로를 두 연산자가 잡으면 거부한다
+  const keys = Object.values(u).flatMap((f) => Object.keys(f))
+  assert.equal(keys.length, new Set(keys).size)
 })

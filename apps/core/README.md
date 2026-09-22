@@ -39,6 +39,15 @@ DATABASE_URL=<neon> MONGO_URI=<mongo> node apps/core/scripts/import-from-neon.mj
 `--overwrite` 없이는 실제 적재를 거부한다(안전장치). 대상 컬렉션에 이미 있는 문서는 `_id`로
 덮어쓴다(재실행 멱등).
 
+`scripts/import-catalog-from-neon.mjs` — **내재화 카탈로그 전용** 같은 성격의 일회성 스크립트(2026-09-23).
+옛 GitHub 저장소가 Neon 표 `catalog_products`·`catalog_contents`(마이그레이션 0005)에 쌓아 둔 시딩·수확 행을
+같은 이름의 Mongo 컬렉션으로 옮긴다. 값은 그대로 옮기고(노출 횟수·생성 시각 포함) 새로 계산하지 않는다.
+
+```bash
+DATABASE_URL=<neon> MONGO_URI=<mongo> node apps/core/scripts/import-catalog-from-neon.mjs --dry-run   # 표별 건수 + 겹치는 _id 수
+DATABASE_URL=<neon> MONGO_URI=<mongo> node apps/core/scripts/import-catalog-from-neon.mjs --overwrite # 실제 적재
+```
+
 ## threadId — 스노우플레이크
 
 쓰레드 생성 시 core가 발급한다 (`src/common/snowflake.ts`): 64비트 = 41b ms 타임스탬프 | 10b 워커 |
@@ -71,7 +80,10 @@ DATABASE_URL=<neon> MONGO_URI=<mongo> node apps/core/scripts/import-from-neon.mj
 검색은 `searchText`(이름·브랜드·태그·카테고리 정규화 연결)에 검색어가 부분 일치하는 개수 — 제품 유형 낱말은 2점 — 로 점수를 매긴다.
 GitHub 저장소의 원래 구현은 Neon 표 + `pg_trgm` ILIKE(마이그레이션 0005)였고, 이 저장소의 core 는 Mongo 라 같은 계약을 컬렉션으로 옮겼다:
 정규식 부분 일치로 후보를 거른 뒤 Node 에서 점수·정렬한다(`src/catalog/catalog.logic.ts` — 병합(bump)·점수·커서 규칙은 순수 함수라
-`test/catalog.test.mjs` 가 Mongo 없이 검증한다). 수천~수만 행이면 정규식 스캔(`SEARCH_SCAN_CAP` 5000)도 수십 ms 안이다. 인덱스는 기동 시
+`test/catalog.test.mjs` 가 Mongo 없이 검증하고, 서비스는 인메모리 가짜 컬렉션 위에서 `test/catalog-service.test.mjs` 가 검증한다).
+**수확(bump)은 replaceOne 이 아니라 updateOne 으로 쓴다**(2026-09-23) — 노출 횟수는 `$inc`, 검증은 이번 행이 true 일 때만 `$set` 이라
+같은 상품을 두 계획이 동시에 수확해도 +1 이 묻히거나 검증이 false 로 되돌아가지 않는다(`harvestUpdateOf`). 태그 합집합·`searchText` 만
+읽은 값에서 계산하므로 그 부분은 경합이 남고, 다음 수확에 복구된다. 수천~수만 행이면 정규식 스캔(`SEARCH_SCAN_CAP` 5000)도 수십 ms 안이다. 인덱스는 기동 시
 (`mongo.service.ts ensureCatalogIndexes`)와 `POST /internal/catalog/ensure-schema`(운영 콘솔 「여기서 표 만들기」 — Mongo 에선 컬렉션·인덱스
 보장)가 멱등으로 만든다. 마이그레이션은 없다 — 컬렉션은 첫 upsert 에 저절로 생긴다.
 

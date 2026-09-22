@@ -17,6 +17,8 @@ import {
   escapeRegex,
   foldContentRows,
   foldProductRows,
+  harvestDeltasOf,
+  harvestUpdateOf,
   listCursorOf,
   normalizeTerm,
   parseListCursor,
@@ -28,8 +30,9 @@ import {
  * 내재화 카탈로그 저장·검색 (2026-09-17 · Mongo 포팅 2026-09-22) — 추천 상품·참고 콘텐츠의 내부 표. core 원칙대로 내용은 해석하지
  * 않는다: 검색어 추출·후보 주입·검증은 BFF/@ddak/pipeline 몫이고, 여기서는
  *  - upsert: id 충돌이면 덮는다. bump=true(수확)면 recommendCount 를 더하고 source·verified(OR)·tags(합집합)·status 는 보존한다
- *    (병합 규칙은 catalog.logic.ts). 기존 문서를 읽어 병합한 뒤 replaceOne 으로 쓴다 — 같은 id 를 두 요청이 동시에 수확하면 노출
- *    횟수 한 번이 묻힐 수 있지만(SQL 의 원자 UPDATE 와 다른 점) 검색 순위 보조값이라 감수한다
+ *    (병합 규칙은 catalog.logic.ts). 기존 문서를 읽어 병합하되, **수확은 replaceOne 이 아니라 updateOne 으로 쓴다** — 노출 횟수는
+ *    `$inc`, 검증은 true 일 때만 `$set` 이라 같은 id 를 두 요청이 동시에 수확해도 +1 이 묻히거나 검증이 되돌아가지 않는다
+ *    (harvestUpdateOf). 태그 합집합·searchText 만 읽은 값에서 계산해 남는 경합이고, 그건 다음 수확에 복구된다
  *  - search: searchText 에 검색어 어느 하나라도 들어 있는 문서를 정규식으로 거른 뒤 Node 에서 점수(부분 일치 개수, 제품 유형 2점)와
  *    동률 규칙으로 정렬한다. pg_trgm 이 없어 인덱스를 못 타지만 수천~수만 행이면 수십 ms 안이다(SEARCH_SCAN_CAP 으로 상한)
  */
@@ -95,7 +98,8 @@ export class CatalogService {
     const now = new Date()
     const prev = await this.existing(col, items.map((r) => r.id))
     const docs = foldProductRows(prev, items, bump, now)
-    await this.replaceAll(col, docs)
+    if (bump) await this.harvestAll(col, docs, harvestDeltasOf(items))
+    else await this.replaceAll(col, docs)
     return { upserted: items.length }
   }
 
@@ -104,7 +108,8 @@ export class CatalogService {
     const now = new Date()
     const prev = await this.existing(col, items.map((r) => r.id))
     const docs = foldContentRows(prev, items, bump, now)
-    await this.replaceAll(col, docs)
+    if (bump) await this.harvestAll(col, docs, harvestDeltasOf(items))
+    else await this.replaceAll(col, docs)
     return { upserted: items.length }
   }
 
@@ -113,6 +118,23 @@ export class CatalogService {
     if (!unique.length) return new Map()
     const docs = await col.find({ _id: { $in: unique } } as Filter<T>).toArray()
     return new Map(docs.map((d) => [d._id, d as T]))
+  }
+
+  /** 수확 쓰기 — 노출 횟수·검증만 연산자로 갈라 원자적으로 (harvestUpdateOf). 나머지는 병합 결과 그대로 */
+  private async harvestAll<T extends { _id: string; recommendCount: number; verified: boolean; createdAt: Date }>(
+    col: Collection<T>,
+    docs: T[],
+    deltas: Map<string, { count: number; verified: boolean }>,
+  ) {
+    if (!docs.length) return
+    const ops = docs.map((doc): AnyBulkWriteOperation<T> => ({
+      updateOne: {
+        filter: { _id: doc._id } as Filter<T>,
+        update: harvestUpdateOf(doc, deltas.get(doc._id) ?? { count: 0, verified: doc.verified }) as never,
+        upsert: true,
+      },
+    }))
+    await col.bulkWrite(ops, { ordered: false })
   }
 
   private async replaceAll<T extends { _id: string }>(col: Collection<T>, docs: T[]) {

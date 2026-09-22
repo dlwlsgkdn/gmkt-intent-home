@@ -170,6 +170,50 @@ export function foldContentRows(prev: Map<string, CatalogContentDoc>, rows: Cata
   return [...merged.values()]
 }
 
+/**
+ * 수확(bump)을 원자적으로 쓰기 위한 갱신 문서.
+ *
+ * 병합 결과(mergeProductDoc·mergeContentDoc)를 그대로 replaceOne 으로 쓰면, 같은 상품을 두 계획이 동시에 수확할 때
+ * 나중 쓰기가 먼저 쓰기의 노출 횟수 +1 을 덮어 잃는다(읽고-쓰기 사이에 낀 갱신). 검증(verified)도 마찬가지로 true 가
+ * false 로 되돌아갈 수 있다. 그래서 그 둘만 연산자로 바꾼다:
+ *  - 노출 횟수는 `$inc`(이번 요청이 더할 몫만) — 동시 수확이 겹쳐도 합쳐진다
+ *  - 검증은 이번 행이 true 일 때만 `$set` — 읽은 뒤 누가 true 로 바꿨어도 되돌리지 않는다(OR 의미)
+ *  - 생성 시각은 새 문서일 때만
+ * 나머지 필드는 병합 결과를 그대로 `$set` 한다 — 태그 합집합·searchText 는 여전히 읽은 값에서 계산하므로, 동시 수확이
+ * 겹치면 한쪽이 붙인 태그가 빠질 수 있다(검색 보조 재료라 다음 수확에 다시 붙는다).
+ */
+export interface HarvestDelta {
+  /** 이번 요청이 더할 노출 횟수 (같은 id 가 여러 행으로 오면 합) */
+  count: number
+  /** 이번 요청 행 중 하나라도 검증됨이면 true */
+  verified: boolean
+}
+
+export function harvestDeltasOf(rows: { id: string; recommendCount?: number; verified: boolean }[]): Map<string, HarvestDelta> {
+  const out = new Map<string, HarvestDelta>()
+  for (const row of rows) {
+    const prev = out.get(row.id) ?? { count: 0, verified: false }
+    out.set(row.id, { count: prev.count + (row.recommendCount ?? 0), verified: prev.verified || row.verified })
+  }
+  return out
+}
+
+/** 병합 문서 + 이번 몫 → updateOne 갱신 문서. recommendCount·verified·createdAt 만 연산자로 갈라 낸다 */
+export function harvestUpdateOf<T extends { _id: string; recommendCount: number; verified: boolean; createdAt: Date }>(
+  doc: T,
+  delta: HarvestDelta,
+): Record<string, Record<string, unknown>> {
+  const { _id, recommendCount, verified, createdAt, ...rest } = doc
+  void _id
+  void recommendCount
+  void verified
+  const set: Record<string, unknown> = { ...rest }
+  const setOnInsert: Record<string, unknown> = { createdAt }
+  if (delta.verified) set.verified = true
+  else setOnInsert.verified = false
+  return { $set: set, $setOnInsert: setOnInsert, $inc: { recommendCount: delta.count } }
+}
+
 /** 둘러보기 커서 `<updatedAt ISO>|<id>` → 값. 깨진 커서는 첫 페이지 */
 export function parseListCursor(raw?: string): { at: Date; id: string } | null {
   if (!raw) return null
