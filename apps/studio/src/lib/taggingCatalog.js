@@ -13,6 +13,8 @@
  * (AI 확신도·근거는 데모용 목데이터 — 카탈로그 원본은 코드라 자동 반영되지 않는다)
  */
 
+import { SEARCH_CATALOG } from './searchCatalog.js'
+
 const STORE_KEY = 'ddak-tagging-review-v2'
 
 /* ── 태그 사전 ── */
@@ -46,6 +48,27 @@ export const FIELD_DEFS = [
 ]
 
 export const TAG_LIMIT = { min: 3, max: 10 }
+
+export const FIELD_GUIDE = {
+  category: '어떤 종류의 상품인가요? 가장 잘 맞는 큰 분류를 1개 선택해요.',
+  subtype: '구체적으로 어떤 제품인가요? 선택한 대분류 안에서 유형을 1개 골라요.',
+  area: '주로 어디에 쓰나요? 가장 관련 있는 피부·두피·모발 부위를 딱 1개 선택해요.',
+  type: '어떤 피부·두피 타입에 맞나요? 상품 설명에 근거가 있는 타입만 1~2개 선택해요.',
+  concern: '어떤 고민을 위한 상품인가요? 핵심 고민만 최대 2개 골라요. 근거가 없으면 비워둬도 돼요.',
+  result: '사용 후 어떤 효과·마무리를 기대하나요? 상품 설명과 리뷰에 근거가 있는 결과를 1~2개 골라요.',
+  condition: '특히 어떤 상황에 쓰기 좋나요? 관련 있는 상황만 최대 2개 골라요. 없으면 비워둬도 돼요.',
+}
+
+export const STATUS_GUIDE = {
+  'needs-review': '사람이 확인하거나 고쳐야 할 상품이에요. 상품을 고른 뒤, 안내에 따라 항목을 확인해요.',
+  unreviewed: 'AI가 1차로 분류했지만 아직 검토 완료로 확정되지 않은 항목이 있어요. 상품 설명·선택 근거를 확인하고 「확인 완료 · 잠그기」를 눌러요.',
+  fix: '필수값 누락, 선택 개수·대표 태그 문제 또는 수정 요청이 남아 있어요. 「지금 할 일」의 안내대로 고친 뒤 확인 완료해요.',
+  unlinked: '쇼핑몰 상품이 공통 상품 정보(카탈로그)에 아직 연결되지 않았어요. 상품 데이터 대시보드의 「카탈로그 연결」에서 연결한 뒤 태깅을 검토해요.',
+  done: '모든 항목의 검토가 끝났어요. 완료 값은 잠겨 있고, 상품 승인은 별도로 할 수 있어요.',
+  approved: '담당자가 상품의 태그를 최종 승인했어요. 값을 수정하면 다시 검토해야 해요.',
+  rejected: '담당자가 보완이 필요하다고 반려했어요. 검토 메모를 읽고 태그를 고친 뒤 다시 승인해요.',
+  all: '검토 대기·완료·승인·반려 상품을 모두 볼 수 있어요. 카탈로그 미연결 상품은 별도 목록이에요.',
+}
 
 /* 사전의 원천은 서버가 실어 보내는 taxonomy(=Python 저장소의 taxonomy.json)다.
    위 상수들은 서버가 없을 때(배포본·사내망 밖) 쓰는 폴백으로 남는다. */
@@ -335,6 +358,19 @@ export const productEmoji = (tags) => TAG_EMOJI[(tags && tags[0]) || ''] || '�
 export const totalTags = (unit) =>
   FIELD_DEFS.reduce((n, d) => n + unit.fields[d.key].selected.length, 0)
 
+export function fieldIssues(unit, def) {
+  const field = unit.fields[def.key]
+  const issues = []
+  if (field.selected.length < def.min) issues.push(`${def.label} 태그를 ${def.min}개 이상 선택해요.`)
+  if (field.selected.length > def.max) issues.push(`${def.label} 태그를 최대 ${def.max}개로 줄여요.`)
+  if (field.selected.length > 1 && !field.selected.includes(field.rep)) issues.push('선택한 태그 중 가장 중요한 1개에 대표 별(★)을 눌러요.')
+  const allowed = optionsFor(def.key, unit.fields.category.selected[0])
+  if (field.selected.some((tag) => !allowed.includes(tag))) issues.push('현재 분류에서 사용할 수 없는 태그를 빼고, 아래 목록에서 다시 골라요.')
+  return issues
+}
+
+export const fieldNeedsReview = (unit, def) => unit.fields[def.key].status !== 'done' || fieldIssues(unit, def).length > 0
+
 export function validateUnit(unit) {
   const errs = []
   const warns = []
@@ -345,6 +381,7 @@ export function validateUnit(unit) {
   for (const def of FIELD_DEFS) {
     const field = unit.fields[def.key]
     if (def.required && field.selected.length === 0) errs.push(`‘${def.label}’은(는) 필수 입력입니다.`)
+    if (field.selected.length > def.max) errs.push(`‘${def.label}’은(는) 최대 ${def.max}개까지 선택할 수 있어요.`)
     if (field.selected.length > 1 && !field.selected.includes(field.rep)) errs.push(`‘${def.label}’ 복수 선택 — 대표 태그(★)를 지정해주세요.`)
     const allow = optionsFor(def.key, category)
     for (const tag of field.selected) {
@@ -366,7 +403,7 @@ export function validateUnit(unit) {
 export function unitStatusKey(unit) {
   if (unit.decision === 'approved') return 'approved'
   if (unit.decision === 'rejected') return 'rejected'
-  if (validateUnit(unit).errs.length) return 'fix'
+  if (validateUnit(unit).errs.length || FIELD_DEFS.some((d) => unit.fields[d.key].status === 'fix')) return 'fix'
   if (FIELD_DEFS.some((d) => unit.fields[d.key].status === 'unreviewed')) return 'unreviewed'
   return 'done'
 }
@@ -379,7 +416,7 @@ const cloneFields = (fields) => Object.fromEntries(
 export const freshUnit = (seed) => ({
   ...seed,
   listings: seed.listings || [
-    { productId: seed.id, mall: 'gmarket', brand: seed.brand, price: seed.price, url: null, imageUrl: seed.imageUrl, optionCount: 1 },
+    { productId: seed.id, mall: 'gmarket', brand: seed.brand, price: seed.price, url: SEARCH_CATALOG.find((product) => product.id === seed.id)?.url || null, imageUrl: seed.imageUrl, optionCount: 1 },
   ],
   fields: cloneFields(seed.fields),
   tagRequest: { ...(seed.tagRequest || {}) },

@@ -1,6 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react'
 import {
   FIELD_DEFS,
+  FIELD_GUIDE,
+  STATUS_GUIDE,
+  fieldIssues,
+  fieldNeedsReview,
   TAGGING_SEED,
   TAG_LIMIT,
   UNIT_STATUS,
@@ -47,6 +51,8 @@ const mallLabel = (mall) => (mall === 'gmarket' ? '지마켓' : '올리브영')
 
 const formatPrice = (price) => (typeof price === 'number' ? `${price.toLocaleString('ko-KR')}원` : '가격 정보 없음')
 
+const productLink = (unit) => unit.listings.find((listing) => /^https?:\/\//i.test(listing.url || '')) || null
+
 /* 사전 캐시 시각을 검토자가 훑기 좋은 형태로 — 1시간 안은 상대 표기, 그 밖은 절대 시각(분까지). */
 const formatTaxonomyTime = (iso) => {
   const date = iso ? new Date(iso) : null
@@ -60,19 +66,19 @@ const formatTaxonomyTime = (iso) => {
 }
 
 const confLevel = (confidence) => (confidence >= 75 ? 'ok' : confidence >= 60 ? 'warn' : 'bad')
-const needsReviewUnit = (unit) => ['unreviewed', 'fix'].includes(unitStatusKey(unit))
+const needsReviewUnit = (unit) => ['unreviewed', 'fix', 'done'].includes(unitStatusKey(unit))
 const fieldEditKey = (unitId, fieldKey) => `${unitId}:${fieldKey}`
 
 /* 필드가 규칙상 다시 봐야 하는지 — status뿐 아니라 사람이 편집하다 만든 범위·사전 오류도
    검수 전용 보기에서 사라지지 않게 같은 관문으로 판정한다. */
-const fieldHasValueIssue = (unit, def) => {
-  const field = unit.fields[def.key]
-  if (field.selected.length < def.min || field.selected.length > def.max) return true
-  const allow = optionsFor(def.key, unit.fields.category.selected[0])
-  if (field.selected.some((tag) => !allow.includes(tag))) return true
-  return def.max > 1 && field.selected.length > 1 && !field.rep
+const fieldHasValueIssue = (unit, def) => fieldIssues(unit, def).length > 0
+
+function Help({ text, children, className = '' }) {
+  const id = useId()
+  return <span className={`sb-tagging-help ${className}`} tabIndex={0} aria-describedby={id}>
+    {children}<span id={id} role="tooltip" className="sb-tagging-help__tip">{text}</span>
+  </span>
 }
-const fieldNeedsReview = (unit, def) => unit.fields[def.key].status !== 'done' || fieldHasValueIssue(unit, def)
 
 /* 검증 문구를 해당 편집 카드에 연결한다. 전체 개수 오류처럼 특정 필드가 없는 경우에는
    보조 태그부터 줄일 수 있도록 조건→고민→결과 순서로 안내한다. */
@@ -188,7 +194,7 @@ export default function TaggingStudio({ api, embedded = false }) {
 
   const statusById = useMemo(() => new Map(units.map((u) => [u.id, unitStatusKey(u)])), [units])
   const counts = useMemo(() => {
-    const out = { unreviewed: 0, fix: 0 }
+    const out = { unreviewed: 0, fix: 0, done: 0 }
     for (const key of statusById.values()) if (out[key] !== undefined) out[key] += 1
     return out
   }, [statusById])
@@ -205,13 +211,15 @@ export default function TaggingStudio({ api, embedded = false }) {
     ? unlinked.filter((u) => `${u.brand} ${u.name}`.toLowerCase().includes(needle))
     : unlinked
   /* 현재 항목이 검수 완료되어 큐에서 빠지면 다음 검수 항목을 즉시 보여준다. */
-  const unit = listed.find((u) => u.id === selectedId) || listed[0] || units.find((u) => u.id === selectedId) || units[0] || EMPTY_UNIT
+  const unit = listed.find((u) => u.id === selectedId) || listed[0] || EMPTY_UNIT
+  const hasUnit = !!unit.id && listFilter !== 'unlinked'
+  const landing = productLink(unit)
   const { errs, warns } = useMemo(() => validateUnit(unit), [unit])
   const total = totalTags(unit)
   const finalTags = FIELD_DEFS.flatMap((d) =>
     unit.fields[d.key].selected.map((tag) => ({ tag, key: d.key, field: d.label, rep: unit.fields[d.key].rep === tag }))
   )
-  const unreviewedFields = FIELD_DEFS.filter((d) => unit.fields[d.key].status === 'unreviewed')
+  const unreviewedFields = FIELD_DEFS.filter((d) => unit.fields[d.key].status !== 'done')
   const currentReviewFields = FIELD_DEFS.filter((def) => fieldNeedsReview(unit, def))
   /* 사전 판을 알 수 없는 채로(file·none) 판정하면 최근 승격 태그를 "허용 목록 밖"으로
      오판해 멀쩡한 태그를 지우는 사고로 이어진다 — 승인만 막는다(반려는 보수적이라 허용). */
@@ -235,17 +243,7 @@ export default function TaggingStudio({ api, embedded = false }) {
     }
   }, [jumpTarget, onlyNeedsReview, unit.id])
 
-  const reviewStats = useMemo(() => {
-    let pending = 0
-    let locked = 0
-    for (const candidate of units) {
-      for (const def of FIELD_DEFS) {
-        if (fieldNeedsReview(candidate, def)) pending += 1
-        else locked += 1
-      }
-    }
-    return { pending, locked, total: pending + locked }
-  }, [units])
+  const completedFields = FIELD_DEFS.filter((def) => !fieldNeedsReview(unit, def))
 
   const selectUnit = (id) => {
     setSelectedId(id)
@@ -265,6 +263,7 @@ export default function TaggingStudio({ api, embedded = false }) {
   const setFieldUnlocked = (key, unlocked) => {
     const editKey = fieldEditKey(unit.id, key)
     setUnlockedFields((prev) => ({ ...prev, [editKey]: unlocked }))
+    if (unlocked) setOnlyNeedsReview(false)
   }
 
   const openFieldFromValidation = (key) => {
@@ -280,7 +279,7 @@ export default function TaggingStudio({ api, embedded = false }) {
     const origin = source === 'remote' ? unit.aiFields : TAGGING_SEED.find((candidate) => candidate.id === unit.id)?.fields
     if (!origin) return
     /* 대분류를 되돌릴 때 종속 사전도 함께 복원해 서로 허용되지 않는 조합이 남지 않게 한다. */
-    const keys = key === 'category' ? ['category', 'subtype', 'type'] : [key]
+    const keys = key === 'category' ? FIELD_DEFS.map((def) => def.key) : [key]
     const hadDecision = unit.decision
     const unitId = unit.id
     const unitName = unit.name
@@ -360,7 +359,7 @@ export default function TaggingStudio({ api, embedded = false }) {
     api.showToast('선택한 상품을 AI 원본으로 되돌렸어요.')
   }
 
-  /* 사람 손이 닿은 필드는 담당자 소유·검토 완료가 되고, 승인/반려 결정은 초기화된다 */
+  /* 값을 바꾸면 다시 확인 완료해야 잠긴다. */
   const toggleTag = (key, tag) => {
     const def = FIELD_DEFS.find((d) => d.key === key)
     patchUnit((u) => {
@@ -377,12 +376,11 @@ export default function TaggingStudio({ api, embedded = false }) {
         selected = [...field.selected, tag]
       }
       const rep = selected.length === 1 ? selected[0] : (selected.includes(field.rep) ? field.rep : null)
-      /* 검수 필요 필드는 값을 고쳤다고 자동 완료하지 않는다. 담당자가 아래 완료 버튼을
-         명시적으로 눌러야 잠기고 큐에서 빠진다. 이미 잠금을 풀어 편집한 완료 필드만 완료 유지. */
-      const fields = { ...u.fields, [key]: { ...field, selected, rep, origin: 'human' } }
+      /* 잠금을 풀어 수정한 값도 다시 확인 완료해야 확정된다. */
+      const fields = { ...u.fields, [key]: { ...field, selected, rep, origin: 'human', status: 'unreviewed' } }
       if (key === 'category') {
         /* 대분류가 바뀌면 종속 사전(세부유형·타입)에서 허용되지 않는 값을 정리한다 */
-        for (const depKey of ['subtype', 'type']) {
+        for (const depKey of ['subtype', 'area', 'type', 'concern', 'result', 'condition']) {
           const dep = fields[depKey]
           const allow = optionsFor(depKey, selected[0])
           const kept = dep.selected.filter((t) => allow.includes(t))
@@ -392,6 +390,7 @@ export default function TaggingStudio({ api, embedded = false }) {
               selected: kept,
               rep: kept.length === 1 ? kept[0] : (kept.includes(dep.rep) ? dep.rep : null),
               origin: 'human',
+              status: 'unreviewed',
             }
           }
         }
@@ -404,7 +403,7 @@ export default function TaggingStudio({ api, embedded = false }) {
     patchUnit((u) => ({
       ...u,
       decision: null,
-      fields: { ...u.fields, [key]: { ...u.fields[key], rep: tag, origin: 'human' } },
+      fields: { ...u.fields, [key]: { ...u.fields[key], rep: tag, origin: 'human', status: 'unreviewed' } },
     }))
   }
 
@@ -419,6 +418,7 @@ export default function TaggingStudio({ api, embedded = false }) {
       fields: { ...u.fields, [key]: { ...u.fields[key], status: 'done', origin: 'human' } },
     }))
     setFieldUnlocked(key, false)
+    if (currentReviewFields.length === 1 && ['unreviewed', 'fix'].includes(listFilter)) setListFilter('needs-review')
   }
 
   const toggleRequest = (key) => {
@@ -433,9 +433,10 @@ export default function TaggingStudio({ api, embedded = false }) {
   }
 
   const approve = async () => {
+    if (!hasUnit) return
     if (taxonomyBlocked) return api.showToast('사전 판을 확인할 수 없어 승인할 수 없어요. 사내망 연결을 확인해주세요.')
     if (errs.length) return api.showToast('규칙 위반이 있어 승인할 수 없어요.')
-    if (unreviewedFields.length) return api.showToast('미검토 항목이 남아 있어요. 확인 후 승인해주세요.')
+    if (currentReviewFields.length) return api.showToast('확인할 항목이 남아 있어요. 각 항목을 확인 완료한 뒤 승인해주세요.')
     const previousDecision = unit.decision
     patchUnit((u) => ({ ...u, decision: 'approved' }))
     if (source === 'remote') {
@@ -449,6 +450,7 @@ export default function TaggingStudio({ api, embedded = false }) {
   }
 
   const reject = async () => {
+    if (!hasUnit) return
     const previousDecision = unit.decision
     patchUnit((u) => ({ ...u, decision: 'rejected' }))
     if (source === 'remote') {
@@ -498,8 +500,7 @@ export default function TaggingStudio({ api, embedded = false }) {
         <div className="sb-tagging__title">
           <h1><span className="sb-tagging__mark">◈</span>상품 태깅 검토 스튜디오</h1>
           <p className="sb-tagging__sub">
-            AI가 확정한 항목은 잠겨 있어요. 검수 필요 항목만 확인하고, 완료 항목을 고치려면 자물쇠를 풀어주세요.
-            언제든 AI 원본으로 되돌릴 수 있어요.
+            AI가 검토를 끝낸 값은 🔒 잠가두었어요. 남은 항목만 확인하고 상품을 승인해요.
           </p>
         </div>
         {source === 'local' && (
@@ -527,46 +528,23 @@ export default function TaggingStudio({ api, embedded = false }) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="브랜드·상품명 검색"
+          aria-label="브랜드 또는 상품명 검색"
         />
         <div className="sb-tagging__filters">
-          <button
-            type="button"
-            className={'sb-tagging-pill sb-tagging-pill--needs' + (listFilter === 'needs-review' ? ' is-on' : '')}
-            onClick={() => setListFilter('needs-review')}
-          >
-            검수 필요 <b>{counts.unreviewed + counts.fix}</b>
-          </button>
-          <button
-            type="button"
-            className={'sb-tagging-pill sb-tagging-pill--unreviewed' + (listFilter === 'unreviewed' ? ' is-on' : '')}
-            onClick={() => setListFilter((prev) => (prev === 'unreviewed' ? 'all' : 'unreviewed'))}
-          >
-            미검토 <b>{counts.unreviewed}</b>
-          </button>
-          {unlinked.length > 0 && (
-            <button
-              type="button"
-              className={'sb-tagging-pill sb-tagging-pill--unlinked' + (listFilter === 'unlinked' ? ' is-on' : '')}
-              onClick={() => setListFilter((prev) => (prev === 'unlinked' ? 'all' : 'unlinked'))}
-              title="카탈로그에 아직 묶이지 않은 몰 상품이에요. 묶는 일은 대시보드에서 합니다."
-            >
-              카탈로그 미연결 <b>{unlinked.length}</b>
+          {[
+            ['needs-review', '검토·승인 대기', counts.unreviewed + counts.fix + counts.done],
+            ['unreviewed', '미검토', counts.unreviewed],
+            ['fix', '수정 필요', counts.fix],
+            ['done', '검토 완료', counts.done],
+            ['unlinked', '카탈로그 미연결', unlinked.length],
+            ['all', '전체', units.length],
+          ].map(([key, label, count]) => <span className="sb-tagging-filter" key={key}>
+            <button type="button" className={`sb-tagging-pill sb-tagging-pill--${key}${listFilter === key ? ' is-on' : ''}`}
+              aria-pressed={listFilter === key} aria-describedby={`tagging-filter-${key}`} onClick={() => setListFilter(key)}>
+              {label} <b>{count}</b><span aria-hidden="true"> ⓘ</span>
             </button>
-          )}
-          <button
-            type="button"
-            className={'sb-tagging-pill sb-tagging-pill--fix' + (listFilter === 'fix' ? ' is-on' : '')}
-            onClick={() => setListFilter((prev) => (prev === 'fix' ? 'all' : 'fix'))}
-          >
-            수정 필요 <b>{counts.fix}</b>
-          </button>
-          <button
-            type="button"
-            className={'sb-tagging-pill' + (listFilter === 'all' ? ' is-on' : '')}
-            onClick={() => setListFilter('all')}
-          >
-            전체 <b>{units.length}</b>
-          </button>
+            <span id={`tagging-filter-${key}`} role="tooltip" className="sb-tagging-help__tip">{STATUS_GUIDE[key]}</span>
+          </span>)}
         </div>
         <div className="sb-tagging__head-actions">
           <button type="button" className="sb-btn sb-btn--ghost sb-btn--small" onClick={exportJson}>
@@ -583,12 +561,17 @@ export default function TaggingStudio({ api, embedded = false }) {
         </div>
       </div>
 
+      <div className="sb-tagging-start">
+        <span><b>1</b> 상품을 고르고</span><span><b>2</b> 필요한 항목만 확인</span><span><b>3</b> 상품 승인으로 마무리</span>
+        <small>상태에 커서를 올리거나 탭 키로 이동하면 도움말이 보여요.</small>
+      </div>
+      <p className="sb-tagging-filter-guide" aria-live="polite">{STATUS_GUIDE[listFilter]}</p>
       <div className="sb-tagging__cols">
         {/* ── 좌: 작업 단위 목록 + 상품 정보 ── */}
         <aside className="sb-tagging__side">
           <div className="sb-tagging-panel">
             <p className="sb-tagging-panel__hd">
-              작업 단위 <span className="sb-tagging-panel__dim">옵션 기준</span>
+              1 · 상품 선택 <span className="sb-tagging-panel__dim">{listFilter === 'unlinked' ? filteredUnlinked.length : listed.length}개 상품</span>
             </p>
             <div className="sb-tagging-units">
               {listFilter === 'unlinked' ? (
@@ -622,9 +605,10 @@ export default function TaggingStudio({ api, embedded = false }) {
                   {listed.length === 0 && <p className="sb-tagging-empty">해당 상태의 작업이 없어요.</p>}
                   {listed.map((u) => {
                     const status = UNIT_STATUS[statusById.get(u.id)]
+                    const link = productLink(u)
                     return (
+                      <div className="sb-tagging-unit-row" key={u.id}>
                       <button
-                        key={u.id}
                         type="button"
                         className={`sb-tagging-unit sb-tagging-unit--${status.cls}` + (u.id === unit.id ? ' is-sel' : '')}
                         onClick={() => selectUnit(u.id)}
@@ -636,8 +620,11 @@ export default function TaggingStudio({ api, embedded = false }) {
                           <span className="sb-tagging-unit__name">{u.name}</span>
                           <span className="sb-tagging-unit__opt">{u.brand} · {u.option}</span>
                         </span>
-                        <span className={`sb-tagging-chip sb-tagging-chip--${status.cls}`}>{status.label}</span>
+                        <span className={`sb-tagging-chip sb-tagging-chip--${status.cls}`} title={STATUS_GUIDE[unitStatusKey(u)]}>{status.label}</span>
                       </button>
+                      {link && <a className="sb-tagging-unit-landing" href={link.url} target="_blank" rel="noopener noreferrer"
+                        aria-label={`${u.name} ${mallLabel(link.mall)} 상세페이지 새 탭에서 열기`} title="판매 상세페이지 새 탭에서 열기">↗</a>}
+                      </div>
                     )
                   })}
                 </>
@@ -645,12 +632,18 @@ export default function TaggingStudio({ api, embedded = false }) {
             </div>
           </div>
 
-          <div className="sb-tagging-panel sb-tagging-pinfo">
+          {hasUnit && <div className="sb-tagging-panel sb-tagging-pinfo">
             <p className="sb-tagging-panel__hd">상품 정보</p>
-            <div className="sb-tagging-pinfo__img">
-              <UnitThumb unit={unit} />
-            </div>
-            <p className="sb-tagging-pinfo__name">{unit.name}</p>
+            {landing ? <a className="sb-tagging-product-link" href={landing.url} target="_blank" rel="noopener noreferrer"
+              aria-label={`${unit.name} ${mallLabel(landing.mall)} 상세페이지 새 탭에서 열기`}>
+              <div className="sb-tagging-pinfo__img"><UnitThumb unit={unit} /></div>
+              <p className="sb-tagging-pinfo__name">{unit.name} ↗</p>
+              <span className="sb-tagging-product-link__hint">{mallLabel(landing.mall)}에서 상품 보기 · 새 탭</span>
+            </a> : <>
+              <div className="sb-tagging-pinfo__img"><UnitThumb unit={unit} /></div>
+              <p className="sb-tagging-pinfo__name">{unit.name}</p>
+              <span className="sb-tagging-listing__nolink">등록된 판매 상세페이지 링크가 없어요.</span>
+            </>}
             <p className="sb-tagging-pinfo__brand">{unit.brand} · {unit.option}</p>
             <dl>
               {unit.copy && (
@@ -675,8 +668,8 @@ export default function TaggingStudio({ api, embedded = false }) {
                     </span>
                     <b>{formatPrice(l.price)}</b>
                     {l.optionCount > 1 && <em>옵션 {l.optionCount}개</em>}
-                    {l.url
-                      ? <a href={l.url} target="_blank" rel="noreferrer">상세페이지</a>
+                    {/^https?:\/\//i.test(l.url || '')
+                      ? <a href={l.url} target="_blank" rel="noopener noreferrer" aria-label={`${mallLabel(l.mall)} ${unit.name} 상세페이지 새 탭에서 열기`}>상품 보러 가기 ↗</a>
                       : <span className="sb-tagging-listing__nolink">상세페이지 없음</span>}
                   </div>
                 ))}
@@ -701,15 +694,25 @@ export default function TaggingStudio({ api, embedded = false }) {
                 </>
               )}
             </dl>
-          </div>
+          </div>}
         </aside>
 
+        {!hasUnit && <div className="sb-tagging-no-selection">
+          <span aria-hidden="true">{listFilter === 'unlinked' ? '🔗' : '✓'}</span>
+          <h2>{listFilter === 'unlinked' ? '상품을 먼저 연결해주세요' : '이 목록에는 상품이 없어요'}</h2>
+          <p>{listFilter === 'unlinked'
+            ? '카탈로그는 여러 쇼핑몰에서 파는 같은 상품을 하나로 모은 공통 상품 정보예요.'
+            : query ? '검색어를 바꾸거나 전체 상품을 확인해보세요.' : '다른 상태를 선택하거나 전체 상품을 확인해보세요.'}</p>
+          {listFilter === 'unlinked' && <ol><li>상품 데이터 대시보드에서 「카탈로그 연결」을 열어요.</li><li>목록의 상품을 찾아 같은 상품의 카탈로그에 연결해요.</li><li>이 화면을 새로고침한 뒤 태그를 검토해요.</li></ol>}
+          <button type="button" className="sb-btn sb-btn--ghost" onClick={() => { setQuery(''); setListFilter('all') }}>전체 상품 보기</button>
+        </div>}
+
         {/* ── 가운데: 필드별 태깅 편집 ── */}
-        <main className="sb-tagging__center">
+        {hasUnit && <main className="sb-tagging__center">
           <div className="sb-tagging-center-hd">
             <div>
-              <h2>사람이 확인할 항목</h2>
-              <p>이 상품에서 {currentReviewFields.length}개만 확인하면 돼요.</p>
+              <h2>2 · 태그 확인</h2>
+              <p>{unit.name}</p>
             </div>
             <label className="sb-tagging-sw">
               <input
@@ -721,20 +724,31 @@ export default function TaggingStudio({ api, embedded = false }) {
             </label>
           </div>
           <div className="sb-tagging-review-focus">
-            <span><b>{reviewStats.pending}</b>개 검수 대기</span>
-            <i><b style={{ width: `${Math.round((reviewStats.locked / reviewStats.total) * 100)}%` }} /></i>
-            <small>AI·담당자 확정 {reviewStats.locked}개는 잠김</small>
+            <span>이 상품 <b>{currentReviewFields.length}</b>개 확인 필요</span>
+            <i><b style={{ width: `${Math.round(completedFields.length / FIELD_DEFS.length * 100)}%` }} /></i>
+            <small>검토 완료 {completedFields.length}/{FIELD_DEFS.length}</small>
           </div>
+          {completedFields.length > 0 && onlyNeedsReview && <div className="sb-tagging-completed">
+            <p>🔒 검토가 끝난 항목 · {completedFields.length}개</p>
+            <div>{completedFields.map((def) => <button key={def.key} type="button" onClick={() => openFieldFromValidation(def.key)}
+              title={`${def.label}: ${unit.fields[def.key].selected.join(', ') || '선택 안 함'}. 잠금을 풀고 편집하기`}>
+              <span>{def.label}</span><b>{unit.fields[def.key].selected.join(' · ') || '선택 안 함'}</b><small>수정</small>
+            </button>)}</div>
+            <small>그대로 두면 돼요. 수정할 때만 항목을 눌러 잠금을 풀어요.</small>
+          </div>}
           {FIELD_DEFS.map((def) => {
             const field = unit.fields[def.key]
             const needsReview = fieldNeedsReview(unit, def)
             if (onlyNeedsReview && !needsReview) return null
-            const opts = optionsFor(def.key, unit.fields.category.selected[0])
-            const status = UNIT_STATUS[field.status]
+            const allowed = optionsFor(def.key, unit.fields.category.selected[0])
+            const opts = [...new Set([...allowed, ...field.selected])]
+            const issues = fieldIssues(unit, def)
+            const statusKey = issues.length ? 'fix' : field.status
+            const status = UNIT_STATUS[statusKey] || UNIT_STATUS.unreviewed
             const multi = def.max > 1
             const requested = !!unit.tagRequest[def.key]
             const unlocked = !!unlockedFields[fieldEditKey(unit.id, def.key)]
-            const locked = field.status === 'done' && !unlocked
+            const locked = !needsReview && !unlocked
             return (
               <section
                 key={def.key}
@@ -746,7 +760,7 @@ export default function TaggingStudio({ api, embedded = false }) {
                 className={
                   `sb-tagging-field sb-tagging-field--k-${def.key}` +
                   (field.status === 'unreviewed' ? ' sb-tagging-field--unreviewed' : '') +
-                  (field.status === 'fix' ? ' sb-tagging-field--fix' : '') +
+                  (statusKey === 'fix' ? ' sb-tagging-field--fix' : '') +
                   (locked ? ' sb-tagging-field--locked' : '') +
                   (jumpTarget === def.key ? ' is-jump-target' : '')
                 }
@@ -767,11 +781,11 @@ export default function TaggingStudio({ api, embedded = false }) {
                       <i style={{ width: `${field.confidence}%` }} />
                       <b>{field.confidence}%</b>
                     </span>
-                    <span className={`sb-tagging-chip sb-tagging-chip--${status.cls}`}>{status.label}</span>
+                    <Help className={`sb-tagging-chip sb-tagging-chip--${status.cls}`} text={field.origin === 'human' && statusKey === 'unreviewed' ? '담당자가 수정한 값이에요. 선택을 확인하고 「확인 완료 · 잠그기」를 눌러요.' : STATUS_GUIDE[statusKey]}>{status.label} ⓘ</Help>
                     <span className={'sb-tagging-origin' + (field.origin === 'human' ? ' sb-tagging-origin--human' : '')}>
                       {field.origin === 'ai' ? 'AI' : '담당자'}
                     </span>
-                    {field.status === 'done' && (
+                    {!needsReview && (
                       <button
                         type="button"
                         className={'sb-tagging-lock' + (unlocked ? ' is-open' : '')}
@@ -779,11 +793,17 @@ export default function TaggingStudio({ api, embedded = false }) {
                         title={unlocked ? '편집을 끝내고 다시 잠그기' : '잠금을 풀고 직접 편집하기'}
                         onClick={() => setFieldUnlocked(def.key, !unlocked)}
                       >
-                        {unlocked ? '🔓 편집 중' : '🔒 고정됨'}
+                        {unlocked ? '🔓 다시 잠그기' : '🔒 잠금 해제'}
                       </button>
                     )}
                   </div>
                 </div>
+                <p className="sb-tagging-field-guide">{FIELD_GUIDE[def.key]}</p>
+                {!locked && <div className="sb-tagging-field-task">
+                  <b>지금 할 일</b>
+                  {issues.length ? issues.map((issue) => <p key={issue}>{issue}</p>) : <p>상품 설명과 선택 근거를 확인해요. 맞으면 아래 「확인 완료 · 잠그기」를 눌러요.</p>}
+                  {multi && <small>2개를 고르면 가장 관련 있는 1개에 대표 별(★)을 눌러요.</small>}
+                </div>}
                 {locked && (
                   <p className="sb-tagging-locked-note">
                     {field.origin === 'ai' ? 'AI 검수 완료 값이에요.' : '담당자가 확인해 확정한 값이에요.'} 수정하려면 오른쪽 자물쇠를 눌러주세요.
@@ -793,19 +813,21 @@ export default function TaggingStudio({ api, embedded = false }) {
                   {opts.length === 0 && (
                     <span className="sb-tagging-panel__dim">대분류를 먼저 선택하면 목록이 표시됩니다.</span>
                   )}
-                  {opts.map((tag) => {
+                  {(locked ? field.selected : opts).map((tag) => {
                     const on = field.selected.includes(tag)
                     const isRep = on && field.rep === tag
                     return (
                       <span key={tag} className={'sb-tagging-opt' + (on ? ' is-on' : '')}>
-                        <button type="button" className="sb-tagging-opt__body" disabled={locked} onClick={() => toggleTag(def.key, tag)}>
-                          {tag}
+                        <button type="button" className="sb-tagging-opt__body" aria-pressed={on} disabled={locked} onClick={() => toggleTag(def.key, tag)}>
+                          {tag}{!allowed.includes(tag) ? ' · 사용 불가, 눌러서 빼기' : ''}
                         </button>
                         {on && multi && field.selected.length > 1 && (
                           <button
                             type="button"
                             className={'sb-tagging-opt__star' + (isRep ? ' is-rep' : '')}
-                            title="대표 태그 지정"
+                            title={`${tag} 대표 태그 지정`}
+                            aria-label={`${tag} 대표 태그 지정`}
+                            aria-pressed={isRep}
                             disabled={locked}
                             onClick={() => setRep(def.key, tag)}
                           >
@@ -829,9 +851,9 @@ export default function TaggingStudio({ api, embedded = false }) {
                       {openWhy[def.key] ? '근거 접기 ▴' : '선택 근거 ▾'}
                     </button>
                   )}
-                  {field.status !== 'done' && (
+                  {!locked && (
                     <button type="button" className="sb-tagging-mini sb-tagging-mini--ok" onClick={() => markDone(def.key)}>
-                      {field.status === 'fix' ? '수정 완료로 표시' : '확인 완료로 표시'}
+                      확인 완료 · 잠그기
                     </button>
                   )}
                   <button
@@ -859,10 +881,14 @@ export default function TaggingStudio({ api, embedded = false }) {
               <button type="button" className="sb-btn sb-btn--ghost sb-btn--small" onClick={() => setOnlyNeedsReview(false)}>잠긴 완료 항목 보기</button>
             </div>
           )}
-        </main>
+        </main>}
 
         {/* ── 우: 게이지 · 최종 태그 · 검증 · 승인/반려 ── */}
-        <aside className="sb-tagging__side">
+        {hasUnit && <aside className="sb-tagging__side sb-tagging__decision-side">
+          <div className="sb-tagging-next">
+            <h2>3 · 상품 승인</h2>
+            <p>{errs.length ? `먼저 ${errs.length}개의 수정 안내를 확인해요.` : currentReviewFields.length ? `${currentReviewFields.length}개 항목을 확인 완료하면 승인할 수 있어요.` : '모든 항목을 확인했어요. 아래에서 상품을 승인해요.'}</p>
+          </div>
           <div className="sb-tagging-panel">
             <p className="sb-tagging-panel__hd">태그 게이지</p>
             <div className="sb-tagging-gauge">
@@ -900,7 +926,7 @@ export default function TaggingStudio({ api, embedded = false }) {
           </div>
 
           <div className="sb-tagging-panel">
-            <p className="sb-tagging-panel__hd">검증 결과</p>
+            <p className="sb-tagging-panel__hd">지금 할 일</p>
             {errs.length === 0 && warns.length === 0 && <p className="sb-tagging-vd sb-tagging-vd--ok">✓ 규칙 위반 없음</p>}
             {errs.map((message) => {
               const targetKey = validationTargetKey(unit, message)
@@ -920,7 +946,7 @@ export default function TaggingStudio({ api, embedded = false }) {
             })}
             {unreviewedFields.map((def) => (
               <button key={def.key} type="button" className="sb-tagging-vd sb-tagging-vd--warn sb-tagging-vd--link" onClick={() => openFieldFromValidation(def.key)}>
-                <span>⚠ 미검토 항목: {def.label}</span><b>확인하기 →</b>
+                <span>{def.label} · 확인 완료 필요</span><b>확인하기 →</b>
               </button>
             ))}
           </div>
@@ -932,6 +958,7 @@ export default function TaggingStudio({ api, embedded = false }) {
               value={unit.note}
               rows={3}
               placeholder="예: ‘지속력’은 리뷰 근거가 약해 뺐어요"
+              aria-label="검토 메모"
               onChange={(event) => {
                 const note = event.target.value
                 patchUnit((u) => ({ ...u, note }))
@@ -940,9 +967,10 @@ export default function TaggingStudio({ api, embedded = false }) {
           </div>
 
           <div className="sb-tagging-actions">
-            <button type="button" className="sb-btn sb-btn--primary" onClick={approve}>승인</button>
-            <button type="button" className="sb-btn sb-btn--danger" onClick={reject}>반려</button>
+            <button type="button" className="sb-btn sb-btn--primary" disabled={taxonomyBlocked || errs.length > 0 || currentReviewFields.length > 0 || unit.decision === 'approved'} onClick={approve}>상품 승인</button>
+            <button type="button" className="sb-btn sb-btn--danger" onClick={reject}>보완 요청 · 반려</button>
           </div>
+          <p className="sb-tagging-action-note">반려할 때는 검토 메모에 고칠 내용을 남겨주세요.</p>
           <button type="button" className="sb-btn sb-btn--ghost sb-btn--small sb-tagging-restore-unit" onClick={restoreCurrentUnit}>
             이 상품을 AI 원본으로 되돌리기
           </button>
@@ -952,7 +980,7 @@ export default function TaggingStudio({ api, embedded = false }) {
               초기화됩니다.
             </p>
           )}
-        </aside>
+        </aside>}
       </div>
     </section>
   )
