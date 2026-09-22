@@ -276,7 +276,7 @@ try {
   ok(last(planB, 'result')?.data?.page?.sections?.length === 4, `legacy 계획 생성 정상 — 5c 콘텐츠 포함 (${last(planB, 'result')?.data?.page?.sections?.length})`)
 
   // ── 8.3 성분 비교표·주의 성분 저니 (v26) — 성분이 기준인 의도면 뼈대가 [안내 → compare → caution → 상품 자리] 를 두고,
-  //    5c 콘텐츠는 그 단계 끝(steps 앞)에 끼며, 빈 short·desc 는 와이어에서 떨어진다 ──
+  //    자리 없는 5c 콘텐츠는 그 단계 안(주의 성분 뒤·상품 앞)에 끼며, 빈 short·desc 는 와이어에서 떨어진다 ──
   console.log('8.3) 성분 비교표·주의 성분 저니 (graph)')
   {
     const startI = await fetch(BFF + '/api/threads', {
@@ -289,8 +289,12 @@ try {
     const planI = await sse(`/api/threads/${startI.threadId}/plan`, { answers: [{ questionId: 'q1', choices: ['건성'] }] }, H)
     const pageI = last(planI, 'result')?.data?.page
     const kindsI = (pageI?.sections ?? []).map((s) => s.kind).join(',')
-    // 5c 콘텐츠는 여기서 빠진다 — 같은 모의 URL 을 앞 쓰레드(3·8단계, 같은 사용자)에서 이미 보여줘 검증 게이트가 duplicate-recent 로 드롭한다
-    ok(kindsI === 'guide,compare,caution,products,steps', `성분 비교표·주의 성분이 단계 안내 뒤·상품 자리 앞에 선다 (${kindsI})`)
+    // 5c 콘텐츠 5항목 중 4개는 게이트가 드롭하고(앞 쓰레드에서 이미 보여준 URL 3개 duplicate-recent + 2020년 글 stale-content)
+    // 남는 「같은 출처 세 번째 글」한 장이 뼈대에 자리가 없어 그 단계 안 — 주의 성분 뒤·상품 자리 앞 — 에 끼어 선다(v27 병합 규칙).
+    // 2026-09-17 까지는 이 글도 duplicate-recent 였다: v29(5044969)가 legacy 경로에도 GuardContext(내부 후보)를 넘기면서
+    // 앞 legacy 쓰레드의 콘텐츠 게이트가 깨어나 그 글을 같은 출처 상한(duplicate-source)으로 드롭했고, 그래서 더는
+    // 「최근 쓰레드에서 보여준 URL」이 아니다 — 자리 순서가 아니라 모의 재료의 드롭 개수가 바뀐 것이다
+    ok(kindsI === 'guide,compare,caution,contents,products,steps', `성분 비교표·주의 성분이 단계 안내 뒤·상품 자리 앞에 선다 (${kindsI})`)
     const cmp = pageI?.sections?.find((s) => s.kind === 'compare')
     ok(cmp?.rows?.length === 3 && cmp?.pick?.short === '쉐이빙 젤' && cmp?.alt?.short === undefined && cmp?.rows?.[0]?.risk === '높음', '비교표 와이어 — 행 3 · 빈 short 제거 · 위험도')
     const cau = pageI?.sections?.find((s) => s.kind === 'caution')
