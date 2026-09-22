@@ -5,12 +5,13 @@ import type { Answer, PlanSectionWire, Profile, SurveyPageWire, ThreadStageFeedb
 import {
   LlmGenerationError,
   PlanSearchSectionGen,
-  PlanSectionPartialGen,
+  partialSkeletonSection,
   PlanSkeletonSectionGen,
   assembleLedger,
   buildSurveyPage,
   checkObjective,
   completeSearchSection,
+  catalogFallbackSections,
   consolidateSmallProductSections,
   groundContentsSection,
   groundProductsSection,
@@ -22,12 +23,15 @@ import {
   type GroundingDrop,
   type GuardContext,
   type PlanRevisionContext,
+  orderSkeletonSlots,
 } from '@ddak/pipeline'
 import type { CoreClientService } from '../core-client.service'
 import type { KnowledgeService } from '../llm/knowledge.service'
 import type { LlmService } from '../llm/llm.service'
 import { LLM_STAGE_RETRY_DELAY_MS, retryLlmStage } from '../llm/retry'
+import { generatePlanContentsRobust } from '../llm/contents-retry'
 import type { EnrichService } from '../threads/enrich.service'
+import type { CatalogService } from '../catalog/catalog.service'
 import { SEQ, combineMeta } from '../threads/thread-io'
 import { ThreadGraphState, type ThreadGraphStateType } from './state'
 import type { ChunkWriter, PlanStreamCoordinator } from './stream'
@@ -49,7 +53,14 @@ import type { ChunkWriter, PlanStreamCoordinator } from './stream'
 /** awaitAnswers interrupt의 재개 값 — 계획 요청 본문이 그대로 실린다 */
 export type PlanResume = { answers: Answer[]; profile?: Profile; feedback?: ThreadStageFeedback }
 
-export type GraphDeps = { llm: LlmService; core: CoreClientService; knowledge: KnowledgeService; enrich: EnrichService }
+export type GraphDeps = {
+  llm: LlmService
+  core: CoreClientService
+  knowledge: KnowledgeService
+  enrich: EnrichService
+  /** 내재화 카탈로그 (v29) — 후보 조회(s2)·수확(s7) */
+  catalog: CatalogService
+}
 
 const logger = new Logger('ThreadGraph')
 
@@ -88,7 +99,12 @@ function groundLogged(
 
 /** 상태에서 확장 게이트 컨텍스트 구성 — 스트리밍(products)과 최종 검증(verify)이 같은 값을 본다 */
 function guardOf(state: ThreadGraphStateType): GuardContext {
-  return { blocklist: state.blocklist ?? [], ledger: state.ledger ?? null, contentBlockHosts: state.contentBlockHosts ?? [] }
+  return {
+    blocklist: state.blocklist ?? [],
+    ledger: state.ledger ?? null,
+    contentBlockHosts: state.contentBlockHosts ?? [],
+    candidates: state.candidates ?? null,
+  }
 }
 
 export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSaver) {
@@ -121,20 +137,32 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
       deps.knowledge.contentBlockHosts(),
       deps.knowledge.recentSelectionsFor(state.userId, state.threadId),
     ])
+    const ledger = assembleLedger({
+      profile: state.profile ?? undefined,
+      survey: state.survey ?? undefined,
+      answers: state.answers ?? undefined,
+      intentProfile: state.intentProfile ?? undefined,
+      trendKeywords,
+      recentFeedback,
+      selectionSignals: selections.selectionSignals,
+      recentRecommended: selections.recentRecommended,
+      recentContentUrls: selections.recentContentUrls,
+    })
+    // 4단계 근거 수집(v29) — 내부 카탈로그 후보. 답변이 굳은 뒤(s2-ledger-update)의 검색어가 정확하지만 첫 조립에서도 의도만으로 조회해 둔다
+    // (조회 실패·표 없음은 데모 카탈로그로 대체 — 계획을 막지 않는다)
+    const candidates = await deps.catalog.candidatesFor({
+      intent: state.intent,
+      survey: state.survey,
+      answers: state.answers,
+      profile: state.profile,
+      ledger,
+    })
     return {
-      ledger: assembleLedger({
-        profile: state.profile ?? undefined,
-        survey: state.survey ?? undefined,
-        answers: state.answers ?? undefined,
-        intentProfile: state.intentProfile ?? undefined,
-        trendKeywords,
-        recentFeedback,
-        selectionSignals: selections.selectionSignals,
-        recentRecommended: selections.recentRecommended,
-        recentContentUrls: selections.recentContentUrls,
-      }),
+      ledger,
       blocklist,
       contentBlockHosts,
+      candidates: { products: candidates.products, contents: candidates.contents },
+      catalogTerms: candidates.terms.terms,
     }
   }
 
@@ -197,17 +225,11 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
           const wire = skeletonSectionWire(parsed.data)
           if (wire) coord.section(wire, index, true)
         },
-        // 자라는 중인 섹션 — 제목이 나오기 시작하면 토큰 단위로 같은 index에 재전송한다
+        // 자라는 중인 섹션 — 제목이 나오기 시작하면 토큰 단위로 같은 index에 재전송한다 (guide·steps·compare·caution —
+        // products·contents 자리는 부분도 내보내지 않는다: 검색 단계 결과가 차지할 인덱스. 규칙은 @ddak/pipeline partial.ts)
         onElementPartial: (element, index) => {
-          const parsed = PlanSectionPartialGen.safeParse(element)
-          if (!parsed.success) return
-          const s = parsed.data
-          if (!s.title) return
-          if (s.kind === 'guide')
-            coord.section({ kind: 'guide', title: s.title, ...(s.subtitle ? { subtitle: s.subtitle } : {}), body: s.body ?? '' }, index, false)
-          else if (s.kind === 'steps')
-            coord.section({ kind: 'steps', title: s.title, steps: (s.steps ?? []).filter(Boolean) }, index, false)
-          // products·contents 자리는 부분도 내보내지 않는다 — 검색 단계 결과가 차지할 인덱스
+          const wire = partialSkeletonSection(element)
+          if (wire) coord.section(wire, index, false)
         },
       },
       revision,
@@ -218,9 +240,12 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
         coord?.status('일시적인 오류가 있어 계획 뼈대를 다시 만들고 있어요…')
       },
     })
-    // 자리 인덱스는 스트림 조각이 아니라 최종 검증본 기준으로 확정한다 (조각 파싱 누락 보정)
-    coord?.skeletonReady(result.content)
-    return { skeleton: result.content, skeletonMeta: result.meta }
+    // 자리 인덱스는 스트림 조각이 아니라 최종 검증본 기준으로 확정한다 (조각 파싱 누락 보정).
+    // 자리 순서는 여기서 한 번 정규화한다(콘텐츠 자리가 상품 자리보다 앞 — @ddak/pipeline orderSkeletonSlots): skeleton 이벤트·
+    // 배정기·verify 병합이 전부 이 정규화된 뼈대를 본다
+    const skeleton = { ...result.content, sections: orderSkeletonSlots(result.content.sections) }
+    coord?.skeletonReady(skeleton)
+    return { skeleton, skeletonMeta: result.meta }
   }
 
   /** 4+5b: 근거 수집(웹 검색 병행) + 상품·콘텐츠 섹션 (LLM) — 실패해도 계획을 죽이지 않는다 */
@@ -256,6 +281,7 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
         },
         revision,
         state.ledger,
+        state.candidates,
       )
       // 썸네일 보강(og:image, 예산 3초) — 최종본에만 실린다 (스트림 조각은 이미 나갔다)
       await deps.enrich.enrichProducts(result.content.sections.filter((s) => s.kind === 'products'))
@@ -275,36 +301,47 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
       ? { feedback: state.feedback, prevPlan: state.prevPlan ?? null }
       : undefined
     try {
-      const result = await deps.llm.generatePlanContents(
-        state.intent,
-        state.survey as SurveyPageWire,
-        state.answers as Answer[],
-        state.profile ?? undefined,
-        coord && {
-          arrayKey: 'sections',
-          onElement: (element, index) => {
-            const parsed = PlanSearchSectionGen.safeParse(element)
-            if (!parsed.success || parsed.data.kind !== 'contents') return
-            const section = groundLogged(parsed.data, index, false, guardOf(state))
-            if (section) coord.searchArrived(section, index)
+      // 첫 호출이 항목을 하나도 못 찾으면 검색어를 바꿔 한 번 더 (llm/contents-retry.ts — 같은 스트림 핸들러: 첫 호출은 index 를 안 썼다)
+      const { result, attempts } = await generatePlanContentsRobust(
+        (opts) => deps.llm.generatePlanContents(
+          state.intent,
+          state.survey as SurveyPageWire,
+          state.answers as Answer[],
+          state.profile ?? undefined,
+          coord && {
+            arrayKey: 'sections',
+            onElement: (element, index) => {
+              const parsed = PlanSearchSectionGen.safeParse(element)
+              if (!parsed.success || parsed.data.kind !== 'contents') return
+              const section = groundLogged(parsed.data, index, false, guardOf(state))
+              if (section) coord.searchArrived(section, index)
+            },
+            onElementPartial: (element, index) => {
+              const gen = completeSearchSection(element)
+              if (!gen || gen.kind !== 'contents') return
+              const section = groundLogged(gen, index, true, guardOf(state))
+              if (section) coord.searchPartial(section, index)
+            },
+            onSearch: (query) => coord.search(query),
           },
-          onElementPartial: (element, index) => {
-            const gen = completeSearchSection(element)
-            if (!gen || gen.kind !== 'contents') return
-            const section = groundLogged(gen, index, true, guardOf(state))
-            if (section) coord.searchPartial(section, index)
+          revision,
+          state.ledger,
+          opts,
+          state.candidates,
+        ),
+        {
+          onRetry: () => {
+            logger.warn('계획 참고 콘텐츠 첫 호출이 빈 결과 — 검색어를 바꿔 한 번 더')
+            coord?.status('참고할 영상·게시글을 다른 검색어로 다시 찾고 있어요…')
           },
-          onSearch: (query) => coord.search(query),
         },
-        revision,
-        state.ledger,
       )
       await deps.enrich.enrichContents(result.content.sections)
-      return { contentSections: result.content.sections, contentsMeta: result.meta, contentsFailed: null }
+      return { contentSections: result.content.sections, contentsMeta: result.meta, contentsFailed: null, contentsAttempts: attempts }
     } catch (e) {
       const message = (e as Error)?.message ?? String(e)
       logger.warn(`계획 참고 콘텐츠 단계 실패 — 콘텐츠 없이 계획 반환: ${message}`)
-      return { contentSections: [], contentsMeta: null, contentsFailed: message }
+      return { contentSections: [], contentsMeta: null, contentsFailed: message, contentsAttempts: null }
     }
   }
 
@@ -314,12 +351,21 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
     const skeleton = state.skeleton
     if (!skeleton) throw new Error('계획 뼈대가 없습니다 — skeleton 노드가 실패했는데 verify에 도달했습니다')
     const dropLog: GroundingDrop[] = []
+    if ((state.contentsAttempts ?? 1) > 1) {
+      dropLog.push({ code: 'contents-empty-retry', message: '참고 콘텐츠 첫 호출이 빈 결과라 검색어를 바꿔 한 번 더 불렀다' })
+    }
     const contents = state.contentSections ?? []
     // 5c 가 콘텐츠를 만들었으면 상품 호출(옛 재정의 프롬프트)이 덧붙인 콘텐츠 섹션은 버린다 — 자리는 5c 가 채운다
     const fromProducts = (state.searchSections ?? []).filter((s) => !(contents.length && s.kind === 'contents'))
     const generated = [...fromProducts, ...contents]
       .map((s, i) => groundLogged(s, i, false, guardOf(state), (d) => dropLog.push(d)))
       .filter((s): s is PlanSectionWire => s !== null)
+    // 상품 검색이 상품 섹션을 하나도 못 만들었으면(실패·빈 결과·전부 드롭) 뼈대 자리를 카탈로그 매칭으로 채운다 — 결정적 폴백
+    if (!generated.some((s) => s.kind === 'products')) {
+      const fallback = catalogFallbackSections(skeleton.sections, guardOf(state))
+      if (fallback.note) dropLog.push(fallback.note)
+      generated.push(...fallback.sections)
+    }
     // 1개짜리 상품 섹션은 이웃 상품 섹션에 합친다 (카드 한 장짜리 트랙 방지)
     const sections = consolidateSmallProductSections(mergePlanSections(skeleton.sections, generated))
     if (!sections.length) {
@@ -346,6 +392,8 @@ export function buildThreadGraph(deps: GraphDeps, checkpointer: BaseCheckpointSa
       }),
       deps.core.updateThread(state.threadId, { status: 'planning' }),
     ])
+    // 내재화 수확(v29) — 검증 게이트를 지난 상품·콘텐츠를 카탈로그에 올린다 (실패는 로그만, 응답 전에 끝낸다 — 서버리스 동결 대비)
+    if (state.page) await deps.catalog.harvest(state.page, state.catalogTerms ?? [])
     return {}
   }
 

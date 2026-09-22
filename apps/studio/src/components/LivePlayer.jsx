@@ -7,8 +7,8 @@ import { isQuestionType, renderItem, resolveSampleFace } from '../lib/registry.j
 import BottomSheet from './ui/BottomSheet.jsx'
 import { fetchLiveCapabilities, fetchLiveThread, recordLiveEvent, renderLiveLook, sendLiveFeedback, startLiveThread, streamLivePlan, streamLiveSurvey } from '../lib/liveApi.js'
 import { PHOTO_ANSWER, isPhotoValue, livePlanItems, liveSurveyItems, lookScopeOfAnswers } from '../lib/livePage.js'
-import { composeMakeup, matchAspectTo, toPhotoDataUrl } from '../lib/makeupComposite.js'
-import { loadLookRender, saveLookRender } from '../lib/lookCache.js'
+import { composeMakeup, alignMakeupPair, toPhotoDataUrl } from '../lib/makeupComposite.js'
+import { loadLookRender, saveLookRender, lookRenderInputKey } from '../lib/lookCache.js'
 import { BgBlobs, FloatingBar, ViewerDeviceControl } from './Frame.jsx'
 import ThreadPanel from './ThreadPanel.jsx'
 import ThreadCartSheet from './ThreadCartSheet.jsx'
@@ -245,6 +245,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   /* 메이크업이 올라간 AFTER 이미지 — 얼굴 랜드마크 합성은 모델 로드가 걸려 늦게 온다.
      그동안 화면은 tone 프리셋으로 이미 그려져 있고, 도착하면 조용히 갈아끼운다 */
   const [lookAfter, setLookAfter] = useState(null)
+  const [lookBefore, setLookBefore] = useState(null) // 정밀 정렬 시 AFTER와 동일한 영역으로 자른 원본
   /* 가상 메이크업 AFTER의 진행 단계 — 'skeleton'(아직 아무 합성도 없음) | 'landmark'(1단계
      기기 합성 표시 중) | 'refining'(그 위에서 2단계 정밀 렌더 진행 중) | 'precise'(2단계 완료).
      사용자가 누를 것이 없다: 계획에 룩이 뜨면 1단계 → (가능하면) 2단계까지 알아서 이어 간다 */
@@ -414,7 +415,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         setStageKey('plan')
         scrollScreenTo(0)
       },
-      onSection: (section, index, final = true) => {
+      onSection: (section, index, final = true, before = null) => {
         if (!active()) return
         if (skeletonDoneRef.current) {
           // 조기 확정 뒤 도착한 상품·콘텐츠 — 확정 페이지의 자리를 직접 채운다 (등장 페이드인).
@@ -425,7 +426,10 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
             if (!prev) return prev
             const sections = [...(prev.sections || [])]
             sections[index] = section
-            return { ...prev, sections }
+            // 자리 없이 배정된 섹션(index 가 뼈대 길이 뒤)은 끼울 위치(before)를 함께 기억한다 — livePage 투영이
+            // 그 단계 묶음 안에 그린다(result 가 최종 순서로 갈아끼운다). 자리를 받은 섹션은 힌트가 없다
+            const placement = before == null ? prev.placement : { ...(prev.placement || {}), [index]: before }
+            return placement ? { ...prev, sections, placement } : { ...prev, sections }
           })
           // pending은 재생성 게이트(저장 경합 방지) — 자라는 중에는 유지하고 최종본에서만 푼다.
           // 로딩 카드는 섹션이 채워지는 즉시 사라진다 (livePlanItems가 null 자리에만 그린다)
@@ -577,11 +581,13 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   useEffect(() => {
     if (!lookSig || !livePhoto) {
       setLookAfter(null)
+      setLookBefore(null)
       setLookStage('skeleton')
       return undefined
     }
     let cancelled = false
     setLookAfter(null) // 룩·사진이 바뀌면 이전 합성부터 내린다 (엉뚱한 얼굴이 남지 않게)
+    setLookBefore(null)
     preciseRef.current = false
     refineRef.current = null
     setLookStage('skeleton')
@@ -654,22 +660,27 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     refineRef.current = key
     const hasSpec = !!JSON.parse(lookSig).spec
     // 보관 키 = 색조+사양+사진 지문 — 같은 쓰레드에서 사진이나 사양이 바뀌면 옛 렌더를 다른 사진 위에 올리지 않는다
-    const cacheKey = `${lookSig}:${livePhoto.length}`
+    const legacyCacheKey = `${lookSig}:${livePhoto.length}`
     let cancelled = false
     ;(async () => {
+      const cacheKey = await lookRenderInputKey(lookSig, livePhoto)
+      if (cancelled || cancelledRef.current) return
       // 지난 결과가 있으면 그대로 — 같은 입력에 유료 호출을 반복하지 않는다 (IndexedDB).
       // key 없는 옛 보관분은 사양 없는 옛 페이지에 한해 색조 일치로 받아들인다
       const cached = await loadLookRender(threadId)
-      const cacheHit = cached && cached.image && (cached.key ? cached.key === cacheKey : !hasSpec && cached.tone === lookTone)
+      const cacheHit = cached && cached.image && (cached.key
+        ? cached.key === cacheKey || cached.key === legacyCacheKey
+        : !hasSpec && cached.tone === lookTone)
       if (cacheHit) {
-        // 옛 보관분은 비율 보정 전 결과일 수 있다 — 원본 비율로 되맞춰 쓰고, 바뀌었으면 보관도 갱신
-        const ref = await toPhotoDataUrl(livePhoto)
-        const fitted = ref ? await matchAspectTo(cached.image, ref) : cached.image
+        // 옛 캐시도 눈 기준 정렬. 보정된 픽셀로 원본을 덮지 않고 변환 정보만 함께 보관한다.
+        const pair = await alignMakeupPair(cached.image, livePhoto, cached.key === cacheKey ? cached.alignment : null)
         if (cancelled || cancelledRef.current) return
+        if (!pair) return // 얼굴 정렬 실패면 기기 합성을 그대로 유지 (유료 재생성 없음)
         preciseRef.current = true
-        setLookAfter(fitted)
+        setLookBefore(pair.before)
+        setLookAfter(pair.after)
         setLookStage('precise')
-        if (fitted !== cached.image) saveLookRender(threadId, fitted, { tone: lookTone, key: cacheKey })
+        saveLookRender(threadId, cached.image, { tone: lookTone, key: cacheKey, alignment: pair.alignment })
         return
       }
       const caps = await fetchLiveCapabilities()
@@ -681,6 +692,7 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
         // 샘플 얼굴은 상대 URL이라 그대로 못 보낸다 — 계약(data URL)에 맞춰 변환한다
         const photo = await toPhotoDataUrl(livePhoto)
         if (!photo) throw new Error('사진을 읽지 못했어요.')
+        if (cancelled || cancelledRef.current) return
         const { image } = await renderLiveLook(threadId, {
           photo,
           tone: look.tone,
@@ -689,15 +701,19 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
           // 사양이 있으면 BFF 가 지시문을 사양에서 생성한다 — 기기 합성과 같은 룩
           ...(look.spec ? { spec: look.spec } : {}),
         })
-        // 편집 모델은 표준 규격(1024×1536 등)으로 돌려주며 원본을 살짝 늘린다 — 원본 비율로 되맞춰야
-        // 슬라이더의 두 층이 정확히 겹친다 (matchAspectTo). 보관도 보정본으로
-        const fitted = await matchAspectTo(image, photo)
         if (cancelled || cancelledRef.current) return
+        const pair = await alignMakeupPair(image, livePhoto)
+        if (cancelled || cancelledRef.current) return
+        // 정렬 불가여도 생성 원본을 남긴다 — 이어보기에서 같은 이미지에 유료 호출을 반복하지 않는다.
+        saveLookRender(threadId, image, { tone: lookTone, key: cacheKey, alignment: pair?.alignment || null })
+        if (!pair) {
+          setLookStage('landmark')
+          return
+        }
         preciseRef.current = true
-        setLookAfter(fitted)
+        setLookBefore(pair.before)
+        setLookAfter(pair.after)
         setLookStage('precise')
-        // 다음 이어보기에서 재호출하지 않도록 원본 화질 그대로 보관한다 (IndexedDB — 실패해도 화면은 그대로)
-        saveLookRender(threadId, fitted, { tone: lookTone, key: cacheKey })
       } catch (e) {
         if (cancelled || cancelledRef.current) return
         console.warn('[look] 정밀 렌더 실패 — 기기 합성을 유지합니다:', e.message)
@@ -706,6 +722,8 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
     })()
     return () => {
       cancelled = true
+      // 사진/룩 교체 때 skeleton으로 돌아가며 취소된 실행은, 기기 합성 완료 후 다시 시작할 수 있다.
+      if (refineRef.current === key) refineRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [landmarkReady, threadId, livePhoto, lookSig])
@@ -798,11 +816,12 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
             pendingSlots,
             query: liveQuery,
             photo: livePhoto,
+            photoBefore: lookBefore,
             photoAfter: lookAfter,
             lookStage,
           })
         : [],
-    [planPage, pendingSlots, liveQuery, livePhoto, lookAfter, lookStage]
+    [planPage, pendingSlots, liveQuery, livePhoto, lookBefore, lookAfter, lookStage]
   )
   const allItems = stageKey === 'plan' ? planItems : surveyItems
   const topItems = allItems.filter((it) => !it.parentId)
@@ -810,7 +829,8 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const qIndex = stepQuestions.length ? Math.min(qStep, stepQuestions.length - 1) : 0
   /* 화면 꽉 채우기 — Player 와 같은 규칙. 라이브 투영 아이템은 fillScreen 을 싣지 않으므로(기본 켜짐) 언제나 켜진다 */
   const fillActive = stageKey === 'survey' && stepQuestions.length > 0 && stepQuestions[qIndex].props?.fillScreen !== false
-  const navHidden = fillActive && topItems.some((it) => it.type === 'screenHeader')
+  /* 하단 내비는 설문 전용 — 계획 페이지에는 「이전 단계 / 체험 완료」 줄을 두지 않는다(2026-09-15, Player 와 같은 규칙) */
+  const navHidden = stageKey !== 'survey' || (fillActive && topItems.some((it) => it.type === 'screenHeader'))
   const items = stageKey === 'survey' ? pageQuestions(topItems, qStep) : topItems
 
   /* 생성 중 부분 페이지 투영 — 최종과 같은 livePage 투영을 그대로 쓴다 (아이템 id가 인덱스
@@ -888,12 +908,11 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
   const fbDirty =
     stageFeedbackSignature(stageFb) !== (fbSavedRef.current[stageKey] ?? stageFeedbackSignature(emptyStageFeedback()))
   const fbAvailable = !loading && !error && (stageKey === 'plan' ? !!planPage : !!surveyPage)
-  /* 화면 헤더 오른쪽 액션 — 옛 상단 크롬(평가·새로 생성)이 헤더로 들어왔다.
-     playerApi 리터럴은 fbMode/fbAvailable보다 앞이라 여기서 뒤늦게 매단다 */
-  playerApi.headerActions = [
+  /* 라이브 도구(평가·새로 생성) — 스튜디오 크롬이라 기기 화면의 헤더가 아니라 스테퍼 알약에 붙인다 (2026-09-16:
+     한때 화면 헤더 오른쪽 아이콘이었는데 Figma TopBar 는 뒤로·제목·홈뿐이라 뗐다. 화면 안에는 DDAK 요소만 둔다) */
+  const liveActions = [
     {
       key: 'feedback',
-      // 이모지 대신 헤더의 뒤로·홈과 같은 24px 라인 아이콘 (Figma TopBar 톤)
       icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H10l-4.6 3.6V16A2.5 2.5 0 0 1 4 13.5z" />
@@ -1094,6 +1113,23 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
             </button>
           </React.Fragment>
         ))}
+        {/* 라이브 도구 — 평가(주석 말풍선 토글)·새로 생성. 기기 화면 밖 스튜디오 크롬 */}
+        <span className="sb-player-stepper__tools" role="group" aria-label="라이브 도구">
+          {liveActions.map((a) => (
+            <button
+              key={a.key}
+              type="button"
+              className={'sb-player-stepper__tool' + (a.active ? ' is-on' : '')}
+              title={a.title || a.label}
+              aria-pressed={a.key === 'feedback' ? !!a.active : undefined}
+              disabled={!!a.disabled}
+              onClick={a.onClick}
+            >
+              {a.icon}
+              <span>{a.label}</span>
+            </button>
+          ))}
+        </span>
       </nav>
 
       {/* 기기 프레임 — 평가 모드는 말풍선 레일을 페이지 옆에 나란히 배치해야 하므로(창 스크롤 기준) 껍데기를 벗고
@@ -1102,7 +1138,13 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
       <BgBlobs />
       {/* 플로팅 버튼 — 체험 화면에서는 쓰레드 목록이 아니라 **지금 진행 중인 쓰레드**의 담은 상품 시트를 연다(2026-09) */}
       <FloatingBar label="현재 쇼핑 쓰레드" onList={() => setCartSheet(true)} />
-      <section className={'sb-player sb-player--live min-h-screen relative z-10' + (fillActive ? ' sb-player--fill' : '')}>
+      <section
+        className={
+          'sb-player sb-player--live min-h-screen relative z-10'
+          + (fillActive ? ' sb-player--fill' : '')
+          + (stageKey === 'plan' ? ' sb-player--plan' : '')
+        }
+      >
         <div className={'sb-live-annotate' + (fbMode && fbAvailable ? ' is-on' : '')}>
         <div className="sb-phone sb-phone--player" ref={phoneRef} style={{ width: viewer.w }}>
           {error ? (
@@ -1195,9 +1237,10 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
                   )
                 })}
               </div>
+              {/* 하단 내비 — 설문 전용(계획 페이지엔 없음): 질문 단위로 뒤로 가고, 질문이 없는 설문만 여기서 계획 생성으로 */}
               {!navHidden && (
               <div className="clean-survey-nav sb-player__nav">
-                {stageKey === 'survey' && qIndex > 0 ? (
+                {qIndex > 0 ? (
                   <button
                     type="button"
                     className="clean-survey-nav-btn clean-survey-nav-btn--ghost"
@@ -1205,21 +1248,13 @@ export default function LivePlayer({ api, query, resumeThreadId }) {
                   >
                     이전 질문
                   </button>
-                ) : stageKey === 'plan' ? (
-                  <button type="button" className="clean-survey-nav-btn clean-survey-nav-btn--ghost" onClick={() => goStage(0)}>
-                    이전 단계
-                  </button>
                 ) : (
                   <button type="button" className="clean-survey-nav-btn clean-survey-nav-btn--ghost" onClick={api.goHome}>
                     홈으로
                   </button>
                 )}
                 {/* 설문에서 앞으로 가는 버튼은 질문 컴포넌트 안에 있다 (진행 표시·질문·항목과 한 벌) */}
-                {stageKey === 'survey' && stepQuestions.length > 0 ? null : stageKey === 'plan' ? (
-                  <button type="button" className="clean-plan-submit" onClick={playerApi.complete}>
-                    체험 완료
-                  </button>
-                ) : (
+                {stepQuestions.length > 0 ? null : (
                   <button
                     type="button"
                     className="clean-plan-submit"

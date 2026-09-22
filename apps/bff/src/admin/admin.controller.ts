@@ -28,6 +28,21 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger'
 import {
+  AdminCatalogHarvestResult,
+  AdminCatalogImportBody,
+  AdminCatalogImportResult,
+  AdminCatalogMigrateResult,
+  AdminCatalogSeedSearchBody,
+  AdminCatalogSeedSearchResult,
+  AdminCatalogFillThumbsResult,
+  AdminCatalogVerifyResult,
+  AdminCatalogWire,
+  CatalogContentListWire,
+  CatalogListQuery,
+  CatalogProductListWire,
+  CatalogSeedJobWire,
+  PatchCatalogRowBody,
+  StartCatalogSeedJobBody,
   AdminDryRunBody,
   AdminChangesWire,
   type AdminChangeEntry,
@@ -69,6 +84,7 @@ import {
   type Profile,
   type SurveyPageWire,
 } from '@ddak/schema'
+import { z } from 'zod'
 import { CoreClientService } from '../core-client.service'
 import { ServiceTokenGuard } from '../common/service-token.guard'
 import { ParseThreadIdPipe } from '../common/thread-id.pipe'
@@ -89,6 +105,8 @@ import {
   RESERVED_PLACEHOLDERS,
   buildJudgeRequest,
   buildJudgeSurveyRequest,
+  catalogTermsOf,
+  harvestRowsOf,
   customKnowledgeId,
   customKnowledgeSettingKey,
   judgeRubricEntries,
@@ -106,6 +124,8 @@ import { KnowledgeService } from '../llm/knowledge.service'
 import { ENGINE_SETTING_KEY, EngineFlagService } from '../engine/engine-flag.service'
 import { PipelineDryRunService } from '../engine/dry-run.service'
 import { PipelineFlowRunService } from '../engine/flow-run.service'
+import { CatalogService } from '../catalog/catalog.service'
+import { CatalogSeedJobService } from '../catalog/seed-job.service'
 import { openSse, sseClose, sseSend, type SseRes } from '../threads/sse'
 
 const THREAD_ID_PARAM = {
@@ -113,6 +133,15 @@ const THREAD_ID_PARAM = {
   description: '스노우플레이크 threadId (19자리 십진 문자열)',
   example: '2195943212345678901',
 } as const
+
+/** 둘러보기 쿼리 — 문자열로 오는 limit 을 숫자로, 빈 문자열은 필터 없음 (core 컨트롤러와 같은 규칙) */
+const CatalogListQueryParams = CatalogListQuery.extend({
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+  q: z.string().max(80).optional().transform((v) => (v?.trim() ? v : undefined)),
+  mall: z.string().max(40).optional().transform((v) => (v ? v : undefined)),
+  source: z.string().max(20).optional().transform((v) => (v ? v : undefined)),
+  cursor: z.string().max(200).optional().transform((v) => (v ? v : undefined)),
+})
 
 const PROMPT_HISTORY_LIMIT = 12
 const promptHistorySettingKey = (id: string) => `llm-prompt-history-${id}`
@@ -192,7 +221,283 @@ export class AdminController {
     private readonly engineFlag: EngineFlagService,
     private readonly dryRunService: PipelineDryRunService,
     private readonly flowRunService: PipelineFlowRunService,
+    private readonly catalog: CatalogService,
+    private readonly seedJobs: CatalogSeedJobService,
   ) {}
+
+  /* ── 내재화 카탈로그 (v29, 2026-09-17) — 현황·시딩·수확·점검. core 미연결(Mongo)이면 available=false 로 안내한다 ── */
+
+  @Get('catalog')
+  @ApiOperation({
+    summary: '내재화 카탈로그 현황 — 상품·콘텐츠 개수, 몰별·출처별, 검증·dead',
+    description: 'core `GET /internal/catalog/stats`. core 미연결(Mongo)이면 available=false (연결 안내).',
+  })
+  @ApiOkResponse({ schema: toOpenApi(AdminCatalogWire) })
+  async catalogStats(): Promise<AdminCatalogWire> {
+    try {
+      const stats = await this.core.catalogStats()
+      return { stats, available: true }
+    } catch (e) {
+      return {
+        available: false,
+        note: `카탈로그 표를 읽지 못했어요 — core 의 Mongo 연결(MONGO_URI)을 확인해 주세요: ${(e as Error).message}`,
+        stats: {
+          products: { total: 0, verified: 0, dead: 0, byMall: [], bySource: [] },
+          contents: { total: 0, verified: 0, dead: 0, byType: [] },
+          updatedAt: null,
+        },
+      }
+    }
+  }
+
+  /* ── 둘러보기·표시 — 운영 콘솔 「데이터 시딩」의 상품·콘텐츠 표(무한 스크롤 + 상세) ── */
+
+  @Get('catalog/products')
+  @ApiOperation({ summary: '카탈로그 상품 둘러보기 — q·mall·source·verified·status, updated_at 내림차순 키셋 커서(≤100)' })
+  @ApiOkResponse({ schema: toOpenApi(CatalogProductListWire) })
+  catalogProducts(@Query(new ZodValidationPipe(CatalogListQueryParams)) query: CatalogListQuery): Promise<CatalogProductListWire> {
+    return this.core.listCatalogProducts(query)
+  }
+
+  @Get('catalog/contents')
+  @ApiOperation({ summary: '카탈로그 콘텐츠 둘러보기 — q·type·verified·status, 키셋 커서' })
+  @ApiOkResponse({ schema: toOpenApi(CatalogContentListWire) })
+  catalogContents(@Query(new ZodValidationPipe(CatalogListQueryParams)) query: CatalogListQuery): Promise<CatalogContentListWire> {
+    return this.core.listCatalogContents(query)
+  }
+
+  @Patch('catalog/products/:id')
+  @ApiOperation({ summary: '상품 행 표시 — verified(검증됨 승격/내림)·status(active|dead)' })
+  @ApiParam({ name: 'id' })
+  @ApiBody({ schema: toOpenApi(PatchCatalogRowBody) })
+  catalogPatchProduct(@Param('id') id: string, @Body(new ZodValidationPipe(PatchCatalogRowBody)) body: PatchCatalogRowBody) {
+    return this.core.patchCatalogProduct(id, body)
+  }
+
+  @Patch('catalog/contents/:id')
+  @ApiOperation({ summary: '콘텐츠 행 표시 — verified·status' })
+  @ApiParam({ name: 'id' })
+  @ApiBody({ schema: toOpenApi(PatchCatalogRowBody) })
+  catalogPatchContent(@Param('id') id: string, @Body(new ZodValidationPipe(PatchCatalogRowBody)) body: PatchCatalogRowBody) {
+    return this.core.patchCatalogContent(id, body)
+  }
+
+  @Post('catalog/migrate')
+  @ApiOperation({
+    summary: '카탈로그 표 만들기 — core 가 Mongo 컬렉션·인덱스를 멱등으로 보장한다 (옛 Neon 시절의 마이그레이션 0005 자리)',
+    description: '운영 콘솔에서 표를 세우는 길. 이미 있으면 created=false 로 인덱스만 확인한다. 응답에 적용 뒤 현황을 싣는다.',
+  })
+  @ApiOkResponse({ schema: toOpenApi(AdminCatalogMigrateResult) })
+  async catalogMigrate(): Promise<AdminCatalogMigrateResult> {
+    const { created } = await this.core.ensureCatalogSchema()
+    const catalog = await this.catalogStats()
+    await this.appendChange({
+      area: 'knowledge',
+      action: created ? 'create' : 'update',
+      targetId: 'catalog',
+      targetLabel: '내재화 카탈로그',
+      summary: created ? '카탈로그 컬렉션 생성 (인덱스 보장)' : '카탈로그 표 확인 — 이미 있음',
+      before: null,
+      after: null,
+      restorable: false,
+    })
+    return { created, catalog }
+  }
+
+  @Post('catalog/import')
+  @ApiOperation({
+    summary: '카탈로그 가져오기 — 올리브영 사내 Mongo 내보내기(tagging-api export:catalog) 등 행 JSON 을 올린다 (≤500/요청, 멱등 upsert)',
+  })
+  @ApiBody({ schema: toOpenApi(AdminCatalogImportBody) })
+  @ApiOkResponse({ schema: toOpenApi(AdminCatalogImportResult) })
+  async catalogImport(
+    @Body(new ZodValidationPipe(AdminCatalogImportBody)) body: AdminCatalogImportBody,
+  ): Promise<AdminCatalogImportResult> {
+    const result = await this.catalog.importRows(body.products ?? [], body.contents ?? [])
+    await this.appendChange({
+      area: 'knowledge',
+      action: 'update',
+      targetId: 'catalog',
+      targetLabel: '내재화 카탈로그',
+      summary: `가져오기 — 상품 ${result.products} · 콘텐츠 ${result.contents}`,
+      before: null,
+      after: null,
+      restorable: false,
+    })
+    return result
+  }
+
+  /* ── 시딩 잡 — 서버가 상태를 갖고(core KV) 드라이버(콘솔 탭·스크립트)가 step 으로 전진시킨다. 콘솔 카드가 진행·결과를 본다 ── */
+
+  @Get('catalog/seed-job')
+  @ApiOperation({ summary: '시딩 잡 현재 상태 — 없으면 { job: null }' })
+  @ApiOkResponse({ schema: toOpenApi(CatalogSeedJobWire) })
+  async seedJob(): Promise<CatalogSeedJobWire> {
+    return { job: await this.seedJobs.get() }
+  }
+
+  @Post('catalog/seed-job')
+  @ApiOperation({
+    summary: '시딩 잡 시작 — 검색 단위 = 유형 × 조건 축(catalogSeedQueries). 진행 중 잡이 있으면 reset 없이는 409',
+    description: '시작만 한다 — 실제 전진은 step 호출이 한다(콘솔이 「이 탭에서 돌리기」로, 또는 apps/bff/scripts/seed-search.mjs 가).',
+  })
+  @ApiBody({ schema: toOpenApi(StartCatalogSeedJobBody) })
+  @ApiOkResponse({ schema: toOpenApi(CatalogSeedJobWire) })
+  async seedJobStart(@Body(new ZodValidationPipe(StartCatalogSeedJobBody)) body: StartCatalogSeedJobBody): Promise<CatalogSeedJobWire> {
+    const job = await this.seedJobs.start(body)
+    await this.appendChange({
+      area: 'knowledge',
+      action: 'create',
+      targetId: 'catalog-seed-job',
+      targetLabel: '내재화 카탈로그 시딩 잡',
+      summary: `웹 검색 시딩 잡 시작 — 검색 단위 ${job.total}개 (조건 ${job.facets.join('+') || '없음'}${job.dense ? ' · dense' : ''})`,
+      before: null,
+      after: null,
+      restorable: false,
+    })
+    return { job }
+  }
+
+  @Post('catalog/seed-job/step')
+  @ApiOperation({
+    summary: '시딩 잡 한 회차 전진 (4단위 병렬 한 라운드·호출당 220초 상한 — 서버리스 300초 안) — running 이 아니거나 다른 드라이버가 잠금 중이면 처리 없이 상태만',
+  })
+  @ApiOkResponse({ schema: toOpenApi(CatalogSeedJobWire) })
+  seedJobStep(): Promise<CatalogSeedJobWire> {
+    return this.seedJobs.step()
+  }
+
+  @Post('catalog/seed-job/pause')
+  @ApiOperation({ summary: '시딩 잡 일시정지 — step 이 처리하지 않는다' })
+  async seedJobPause(): Promise<CatalogSeedJobWire> {
+    return { job: await this.seedJobs.setStatus('paused') }
+  }
+
+  @Post('catalog/seed-job/resume')
+  @ApiOperation({ summary: '시딩 잡 재개' })
+  async seedJobResume(): Promise<CatalogSeedJobWire> {
+    return { job: await this.seedJobs.setStatus('running') }
+  }
+
+  @Delete('catalog/seed-job')
+  @ApiOperation({ summary: '시딩 잡 기록 지우기 (끝난 잡 정리 — 카탈로그 행은 그대로)' })
+  seedJobClear() {
+    return this.seedJobs.clear()
+  }
+
+  @Post('catalog/seed-search')
+  @ApiOperation({
+    summary: '시딩 웹 검색 배치 — 검색 단위(유형 또는 유형×조건, ≤4/요청 — 4병렬 한 라운드)마다 LLM+web_search 1회로 실제 판매 상품 8~12개(dense 12~16)를 모아 카탈로그에 upsert',
+    description:
+      '운영 콘솔·배치 스크립트(apps/bff/scripts/seed-search.mjs)가 검색 단위 목록(@ddak/pipeline catalogSeedQueries — 유형 42 × 조건 축)을 4개씩 잘라 여러 번 부른다. ' +
+      '검색 단위 하나당 약 $0.14(dense $0.18). 실패한 단위는 failed 로 돌려주고 나머지는 저장한다. keywords(유형만)·queries(유형×조건) 둘 다 받는다.',
+  })
+  @ApiBody({ schema: toOpenApi(AdminCatalogSeedSearchBody) })
+  @ApiOkResponse({ schema: toOpenApi(AdminCatalogSeedSearchResult) })
+  async catalogSeedSearch(
+    @Body(new ZodValidationPipe(AdminCatalogSeedSearchBody)) body: AdminCatalogSeedSearchBody,
+  ): Promise<AdminCatalogSeedSearchResult> {
+    // 옛 형식(keywords = 유형만)과 대량 형식(queries = 유형×조건)을 한 목록으로
+    const queries = [
+      ...(body.keywords ?? []).map((keyword) => ({ keyword, query: keyword })),
+      ...(body.queries ?? []).map((q) => ({ keyword: q.keyword, query: q.query ?? q.keyword })),
+    ]
+    const result = await this.catalog.seedBySearch(queries, body.dense ?? false)
+    await this.appendChange({
+      area: 'knowledge',
+      action: 'update',
+      targetId: 'catalog',
+      targetLabel: '내재화 카탈로그',
+      summary: `웹 검색 시딩${body.dense ? '(dense)' : ''} — ${queries.map((q) => q.query).join('·')}: 상품 ${result.products}(검증 ${result.verified})${result.failed.length ? ` · 실패 ${result.failed.join('·')}` : ''}`,
+      before: null,
+      after: null,
+      restorable: false,
+    })
+    return result
+  }
+
+  @Post('catalog/harvest')
+  @ApiOperation({
+    summary: '지난 쓰레드 계획에서 수확 (백필) — plan 스텝의 검증 통과 상품·콘텐츠를 카탈로그로',
+    description: '전체 쓰레드 최신순 N개를 훑어 각 계획 페이지를 harvestRowsOf 로 행으로 만들어 bump upsert 한다. 실주행 7단계 수확과 같은 규칙.',
+  })
+  @ApiQuery({ name: 'limit', required: false, type: 'integer', example: 100 })
+  @ApiOkResponse({ schema: toOpenApi(AdminCatalogHarvestResult) })
+  async catalogHarvest(
+    @Query('limit', new DefaultValuePipe(100), ParseIntPipe) limit: number,
+  ): Promise<AdminCatalogHarvestResult> {
+    const out: AdminCatalogHarvestResult = { threads: 0, plans: 0, products: 0, contents: 0 }
+    let cursor: string | undefined
+    const max = Math.min(Math.max(limit, 1), 500)
+    while (out.threads < max) {
+      const page = await this.core.listAllThreads(cursor, Math.min(50, max - out.threads))
+      for (const row of page.items) {
+        out.threads += 1
+        let thread: ThreadWithSteps
+        try {
+          thread = await this.core.getThread(row.id)
+        } catch {
+          continue
+        }
+        const plan = (thread.steps.find((s) => s.seq === SEQ.plan)?.payload as { page?: PlanPageWire } | undefined)?.page
+        if (!plan) continue
+        const survey = (thread.steps.find((s) => s.seq === SEQ.survey)?.payload as { page?: SurveyPageWire } | undefined)?.page ?? null
+        const answersStep = thread.steps.find((s) => s.seq === SEQ.answers)?.payload as { answers?: Answer[]; profile?: Profile | null } | undefined
+        let intent: string
+        try {
+          intent = intentOf(thread)
+        } catch {
+          intent = thread.title ?? ''
+        }
+        const terms = catalogTermsOf({ intent, survey, answers: answersStep?.answers ?? null, profile: answersStep?.profile ?? null })
+        const rows = harvestRowsOf(plan, terms.terms)
+        out.plans += 1
+        try {
+          if (rows.products.length) out.products += (await this.core.upsertCatalogProducts({ items: rows.products, bump: true })).upserted
+          if (rows.contents.length) out.contents += (await this.core.upsertCatalogContents({ items: rows.contents, bump: true })).upserted
+        } catch (e) {
+          this.logger.warn(`수확 upsert 실패(${row.id}): ${(e as Error).message}`)
+        }
+      }
+      if (!page.nextCursor) break
+      cursor = page.nextCursor
+    }
+    await this.appendChange({
+      area: 'knowledge',
+      action: 'update',
+      targetId: 'catalog',
+      targetLabel: '내재화 카탈로그',
+      summary: `쓰레드 수확 — 계획 ${out.plans}건에서 상품 ${out.products} · 콘텐츠 ${out.contents}`,
+      before: null,
+      after: null,
+      restorable: false,
+    })
+    return out
+  }
+
+  @Post('catalog/verify')
+  @ApiOperation({
+    summary: '상품 링크 점검 — 오래 안 본 순 N개: 지마켓은 썸네일(gdimg)·그 밖의 몰은 상품 주소에 HEAD (404 → dead, 200 → verified). 올리브영은 CDN 썸네일에 HEAD, 쿠팡은 건너뜀',
+  })
+  @ApiQuery({ name: 'limit', required: false, type: 'integer', example: 50 })
+  @ApiQuery({ name: 'mall', required: false, example: '*', description: "몰 이름 또는 '*'(전체, 기본)" })
+  @ApiOkResponse({ schema: toOpenApi(AdminCatalogVerifyResult) })
+  catalogVerify(
+    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
+    @Query('mall', new DefaultValuePipe('*')) mall: string,
+  ): Promise<AdminCatalogVerifyResult> {
+    return this.catalog.verifyProducts(mall, Math.min(Math.max(limit, 1), 200))
+  }
+
+  @Post('catalog/fill-thumbnails')
+  @ApiOperation({
+    summary: '썸네일 채우기(소급) — 빈 imageUrl 행에 지마켓 gdimg·올리브영 CDN 결정적 썸네일을 적용 (전 행 훑기 + 값 그대로 upsert)',
+    description: '웹 검색 시딩은 검색 결과에 이미지 주소가 없어 올리브영·쿠팡 행이 빈 채 쌓였다. 올리브영은 상품 번호로 CDN 첫 이미지(01ko.jpg)가 결정되므로 채우고, 쿠팡은 규칙이 없어 그대로 둔다.',
+  })
+  @ApiOkResponse({ schema: toOpenApi(AdminCatalogFillThumbsResult) })
+  catalogFillThumbnails(): Promise<AdminCatalogFillThumbsResult> {
+    return this.catalog.fillThumbnails()
+  }
 
   /** 설정 변경 뒤 같은 core KV에 최신순으로 쌓는다. 설정 반영 자체를 로그 장애로 되돌리진 않는다. */
   private async appendChange(entry: Omit<AdminChangeEntry, 'id' | 'at'> & Partial<Pick<AdminChangeEntry, 'id' | 'at'>>) {
@@ -421,7 +726,7 @@ export class AdminController {
     summary: 'LLM 시스템 프롬프트 — 단계별 기본값·재정의 원문 (카탈로그는 BFF prompts.ts 소유)',
     description:
       'defaultText는 코드 기본 템플릿, configured는 core 설정(llm-prompt-<id>)의 재정의 원문(없으면 null). ' +
-      'plan-products의 {{CATALOG}} 자리표시자는 호출 시점에 상품 카탈로그 목록으로 치환된다.',
+      '상품 후보는 v29 부터 시스템 자리표시자가 아니라 요청별 가변부 표(내부 카탈로그)로 실린다 — 옛 재정의의 {{CATALOG}} 는 데모 14종으로 치환된다.',
   })
   @ApiOkResponse({ schema: toOpenApi(AdminPromptsWire) })
   async getPrompts(): Promise<AdminPromptsWire> {
@@ -879,7 +1184,7 @@ export class AdminController {
       '그래프 노드와 같은 빌더·스키마·가드를 그대로 실행한다. promptOverride가 있으면 저장하지 않은 ' +
       '임시 프롬프트로 실행(what-if — 자리표시자 치환 동일). 지식 KV는 실제 값으로 주입된다. ' +
       'SSE: status(진행 문구) → result(DryRunResult — survey 페이지 | skeleton 원본 | 검증 통과 sections+dropLog, ' +
-      '공통으로 ledger·meta·promptCustom) 또는 error({ code, message, retryable }).',
+      '공통으로 ledger·meta·promptCustom) 또는 error({ code, message, retryable, detail? } — detail 은 운영자용 원인 한 줄).',
   })
   @ApiBody({ schema: toOpenApi(AdminDryRunBody) })
   @ApiProduces('text/event-stream')
@@ -906,7 +1211,7 @@ export class AdminController {
       'phase=survey는 답변 대기 interrupt까지, phase=plan은 flowId로 재개(유실 시 body의 survey·answers 시딩 재실행). ' +
       'SSE: status → stage({ id, phase: start|done, meta?, prompt?(실제 시스템 전문·가변부), summary? }) ' +
       '→ content(설문·계획 스트림 조각) → state({ node, id, patch } — 노드가 덮은 그래프 상태 채널, ' +
-      'LastValue라 누적하면 스냅샷) → result(FlowRunResult) 또는 error.',
+      'LastValue라 누적하면 스냅샷) → result(FlowRunResult) 또는 error({ code, message, retryable, detail? }).',
   })
   @ApiBody({ schema: toOpenApi(AdminFlowRunBody) })
   @ApiProduces('text/event-stream')
@@ -928,10 +1233,12 @@ export class AdminController {
     sseClose(res)
   }
 
+  /** 관리 SSE 의 실패 안내 — 운영자 화면이라 사용자 안내(message)에 더해 원인 한 줄(detail: API 상태·오류 문구·파싱 사유)을
+   * 싣는다. 사용자 쓰레드 SSE(threads.controller)에는 detail 을 싣지 않는다 */
   private sendSseFailure(res: SseRes, label: string, e: unknown) {
     if (e instanceof LlmGenerationError) {
-      this.logger.warn(`${label} 실패 안내 — code=${e.code}`)
-      sseSend(res, 'error', { code: e.code, message: e.message, retryable: e.retryable })
+      this.logger.warn(`${label} 실패 안내 — code=${e.code}${e.detail ? ` (${e.detail})` : ''}`)
+      sseSend(res, 'error', { code: e.code, message: e.message, retryable: e.retryable, ...(e.detail ? { detail: e.detail } : {}) })
     } else if (e instanceof BadRequestException) {
       sseSend(res, 'error', { code: 'bad_request', message: e.message, retryable: false })
     } else {

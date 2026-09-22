@@ -1,4 +1,5 @@
-import type { EvalCaseDoc, EvalRunDoc, SettingDoc, ThreadDoc, ThreadStepDoc } from './schema'
+import type { CatalogContentRow, CatalogProductRow } from '@ddak/schema'
+import type { CatalogContentDoc, CatalogProductDoc, EvalCaseDoc, EvalRunDoc, SettingDoc, ThreadDoc, ThreadStepDoc } from './schema'
 
 /*
  * 문서(Mongo) ↔ API 응답(와이어) 변환 — 순수 함수만 모았다(IO 없음, Mongo 연결 없이
@@ -92,4 +93,52 @@ export function isFeedbackStep(doc: Pick<ThreadStepDoc, 'stage' | 'payload'>): b
 export function compareFeedbackSteps(a: ThreadStepDoc, b: ThreadStepDoc): number {
   const byCreated = b.createdAt.getTime() - a.createdAt.getTime()
   return byCreated !== 0 ? byCreated : b.seq - a.seq
+}
+
+/** 카탈로그 상품 문서 → 와이어 (score 는 검색 응답에만 붙는다) */
+export function catalogProductToWire(doc: CatalogProductDoc, score?: number) {
+  return {
+    id: doc._id,
+    mall: doc.mall,
+    mallProductId: doc.mallProductId,
+    name: doc.name,
+    brand: doc.brand,
+    price: doc.price,
+    url: doc.url,
+    imageUrl: doc.imageUrl,
+    tags: doc.tags,
+    category: doc.category,
+    source: doc.source as CatalogProductRow['source'],
+    verified: doc.verified,
+    status: doc.status as CatalogProductRow['status'],
+    meta: doc.meta,
+    recommendCount: doc.recommendCount,
+    lastSeenAt: doc.lastSeenAt?.toISOString() ?? null,
+    createdAt: doc.createdAt.toISOString(),
+    updatedAt: doc.updatedAt.toISOString(),
+    ...(score !== undefined ? { score } : {}),
+  }
+}
+
+export function catalogContentToWire(doc: CatalogContentDoc, score?: number) {
+  return {
+    id: doc._id,
+    type: doc.type as CatalogContentRow['type'],
+    source: doc.source,
+    title: doc.title,
+    url: doc.url,
+    imageUrl: doc.imageUrl,
+    meta: doc.meta,
+    snippet: doc.snippet,
+    duration: doc.duration,
+    tags: doc.tags,
+    year: doc.year,
+    verified: doc.verified,
+    status: doc.status as CatalogContentRow['status'],
+    recommendCount: doc.recommendCount,
+    lastSeenAt: doc.lastSeenAt?.toISOString() ?? null,
+    createdAt: doc.createdAt.toISOString(),
+    updatedAt: doc.updatedAt.toISOString(),
+    ...(score !== undefined ? { score } : {}),
+  }
 }

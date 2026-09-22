@@ -120,7 +120,9 @@ export default function Player({ api, scenario, resume }) {
      붙는다(Figma BottomBar). 화면 헤더가 있으면 하단 내비(이전 질문·홈으로)는 헤더의 뒤로·홈이 같은 일을
      하므로 숨긴다 — 바닥에 붙은 버튼 밑에 또 버튼 줄이 깔리지 않게 */
   const fillActive = stage.key === 'survey' && stepQuestions.length > 0 && stepQuestions[step].props?.fillScreen !== false
-  const navHidden = fillActive && visibleItems.some((it) => it.type === 'screenHeader')
+  /* 하단 내비는 설문 전용 — 계획 페이지에는 「이전 단계 / 시나리오 완료」 줄을 두지 않는다(2026-09-15, Figma 계획 화면은 플로팅
+     버튼뿐. 뒤로는 화면 헤더·스테퍼가, 완료 기록은 담기 요약·결제 바(ctaBar)에 버튼 문구가 있을 때 그 버튼이 맡는다) */
+  const navHidden = stage.key !== 'survey' || (fillActive && visibleItems.some((it) => it.type === 'screenHeader'))
 
   /* 쓰레드 기록 — 설문 진입(마운트) 시 생성되고, 단계 이동/담기/완료 때마다 갱신.
      이어보기(resume)면 새로 만들지 않고 같은 id로 이어서 기록한다 */
@@ -271,7 +273,13 @@ export default function Player({ api, scenario, resume }) {
       <BgBlobs />
       {/* 플로팅 버튼 — 체험 화면에서는 쓰레드 목록이 아니라 **지금 진행 중인 쓰레드**의 담은 상품 시트를 연다(2026-09). 목록은 시트 밑 링크로 */}
       <FloatingBar label="현재 쇼핑 쓰레드" onList={() => setCartSheet(true)} />
-      <section className={'sb-player min-h-screen relative z-10' + (fillActive ? ' sb-player--fill' : '')}>
+      <section
+        className={
+          'sb-player min-h-screen relative z-10'
+          + (fillActive ? ' sb-player--fill' : '')
+          + (stage.key === 'plan' ? ' sb-player--plan' : '')
+        }
+      >
         <div className="sb-phone sb-phone--player" ref={phoneRef} style={{ width: viewer.w }}>
         <div className="sb-player__stack">
           {visibleItems.length === 0 && (
@@ -287,20 +295,16 @@ export default function Player({ api, scenario, resume }) {
           ))}
         </div>
 
-        {/* 하단 내비 — 설문에서는 질문 단위로 넘어가고, 마지막 질문에서만 다음 단계로 */}
+        {/* 하단 내비 — 설문 전용: 질문 단위로 뒤로 가고, 질문이 하나도 없는 설문만 여기서 계획으로 넘어간다 (계획 페이지엔 없음) */}
         {!navHidden && (
         <div className="clean-survey-nav sb-player__nav">
-          {stage.key === 'survey' && step > 0 ? (
+          {step > 0 ? (
             <button
               type="button"
               className="clean-survey-nav-btn clean-survey-nav-btn--ghost"
               onClick={() => setQStep(step - 1)}
             >
               이전 질문
-            </button>
-          ) : stageIdx > 0 ? (
-            <button type="button" className="clean-survey-nav-btn clean-survey-nav-btn--ghost" onClick={prev}>
-              이전 단계
             </button>
           ) : (
             <button type="button" className="clean-survey-nav-btn clean-survey-nav-btn--ghost" onClick={api.goHome}>
@@ -309,13 +313,9 @@ export default function Player({ api, scenario, resume }) {
           )}
           {/* 설문에서 앞으로 가는 버튼은 질문 컴포넌트 안에 있다 (진행 표시·질문·항목과 한 벌).
              질문이 하나도 없는 설문만 여기서 다음 단계로 넘어갈 길을 열어 준다 */}
-          {stage.key === 'survey' && stepQuestions.length > 0 ? null : stageIdx < STAGES.length - 1 ? (
+          {stepQuestions.length > 0 ? null : (
             <button type="button" className="clean-plan-submit" onClick={next}>
               맞춤 계획 확인하기
-            </button>
-          ) : (
-            <button type="button" className="clean-plan-submit" onClick={playerApi.complete}>
-              시나리오 완료
             </button>
           )}
         </div>

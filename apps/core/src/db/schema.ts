@@ -76,3 +76,64 @@ export interface EvalRunDoc {
   judge: unknown
   createdAt: Date
 }
+
+/* ── 내재화 카탈로그 (2026-09-17, Mongo 포팅 2026-09-22) — 추천 상품·참고 콘텐츠의 내부 표. 계약은 @ddak/schema catalog.ts,
+ * 배경은 API.md §1-4. GitHub 저장소(옛 Neon/Drizzle)에서는 마이그레이션 0005 의 표 2개 + pg_trgm ILIKE 였고, 이 저장소의 core 는
+ * Mongo 라 같은 계약을 컬렉션으로 옮겼다. core 는 저장·검색만 한다: searchText(이름·브랜드·태그·카테고리를 소문자·공백 제거로 이어
+ * 붙인 문자열 — 콘텐츠는 제목·출처·태그·요약 200자)에 검색어가 부분 일치하는 개수로 순위를 매기되, pg_trgm 대신 정규식 부분 일치로
+ * 후보를 거른 뒤 Node 에서 점수·정렬한다(규칙은 catalog/catalog.logic.ts 순수 함수 — test/catalog.test.mjs). 인덱스는
+ * mongo.service.ts ensureCatalogIndexes 가 기동 시·「표 만들기」 때 멱등으로 만든다 */
+
+export const CATALOG_PRODUCTS_COLL = 'catalog_products'
+export const CATALOG_CONTENTS_COLL = 'catalog_contents'
+
+/** _id = 카탈로그 id — `gm-<상품번호>`(지마켓) · `oy-<goodsNo>`(올리브영) · `p-001`(데모) · `web-<해시>`(그 밖 몰). BFF/@ddak/pipeline 이 만든다 */
+export interface CatalogProductDoc {
+  _id: string
+  mall: string
+  mallProductId: string | null
+  name: string
+  brand: string
+  price: number
+  url: string
+  imageUrl: string | null
+  tags: string[]
+  category: string | null
+  /** search | thread | manual */
+  source: string
+  /** PDP 가 확인된 상품 — 검색은 기본으로 이 행만 돌려준다 */
+  verified: boolean
+  /** active | dead (점검에서 상품이 내려간 것으로 확인) */
+  status: string
+  meta: Record<string, unknown> | null
+  /** 계획에 실린 횟수 — 수확(bump) upsert 가 더한다 (검색 순위 보조) */
+  recommendCount: number
+  /** 검색 재료 — 정규화 연결 문자열 (앱이 만든다, catalog.logic.ts productSearchText) */
+  searchText: string
+  lastSeenAt: Date | null
+  createdAt: Date
+  updatedAt: Date
+}
+
+/** _id = `ct-<url 해시>` */
+export interface CatalogContentDoc {
+  _id: string
+  /** video | article */
+  type: string
+  source: string
+  title: string
+  url: string
+  imageUrl: string | null
+  meta: string | null
+  snippet: string | null
+  duration: string | null
+  tags: string[]
+  year: number | null
+  verified: boolean
+  status: string
+  recommendCount: number
+  searchText: string
+  lastSeenAt: Date | null
+  createdAt: Date
+  updatedAt: Date
+}

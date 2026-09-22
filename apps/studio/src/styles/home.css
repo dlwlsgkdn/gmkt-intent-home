@@ -908,7 +908,8 @@
 /* ── 홈 칩 — Figma "[PP1K] EEVEE 공유용" Search 랜딩 ChipSection (2026-09) ──
    44px 알약 · 12/16 패딩 · 12/18 라벨(Figma 14 에서 두 단계 줄임 — 2026-09 요청) · 테두리 없음. 키워드 칩은 blue 톤(badge/blue 위 연파랑 면),
    시나리오 칩은 시나리오별 chip color(인라인 color/background)가 정하고 여기서는 도형·타이포만.
-   ✦ 아이콘은 Figma 자연어 칩에 있지만 DDAK에서는 라이브 생성 전용 기호라 달지 않는다 */
+   종류 아이콘은 추천 검색어 칩(.sb-chip-reco, 아래)만 단다 — 보라 ✦ 는 라이브 생성으로 직행하는 검색어라 ✦ 규칙과 맞고 파랑은 돋보기.
+   시나리오 칩에는 달지 않는다 */
 .clean-tag-row .suggestion-tag {
   min-height: 44px;
   padding: 12px 16px;
@@ -966,12 +967,17 @@
 }
 .sb-thread__more-btn:hover { border-color: var(--dk-brand); color: var(--dk-brand); }
 
-/* ── 추천 검색어 칩 (2026-09) — 검색창 아래 두 톤(Figma Search 랜딩 ChipSection): 보라 = 내 쇼핑 쓰레드로 만든 개인화
-   자연어 검색어(자연어 칩 #F3F0FF/#7950F2), 파랑 = 전체 사용자 인기 검색어 `#키워드`(키워드 칩 #E3ECFF/#3E7CF8 — 위 기본 톤).
+/* ── 추천 검색어 칩 (2026-09) — 검색창 아래 두 톤(Figma Search 랜딩 ChipSection): 보라 = ✦ + 내 쇼핑 쓰레드로 만든 개인화
+   자연어 검색어(자연어 칩 #F3F0FF/#7950F2), 파랑 = 돋보기 + 전체 사용자 인기 검색어(키워드 칩 #E3ECFF/#3E7CF8 — 위 기본 톤).
+   두 톤은 역할 캡션 없이 한 줄에 순서 없이 섞여 선다(2026-09-15 — 종류는 아이콘·색이 가른다).
    내용은 hooks/useHomePersonalize 가 채우고 바뀌면 크로스페이드(.sb-xfade)로 갈아끼운다 ── */
 .sb-recochips { width: 100%; }
+.clean-tag-row .suggestion-tag.sb-chip-reco { gap: 6px; }
 .clean-tag-row .suggestion-tag.sb-chip-reco--personal { background: var(--dk-brand-tint); color: var(--dk-brand); }
 .clean-tag-row .suggestion-tag.sb-chip-reco--personal:hover { background: var(--dk-brand-soft); color: var(--dk-brand-deep); }
+/* 종류 아이콘 — 글자색을 따르는 16px SVG (SearchOverlay 의 SparkIcon·SearchIcon 재사용) */
+.sb-chip-reco__icon { display: inline-flex; flex: 0 0 auto; }
+.sb-chip-reco__icon svg { width: 16px; height: 16px; }
 /* 캔버스 자리표시자 — 실제 문구는 홈에서 채워진다 */
 .clean-tag-row .suggestion-tag.sb-chip-reco--sample { opacity: 0.6; border: 1px dashed currentColor !important; background: transparent; cursor: default; }
 
@@ -1025,14 +1031,3 @@
   transition: border-color var(--sb-dur) var(--sb-ease);
 }
 .beauty-greeting__thread:hover { border-bottom-color: var(--dk-brand); }
-/* 추천 칩 역할 캡션 — 묶음마다 11px 회색 한 줄(홈 히어로에서는 칩처럼 가운데) */
-.sb-recochips__groups { display: flex; flex-direction: column; gap: 14px; }
-.sb-recochips__group { display: flex; flex-direction: column; gap: 6px; }
-.sb-recochips__caption {
-  font-size: var(--sb-t-micro);
-  font-weight: 400;
-  line-height: 14px;
-  letter-spacing: -0.2px;
-  color: var(--dk-muted);
-}
-.sb-home-hero .sb-recochips__caption { text-align: center; }

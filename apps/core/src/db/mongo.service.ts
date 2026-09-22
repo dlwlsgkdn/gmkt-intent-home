@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common'
 import { Collection, Db, Document, MongoClient } from 'mongodb'
-import { EVAL_RUNS_COLL, THREAD_STEPS_COLL, THREADS_COLL } from './schema'
+import { CATALOG_CONTENTS_COLL, CATALOG_PRODUCTS_COLL, EVAL_RUNS_COLL, THREAD_STEPS_COLL, THREADS_COLL } from './schema'
 
 /*
  * 사내 Mongo 연결 — apps/tagging-api의 MongoService와 같은 패턴이다: 연결 실패가
@@ -50,5 +50,22 @@ async function ensureIndexes(db: Db) {
       .collection(THREAD_STEPS_COLL)
       .createIndex({ threadId: 1, seq: 1 }, { name: 'thread_steps_thread_seq_uq', unique: true }),
     db.collection(EVAL_RUNS_COLL).createIndex({ caseId: 1, createdAt: -1 }, { name: 'eval_runs_case_idx' }),
+    ensureCatalogIndexes(db),
+  ])
+}
+
+/** 내재화 카탈로그 인덱스 — 기동 시와 `POST /internal/catalog/ensure-schema`(운영 콘솔 「표 만들기」)가 부른다. createIndex 는 멱등.
+ * 검색(searchText 정규식 부분 일치)은 인덱스를 못 타므로 여기엔 없다 — 필터·정렬·커서 축만 건다 */
+export async function ensureCatalogIndexes(db: Db) {
+  const products = db.collection(CATALOG_PRODUCTS_COLL)
+  const contents = db.collection(CATALOG_CONTENTS_COLL)
+  await Promise.all([
+    products.createIndex({ mall: 1, verified: 1 }, { name: 'catalog_products_mall_idx' }),
+    products.createIndex({ status: 1, verified: 1 }, { name: 'catalog_products_status_idx' }),
+    products.createIndex({ updatedAt: -1, _id: -1 }, { name: 'catalog_products_updated_idx' }),
+    products.createIndex({ lastSeenAt: 1, _id: 1 }, { name: 'catalog_products_seen_idx' }),
+    contents.createIndex({ type: 1, verified: 1 }, { name: 'catalog_contents_type_idx' }),
+    contents.createIndex({ status: 1, verified: 1 }, { name: 'catalog_contents_status_idx' }),
+    contents.createIndex({ updatedAt: -1, _id: -1 }, { name: 'catalog_contents_updated_idx' }),
   ])
 }

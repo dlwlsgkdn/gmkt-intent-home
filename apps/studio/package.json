@@ -9,7 +9,8 @@
     "dev": "vite",
     "prebuild": "node scripts/copy-mediapipe-wasm.mjs",
     "build": "vite build && cp -R ../../legacy dist/legacy",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "snapshot:srp": "node scripts/snapshot-srp.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^1.0.1",

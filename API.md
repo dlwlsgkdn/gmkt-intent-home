@@ -4,7 +4,7 @@
 > 검증기·OpenAPI 문서·타입이 전부 거기서 나온다. 설계 배경은 [DESIGN-LLM-SERVICE.md](DESIGN-LLM-SERVICE.md).
 
 ```
-FE ──(공개, x-device-id)──▶ BFF(ddak-bff) ──(Bearer 서비스 토큰)──▶ Core(ddak-core) ──▶ Neon(전용 DB)
+FE ──(공개, x-device-id)──▶ BFF(ddak-bff) ──(Bearer 서비스 토큰)──▶ Core(ddak-core) ──▶ 사내 MongoDB(2026-09 Neon 에서 이관)
                                  │
                                  └──▶ Claude API (claude-opus-5, 구조화 출력)
 ```
@@ -50,7 +50,7 @@ event: status   → { message: "질문을 구성하고 있어요…" }         (
 event: head     → { intro } | { headline } | { summary }         (머리 필드 — 자라는 값 반복 발송 + 완성본)
 event: question → { index, question: SurveyQuestionWire }        (설문 — 자라는 질문을 같은 index로 반복 발송)
 event: skeleton → { page, pending: number[] }                    (계획 — 뼈대 조기 확정: page.sections의 상품·콘텐츠 자리는 null, pending이 그 인덱스)
-event: section  → { index, section: PlanSectionWire, final }     (계획 — 자라는 섹션을 같은 index로 반복 발송, final:true·생략=최종본)
+event: section  → { index, section: PlanSectionWire, final, before? } (계획 — 자라는 섹션을 같은 index로 반복 발송, final:true·생략=최종본. before = 자리 없이 배정된 섹션(index 가 뼈대 길이 뒤)을 끼울 뼈대 인덱스(이 앞, 그 단계 묶음 안 — 최종 병합이 끼우는 자리와 같다). FE 는 result 전에도 이 힌트로 그 단계 안에 그린다, 2026-09-18)
 event: result   → { page: SurveyPageWire | PlanPageWire }        (완성 페이지 — 권위·저장 기준, 종료)
 event: error    → { code, message, retryable }                   (실패 안내 — 종료)
 ```
@@ -79,7 +79,7 @@ pending(재생성 게이트)으로 유지한다. **`skeleton`은 계획 전용 �
 | `llm_failed` | 호출 실패·파싱 실패 (SDK 자동 재시도 2회 후) | ○ |
 | `internal` | 그 외 서버 오류 (core 연결 등) | ○ |
 
-**와이어 페이지 형태** (스튜디오 레지스트리 투영 기준: question→`surveyQuestion`(사진 질문은 `surveyPhoto`), guide→`planStep`, look→`beforeAfter`, products→`productCard`, contents→`videoCard`/`articleCard`, steps→`checklist`):
+**와이어 페이지 형태** (스튜디오 레지스트리 투영 기준: question→`surveyQuestion`(사진 질문은 `surveyPhoto`), guide→`planStep`, look→`beforeAfter`, products→`productCard`, contents→`videoCard`/`articleCard`, steps→`checklist`, compare→`ingredientCompare`(성분 비교표), caution→`cautionIngredients`(주의 성분)):
 
 ```ts
 SurveyPageWire = { intro, questions: [{ id, question, kind?: 'choice'|'photo', options[0..6], multi, placeholder? }] }
@@ -97,6 +97,10 @@ PlanPageWire   = { headline, summary, sections: [
                                                                                        //   hair?{style keep|straight|wavy|curly|updo|ponytail, length keep|short|medium|long, color hex|keep, bangs keep|none|see-through|full, note}(scope≥hair),
                                                                                        //   outfit?{top keep|tee|shirt|blouse|knit|jacket|dress, color hex|keep, fit regular|oversized|fitted, neckline keep|crew|v|collar|off-shoulder, note}(scope=outfit) } — 기기 합성과 정밀 렌더가 그대로 소비하는 한 원천.
                                                                                        //   points 는 BFF 가 부위별 note 에서 파생("립 — …"). FE가 기기에 남은 사진을 BEFORE, 같은 사진에 사양대로 칠한 것을 AFTER로 비포/애프터 투영 (합성은 화면에서)
+                   { kind: 'compare',  title, alt: CompareSide, pick: CompareSide, rows: [{ ingredient, alt, pick, risk? }] } |  // 성분 비교표(v26) — 뼈대(5a)가 성분이 기준인 의도(면도 자극·민감·"성분 비교해 줘")에서만.
+                                                                                       //   **제품 유형 수준** 대조: alt = 기존/일반 제품 유형(답변의 사용 중 제품이 있으면 그것), pick = 이 계획이 권하는 제품 유형. CompareSide = { badge, name, short? }.
+                                                                                       //   행 = 성분 · 기존 열 값(있음/없음/소량) · 추천 열 값 · 위험도(높음/중간/낮음). 구체 상품명·전성분 단정 없음 — 그 기준으로 고른 상품은 바로 뒤 products 가 채운다
+                   { kind: 'caution',  title, desc?, items: [{ name, note }] } |       // 주의 성분(v26) — compare 와 같은 조건에서 뼈대가 만든다. 이름(한글 + INCI) · 왜 주의하는지 한 줄
                    { kind: 'products', title, reason, products: CatalogProduct[] } |  // 카탈로그 id 검증 + 웹 상품 URL 검증 통과분만
                    { kind: 'contents', title, reason, items: PlanContentItem[] } |    // 참고 콘텐츠 — 웹 검색으로 확인한 게시글·영상 (URL 검증 통과분만)
                    { kind: 'steps',    title, steps[] } ] }
@@ -163,7 +167,7 @@ Base: `/api/admin/*` (스튜디오 프록시 `/api/bff/admin/*` 경유) · 인�
 | POST | `/api/admin/knowledge` | **지식 소스 추가** — `{ label, placeholder, heading?, note?, value? }`. 주입은 시스템 자리표시자 한 가지다(원장·검증 게이트 주입은 코드 배선이라 만들 수 없다). 자리표시자는 `{{NAME}}` 꼴로 정규화(영문 대문자·숫자·밑줄 2~31자)하고 예약 토큰(`{{CATALOG}}`·붙박이 4종)·중복은 400. 목록은 core `settings.knowledge-custom`(JSON 배열), 값은 붙박이와 같은 `settings.knowledge-<id>`. **만들기만 하면 아직 어디에도 실리지 않는다** — 단계 프롬프트에 토큰을 넣어야 주입된다. 응답은 갱신된 pipeline wire |
 | DELETE | `/api/admin/knowledge/:id` | 추가 지식 삭제 (붙박이는 400) — 목록·값 KV와 함께 **재정의 프롬프트에 남은 자리표시자도 제거**한다 (안 지우면 `{{TOKEN}}` 원문이 모델에 나간다). 응답은 갱신된 pipeline wire |
 | PUT | `/api/admin/engine` | 생성 엔진 플래그 — `{ engine: legacy\|langgraph\|null }` (null=기본값 legacy 복귀). core `settings.engine` 저장. 요청 단위 오버라이드는 `x-ddak-engine` 헤더 |
-| POST | `/api/admin/pipeline/dry-run` | **LLM 단계 단독 실행** (플레이그라운드, SSE) — `{ stageId: survey\|plan-skeleton\|plan-products, intent, profile?, survey?, answers?, promptOverride? }`. 그래프·쓰레드·core 기록 없이 같은 빌더·스키마·가드로 실행, promptOverride는 저장 없는 what-if. SSE: `status` → `result`(DryRunResult — survey 페이지 \| skeleton 원본 \| 검증 통과 sections+dropLog, 공통 ledger·meta·promptCustom·**prompt**(실제 사용 프롬프트 — 치환 완료 시스템 전문+user 가변부, 평가 실행 저장엔 미포함)) \| `error` |
+| POST | `/api/admin/pipeline/dry-run` | **LLM 단계 단독 실행** (플레이그라운드, SSE) — `{ stageId: survey\|plan-skeleton\|plan-products\|plan-contents, intent, profile?, survey?, answers?, promptOverride? }`. 그래프·쓰레드·core 기록 없이 같은 빌더·스키마·가드로 실행, promptOverride는 저장 없는 what-if. SSE: `status` → `result`(DryRunResult — survey 페이지 \| skeleton 원본 \| 검증 통과 sections+dropLog, 공통 ledger·meta·promptCustom·**prompt**(실제 사용 프롬프트 — 치환 완료 시스템 전문+user 가변부, 평가 실행 저장엔 미포함)) \| `error`(`{ code, message, retryable, detail? }` — **detail 은 관리 SSE 전용 운영자 진단 한 줄**: API 상태·오류 타입·문구 또는 결과 파싱 첫 이슈. 사용자 쓰레드 SSE 에는 없다. flow-run 도 같다) |
 | POST | `/api/admin/pipeline/flow-run` | **전체 플로우 실행** (플레이그라운드, SSE) — 실제 LangGraph 그래프(병렬 5a∥5b·interrupt·검증 게이트)를 전용 MemorySaver로 통째 실행하고 **admin 프로필(`ops-playground`)의 core 쓰레드로 실기록**한다 (쓰레드·평가 탭에서 열람·평가·케이스 승격 가능). `{ phase: survey\|plan, flowId?, intent, profile?, survey?, answers? }` — survey 페이즈는 답변 대기 interrupt까지 돌고 flowId(=쓰레드 id) 발급, core 미연결이면 쓰레드 생성 실패를 삼키고 `flow-` 임시 id로 기록 없이 강등(결과 `recorded: false`), plan 페이즈는 flowId로 Command 재개(체크포인트 유실 시 body의 survey·answers 시딩 재실행 — 그래프 복구 경로). SSE: `status` → `stage`(`{ id, phase: start\|done, meta?, prompt?(실행 직전 재구성한 실제 시스템 전문·가변부), summary?, pass?, drops? }` — 노드 완료마다 실시간, 병렬 노드는 각자 완료 시점) → `content`(설문·계획 스트림 조각 원본) → `state`(`{ node, id, patch }` — 노드가 덮은 ThreadGraphState 채널 패치. LastValue라 FE가 누적하면 시점별 스냅샷, 빈 패치 생략, 시작 입력·체크포인트 재개도 합성 시점으로 실림) → `result`(FlowRunResult — 공통 flowId·`recorded`, survey: survey·ledger·meta / plan: 최종 병합 page·dropLog·skeletonMeta·productsMeta) \| `error` |
 
 평가·실험 (관리 페이지 "실험" 탭 — 페이즈 5):
@@ -198,7 +202,64 @@ FE(`apps/studio/src/lib/liveApi.js` `routeSearch`/`suggestSearch`)는 실패 시
 
 와이어 변화: `CatalogProduct.priceUnknown?`(판매가 미확인 — price 0), `PlanContentItem.why?`. 검증 게이트 드롭 코드 추가: `catalog-low-match`·`catalog-overflow`·`already-in-cart`·`stale-content`·`low-trust-source`·`duplicate-source`·`duplicate-recent`. 원장(`ledger`)에 `budgetMinKrw`(예산 하한 — 드롭 기준 아님)·`recentRecommended`·`recentContentUrls`(같은 사용자 최근 3개 쓰레드) 추가.
 
+**v27(2026-09-17)**: 5c 참고 콘텐츠가 빈 결과면 BFF 가 검색어를 바꾸라는 힌트로 한 번 더 부른다(SSE `status` 「참고할 영상·게시글을 다른 검색어로 다시 찾고 있어요…」, plan 스텝 `dropLog` 에 정보 기록 `contents-empty-retry`). 상품 검색(5b)이 상품 섹션을 하나도 못 만들면 뼈대의 상품 자리를 카탈로그 매칭(60% 이상, 자리당 3개) 상품으로 채운다(`dropLog` `catalog-fallback`). 둘 다 드롭이 아니라 정보 기록이다.
+
 admin: 프롬프트 카탈로그에 `plan-contents` 추가, 지식 목록에 guard 행 `guard-content-hosts`(콘텐츠 저신뢰 출처 도메인, 줄바꿈 구분·접미 일치) 추가, dry-run `stageId` 에 `plan-contents` 추가(응답은 `sections`·`dropLog`), `GET /api/admin/metrics/engines` 엔진별 `avgContentsMs`·`quality`(비율 0~1·평균, quality 요약이 있는 표본만). 썸네일 보강(`EnrichService`, og:image)은 BFF 환경변수 `ENRICH_FETCH=0` 으로 끌 수 있다(오프라인 e2e).
+
+## 1-4. 내재화 카탈로그 — 내부 DB 70% + 웹 검색 30% (v29 2026-09-17 절반씩 → v30 2026-09-18 70 : 30)
+
+추천 상품·참고 콘텐츠를 core DB(사내 Mongo 컬렉션 `catalog_products`·`catalog_contents` — GitHub 저장소 시절엔 Neon 표)에 쌓고, 계획 생성이 **내부 후보 70% + 웹 검색 30%**로 고른다(상품 섹션당 내부 4~6개 + 웹 1~2개, 콘텐츠 섹션당 내부 2~4개 + 웹 1~2개 — v30, 2026-09-18. v29 는 절반씩이었다).
+목적은 둘 — 빠른 응답(내부 후보가 70% 를 채우니 5b·5c 웹 검색 상한이 4→2, 지마켓 검색 불필요)과 정확한 PDP(내부 행은 상품 번호로 주소·썸네일이
+결정되는 검증 상품이고, 모델은 **id 만** 적어 주소를 되받아 적지 않는다).
+
+- **후보 조회(4단계 근거 수집의 첫 실구현)**: 의도·답변·프로필에서 검색어를 뽑아(`@ddak/pipeline catalogTermsOf` — 제품 유형 어휘 `PRODUCT_TYPE_VOCAB`
+  + 조사·상투어를 뗀 낱말) core `POST /internal/catalog/{products,contents}/search` 로 상품 32·콘텐츠 16개를 받는다(BFF `CatalogService.candidatesFor` — v29 는 24·12).
+  그래프는 s2 원장 노드(첫 조립·답변 뒤 갱신 둘 다)에서, legacy 는 계획 생성 직전에, dry-run 도 같은 조회. 표가 비었거나(마이그레이션·시딩 전) core
+  미연결이면 데모 카탈로그 14종으로 대신한다(옛 `{{CATALOG}}` 와 같은 상품) — 계획을 막지 않는다.
+- **주입**: 후보는 시스템 프롬프트가 아니라 **가변부(사용자 메시지) 표**로 실린다(`productCandidatesBlock`·`contentCandidatesBlock` — 시스템은 바이트
+  고정·캐시 유지). 5b 는 `productIds`(≤8)+`catalogRatings` 로, 5c 는 새 필드 `catalogIds`(≤6) 로 id 만 적는다. `PLAN_PRODUCTS_SYSTEM` v29 에는 정적
+  `{{CATALOG}}` 블록이 없다(재정의 프롬프트에 남아 있으면 데모 14종으로 치환은 되지만 후보 표와 겹친다).
+- **검증 게이트**: `GuardContext.candidates` — productIds·catalogIds 는 이 요청의 후보 목록(+데모 카탈로그)에서만 해석(`catalog-miss`), 내부 상품은
+  근거 신뢰 100·id 접두가 `web-` 이 아니면 내부(품질 KPI `webProducts` 도 접두 기준), 웹 상품이 후보와 같은 지마켓 상품 번호면 후보 값으로 대체
+  (`duplicate-candidate` 정보 기록), 섹션당 내부 상한 `CATALOG_MAX_PER_SECTION` 3→4→6(v30). **PDP 보정** `repairPdpUrl`: 아는 몰인데 상품 번호 형식이 어긋난
+  주소(지마켓 goodscode 없음·올리브영 goodsNo 가 `A`+12자리 아님·쿠팡 `/vp/products/<번호>` 아님)는 몰 검색 링크(`urlKind=search`, 근거 25)로 바꿔
+  싣는다(`repaired-url` 정보 기록) — 깨진 상세보기 대신 검색 결과가 열린다. 카탈로그 폴백 풀도 후보+데모.
+- **수확**: 7단계 기록 직후 최종 페이지의 상품·콘텐츠를 `harvestRowsOf` 로 행으로 만들어 `PUT …?bump` upsert. **몰은 가리지 않는다** — 웹 지마켓
+  `gm-<번호>`, 올리브영 `oy-<goodsNo>`, 쿠팡 `cp-<번호>` 는 상품 번호 형식이 맞으면 verified(주소가 번호로 결정된다 — `pdpKeyOf`/`pdpVerified`),
+  그 밖의 몰 `web-<url 해시>` 는 썸네일(og:image)을 받아 왔으면 verified(페이지가 실제로 열렸다) 아니면 unverified(운영자 표시로 승격), 검색 링크
+  상품은 제외, 콘텐츠는 `ct-<url 해시>`(verified). 태그 = 이 계획의 검색어 + 섹션 제목의 제품 유형 → 다음 검색이 이 행을 찾는다. 웹 상품이
+  후보와 같은 정체 키(지마켓·올리브영·쿠팡 번호)면 후보로 대체된다.
+- **시딩 재료는 셋이다(2026-09-17 결정 — 스튜디오 SRP 스냅샷·데모 카탈로그는 시딩에 쓰지 않는다)**: ① **시딩 실행 시 실제 웹 검색 배치** —
+  운영 콘솔 「데이터 시딩」 메뉴(`#ops/seeding`)의 「✦ 시딩 잡 시작」이 제품 유형 어휘(`CATALOG_SEED_KEYWORDS`, 42개)를 4개씩 `POST /api/admin/catalog/seed-search` 로 보내고,
+  BFF 가 유형마다 LLM+web_search 1회(`CATALOG_SEED_SYSTEM`, 검색 2~3회, PROMPT_DEFS 밖)로 실제 판매 상품 8~12개를 모아 `seedProductRowsOf` 로
+  행(source `search`)을 만든다 — 몰별 상품 번호 형식이면 verified, 검색 페이지 주소·주소 없는 상품은 버림, 유형만이면 42 검색 약 $5.
+  **대량 시딩**은 검색 단위를 유형 × 조건 축(`catalogSeedQueries` — 피부 타입 4·고민 6·가격대 2·몰 3, `CATALOG_SEED_FACETS`)으로 펼친다:
+  실행은 **서버 시딩 잡**(위 표 `seed-job`)이다 — 상태·진행·회차 기록·결과가 core KV 에 있어 운영 콘솔 카드가 실시간으로 보고, 드라이버는
+  콘솔 「데이터 시딩」 탭(「✦ 시딩 잡 시작」 뒤 그 탭이 step 을 돌린다 · 「이 탭에서 돌리기」로 이어받기 · 일시정지/재개)이든 배치 스크립트
+  `npm run seed:search --workspace=apps/bff -- --bff <BFF 주소> --token <BFF_SERVICE_TOKEN> --facets skin,concern [--dense] [--resume|--reset] [--status] [--dry-run]`
+  이든 같은 잡을 민다(Ctrl+C 해도 잡은 남고 다시 실행하면 이어 돈다). **드라이버 없이 서버에서 계속 돌리려면 GitHub Actions
+  `.github/workflows/seed-search.yml`** — Vercel 서버리스는 요청 300초 상한·hobby cron 하루 1회라 BFF 가 스스로 돌 수 없어 Actions 러너가
+  드라이버가 된다: 수동 실행(조건·유형·dense·reset 입력)은 새 잡을 시작해 끝까지(러너 6시간 안), 30분 schedule 틱은 `--tick` 으로 running 잡만
+  이어 돌린다. 저장소 시크릿 `BFF_URL`·`BFF_SERVICE_TOKEN` 필요. 단위당 약 $0.14(dense $0.18) — 네 축 전부면 672 단위 ≈ $95, 상품 5,000~8,000개. ② **지난 쓰레드의 계획**
+  — `POST /api/admin/catalog/harvest` 백필(실주행은 7단계가 자동). ③ **올리브영 사내 Mongo 내보내기** `npm run export:catalog
+  --workspace=apps/tagging-api -- --out oy.json`(태깅 스튜디오와 같은 문서 → 행, goodsNo 형식이면 verified, 태그 = 세부유형·제형·성분·피부 타입·
+  고민·결과·대분류, source `manual`) → `npm run seed:catalog --workspace=apps/core -- --file oy.json` 또는 「데이터 시딩」 메뉴의 「JSON 가져오기」. 그 밖의 몰도
+  같은 행 형식의 JSON 을 가져오기로. admin API:
+
+| 메서드 | 경로 | 설명 |
+|---|---|---|
+| GET | `/api/admin/catalog` | 현황 `AdminCatalogWire` — `{ stats: CatalogStatsWire, available, note? }` (표 없음·core 미연결이면 available=false) |
+| GET | `/api/admin/catalog/products` · `/api/admin/catalog/contents` | **둘러보기** (`CatalogListQuery` → `Catalog*ListWire`) — 「데이터 시딩」의 표(무한 스크롤). q(search_text 부분 일치)·mall·source·type(콘텐츠)·verified(true/false)·status 필터, updated_at 내림차순 키셋 커서 `<updatedAt>|<id>`, limit ≤100, total 은 필터 적용 개수. 검색과 달리 미검증·dead 도 보인다. core `GET /internal/catalog/{products,contents}` |
+| PATCH | `/api/admin/catalog/products/:id` · `/api/admin/catalog/contents/:id` | 행 표시 `PatchCatalogRowBody` `{ verified?, status? }` — 상세 다이얼로그의 「검증됨으로」·「내려감 표시」 |
+| POST | `/api/admin/catalog/fill-thumbnails` | **썸네일 채우기(소급)** → `AdminCatalogFillThumbsResult` `{ scanned, filled }` — 빈 imageUrl 행에 몰별 결정적 썸네일(지마켓 gdimg · 올리브영 CDN `thumbnails/10/<앞4>/<다음4>/<goodsNo>01ko.jpg`, `@ddak/pipeline mallThumbnailOf`)을 전 행 훑기 + 값 그대로 upsert 로 적용. 웹 검색 시딩은 검색 결과에 이미지 주소가 없어 올리브영·쿠팡 행이 빈 채 쌓였다(2026-09-18) — 새 행은 시딩·수확이 자동으로 채우고, 쿠팡은 규칙이 없어 그대로. 「상품 링크 점검」도 올리브영은 이 CDN 주소에 HEAD 한다 |
+| POST | `/api/admin/catalog/migrate` | **표 만들기** — core `POST /internal/catalog/ensure-schema` 가 카탈로그 컬렉션·인덱스를 멱등으로 보장한다(Mongo 라 마이그레이션이 없다 — 옛 Neon 시절엔 0005 DDL 적용) → `{ created, catalog }`. 운영 콘솔 「데이터 시딩」의 「여기서 표 만들기」가 부른다 |
+| GET/POST/DELETE | `/api/admin/catalog/seed-job` · POST `…/step` · `…/pause` · `…/resume` | **시딩 잡** — 상태는 core KV `catalog-seed-job`(`CatalogSeedJob`: facets·types·dense·total·cursor·retry·failed·products·verified·webSearchRequests·history[≤40]·lockUntil·lastError). POST 시작(`StartCatalogSeedJobBody`, 진행 중 잡이 있으면 reset 없이 409) → 드라이버(콘솔 「이 탭에서 돌리기」·`apps/bff/scripts/seed-search.mjs`)가 `step` 을 반복 호출해 4단위씩 한 라운드로 전진(4병렬·호출당 220초 상한 — 서버리스 300초 안, 회차 잠금 270초 — 다른 드라이버는 `busy`), 본 회차 뒤 실패 단위 재시도 회차 1번, 끝나면 `done`. 콘솔 「데이터 시딩」 메뉴가 진행 바·회차 기록·결과를 본다(드라이버가 없으면 10초 조회) |
+| POST | `/api/admin/catalog/seed-search` | **시딩 웹 검색 배치(잡 없이 1회차)** `{ keywords?[≤8] }`(유형만) 또는 `{ queries?: [{ keyword, query? }][≤8], dense? }`(대량 — 유형×조건) → `{ keywords, failed[], products, verified, webSearchRequests }` — 검색 단위마다 LLM+web_search 1회(4병렬, 호출당 220초 상한, dense 는 검색 4회·16개), 실패 단위는 failed 로(초점 문구, 다시 돌리면 됨), 결과는 멱등 upsert |
+| POST | `/api/admin/catalog/import` | 가져오기 `{ products?[≤500], contents?[≤500] }` — 올리브영 사내 Mongo 내보내기 JSON 등 행 파일을 500개씩 올린다 (멱등) |
+| POST | `/api/admin/catalog/harvest?limit=` | 지난 쓰레드 계획에서 수확(백필) — 최신 N개 쓰레드의 plan 스텝을 실주행과 같은 규칙으로 |
+| POST | `/api/admin/catalog/verify?limit=&mall=` | 상품 링크 점검 — 오래 안 본 순 N개(mall 기본 `*` 전체): 지마켓은 썸네일(gdimg)·그 밖의 몰은 상품 주소에 HEAD, 404 → `dead`, 200 → `verified`. 올리브영·쿠팡은 Node 에서 닿지 못해 건너뜀(번호 형식으로 verified) |
+
+e2e: `langgraph-smoke.mjs` 14절(모의 core 가 인메모리 카탈로그 — 수확·시딩·5b 가변부 후보 표 주입 확인), 단위 `packages/pipeline/test/catalog.test.mjs`.
 
 ## 2. Core — internal API (BFF 전용, 비공개)
 
@@ -219,6 +280,11 @@ Base: `https://ddak-core.vercel.app` · 인증: **`Authorization: Bearer <CORE_S
 | POST/GET | `/internal/eval/cases/:id/runs` · GET/PATCH `/internal/eval/runs/:id` | 실행 기록 저장·조회·사람 채점(score·comment·components) (`eval_runs`, 케이스 cascade) — core는 내용 해석 안 함. 단건 GET은 `{ run, case }`(자동 채점이 케이스 입력을 함께 쓴다) |
 | PUT | `/internal/eval/runs/:id/judge` | 자동 채점 판정 저장 (`{ judge: EvalJudgeVerdict }`) — 사람 채점 필드는 불변 (source 축 분리) |
 | GET | `/internal/settings/:key` · PUT · DELETE | 운영 설정 KV (jsonb — core는 해석 안 함). 예: `llm-model` |
+| POST | `/internal/catalog/products/search` · `/internal/catalog/contents/search` | **내재화 카탈로그** 검색 (`CatalogSearchQuery` → `Catalog*SearchWire`) — search_text 부분 일치 점수순, 기본 verified·active 만 (§1-4) |
+| PUT | `/internal/catalog/products` · `/internal/catalog/contents` | 일괄 upsert (≤500) — `bump=true` 면 수확(노출 횟수 누적·출처/검증/상태 보존·태그 합집합) |
+| PATCH | `/internal/catalog/products/:id` · `/internal/catalog/contents/:id` | `verified`·`status` 표시 (`PatchCatalogRowBody`) |
+| GET | `/internal/catalog/products?…` · `/internal/catalog/contents?…` | **둘러보기** (`CatalogListQuery` → `Catalog*ListWire`) — 필터 + updated_at 키셋 커서, 미검증·dead 포함 (운영 콘솔 표) |
+| GET | `/internal/catalog/products/verify-list?mall=&limit=` · `/internal/catalog/stats` | 점검 대상(오래 안 본 순) · 현황 (`CatalogStatsWire`) |
 | GET | `/healthz` | 헬스체크 (가드 밖) |
 
 **스텝 seq 규약** (BFF가 부여 — 쓰레드 1개의 이벤트 소싱 로그):
@@ -243,4 +309,4 @@ Base: `https://ddak-core.vercel.app` · 인증: **`Authorization: Bearer <CORE_S
 | 프로젝트 | Root Directory | 주요 env |
 |---|---|---|
 | ddak-bff | `apps/bff` | `ANTHROPIC_API_KEY`(없으면 생성 요청이 실패 안내로 응답), `CORE_URL`, `CORE_SERVICE_TOKEN`, `NODEJS_HELPERS=0`, `ALLOWED_ORIGINS?` |
-| ddak-core | `apps/core` | `DATABASE_URL`(Neon 통합 자동 주입), `CORE_SERVICE_TOKEN`, `NODEJS_HELPERS=0`, `API_DOCS?` |
+| ddak-core | `apps/core` | `MONGO_URI`·`MONGO_DB`(사내 Mongo — Vercel 서버리스가 닿는지는 별개), `CORE_SERVICE_TOKEN`, `NODEJS_HELPERS=0`, `API_DOCS?` |

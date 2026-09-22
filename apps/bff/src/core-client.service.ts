@@ -1,5 +1,18 @@
 import { HttpException, Injectable, ServiceUnavailableException } from '@nestjs/common'
 import type {
+  CatalogContentListWire,
+  CatalogContentRow,
+  CatalogContentSearchWire,
+  CatalogListQuery,
+  CatalogProductListWire,
+  CatalogProductRow,
+  CatalogProductSearchWire,
+  CatalogSearchQuery,
+  CatalogStatsWire,
+  PatchCatalogRowBody,
+  UpsertCatalogContentsBody,
+  UpsertCatalogProductsBody,
+  UpsertCatalogResult,
   CreateEvalCaseBody,
   CreateEvalRunBody,
   CreateThreadBody,
@@ -20,6 +33,14 @@ import type {
   UpdateThreadBody,
   UpsertStepBody,
 } from '@ddak/schema'
+
+/** 둘러보기 쿼리 → 쿼리 문자열 (빈 값 생략) */
+const listQs = (query: CatalogListQuery): string => {
+  const q = new URLSearchParams()
+  for (const [k, v] of Object.entries(query)) if (v !== undefined && v !== null && v !== '') q.set(k, String(v))
+  const s = q.toString()
+  return s ? `?${s}` : ''
+}
 
 /** backend core internal API 클라이언트 — 계약 타입은 @ddak/schema 공유 */
 @Injectable()
@@ -118,6 +139,46 @@ export class CoreClientService {
   /** 실주행 plan 스텝 llmMeta — 전환 판정 계기판의 원천 */
   listPlanMetas(limit?: number) {
     return this.req<PlanMetasWire>('GET', `/internal/plan-metas${limit ? `?limit=${limit}` : ''}`)
+  }
+
+  /* ── 내재화 카탈로그 (2026-09-17, API.md §2-1) — 저장·검색·점검. 조회 실패는 호출자(CatalogService)가 삼킨다 */
+  searchCatalogProducts(query: CatalogSearchQuery) {
+    return this.req<CatalogProductSearchWire>('POST', '/internal/catalog/products/search', query)
+  }
+  searchCatalogContents(query: CatalogSearchQuery) {
+    return this.req<CatalogContentSearchWire>('POST', '/internal/catalog/contents/search', query)
+  }
+  upsertCatalogProducts(body: UpsertCatalogProductsBody) {
+    return this.req<UpsertCatalogResult>('PUT', '/internal/catalog/products', body)
+  }
+  upsertCatalogContents(body: UpsertCatalogContentsBody) {
+    return this.req<UpsertCatalogResult>('PUT', '/internal/catalog/contents', body)
+  }
+  /** 둘러보기 (운영 콘솔 표) — 쿼리를 그대로 넘긴다 */
+  listCatalogProducts(query: CatalogListQuery) {
+    return this.req<CatalogProductListWire>('GET', `/internal/catalog/products${listQs(query)}`)
+  }
+  listCatalogContents(query: CatalogListQuery) {
+    return this.req<CatalogContentListWire>('GET', `/internal/catalog/contents${listQs(query)}`)
+  }
+  patchCatalogContent(id: string, body: PatchCatalogRowBody) {
+    return this.req<CatalogContentRow>('PATCH', `/internal/catalog/contents/${encodeURIComponent(id)}`, body)
+  }
+  patchCatalogProduct(id: string, body: PatchCatalogRowBody) {
+    return this.req<CatalogProductRow>('PATCH', `/internal/catalog/products/${encodeURIComponent(id)}`, body)
+  }
+  catalogVerifyList(mall: string, limit: number) {
+    return this.req<{ items: CatalogProductRow[] }>(
+      'GET',
+      `/internal/catalog/products/verify-list?mall=${encodeURIComponent(mall)}&limit=${limit}`,
+    )
+  }
+  catalogStats() {
+    return this.req<CatalogStatsWire>('GET', '/internal/catalog/stats')
+  }
+  /** 표 만들기 — core 가 자기 DATABASE_URL 로 마이그레이션 0005 DDL 을 멱등 적용 (운영 콘솔 「표 만들기」) */
+  ensureCatalogSchema() {
+    return this.req<{ ok: true; created: boolean }>('POST', '/internal/catalog/ensure-schema')
   }
 
   /** 설정 KV — 없는 키는 null (404를 삼킨다) */

@@ -3,7 +3,6 @@ import type { AdminDryRunBody, LlmMeta, PlanSectionWire, SurveyPageWire } from '
 import {
   PlanContentsGen,
   PlanProductsGen,
-  PlanSkeletonGen,
   STAGE_BY_ID,
   SurveyGen,
   assembleLedger,
@@ -14,18 +13,31 @@ import {
   buildSurveyRequest,
   groundContentsSection,
   groundProductsSection,
+  hasPhotoAnswer,
+  planSkeletonGenFor,
   renderSystemTemplate,
   type ConstraintLedger,
   type GroundingDrop,
   type GuardContext,
   type LlmEffort,
+  type PlanSkeletonGen,
   type PromptDefId,
   type ResolvedSystem,
+  orderSkeletonSlots,
 } from '@ddak/pipeline'
 import { KnowledgeService } from '../llm/knowledge.service'
-import { LlmService } from '../llm/llm.service'
+import {
+  LlmService,
+  RICH_CONTENT_CANDIDATES,
+  RICH_PRODUCT_CANDIDATES,
+  WEB_SEARCH_CONTENTS_MAX_USES,
+  WEB_SEARCH_MAX_USES,
+  webSearchBudget,
+} from '../llm/llm.service'
 import { retryLlmStage } from '../llm/retry'
+import { generatePlanContentsRobust } from '../llm/contents-retry'
 import { EnrichService } from '../threads/enrich.service'
+import { CatalogService } from '../catalog/catalog.service'
 
 /*
  * 파이프라인 플레이그라운드 dry-run (DESIGN-PIPELINE-LANGGRAPH.md 페이즈 4) — LLM 단계 하나를
@@ -73,6 +85,7 @@ export class PipelineDryRunService {
     private readonly llm: LlmService,
     private readonly knowledge: KnowledgeService,
     private readonly enrich: EnrichService,
+    private readonly catalog: CatalogService,
   ) {}
 
   private async systemFor(promptId: PromptDefId, override?: string): Promise<ResolvedSystem> {
@@ -123,8 +136,10 @@ export class PipelineDryRunService {
     if (body.stageId === 'plan-skeleton') {
       const system = await this.systemFor('plan-skeleton', body.promptOverride)
       const user = buildPlanSkeletonRequest(body.intent, body.survey, body.answers, body.profile, undefined, ledger)
-      // 그래프·legacy 와 같은 재시도 규칙 (llm/retry.ts) — 플레이그라운드도 같은 견고함으로
-      const { content, meta } = await retryLlmStage(() => this.llm.generate('계획 뼈대 생성(dry-run)', PlanSkeletonGen, {
+      // 그래프·legacy 와 같은 재시도 규칙 (llm/retry.ts) — 플레이그라운드도 같은 견고함으로.
+      // 스키마 갈래(look | compare·caution)도 운영 호출(LlmService.generatePlanSkeleton)과 같은 판정으로 고른다
+      const skeletonSchema = planSkeletonGenFor({ photo: hasPhotoAnswer(body.survey, body.answers) })
+      const { content, meta } = await retryLlmStage(() => this.llm.generate('계획 뼈대 생성(dry-run)', skeletonSchema, {
         system,
         effort: this.effortOf('plan-skeleton', 'medium'),
         user,
@@ -135,30 +150,55 @@ export class PipelineDryRunService {
         promptCustom: system.custom,
         prompt: { promptId: 'plan-skeleton', system: system.text, custom: system.custom, user },
         meta,
-        skeleton: content,
+        // 자리 순서 정규화(콘텐츠 자리가 상품 자리보다 앞) — 운영 경로와 같은 뼈대를 플레이그라운드도 본다
+        skeleton: { ...content, sections: orderSkeletonSlots(content.sections as PlanSkeletonGen['sections']) },
       }
     }
 
+    // 내부 카탈로그 후보(v29) — 운영 경로(s2 원장 노드)와 같은 조회. 후보 표가 가변부에 실리고 게이트가 같은 목록으로 id 를 해석한다
+    const candidates = await this.catalog.candidatesFor({
+      intent: body.intent,
+      survey: body.survey,
+      answers: body.answers,
+      profile: body.profile,
+      ledger,
+    })
+    events.onStatus?.(
+      candidates.source === 'db'
+        ? `내부 카탈로그 후보 — 상품 ${candidates.products.length} · 콘텐츠 ${candidates.contents.length}`
+        : '내부 카탈로그 표가 비어 데모 카탈로그로 대신해요',
+    )
     const guard: GuardContext = {
       blocklist: await this.knowledge.blocklist(),
       contentBlockHosts: await this.knowledge.contentBlockHosts(),
       ledger,
+      candidates,
     }
     if (body.stageId === 'plan-contents') {
       const contentsSystem = await this.systemFor('plan-contents', body.promptOverride)
-      const contentsUser = buildPlanContentsRequest(body.intent, body.survey, body.answers, body.profile, undefined, ledger)
-      const contents = await this.llm.generate('계획 참고 콘텐츠 생성(dry-run)', PlanContentsGen, {
-        system: contentsSystem,
-        effort: this.effortOf('plan-contents', 'medium'),
-        user: contentsUser,
-        webSearch: true,
-        webSearchMaxUses: 3,
-        stream: events.onStatus
-          ? { arrayKey: 'sections', onSearch: (query) => events.onStatus?.(`웹에서 "${query}" 검색 중…`) }
-          : undefined,
-      })
+      const survey = body.survey
+      const answers = body.answers
+      let contentsUser = ''
+      // 운영 경로와 같은 「빈 결과 재시도」 (llm/contents-retry.ts) — 플레이그라운드가 운영과 다른 성공률을 보이지 않게
+      const { result: contents, attempts } = await generatePlanContentsRobust(
+        (opts) => {
+          contentsUser = buildPlanContentsRequest(body.intent, survey, answers, body.profile, undefined, ledger, opts, candidates)
+          return this.llm.generate(opts.retry ? '계획 참고 콘텐츠 생성(dry-run 재시도)' : '계획 참고 콘텐츠 생성(dry-run)', PlanContentsGen, {
+            system: contentsSystem,
+            effort: this.effortOf('plan-contents', 'medium'),
+            user: contentsUser,
+            webSearch: true,
+            webSearchMaxUses: webSearchBudget(WEB_SEARCH_CONTENTS_MAX_USES, candidates.contents.length >= RICH_CONTENT_CANDIDATES),
+            stream: events.onStatus
+              ? { arrayKey: 'sections', onSearch: (query) => events.onStatus?.(`웹에서 "${query}" 검색 중…`) }
+              : undefined,
+          })
+        },
+        { onRetry: () => events.onStatus?.('참고할 영상·게시글을 다른 검색어로 다시 찾고 있어요…') },
+      )
       await this.enrich.enrichContents(contents.content.sections)
       const contentsDrops: GroundingDrop[] = []
+      if (attempts > 1) contentsDrops.push({ code: 'contents-empty-retry', message: '참고 콘텐츠 첫 호출이 빈 결과라 검색어를 바꿔 한 번 더 불렀다' })
       const contentSections = contents.content.sections
         .map((s) => {
           const { section, drops } = groundContentsSection(s, guard)
@@ -177,12 +217,13 @@ export class PipelineDryRunService {
       }
     }
     const system = await this.systemFor('plan-products', body.promptOverride)
-    const user = buildPlanProductsRequest(body.intent, body.survey, body.answers, body.profile, undefined, ledger)
+    const user = buildPlanProductsRequest(body.intent, body.survey, body.answers, body.profile, undefined, ledger, candidates)
     const { content, meta } = await this.llm.generate('계획 상품 생성(dry-run)', PlanProductsGen, {
       system,
       effort: this.effortOf('plan-products', 'high'),
       user,
       webSearch: true,
+      webSearchMaxUses: webSearchBudget(WEB_SEARCH_MAX_USES, candidates.products.length >= RICH_PRODUCT_CANDIDATES),
       stream: events.onStatus
         ? { arrayKey: 'sections', onSearch: (query) => events.onStatus?.(`웹에서 "${query}" 검색 중…`) }
         : undefined,

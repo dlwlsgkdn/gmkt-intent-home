@@ -13,6 +13,7 @@ import AdminThreadPreview, { threadPreviewPages } from './AdminThreadPreview.jsx
 import PipelineStudio from './PipelineStudio.jsx'
 import AdminDashboard from './AdminDashboard.jsx'
 import AdminKnowledge from './AdminKnowledge.jsx'
+import AdminSeeding from './AdminSeeding.jsx'
 import AdminPromptLibrary from './AdminPromptLibrary.jsx'
 import AdminChangeLog from './AdminChangeLog.jsx'
 import TaggingStudio from './TaggingStudio.jsx'
@@ -47,6 +48,7 @@ const NAV_GROUPS = [
       ['threads', '◎', '고객 여정·평가'],
       ['tagging', '⊞', '상품 태깅'],
       ['knowledge', '◇', '트렌드 사전'],
+      ['seeding', '⇣', '데이터 시딩'],
     ],
   },
   {
@@ -299,7 +301,7 @@ export default function AdminView({ api, tab, studioScenarioId, threadId }) {
     {/* 파이프라인 탭은 3컬럼(지식·다이어그램·플레이그라운드)이라 넓은 컨테이너 변형을 쓴다 */}
     <main className={
       'sb-admin'
-      + (tab === 'pipeline' || tab === 'tagging' || tab === 'prompts' || tab === 'knowledge' ? ' sb-admin--wide' : '')
+      + (tab === 'pipeline' || tab === 'tagging' || tab === 'prompts' || tab === 'knowledge' || tab === 'seeding' ? ' sb-admin--wide' : '')
       + (studioFullView ? ' sb-admin--studio-editor' : '')
     }>
 
@@ -334,6 +336,9 @@ export default function AdminView({ api, tab, studioScenarioId, threadId }) {
       )}
 
       {tab === 'knowledge' && <AdminKnowledge api={api} />}
+
+      {/* 데이터 시딩 — 내재화 카탈로그(추천 상품·콘텐츠 내부 표)의 현황·시딩 잡·재료·점검 (2026-09-17) */}
+      {tab === 'seeding' && <AdminSeeding api={api} />}
 
       {tab === 'tagging' && <TaggingStudio api={api} embedded />}
 

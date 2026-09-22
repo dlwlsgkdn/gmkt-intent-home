@@ -180,8 +180,7 @@ export function useHomePersonalize(api) {
   const threadId = Number.isInteger(personal.threadIndex) && personal.threadIndex >= 1 ? threadIds[personal.threadIndex - 1] || null : null
   return {
     greeting: { text: personal.greeting, threadId, ready: personal.ready, source: personal.source },
-    /* basis — 보라 칩의 근거: 쓰레드가 있으면 '내 쓰레드에서 이어서', 없으면 프로필·계절만으로 만든 것 */
-    personal: { items: personal.suggestions, ready: personal.ready, source: personal.source, basis: digests.length ? 'threads' : 'profile' },
+    personal: { items: personal.suggestions, ready: personal.ready, source: personal.source },
     popular,
     weather: personal.weather,
   }

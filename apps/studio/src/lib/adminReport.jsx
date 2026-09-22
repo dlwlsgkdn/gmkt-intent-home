@@ -73,6 +73,10 @@ function stepSummary(step, surveyPage) {
         lines.push(`- [contents] ${s.title} — 콘텐츠 ${(s.items || []).length}개`)
       } else if (s.kind === 'steps') {
         lines.push(`- [steps] ${s.title} — 체크 ${(s.steps || []).length}개`)
+      } else if (s.kind === 'compare') {
+        lines.push(`- [compare] ${s.title} — ${s.alt?.name || '?'} vs ${s.pick?.name || '?'} · 성분 ${(s.rows || []).length}행`)
+      } else if (s.kind === 'caution') {
+        lines.push(`- [caution] ${s.title} — 성분 ${(s.items || []).length}개`)
       } else {
         lines.push(`- [${s.kind}] ${s.title}`)
       }

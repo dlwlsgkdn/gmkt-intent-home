@@ -171,8 +171,10 @@ async function ssePost(path, body, { onStatus, onEvent } = {}) {
     if (done) break
   }
   if (error) {
-    const e = new AdminApiError(0, error.message || '실행에 실패했어요.')
+    // detail = 운영자용 원인 한 줄(API 상태·오류 문구·파싱 사유) — 사용자 안내와 따로 오므로 메시지 뒤에 붙여 보인다
+    const e = new AdminApiError(0, error.detail ? `${error.message || '실행에 실패했어요.'} — 원인: ${error.detail}` : error.message || '실행에 실패했어요.')
     e.code = error.code
+    e.detail = error.detail
     throw e
   }
   if (!result) throw new AdminApiError(0, '결과를 받지 못했어요. 잠시 후 다시 시도해 주세요.')
@@ -241,3 +243,38 @@ export function fetchEngineMetrics() {
 
 export function assistPromptFlow(body) { return req('POST', '/prompt-flow/assist', body) }
 export function applyPromptFlow(body) { return req('PUT', '/prompt-flow', body) }
+
+/* ── 내재화 카탈로그 (v29, 2026-09-17) — 현황·시딩·수확·점검 (API.md §1-1) ── */
+/** 현황 — { stats: { products, contents, updatedAt }, available, note? } (available=false 면 core 표 없음/미연결) */
+export function fetchAdminCatalog() { return req('GET', '/catalog') }
+/** 가져오기 — 올리브영 사내 Mongo 내보내기 JSON 등 { products?: CatalogProductRow[], contents?: CatalogContentRow[] } (≤500/요청, 멱등 upsert) → { products, contents } */
+export function importAdminCatalog(body) { return req('POST', '/catalog/import', body) }
+/** 지난 쓰레드 계획에서 수확(백필) → { threads, plans, products, contents } */
+export function harvestAdminCatalog(limit = 100) { return req('POST', `/catalog/harvest?limit=${limit}`) }
+/** 상품 링크 점검(지마켓 썸네일·그 밖 몰 상품 주소 HEAD, mall 기본 전체) → { checked, alive, dead, skipped } */
+export function verifyAdminCatalog(limit = 50, mall = '*') { return req('POST', `/catalog/verify?limit=${limit}&mall=${encodeURIComponent(mall)}`) }
+/** 썸네일 채우기(소급) — 빈 imageUrl 행에 지마켓·올리브영 결정적 썸네일 → { scanned, filled } */
+export function fillThumbsAdminCatalog() { return req('POST', '/catalog/fill-thumbnails') }
+/** 시딩 웹 검색 배치 — { keywords?: string[≤8] } 또는 { queries?: [{keyword, query}][≤8], dense? } → { keywords, failed, products, verified, webSearchRequests } */
+export function seedSearchAdminCatalog(body) { return req('POST', '/catalog/seed-search', Array.isArray(body) ? { keywords: body } : body) }
+/* 시딩 잡 — 서버(core KV)가 상태를 갖고 드라이버가 step 으로 전진시킨다. 응답은 { job, busy? } */
+export function fetchSeedJob() { return req('GET', '/catalog/seed-job') }
+export function startSeedJob(body) { return req('POST', '/catalog/seed-job', body) }
+export function stepSeedJob() { return req('POST', '/catalog/seed-job/step') }
+export function pauseSeedJob() { return req('POST', '/catalog/seed-job/pause') }
+export function resumeSeedJob() { return req('POST', '/catalog/seed-job/resume') }
+export function clearSeedJob() { return req('DELETE', '/catalog/seed-job') }
+/** 표 만들기 — core 가 카탈로그 컬렉션·인덱스를 멱등 보장 → { created, catalog: AdminCatalogWire } */
+export function migrateAdminCatalog() { return req('POST', '/catalog/migrate') }
+/* 둘러보기 — 「데이터 시딩」의 상품·콘텐츠 표 (무한 스크롤). params: { q, mall, source, type, verified, status, cursor, limit } → { items, nextCursor, total } */
+const listQs = (params = {}) => {
+  const q = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null && v !== '') q.set(k, String(v))
+  const s = q.toString()
+  return s ? `?${s}` : ''
+}
+export function fetchCatalogProducts(params) { return req('GET', `/catalog/products${listQs(params)}`) }
+export function fetchCatalogContents(params) { return req('GET', `/catalog/contents${listQs(params)}`) }
+/** 행 표시 — { verified?, status? } */
+export function patchCatalogProduct(id, body) { return req('PATCH', `/catalog/products/${encodeURIComponent(id)}`, body) }
+export function patchCatalogContent(id, body) { return req('PATCH', `/catalog/contents/${encodeURIComponent(id)}`, body) }

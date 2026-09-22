@@ -7,7 +7,7 @@
  * 두 형태가 같은 배열에 섞여 있어도 되므로 읽는 쪽은 언제나 cartEntry()/cartEntries()를 거친다.
  * 워크스페이스 쓰레드 기록(account:<id>:threads 행)과 라이브 cartAdd 이벤트 payload 가 같은 형태를 싣는다.
  */
-import { livePlanSectionId } from './livePage.js'
+import { livePlanSectionId, orderedPlanSections } from './livePage.js'
 
 export function cartEntry(entry) {
   if (entry && typeof entry === 'object') return entry
@@ -158,11 +158,10 @@ export function productLookupFromPlanPage(page, opts = {}) {
   const pendingSlots = opts.pendingSlots || []
   const map = new Map()
   map.steps = [] // 라이브 계획의 단계(guide) 목록 — 시트의 빈 파트 행 재료 (라이브 단계엔 배지가 없다)
-  const sections = page?.sections || []
   let current = null
-  /* forEach 가 아니라 인덱스 순회 — 조기 확정 뒤 안 온 자리는 null 이라 forEach 는 건너뛰고, 그러면 어느 단계가 대기 중인지 모른다 */
-  for (let i = 0; i < sections.length; i += 1) {
-    const section = sections[i]
+  /* forEach 가 아니라 화면 순서(orderedPlanSections) 순회 — 조기 확정 뒤 안 온 자리는 null 이라 forEach 는 건너뛰고, 그러면 어느
+     단계가 대기 중인지 모른다. 스트리밍 중 자리 없이 배정된 상품 섹션(page.placement)도 투영과 같은 단계에 묶인다 */
+  for (const { index: i, section } of orderedPlanSections(page)) {
     if (!section) {
       if (current && pendingSlots.includes(i)) current.pending = true
       continue

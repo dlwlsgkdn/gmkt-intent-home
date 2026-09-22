@@ -7,7 +7,7 @@ export const COMMON_COMPONENTS = {
     label: '화면 헤더',
     stage: 'common',
     icon: '🔝',
-    hint: 'Figma 상단 바 — 뒤로 · 화면 제목 · 홈',
+    hint: 'Figma 상단 바 — 뒤로 · 화면 제목 · 홈 (라이브 도구(평가·새로 생성)는 화면 밖 스테퍼에 있다)',
     defaults: { title: '설문 단계', back: true, home: true, ai: false },
     fields: [
       { key: 'title', label: '화면 제목', kind: 'text' },
@@ -40,20 +40,6 @@ export const COMMON_COMPONENTS = {
             ) : null}
             {kText(p.title, ctx, 'title')}
           </p>
-          {/* 플레이어가 넘긴 화면 액션 (예: 라이브 생성의 평가·새로 생성) — 홈 왼쪽에 붙는다 */}
-          {(isPlayer && ctx.player.headerActions ? ctx.player.headerActions : []).map((a) => (
-            <button
-              key={a.key}
-              type="button"
-              className={'sb-screen-header__icon' + (a.active ? ' is-on' : '')}
-              aria-label={a.label}
-              title={a.title || a.label}
-              disabled={!!a.disabled}
-              onClick={a.onClick}
-            >
-              {a.icon}
-            </button>
-          ))}
           {slot(
             p.home !== false,
             <button

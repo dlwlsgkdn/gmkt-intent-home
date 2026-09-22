@@ -72,8 +72,9 @@ function priceFactor(product: CatalogProduct, ledger: ConstraintLedger | null | 
 }
 
 function evidenceFactor(product: CatalogProduct): { score: number; note: string } {
-  const isCatalog = !product.mall
-  if (isCatalog) return { score: 100, note: '지마켓 카탈로그의 검증된 상품이에요' }
+  // 내부 카탈로그(데모 14종·DB 후보 gm-/oy-/…)는 id 접두가 `web-` 이 아니다 — mall 이 적혀 있어도 검증된 내부 상품이다 (v29)
+  const isCatalog = !product.id.startsWith('web-')
+  if (isCatalog) return { score: 100, note: `${product.mall ?? '지마켓'} 카탈로그의 검증된 상품이에요` }
   if (product.urlKind === 'search') return { score: 25, note: `${product.mall} 검색 결과로 확인한 상품이에요 (상세 페이지는 미확인)` }
   if (product.imageUrl) return { score: 75, note: `${product.mall} 상품 페이지와 썸네일을 확인했어요` }
   return { score: 50, note: `${product.mall} 상품 페이지를 확인했어요 (썸네일은 미확인)` }
@@ -83,6 +84,13 @@ const FACT_SOURCES: Record<'skin' | 'concern' | 'preference', LedgerFact['source
   skin: ['profile'],
   concern: ['intent', 'answer'],
   preference: ['answer'],
+}
+
+/** 항목 하나를 덮어쓰고 총점을 다시 합산한다 — 카탈로그 폴백이 「상품 자리 기준과 겹치는 태그」를 고민·목적 항목의 근거로 쓸 때 */
+export function withMatchFactor(match: ProductMatch, key: MatchDimensionKey, score: number, note: string): ProductMatch {
+  const factors = match.factors.map((f) => (f.key === key ? { ...f, score: Math.min(100, Math.max(0, Math.round(score))), note } : f))
+  const total = Math.round(factors.reduce((sum, f) => sum + (f.weight * f.score) / 100, 0))
+  return { ...match, factors, score: Math.min(100, Math.max(0, total)) }
 }
 
 /** 상품 하나의 매칭율 — LLM 평가(있으면)와 원장으로 항목 5개를 채우고 가중 합산한다 */

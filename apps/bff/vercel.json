@@ -1,5 +1,5 @@
 {
-  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- ':(top)apps/bff' ':(top)packages' ':(top)package-lock.json' 2>/dev/null || exit 1",
+  "ignoreCommand": "b=\"${VERCEL_GIT_PREVIOUS_SHA:-HEAD^}\"; git diff --quiet \"$b\" HEAD -- ':(top)apps/bff' ':(top)packages' ':(top)package-lock.json' 2>/dev/null || exit 1",
   "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }],
   "functions": { "api/index.js": { "maxDuration": 300 } }
 }

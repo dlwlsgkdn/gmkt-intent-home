@@ -29,6 +29,18 @@ export function useTopBarActions({
     api.showToast(`${preset.label} 폭 기준으로 캔버스를 전환했어요.`)
   }
 
+  /* 발행·발행 취소·빌더 이탈(홈으로)은 곧 서버 저장 시점이다(2026-09-16). 「발행하기」가 로컬 상태만 바꾸고 홈으로 나가면
+     홈엔 저장 버튼이 없어, 새로고침 때 부트 하이드레이션이 서버의 옛 셸로 탐색 페이지·발행 상태를 되돌렸다(실제 사고).
+     상태 커밋 뒤에 올려야 하므로 setTimeout(0) — 발행의 updateScenario 가 반영된 스냅샷을 push(stateRef)가 읽는다.
+     수동 「서버에 저장」과 같은 push 경로라 충돌은 확인 대화상자·실패는 토스트로 알리고, 이동 자체는 막지 않는다
+     (로컬엔 이미 저장됐다). force = 이번 동작이 방금 상태를 바꿔 이 렌더의 dirty 가 아직 옛 값일 때 */
+  const pushToServerSoon = ({ force = false } = {}) => {
+    const sync = api.remoteSync
+    if (!sync || !sync.enabled) return
+    if (!force && !sync.dirty) return
+    setTimeout(() => sync.push(), 0)
+  }
+
   const publish = () => {
     const warnings = publishWarnings(scenario, planCases)
     if (warnings.length > 0 && !window.confirm(`${warnings.join('\n')}\n\n그래도 발행할까요?`)) return
@@ -42,6 +54,7 @@ export function useTopBarActions({
       versions: [...(current.versions || []), snapshot].slice(-VERSION_LIMIT),
     }))
     api.showToast(`"#${chip}" 칩이 홈 탐색창 밑에 발행됐어요!`)
+    pushToServerSoon({ force: true })
     api.goHome()
   }
 
@@ -112,6 +125,7 @@ export function useTopBarActions({
     patchScenario,
     changeDevice,
     publish,
+    pushToServerSoon,
     restoreVersion,
     exportScenarioJson,
     importScenarioJson,

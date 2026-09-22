@@ -145,7 +145,7 @@ export class ThreadsController {
           onHead: (patch) => sseSend(res, 'head', patch),
           // 뼈대 조기 확정 — FE가 계획을 확정 렌더하고, 상품·콘텐츠 자리(pending)는 로딩 카드로 둔다
           onSkeleton: (page, pending) => sseSend(res, 'skeleton', { page, pending }),
-          onSection: (section, index, final) => sseSend(res, 'section', { index, section, final }),
+          onSection: (section, index, final, before) => sseSend(res, 'section', before == null ? { index, section, final } : { index, section, final, before }),
           onSearch: (query) => sseSend(res, 'status', { message: `웹에서 "${query}" 검색 중…` }),
           onStatus: (message) => sseSend(res, 'status', { message }),
         },

@@ -118,8 +118,12 @@ export default function BuilderTopBar({
         <span className={'sb-status ' + (scenario.status === 'published' ? 'sb-status--live' : '')}>
           {scenario.status === 'published' ? '발행됨' : '작성 중'}
         </span>
-        <span className="sb-autosave" title={scenario.updatedAt}>
-          자동 저장됨 · {new Date(scenario.updatedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+        {/* 로컬(localStorage) 자동 저장 시각 — 서버 저장과 다른 것임을 라벨로 가른다(옛 「자동 저장됨」이 서버 저장으로 읽혔다) */}
+        <span
+          className="sb-autosave"
+          title={`이 브라우저에 자동 저장된 시각 (${scenario.updatedAt}) — 서버 저장은 오른쪽 버튼, 발행·홈으로 이동 때도 올라가요`}
+        >
+          로컬 자동 저장 · {new Date(scenario.updatedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
         </span>
         <SyncButton sync={remoteSync} small />
 

@@ -9,6 +9,8 @@ const threads = new Map() // id -> { thread, steps: Map<seq, step> }
 const settings = new Map() // key -> value (core 설정 KV 모의 — 지식·가드·엔진 플래그)
 const evalCases = new Map() // id -> case row
 const evalRuns = new Map() // id -> run row
+const catalogProducts = new Map() // id -> 내재화 카탈로그 상품 행 (v29 — 시딩·수확 검증)
+const catalogContents = new Map() // id -> 내재화 카탈로그 콘텐츠 행
 let nextId = 2195943212345678900n
 export const llmCalls = [] // { type, system, user } — e2e가 프롬프트 주입을 검증한다
 /* 모의 LLM 실패 주입 — `PUT /internal/mock/llm-fail {count, status, only}`: 다음 count 번의 /v1/messages 를 status(기본 529)로
@@ -115,6 +117,38 @@ const SKELETON_JSON = JSON.stringify({
   ],
 })
 
+/* 성분이 기준인 의도(면도 자극·성분 비교 요구) — 뼈대가 성분 비교표(compare)·주의 성분(caution)을 단계 안내 뒤·상품 자리 앞에
+   둔다 (v26). short·desc 의 빈 문자열이 와이어에서 떨어지는지, 5c 콘텐츠가 그 단계 끝(steps 앞)에 끼는지 본다 */
+const SKELETON_INGREDIENT_JSON = JSON.stringify({
+  headline: '모의 면도 자극 케어 계획',
+  summary: '면도 뒤 붉어지는 피부를 위한 모의 요약입니다.',
+  sections: [
+    { kind: 'guide', title: '자극 원인 짚기', subtitle: '면도 뒤 붉어짐을 부르는 성분부터', body: '면도 직후 피부 장벽이 약해져 있어요.' },
+    {
+      kind: 'compare',
+      title: '기존 워시와 추천 기준을 성분으로 비교했어요',
+      alt: { badge: '기존 제품', name: '일반 올인원 워시', short: '' },
+      pick: { badge: '추천 기준', name: '약산성 저자극 쉐이빙 젤', short: '쉐이빙 젤' },
+      rows: [
+        { ingredient: 'SLS/SLES', alt: '있음', pick: '없음', risk: '높음' },
+        { ingredient: '인공향료', alt: '있음', pick: '없음', risk: '중간' },
+        { ingredient: '에탄올', alt: '소량', pick: '없음', risk: '낮음' },
+      ],
+    },
+    {
+      kind: 'caution',
+      title: '주의해서 볼 성분',
+      desc: '',
+      items: [
+        { name: 'SLS (Sodium Lauryl Sulfate)', note: '세정력이 강해 면도 직후엔 자극이 될 수 있어요.' },
+        { name: '인공향료 (Fragrance)', note: '민감해진 피부에 자극이 될 수 있어요.' },
+      ],
+    },
+    { kind: 'products', title: '저자극 쉐이빙 젤·폼 고르기', reason: '약산성·무향·SLS 프리 기준으로 고를 거예요.' },
+    { kind: 'steps', title: '사용 순서', steps: ['미온수로 적시기', '젤을 얇게 펴 바르기'] },
+  ],
+})
+
 const INTENT_JSON = JSON.stringify({
   template: '제품 추천',
   goal: '여름 지속력',
@@ -164,7 +198,7 @@ const PRODUCTS_JSON = JSON.stringify({
           brand: '모의브랜드',
           price: 19900,
           mall: '올리브영',
-          url: 'https://www.oliveyoung.co.kr/store/goods/getGoodsDetail.do?goodsNo=A000000001',
+          url: 'https://www.oliveyoung.co.kr/store/goods/getGoodsDetail.do?goodsNo=A000000000001',
           urlKind: 'pdp',
           imageUrl: '',
           tags: ['지속력', '세미매트'],
@@ -179,7 +213,7 @@ const PRODUCTS_JSON = JSON.stringify({
           brand: '모의브랜드',
           price: 15000,
           mall: '올리브영',
-          url: 'https://www.oliveyoung.co.kr/store/goods/getGoodsDetail.do?goodsNo=A000000002',
+          url: 'https://www.oliveyoung.co.kr/store/goods/getGoodsDetail.do?goodsNo=A000000000002',
           urlKind: 'pdp',
           imageUrl: '',
           tags: ['진정'],
@@ -355,8 +389,29 @@ const server = http.createServer(async (req, res) => {
       })
       return streamAnthropic(res, output, { delayMs: 2, chunkSize: 40 })
     }
+    if (system.includes('카탈로그 수집기')) {
+      // 내재화 시딩 웹 검색 배치 (v29) — 유형마다 지마켓·올리브영·검색 페이지(버려짐) 상품 셋
+      llmCalls.push({ type: 'catalog-seed', system, user })
+      const kw = (user.match(/제품 유형: (.+)/) || [])[1]?.trim() || '상품'
+      const code = String(5500000000 + [...kw].reduce((n, ch) => n + ch.charCodeAt(0), 0))
+      return streamAnthropic(res, JSON.stringify({
+        products: [
+          { name: `모의 ${kw} 지마켓 A`, brand: '모의랩', price: 21000, mall: '지마켓', url: `https://item.gmarket.co.kr/Item?goodscode=${code}`, imageUrl: '', tags: [kw, '지속력'] },
+          { name: `[올영픽] 모의 ${kw} 올영 B`, brand: '모의랩', price: 0, mall: '올리브영', url: 'https://www.oliveyoung.co.kr/store/goods/getGoodsDetail.do?goodsNo=A000000009999', imageUrl: '', tags: [kw] },
+          { name: `검색 페이지 C`, brand: '모의랩', price: 1000, mall: '지마켓', url: 'https://browse.gmarket.co.kr/search?keyword=c', imageUrl: '', tags: [] },
+        ],
+      }), { delayMs: 2, chunkSize: 60 })
+    }
     if (system.includes('참고 콘텐츠 수집')) {
-      llmCalls.push({ type: 'contents', system, user })
+      // 「빈 콘텐츠」 의도의 첫 호출은 확인된 콘텐츠가 없는 척 빈 배열을 돌려준다 — bff 가 검색어를 바꾸라는 힌트(CONTENTS_RETRY_HINT
+      // 「직전 시도에서는」)를 붙여 한 번 더 부르면 그때 정상 콘텐츠를 준다 (llm/contents-retry.ts 검증)
+      const retry = user.includes('직전 시도에서는')
+      llmCalls.push({ type: 'contents', system, user, retry })
+      if (user.includes('빈 콘텐츠')) {
+        if (!retry) return streamAnthropic(res, JSON.stringify({ sections: [] }), { delayMs: 2, chunkSize: 40 })
+        // 재시도 결과는 앞 쓰레드들이 이미 보여준 모의 URL 과 겹치지 않게(검증 게이트 duplicate-recent) 주소를 바꿔 준다
+        return streamAnthropic(res, CONTENTS_JSON.replace(/mock0001/g, 'retry0001').replace(/blog\.example\.com\//g, 'blog.example.com/retry-'), { delayMs: 6, chunkSize: 40 })
+      }
       return streamAnthropic(res, CONTENTS_JSON, { delayMs: 6, chunkSize: 40 })
     }
     if (system.includes('productIds')) {
@@ -364,10 +419,17 @@ const server = http.createServer(async (req, res) => {
       return streamAnthropic(res, PRODUCTS_JSON, { delayMs: 10, chunkSize: 24 }) // 뼈대보다 늦게 끝나게
     }
     if (system.includes('뼈대')) {
-      llmCalls.push({ type: 'skeleton', system, user })
+      // 요청의 출력 스키마에 실린 섹션 종류 — 뼈대 호출은 look 갈래 | compare·caution 갈래 중 하나만 싣는다
+      // (전부 한 합집합에 실으면 실제 API 가 문법 크기 초과 400 으로 거절한다, 2026-09-17). SDK 는 판별자 const 를
+      // description 에 접어 보내므로 `{const: "look"}` 문구로 센다
+      const schemaText = JSON.stringify(body.output_config?.format?.schema ?? {})
+      const schemaKinds = ['guide', 'look', 'compare', 'caution', 'products', 'contents', 'steps'].filter((k) => schemaText.includes(`{const: \\"${k}\\"}`))
+      llmCalls.push({ type: 'skeleton', system, user, schemaKinds })
       // 사진을 받은 쓰레드면 가상 메이크업 결과(look)로 여는 뼈대를 돌려준다
       const lookPlan = user.includes('얼굴 사진을 올렸습니다')
-      return streamAnthropic(res, lookPlan ? SKELETON_LOOK_JSON : SKELETON_JSON, { delayMs: 4, chunkSize: 18 })
+      // 성분이 기준인 의도(면도 자극·성분 비교)면 성분 비교표·주의 성분이 든 뼈대를 돌려준다 (v26)
+      const ingredientPlan = user.includes('성분 비교')
+      return streamAnthropic(res, lookPlan ? SKELETON_LOOK_JSON : ingredientPlan ? SKELETON_INGREDIENT_JSON : SKELETON_JSON, { delayMs: 4, chunkSize: 18 })
     }
     if (system.includes('정규화한다')) {
       llmCalls.push({ type: 'intent', system, user })
@@ -504,6 +566,100 @@ const server = http.createServer(async (req, res) => {
       if (!row) return send(404, { message: 'no run' })
       row.judge = body.judge
       return send(200, row)
+    }
+  }
+  // ── 내재화 카탈로그 (v29) — 인메모리 표. 검색은 search_text 부분 일치 개수(core 와 같은 규칙)로 점수 ──
+  if (url.startsWith('/internal/catalog/')) {
+    const norm = (parts) => parts.filter((p) => typeof p === 'string' && p.trim()).join(' ').toLowerCase().replace(/\s+/g, '')
+    const search = (table, textOf, q) => {
+      const typeSet = new Set((q.typeTerms ?? []).map((t) => t.toLowerCase().replace(/\s+/g, '')))
+      const items = [...table.values()]
+        .filter((row) => row.status !== 'dead' && (q.verifiedOnly === false || row.verified))
+        .map((row) => {
+          const text = textOf(row)
+          const score = (q.terms ?? []).reduce((n, t) => {
+            const key = t.toLowerCase().replace(/\s+/g, '')
+            return n + (text.includes(key) ? (typeSet.has(key) ? 2 : 1) : 0)
+          }, 0)
+          return { ...row, score }
+        })
+        .filter((row) => row.score > 0)
+        .sort((a, b) => b.score - a.score || (b.recommendCount ?? 0) - (a.recommendCount ?? 0) || (a.id < b.id ? -1 : 1))
+        .slice(0, q.limit ?? 24)
+      return { items, total: table.size }
+    }
+    const upsert = (table, items, bump) => {
+      for (const row of items) {
+        const prev = table.get(row.id)
+        if (prev && bump) {
+          table.set(row.id, {
+            ...prev,
+            name: row.name ?? prev.name,
+            price: row.price ?? prev.price,
+            imageUrl: row.imageUrl ?? prev.imageUrl,
+            tags: [...new Set([...(prev.tags ?? []), ...(row.tags ?? [])])],
+            verified: prev.verified || row.verified,
+            recommendCount: (prev.recommendCount ?? 0) + (row.recommendCount ?? 0),
+            lastSeenAt: row.lastSeenAt ?? prev.lastSeenAt,
+          })
+        } else table.set(row.id, { status: 'active', recommendCount: 0, ...row })
+      }
+      return { upserted: items.length }
+    }
+    const productText = (r) => norm([r.name, r.brand, ...(r.tags ?? []), r.category, r.mall])
+    const contentText = (r) => norm([r.title, r.source, ...(r.tags ?? []), (r.snippet ?? '').slice(0, 200)])
+    if (url === '/internal/catalog/products/search' && req.method === 'POST') return send(200, search(catalogProducts, productText, body))
+    if (url === '/internal/catalog/contents/search' && req.method === 'POST') return send(200, search(catalogContents, contentText, body))
+    if (url === '/internal/catalog/products' && req.method === 'PUT') return send(200, upsert(catalogProducts, body.items ?? [], body.bump))
+    if (url === '/internal/catalog/contents' && req.method === 'PUT') return send(200, upsert(catalogContents, body.items ?? [], body.bump))
+    if ((m = url.match(/^\/internal\/catalog\/products\/([^/?]+)$/)) && req.method === 'PATCH') {
+      const row = catalogProducts.get(decodeURIComponent(m[1]))
+      if (!row) return send(404, { message: 'no product' })
+      Object.assign(row, body)
+      return send(200, row)
+    }
+    if (url.startsWith('/internal/catalog/products/verify-list') && req.method === 'GET') {
+      const mallQ = new URLSearchParams(url.split('?')[1] || '').get('mall') || '*'
+      return send(200, { items: [...catalogProducts.values()].filter((r) => (mallQ === '*' || r.mall === mallQ) && r.status !== 'dead').slice(0, 50) })
+    }
+    if (url === '/internal/catalog/ensure-schema' && req.method === 'POST') return send(200, { ok: true, created: false })
+    // 둘러보기 — 필터 + 커서(offset 근사) 페이지
+    if ((m = url.match(/^\/internal\/catalog\/(products|contents)(?:\?(.*))?$/)) && req.method === 'GET') {
+      const params = new URLSearchParams(m[2] || '')
+      const table = m[1] === 'products' ? catalogProducts : catalogContents
+      const q = (params.get('q') || '').toLowerCase().replace(/\s+/g, '')
+      let rows = [...table.values()].filter((r) => {
+        if (q && !(m[1] === 'products' ? productText(r) : contentText(r)).includes(q)) return false
+        if (params.get('mall') && r.mall !== params.get('mall')) return false
+        if (params.get('source') && r.source !== params.get('source')) return false
+        if (params.get('type') && r.type !== params.get('type')) return false
+        if (params.get('verified') && String(Boolean(r.verified)) !== params.get('verified')) return false
+        if (params.get('status') && (r.status || 'active') !== params.get('status')) return false
+        return true
+      })
+      const limit = Number(params.get('limit') || 40)
+      const offset = Number(params.get('cursor') || 0)
+      const page = rows.slice(offset, offset + limit)
+      return send(200, { items: page, nextCursor: offset + limit < rows.length ? String(offset + limit) : null, total: rows.length })
+    }
+    if ((m = url.match(/^\/internal\/catalog\/contents\/([^/?]+)$/)) && req.method === 'PATCH') {
+      const row = catalogContents.get(decodeURIComponent(m[1]))
+      if (!row) return send(404, { message: 'no content' })
+      Object.assign(row, body)
+      return send(200, row)
+    }
+    if (url === '/internal/catalog/stats' && req.method === 'GET') {
+      const count = (table, pred) => [...table.values()].filter(pred).length
+      const group = (table, key) => {
+        const acc = new Map()
+        for (const r of table.values()) acc.set(r[key], (acc.get(r[key]) ?? 0) + 1)
+        return [...acc].map(([k, count]) => ({ [key]: k, count }))
+      }
+      return send(200, {
+        products: { total: catalogProducts.size, verified: count(catalogProducts, (r) => r.verified && r.status !== 'dead'), dead: count(catalogProducts, (r) => r.status === 'dead'), byMall: group(catalogProducts, 'mall'), bySource: group(catalogProducts, 'source') },
+        contents: { total: catalogContents.size, verified: count(catalogContents, (r) => r.verified && r.status !== 'dead'), dead: count(catalogContents, (r) => r.status === 'dead'), byType: group(catalogContents, 'type') },
+        updatedAt: new Date().toISOString(),
+      })
     }
   }
   if (url.startsWith('/internal/plan-metas') && req.method === 'GET') {

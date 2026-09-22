@@ -18,7 +18,7 @@ import { livePlanItems, liveSurveyItems } from '../lib/livePage.js'
 
 const noop = () => {}
 
-const SECTION_KIND_LABEL = { guide: '단계 안내', steps: '체크리스트', products: '상품 추천', contents: '참고 콘텐츠' }
+const SECTION_KIND_LABEL = { guide: '단계 안내', steps: '체크리스트', products: '상품 추천', contents: '참고 콘텐츠', compare: '성분 비교표', caution: '주의 성분' }
 
 /** 섹션 kind → livePage 투영 타입 — 말풍선의 "무엇으로 그려졌나" 표기 */
 const SECTION_PROJECTION = {
@@ -26,6 +26,8 @@ const SECTION_PROJECTION = {
   steps: 'checklist',
   products: 'hscroll+productCard',
   contents: 'hscroll+video/articleCard',
+  compare: 'ingredientCompare',
+  caution: 'cautionIngredients',
 }
 
 /** URL → 도메인 한 조각 — 말풍선의 출처 근거 표기 (URL 없으면 null) */
@@ -284,6 +286,8 @@ export default function FlowRunPreview({
           {s.kind === 'steps' ? ` · 항목 ${(s.steps || []).length}개` : ''}
           {s.kind === 'products' ? ` · 상품 ${(s.products || []).length}개` : ''}
           {s.kind === 'contents' ? ` · 콘텐츠 ${(s.items || []).length}개` : ''}
+          {s.kind === 'compare' ? ` · ${s.alt?.name || '?'} vs ${s.pick?.name || '?'} · 성분 ${(s.rows || []).length}행` : ''}
+          {s.kind === 'caution' ? ` · 성분 ${(s.items || []).length}개` : ''}
           {s.kind === 'guide' ? ` · 본문 ${(s.body || '').length}자${s.subtitle ? ' · 서브타이틀 ✓' : ' · 서브타이틀 없음'}` : ''}
         </p>
         {b.slotReason && <p className="sb-flow-bubble__text">자리 선정 기준 (뼈대 5a) — {b.slotReason}</p>}

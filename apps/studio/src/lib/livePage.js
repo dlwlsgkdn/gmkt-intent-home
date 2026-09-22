@@ -1,7 +1,9 @@
 /* 라이브 와이어 페이지 → 스튜디오 아이템 투영 (DESIGN-LLM-SERVICE.md §2-1).
    매핑 기준: question→surveyQuestion(사진 질문은 surveyPhoto), guide→planStep,
    look→beforeAfter(가상 메이크업 결과), products→hscroll+productCard,
-   contents→hscroll+videoCard/articleCard, steps→checklist. 새 렌더 계층을 만들지 않고
+   contents→hscroll+videoCard/articleCard, steps→checklist,
+   compare→ingredientCompare(성분 비교표)·caution→cautionIngredients(주의 성분 — 뼈대가 성분이
+   기준인 의도에서만 만든다, v26). 새 렌더 계층을 만들지 않고
    레지스트리 player 렌더러를 그대로 재사용하기 위한 얇은 변환이다. id는 결정적으로
    부여한다 — 설문 답변 키는 와이어 질문 id 그대로(= surveyQuestion 아이템 id)라 answers
    왕복에 재매핑이 없다. 좌표(x/y)는 넣지 않는다. */
@@ -11,6 +13,46 @@ import { joinTextList } from './store.js'
 /** 계획 섹션 i 의 투영 아이템 id — 섹션 종류와 무관하게 인덱스로 결정된다(스트리밍 중 같은 index 재도착 = 같은 엘리먼트).
  * lib/cart.js 가 단계(guide) 목록에 같은 id 를 실어, 담은 상품 시트의 파트 → 계획 단계 앵커 스크롤이 이 id 로 래퍼를 찾는다 */
 export const livePlanSectionId = (index) => `live-plan-s${index}`
+
+/** 계획 섹션의 화면 순서 — `[{ index, section }]` (index = page.sections 인덱스 = 투영 아이템 id 의 재료). 투영(livePlanItems)과
+ * 담은 상품 시트의 단계 묶기(lib/cart.js productLookupFromPlanPage)가 같은 순서를 본다.
+ * 보통은 배열 순서 그대로다 — 빈 자리(null)도 방문한다(스트리밍 중 희소 배열의 구멍 = 아직 안 온 상품·콘텐츠 자리, 로딩 카드).
+ * 스트리밍 중 **자리 없이 배정된 섹션**(BFF 가 뼈대 길이 뒤 index 로 보내는 섹션)은 `page.placement[index]` = 끼울 뼈대 인덱스(이 앞)를
+ * 갖고, 그 위치에서 그린다 — 같은 위치는 콘텐츠 먼저·상품 다음(최종 병합 @ddak/pipeline composePlanSections 과 같은 순서), 같은
+ * 종류는 도착 순. 이전(2026-09-18 전)엔 이런 섹션이 result 까지 계획 끝(사용 순서 아래)에 보였다. result(최종본)엔 placement 가 없다 */
+export function orderedPlanSections(page) {
+  const sections = (page && page.sections) || []
+  const placement = (page && page.placement) || null
+  const out = []
+  if (!placement) {
+    for (let i = 0; i < sections.length; i += 1) out.push({ index: i, section: sections[i] })
+    return out
+  }
+  const extrasBefore = new Map() // 끼울 뼈대 인덱스 → 그 앞에 그릴 섹션들(도착 순)
+  const extraIndexes = new Set()
+  for (let i = 0; i < sections.length; i += 1) {
+    const before = placement[i]
+    if (typeof before !== 'number' || !sections[i]) continue
+    extraIndexes.add(i)
+    const list = extrasBefore.get(before) || []
+    list.push({ index: i, section: sections[i] })
+    extrasBefore.set(before, list)
+  }
+  const byKind = (list) => [...list.filter((e) => e.section.kind === 'contents'), ...list.filter((e) => e.section.kind !== 'contents')]
+  for (let i = 0; i < sections.length; i += 1) {
+    if (extraIndexes.has(i)) continue
+    const list = extrasBefore.get(i)
+    if (list) {
+      out.push(...byKind(list))
+      extrasBefore.delete(i)
+    }
+    out.push({ index: i, section: sections[i] })
+  }
+  // 뼈대 끝 위치(마지막 단계에 닫는 섹션이 없을 때)·모르는 위치 — 끝에, 위치 순
+  const rest = [...extrasBefore.entries()].sort((a, b) => a[0] - b[0])
+  for (const [, list] of rest) out.push(...byKind(list))
+  return out
+}
 
 /** 사진 질문의 와이어 답 — @ddak/schema PHOTO_ANSWER와 같은 문자열이어야 한다.
  * 사진 원본은 기기에 남고 서버로는 이 표식만 간다 (데이터 URL은 스텝·프롬프트에 실을 것이 못 된다) */
@@ -128,6 +170,7 @@ export function liveSurveyItems(page, opts = {}) {
 
 /** opts.photo — 설문에서 고른 얼굴 사진(데이터 URL). 가상 메이크업 결과(look) 섹션의
  * BEFORE 재료다: 서버는 어떤 룩인지(tone)만 정하고 합성은 화면이 한다.
+ * opts.photoBefore — 정밀 정렬 시 AFTER와 동일 영역으로 자른 BEFORE. 없으면 opts.photo 그대로.
  * opts.photoAfter — 메이크업이 올라간 AFTER 이미지(로컬 랜드마크 합성 또는 정밀 렌더). 늦게
  * 도착하므로 없을 수도 있고, 그때는 같은 사진에 tone 프리셋을 얹어 보여준다.
  * opts.lookStage — AFTER 자리의 진행 단계(skeleton|landmark|refining|precise). 원본(BEFORE)은
@@ -168,18 +211,18 @@ export function livePlanItems(page, opts = {}) {
     })
   }
   const sections = page.sections || []
-  /* forEach가 아니라 인덱스 순회다 — 스트리밍 중 partial.sections는 도착한 인덱스에만 값이
+  /* forEach가 아니라 orderedPlanSections 의 화면 순서 순회다 — 스트리밍 중 partial.sections는 도착한 인덱스에만 값이
      있는 희소 배열이고, forEach는 그 구멍을 아예 건너뛴다. 아직 안 온 자리에 로딩 카드를
-     제자리에 그리려면 구멍도 방문해야 한다 (렌더 여부는 pendingSlots가 정한다) */
+     제자리에 그리려면 구멍도 방문해야 한다 (렌더 여부는 pendingSlots가 정한다). 자리 없이 배정된 섹션(page.placement)은
+     배열 끝이 아니라 그 단계 묶음 안에서 방문한다 — 추천 카드가 단계 컴포넌트 밖에 서지 않는다 */
   // 단계 하위 연쇄 — 직전 섹션이 단계 안내(guide)이거나, 그 단계에 붙은 상품·콘텐츠 섹션(빈 자리 포함)이면
-  // 이번 섹션도 같은 단계에 속한다. 뼈대(v20)가 단계마다 [안내 → 상품 자리 → 콘텐츠 자리]를 이어 두므로
+  // 이번 섹션도 같은 단계에 속한다. 뼈대(v20)가 단계마다 [안내 → 콘텐츠 자리 → 상품 자리]를 이어 두므로
   // 콘텐츠 카드가 계획 끝이 아니라 단계 본문 사이에 서고, LivePlayer가 stepSub로 간격만 당겨 붙인다
   let chain = false
-  for (let i = 0; i < sections.length; i += 1) {
-    const section = sections[i]
-    // 상품·콘텐츠(빈 자리 포함)만 단계 하위가 될 수 있다 — 다음 단계 안내·사용 순서는 연쇄를 끊는다
-    const isSlotKind = !section || section.kind === 'products' || section.kind === 'contents'
-    const stepSub = chain && isSlotKind
+  for (const { index: i, section } of orderedPlanSections(page)) {
+    // 상품·콘텐츠(빈 자리 포함)와 단계 본문 섹션(성분 비교표·주의 성분)만 단계 하위가 될 수 있다 — 다음 단계 안내·사용 순서는 연쇄를 끊는다
+    const isSubKind = !section || ['products', 'contents', 'compare', 'caution'].includes(section.kind)
+    const stepSub = chain && isSubKind
     chain = (section != null && section.kind === 'guide') || stepSub
     if (!section) {
       // 빈 슬롯 — 아직 안 온 상품·콘텐츠 자리. 인덱스는 보존되고, 자리 표시는 로딩 카드
@@ -212,7 +255,7 @@ export function livePlanItems(page, opts = {}) {
           props: {
             title: section.title,
             desc: section.desc || '',
-            beforeImage: photo,
+            beforeImage: opts.photoBefore || photo,
             afterImage: after,
             tone: opts.photoAfter ? '' : section.tone || '',
             // 합성 전 CSS 프리셋 단계에서도 사양의 립 색을 쓴다 (tone 고정색 대신)
@@ -259,6 +302,43 @@ export function livePlanItems(page, opts = {}) {
         type: 'checklist',
         props: { title: section.title, items: joinTextList(section.steps || []) },
       })
+    } else if (section.kind === 'compare') {
+      /* 성분 비교표(v26) — 뼈대가 성분이 기준인 의도에서 만든 **제품 유형 수준**의 대조(기존/일반 제품 유형 vs 추천 기준).
+         스튜디오 ingredientCompare 렌더러의 행 문법 "추천 값|성분|기존 값|위험도"로 직렬화한다(셀 안의 | 는 / 로).
+         이미지는 싣지 않는다 — 특정 상품의 전성분을 확인한 것이 아니라 유형 비교라 상품 사진을 붙이면 단정이 된다 */
+      const cell = (v) => String(v || '').replace(/\|/g, '/')
+      const alt = section.alt || {}
+      const pick = section.pick || {}
+      items.push({
+        id: base,
+        type: 'ingredientCompare',
+        stepSub,
+        props: {
+          caption: section.title || '',
+          pickBadge: pick.badge || '추천 기준',
+          pickName: pick.name || '',
+          pickMeta: pick.short || '',
+          pickImage: '',
+          altBadge: alt.badge || '기존 제품',
+          altName: alt.name || '',
+          altMeta: alt.short || '',
+          altImage: '',
+          rows: joinTextList((section.rows || []).map((r) => [r.pick, r.ingredient, r.alt, r.risk].map(cell).join('|'))),
+        },
+      })
+    } else if (section.kind === 'caution') {
+      // 주의 성분(v26) — 이 고민에서 먼저 확인할 성분. 스튜디오 cautionIngredients 렌더러의 "이름|설명" 행 문법
+      const cell = (v) => String(v || '').replace(/\|/g, '/')
+      items.push({
+        id: base,
+        type: 'cautionIngredients',
+        stepSub,
+        props: {
+          title: section.title || '주의해서 볼 성분',
+          desc: section.desc || '',
+          items: joinTextList((section.items || []).map((it) => `${cell(it.name)}|${cell(it.note)}`)),
+        },
+      })
     } else if (section.kind === 'products') {
       if (section.reason) {
         items.push({ id: `${base}-reason`, type: 'textBlock', stepSub, props: { kicker: '', title: '', body: section.reason } })
@@ -299,7 +379,7 @@ export function livePlanItems(page, opts = {}) {
     } else if (section.kind === 'contents') {
       // 참고 콘텐츠 — 웹 검색으로 확인한 게시글·영상. 스튜디오 미디어 카드 렌더러를 재사용한다
       if (section.reason) {
-        items.push({ id: `${base}-reason`, type: 'textBlock', props: { kicker: '', title: '', body: section.reason } })
+        items.push({ id: `${base}-reason`, type: 'textBlock', stepSub, props: { kicker: '', title: '', body: section.reason } })
       }
       /* Figma [PP1K] 계획 2-2·4-1 의 VideoCard 는 단계 본문 안 전폭 카드 한 장이다 — 콘텐츠가 하나면 트랙 없이 최상위
          전폭 카드로(섹션 id `base` 를 카드가 그대로 받아 피드백 말풍선 앵커·늦은 도착 페이드인 규칙이 섹션과 같다),
@@ -322,7 +402,7 @@ export function livePlanItems(page, opts = {}) {
               duration: c.duration || '',
               url: c.url || '', // 카드 클릭 = 새 탭 (registry videoCard의 openExternal)
               imageUrl: c.imageUrl || '', // 없으면 유튜브 URL 자동 썸네일 → 폴백 이미지
-              note: c.why || '', // 5c 콘텐츠 단계가 답변을 인용해 적은 "왜 이 콘텐츠인지" (옛 페이지엔 없음)
+              // 5c 가 적는 고른 이유(why)는 카드에 싣지 않는다 (2026-09-17 요청 — 카드는 출처·제목만. why 는 와이어·심사 요청에는 그대로 남는다)
             },
           })
         } else {
@@ -336,7 +416,6 @@ export function livePlanItems(page, opts = {}) {
               author: c.meta || '',
               url: c.url || '',
               imageUrl: c.imageUrl || '',
-              note: c.why || '',
             },
           })
         }

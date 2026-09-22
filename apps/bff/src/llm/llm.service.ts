@@ -17,6 +17,8 @@ import {
   type SurveyPageWire,
 } from '@ddak/schema'
 import {
+  CATALOG_SEED_SYSTEM,
+  CatalogSeedGen,
   HOME_PERSONALIZE_SYSTEM,
   HomePersonalizeGen,
   IntentGen,
@@ -25,13 +27,13 @@ import {
   PROMPT_VERSION,
   PlanContentsGen,
   PlanProductsGen,
-  PlanSkeletonGen,
   SEARCH_ROUTE_SYSTEM,
   SEARCH_SUGGEST_SYSTEM,
   SearchRouteGen,
   SearchSuggestGen,
   StructuredStreamParser,
   SurveyGen,
+  buildCatalogSeedRequest,
   buildHomePersonalizeRequest,
   buildIntentRequest,
   buildPlanContentsRequest,
@@ -40,13 +42,17 @@ import {
   buildSearchRouteRequest,
   buildSearchSuggestRequest,
   buildSurveyRequest,
+  hasPhotoAnswer,
+  planSkeletonGenFor,
   renderSystemTemplate,
+  type CatalogCandidates,
   type ConstraintLedger,
   type GenResult,
   type LlmGenerateRequest,
   type LlmPort,
   type LlmStreamHandlers,
   type PlanRevisionContext,
+  type PlanSkeletonGen,
   type PromptDefId,
   type ResolvedSystem,
 } from '@ddak/pipeline'
@@ -73,12 +79,32 @@ const MODEL_CACHE_MS = 30_000
 
 /** 동적 필터링 web_search_20260209 미지원 모델 — 기본 변형(20250305)으로 호출한다 */
 const WEB_SEARCH_BASIC_MODELS = new Set(['claude-haiku-4-5'])
-/** 생성 1회당 웹 검색 상한 — 상품·콘텐츠 확인용 소수 검색만 허용 (비용·지연 가드) */
-const WEB_SEARCH_MAX_USES = 4
-/** 참고 콘텐츠 단계(5c)의 검색 예산 — 영상 1회 + 게시글 1회 + 보완 1회 */
-const WEB_SEARCH_CONTENTS_MAX_USES = 3
+/** 생성 1회당 웹 검색 상한 — 상품·콘텐츠 확인용 소수 검색만 허용 (비용·지연 가드). 내부 후보가 넉넉하면 webSearchBudget 이 2 줄인다(v30 70 : 30) */
+export const WEB_SEARCH_MAX_USES = 4
+/** 참고 콘텐츠 단계(5c)의 검색 예산 — 영상 1회 + 게시글 1회 + 보완 2회 (2026-09-17: 3→4. 운영 계획의 44% 가 콘텐츠 0개였고
+ * 재현에서 같은 검색어를 되풀이해 예산을 태운 뒤 빈 배열을 돌려줬다 — 프롬프트 v27 이 검색어 중복을 금하고 확인 기준을 낮췄다).
+ * dry-run 도 같은 값을 쓴다 */
+export const WEB_SEARCH_CONTENTS_MAX_USES = 4
 /** 서버 도구 루프가 pause_turn으로 멈췄을 때 이어붙이는 최대 횟수 */
 const MAX_CONTINUATIONS = 3
+/** 내부 카탈로그 후보가 넉넉할 때의 웹 검색 예산 — 후보가 70% 를 채우니 검색은 외부몰 보완 몫만 (v29 절반→1 감축, v30 70 : 30 → 2 감축 = 4→2회, 지연 단축).
+ * 상품 후보 6개 이상 / 콘텐츠 후보 4개 이상이면 상한을 줄인다 (catalog.service RICH_*). 후보가 없으면 예전 예산 그대로. 하한 2회는 상품·콘텐츠 프롬프트의 「2회」와 한 벌 */
+const WEB_SEARCH_RICH_REDUCTION = 2
+export const RICH_PRODUCT_CANDIDATES = 6
+export const RICH_CONTENT_CANDIDATES = 4
+export const webSearchBudget = (base: number, rich: boolean) => (rich ? Math.max(2, base - WEB_SEARCH_RICH_REDUCTION) : base)
+
+/** API 오류를 운영자용 한 줄로 — 상태 코드·오류 타입·문구·request-id (SDK 오류는 status 를, 그 밖은 message 만).
+ * SDK 의 APIError.error 는 응답 본문 `{ type: 'error', error: { type, message } }` 그대로다 */
+function describeLlmFailure(e: unknown): string {
+  if (e instanceof Anthropic.APIError) {
+    const body = (e as { error?: { error?: { type?: string; message?: string } } }).error?.error
+    const type = body?.type ? ` ${body.type}` : ''
+    const requestId = e.requestID ? ` (request-id ${e.requestID})` : ''
+    return `HTTP ${e.status ?? '?'}${type}: ${body?.message ?? e.message}${requestId}`
+  }
+  return e instanceof Error ? `${e.name}: ${e.message}` : String(e)
+}
 
 /*
  * Claude 호출 계층 — LlmPort의 1차(Anthropic) 구현. 구조화 출력(parse) + 프롬프트 캐싱 + refusal 처리.
@@ -124,7 +150,7 @@ export class LlmService implements LlmPort {
 
   /** 지금 생성에 쓸 시스템 프롬프트 — core 설정(llm-prompt-<id>) 재정의 우선, 없거나 조회
    * 실패면 코드 기본값. 모델과 같은 30s 캐시. 재정의·기본값 모두 자리표시자 치환
-   * (renderSystemTemplate — {{CATALOG}} + 지식 4종 {{VOCAB}}/{{RULES}}/{{CRITERIA}}/{{FEWSHOT}})을
+   * (renderSystemTemplate — 지식 4종 {{VOCAB}}/{{RULES}}/{{CRITERIA}}/{{FEWSHOT}} + 옛 재정의 호환 {{CATALOG}})을
    * 거치며, 저장값·지식 KV가 고정인 한 결과도 바이트 고정이라 프롬프트 캐시는 계속 적중한다 */
   async resolveSystem(id: PromptDefId): Promise<ResolvedSystem> {
     const cached = this.promptCache.get(id)
@@ -195,6 +221,18 @@ export class LlmService implements LlmPort {
       user: buildSearchSuggestRequest(query, profile),
     })
   }
+  /** 내재화 카탈로그 시딩 — 제품 유형 하나의 판매 상품을 웹 검색(2~3회)으로 모은다 (2026-09-17). 운영 콘솔 배치가 유형마다 1회 부른다.
+   * 실패는 호출자가 그 유형만 건너뛰고 다음으로 간다 */
+  async collectCatalogProducts(keyword: string, opts: { query?: string; dense?: boolean } = {}): Promise<GenResult<CatalogSeedGen>> {
+    return this.generate(`카탈로그 수집(${opts.query && opts.query !== keyword ? opts.query : keyword})`, CatalogSeedGen, {
+      system: { text: CATALOG_SEED_SYSTEM, custom: false },
+      effort: 'medium' as const,
+      user: buildCatalogSeedRequest(keyword, opts),
+      webSearch: true,
+      webSearchMaxUses: opts.dense ? 4 : 3,
+    })
+  }
+
   /** 홈 개인화 — 인사말 + 개인화 추천 검색어(보라 칩). 작고 빠른 구조화 호출(스트리밍 없음). 실패 처리는 호출자(휴리스틱 대체) */
   async personalizeHome(input: Parameters<typeof buildHomePersonalizeRequest>[0]): Promise<GenResult<HomePersonalizeGen>> {
     return this.generate('홈 개인화', HomePersonalizeGen, {
@@ -305,7 +343,9 @@ export class LlmService implements LlmPort {
   }
 
   /** 계획 1단계 — 뼈대 (검색 없음·medium): 제목·요약·단계 안내·순서 + 상품/콘텐츠 자리. 수 초 안에 스트리밍된다.
-   * revision이 있으면 피드백 반영 재생성 — 직전 계획+피드백이 사용자 메시지에 실린다 */
+   * revision이 있으면 피드백 반영 재생성 — 직전 계획+피드백이 사용자 메시지에 실린다.
+   * 출력 스키마는 사진 답변 여부로 look 갈래 | compare·caution 갈래 중 하나만 싣는다(@ddak/pipeline planSkeletonGenFor —
+   * 전부 한 합집합에 실으면 구조화 출력 문법이 커져 API 가 400 으로 거절한다, 2026-09-17) */
   async generatePlanSkeleton(
     intent: string,
     survey: SurveyPageWire,
@@ -315,7 +355,7 @@ export class LlmService implements LlmPort {
     revision?: PlanRevisionContext,
     ledger?: ConstraintLedger | null,
   ): Promise<GenResult<PlanSkeletonGen>> {
-    return this.generate('계획 뼈대 생성', PlanSkeletonGen, {
+    return this.generate('계획 뼈대 생성', planSkeletonGenFor({ photo: hasPhotoAnswer(survey, answers) }), {
       system: await this.resolveSystem('plan-skeleton'),
       effort: 'medium' as const, // 속도가 목적 — 텍스트 뼈대는 medium으로 충분
       user: buildPlanSkeletonRequest(intent, survey, answers, profile, revision, ledger),
@@ -333,13 +373,15 @@ export class LlmService implements LlmPort {
     stream?: LlmStreamHandlers,
     revision?: PlanRevisionContext,
     ledger?: ConstraintLedger | null,
+    /** 내부 카탈로그 후보 (v29) — 가변부 표로 실린다. 후보가 넉넉하면 웹 검색 예산을 4→3 으로 줄인다(지연 단축) */
+    candidates?: CatalogCandidates | null,
   ): Promise<GenResult<PlanProductsGen>> {
     return this.generate('계획 상품 생성', PlanProductsGen, {
       system: await this.resolveSystem('plan-products'),
       effort: 'high' as const,
-      user: buildPlanProductsRequest(intent, survey, answers, profile, revision, ledger),
+      user: buildPlanProductsRequest(intent, survey, answers, profile, revision, ledger, candidates),
       webSearch: true,
-      webSearchMaxUses: WEB_SEARCH_MAX_USES,
+      webSearchMaxUses: webSearchBudget(WEB_SEARCH_MAX_USES, (candidates?.products.length ?? 0) >= RICH_PRODUCT_CANDIDATES),
       stream,
     })
   }
@@ -354,13 +396,17 @@ export class LlmService implements LlmPort {
     stream?: LlmStreamHandlers,
     revision?: PlanRevisionContext,
     ledger?: ConstraintLedger | null,
+    /** retry = 첫 호출이 콘텐츠를 못 찾아 검색어를 바꿔 다시 부르는 2회차 (가변부에 CONTENTS_RETRY_HINT — 시스템 고정·캐시 유지) */
+    opts: { retry?: boolean } = {},
+    /** 내부 콘텐츠 후보 (v29) — 가변부 표로 실린다. 후보가 넉넉하면 웹 검색 예산을 4→3 으로 줄인다 */
+    candidates?: CatalogCandidates | null,
   ): Promise<GenResult<PlanContentsGen>> {
-    return this.generate('계획 참고 콘텐츠 생성', PlanContentsGen, {
+    return this.generate(opts.retry ? '계획 참고 콘텐츠 생성(재시도)' : '계획 참고 콘텐츠 생성', PlanContentsGen, {
       system: await this.resolveSystem('plan-contents'),
       effort: 'medium' as const,
-      user: buildPlanContentsRequest(intent, survey, answers, profile, revision, ledger),
+      user: buildPlanContentsRequest(intent, survey, answers, profile, revision, ledger, opts, candidates),
       webSearch: true,
-      webSearchMaxUses: WEB_SEARCH_CONTENTS_MAX_USES,
+      webSearchMaxUses: webSearchBudget(WEB_SEARCH_CONTENTS_MAX_USES, (candidates?.contents.length ?? 0) >= RICH_CONTENT_CANDIDATES),
       stream,
     })
   }
@@ -440,47 +486,61 @@ export class LlmService implements LlmPort {
           false,
         )
       }
-      this.logger.warn(`${label} 호출 실패: ${(e as Error).message}`)
+      // 원인은 운영자용 detail 로 따로 싣는다 — 사용자 안내는 그대로, 관리 dry-run·flow-run 오류 이벤트가 보여 준다
+      const detail = describeLlmFailure(e)
+      this.logger.warn(`${label} 호출 실패: ${detail}`)
       throw new LlmGenerationError(
         'llm_failed',
         `일시적인 문제로 ${label}에 실패했어요. 잠시 후 다시 시도해 주세요.`,
         true,
+        { detail, cause: e },
       )
     }
     if (response.stop_reason === 'refusal') {
       this.logger.warn(`${label} 거절 — category=${response.stop_details?.category ?? 'null'}`)
       throw new LlmGenerationError('llm_refused', '이 요청은 처리할 수 없어요. 다른 검색어로 시도해 주세요.', false)
     }
-    const content = this.parseOutput(schema, response)
-    if (!content) {
-      this.logger.warn(`${label} 결과 파싱 실패 — stop_reason=${response.stop_reason}`)
+    const parsed = this.parseOutput(schema, response)
+    if (!parsed.content) {
+      const detail = `결과 파싱 실패 — stop_reason=${response.stop_reason}${parsed.issue ? `: ${parsed.issue}` : ''}`
+      this.logger.warn(`${label} ${detail}`)
       throw new LlmGenerationError(
         'llm_failed',
         `일시적인 문제로 ${label}에 실패했어요. 잠시 후 다시 시도해 주세요.`,
         true,
+        { detail },
       )
     }
+    const content = parsed.content
     return { content, meta: this.meta(started, response, req.system.custom) }
   }
 
   /** 구조화 출력 텍스트 → 스키마 검증. JSON은 보통 마지막 텍스트 블록이지만,
-   * 도구 사용으로 블록이 쪼개진 경우를 대비해 전체 연결로 한 번 더 시도한다 */
+   * 도구 사용으로 블록이 쪼개진 경우를 대비해 전체 연결로 한 번 더 시도한다.
+   * 실패하면 마지막 후보의 사유(JSON 오류 또는 첫 zod 이슈 경로)를 진단용으로 돌려준다 */
   private parseOutput<S extends z.ZodTypeAny>(
     schema: S,
     response: Anthropic.Message,
-  ): S['_output'] | null {
+  ): { content: S['_output'] | null; issue?: string } {
     const texts = response.content
       .filter((block): block is Anthropic.TextBlock => block.type === 'text')
       .map((block) => block.text)
+    let issue: string | undefined
     for (const candidate of [texts[texts.length - 1], texts.join('')]) {
       if (!candidate) continue
+      let json: unknown
       try {
-        return schema.parse(JSON.parse(candidate)) as S['_output']
-      } catch {
-        /* 다음 후보 */
+        json = JSON.parse(candidate)
+      } catch (e) {
+        issue = `JSON 아님(${(e as Error).message})`
+        continue
       }
+      const result = schema.safeParse(json)
+      if (result.success) return { content: result.data as S['_output'] }
+      const first = result.error.issues[0]
+      issue = first ? `${first.path.join('.') || '(root)'}: ${first.message}` : result.error.message
     }
-    return null
+    return { content: null, issue: issue ?? (texts.length ? undefined : '텍스트 블록 없음') }
   }
 
   private meta(started: number, response: Anthropic.Message, customPrompt: boolean): LlmMeta {

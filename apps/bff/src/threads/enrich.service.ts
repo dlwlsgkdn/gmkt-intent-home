@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common'
-import { gmarketThumbnailOf, type ContentsSectionGen, type ProductsSectionGen } from '@ddak/pipeline'
+import { mallThumbnailOf, type ContentsSectionGen, type ProductsSectionGen } from '@ddak/pipeline'
 
 /*
  * 썸네일 보강 — 검색 단계가 확인하지 못한 imageUrl 을 페이지의 og:image 로 채운다 (2026-09 분석: 웹 상품 썸네일 0%,
@@ -106,7 +106,7 @@ export class EnrichService {
     for (const section of sections) {
       for (const product of section.webProducts) {
         if (product.imageUrl || product.urlKind === 'search') continue
-        const derived = gmarketThumbnailOf(product.url)
+        const derived = mallThumbnailOf(product.url)
         if (derived) {
           product.imageUrl = derived
           filled += 1

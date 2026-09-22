@@ -81,6 +81,7 @@ export type IntentGen = z.infer<typeof IntentGen>
 /*
  * 계획은 2단계 병렬 생성이다 (DESIGN-LLM-SERVICE.md §9-1):
  * ① 뼈대(PlanSkeletonGen) — 검색 없이 제목·요약·안내(2~3단계)·순서 + 상품/콘텐츠 섹션 "자리"(제목·기준)만
+ *    (+ 성분이 판단 기준인 의도면 성분 비교표(compare)·주의 성분(caution) — 제품 유형 수준의 텍스트라 뼈대 몫, v26)
  * ② 검색(PlanProductsGen) — 웹 검색 포함으로 상품 섹션 + 참고 콘텐츠(게시글·영상) 섹션만. 뼈대의 자리를 채운다
  */
 
@@ -177,6 +178,49 @@ const StepsSectionGen = z.object({
   steps: z.array(z.string()).min(2).max(8).describe('실행 순서 — 아침/저녁 루틴 등'),
 })
 
+/* 성분 비교표·주의 성분 (v26) — 성분이 판단 기준인 의도(면도 자극·민감·트러블·"성분 비교해 줘")에서만 뼈대가 만든다.
+   구체 상품이 아니라 **제품 유형·기준** 수준의 대조다 — 뼈대는 검색 없이 돌고 "구체 상품명 금지" 규칙을 지키며,
+   특정 제품의 전성분을 확인하지 않은 채 단정하지 않기 위해서다. 그 기준으로 고른 실제 상품은 바로 뒤 상품 자리가 채운다.
+   빈 문자열(short·desc)은 와이어에 실리기 전 skeletonSectionWire 가 뗀다. 부분 스트리밍은 partialSkeletonSection 이
+   완성된 행·항목만 싣는다 (반 토막 행은 표를 깨뜨린다) */
+export const CompareSideGen = z.object({
+  badge: z.string().describe('카드 알약 문구 — 기존 쪽은 "기존 제품"·"일반 제품", 추천 쪽은 "추천 기준"'),
+  name: z.string().describe('제품 유형 이름 — 예: "일반 올인원 워시", "약산성 저자극 쉐이빙 젤" (브랜드·구체 상품명 금지)'),
+  short: z.string().describe('표 머리에 쓸 짧은 이름 2~8자 — 비우면 name 을 그대로 쓴다'),
+})
+export type CompareSideGen = z.infer<typeof CompareSideGen>
+
+export const CompareRowGen = z.object({
+  ingredient: z.string().describe('성분 이름 — 한글(영문/INCI 병기 가능), 예: "SLS/SLES", "인공향료"'),
+  alt: z.string().describe('기존(일반) 제품 유형에서의 함유 — "있음"·"없음"·"소량"·"흔함" 처럼 2~4자'),
+  pick: z.string().describe('추천 기준 제품 유형에서의 함유 — 같은 눈금'),
+  risk: z.enum(['높음', '중간', '낮음']).describe('이 고민에서의 위험도'),
+})
+export type CompareRowGen = z.infer<typeof CompareRowGen>
+
+export const CompareSectionGen = z.object({
+  kind: z.literal('compare'),
+  title: z.string().describe('표 머리 문구 한 줄 — 예: "기존 워시와 추천 기준을 성분으로 비교했어요"'),
+  alt: CompareSideGen.describe('기존/일반 제품 유형 — 답변에 지금 쓰는 제품(유형)이 있으면 그것, 없으면 이 고민을 부르는 통상 제품 유형'),
+  pick: CompareSideGen.describe('이 계획이 권하는 제품 유형(고를 기준)'),
+  rows: z.array(CompareRowGen).min(3).max(6).describe('성분 3~6행 — 이 고민에서 차이가 나는 성분만'),
+})
+export type CompareSectionGen = z.infer<typeof CompareSectionGen>
+
+export const CautionItemGen = z.object({
+  name: z.string().describe('성분 이름 — 한글 + 영문/INCI 병기, 예: "인공향료 (Fragrance)"'),
+  note: z.string().describe('왜 주의하는지 한 줄 — 가능성 표현("자극이 될 수 있어요"), 치료·질병 같은 의학 단정 금지'),
+})
+export type CautionItemGen = z.infer<typeof CautionItemGen>
+
+export const CautionSectionGen = z.object({
+  kind: z.literal('caution'),
+  title: z.string().describe('카드 제목 — 예: "주의해서 볼 성분"'),
+  desc: z.string().describe('한 줄 설명 — 없으면 빈 문자열'),
+  items: z.array(CautionItemGen).min(2).max(5).describe('먼저 확인할 성분 2~5개'),
+})
+export type CautionSectionGen = z.infer<typeof CautionSectionGen>
+
 /** 상품 하나의 매칭 평가 — LLM 이 프로필·답변과 대조해 1~5 로 매기는 세 항목 + 근거 한 줄.
  * 퍼센트 계산은 LLM 이 아니라 검증 게이트(guards/match.ts)가 가중치 표로 한다 — 눈금은 여기, 가중치는 거기 */
 export const ProductRatingGen = z.object({
@@ -223,12 +267,12 @@ export const ProductsSectionGen = z.object({
   kind: z.literal('products'),
   title: z.string(),
   reason: z.string().describe('이 상품들을 고른 이유 한두 문장 — 답변을 근거로'),
-  productIds: z.array(z.string()).max(4).describe('카탈로그에서 고른 상품 id (없으면 빈 배열)'),
+  productIds: z.array(z.string()).max(8).describe('요청 본문의 내부 카탈로그 후보 표에서 고른 상품 id — 섹션 상품의 70%(4~6개) 몫 (맞는 후보가 없으면 빈 배열)'),
   // 웹 검색 그라운딩: 검색 결과에서 확인한 상품만 — url은 BFF가 http(s)+PDP 검증 후 채택한다
   webProducts: z.array(WebProductGen).max(10).describe('웹 검색으로 찾은 상품 — 섹션당 6~8개를 브랜드·가격대·제형 다양하게 (없으면 빈 배열)'),
   catalogRatings: z
     .array(CatalogRatingGen)
-    .max(4)
+    .max(8)
     .optional()
     .describe('productIds 각 상품의 매칭 평가 (productIds 가 비었으면 빈 배열)'),
 })
@@ -255,6 +299,8 @@ export const ContentsSectionGen = z.object({
   title: z.string(),
   reason: z.string().describe('이 콘텐츠들을 고른 이유 한두 문장 — 답변을 근거로'),
   items: z.array(ContentItemGen).min(1).max(8).describe('웹 검색으로 확인한 실제 게시글·영상 — 영상 2~3 + 게시글 2~3 으로 5~6개를 목표로 (검색해도 하나도 확인 못 했을 때만 섹션 생략)'),
+  /** 내부 콘텐츠 후보(가변부 표)에서 고른 id — v29. 후보 표가 없으면 빈 배열·생략. 검증 게이트가 후보 목록으로 되돌려 items 앞에 싣는다 */
+  catalogIds: z.array(z.string()).max(6).optional().describe('요청 본문의 내부 콘텐츠 후보 표에서 고른 id — 섹션 항목의 70%(2~4개) 몫 (후보 표가 없거나 맞는 게 없으면 빈 배열)'),
 })
 export type ContentsSectionGen = z.infer<typeof ContentsSectionGen>
 
@@ -276,28 +322,73 @@ const ContentsSlotGen = z.object({
   reason: z.string().describe('어떤 게시글·영상을 볼지 기준 한두 문장 — 구체 콘텐츠 제목은 쓰지 않는다'),
 })
 
+/** 뼈대 섹션 전체 합집합 — 스트림 조각 검증·타입·기록의 기준. **API 호출에는 이 합집합을 그대로 보내지 않는다**
+ * (아래 planSkeletonGenFor) */
 export const PlanSkeletonSectionGen = z.discriminatedUnion('kind', [
   GuideSectionGen,
   LookSectionGen,
+  CompareSectionGen,
+  CautionSectionGen,
   ProductsSlotGen,
   ContentsSlotGen,
   StepsSectionGen,
 ])
 export type PlanSkeletonSectionGen = z.infer<typeof PlanSkeletonSectionGen>
 
-export const PlanSkeletonGen = z.object({
-  headline: z.string().describe('계획 페이지 제목 — 설문 결과를 반영한 맞춤 문구'),
-  summary: z.string().describe('추천 방향 요약 두세 문장'),
-  sections: z.array(PlanSkeletonSectionGen).min(2).max(10),
-})
+const planSkeletonGenOf = <T extends z.ZodTypeAny>(sections: T) =>
+  z.object({
+    headline: z.string().describe('계획 페이지 제목 — 설문 결과를 반영한 맞춤 문구'),
+    summary: z.string().describe('추천 방향 요약 두세 문장'),
+    // 3단계 × (안내 + 콘텐츠 + 상품) + 사용 순서 + 성분 비교·주의 또는 룩.
+    sections: z.array(sections).min(2).max(12),
+  })
+
+export const PlanSkeletonGen = planSkeletonGenOf(PlanSkeletonSectionGen)
 export type PlanSkeletonGen = z.infer<typeof PlanSkeletonGen>
+
+/*
+ * 뼈대 호출용 스키마는 **요청마다 둘 중 하나**다 (2026-09-17). 구조화 출력은 스키마를 문법으로 컴파일하는데
+ * 문법이 일정 크기를 넘으면 API 가 400(「The compiled grammar is too large」)으로 요청 자체를 거절한다 —
+ * v26 에서 compare·caution 두 갈래(객체 5종)를 look(사양 spec 객체 7종)과 한 합집합에 더하자 뼈대 호출이
+ * 즉시 실패해 계획이 전부 죽었다(운영 2026-09-16~17, 재시도로도 회복 불가). look 은 사진을 올린 쓰레드에서만,
+ * compare·caution 은 성분이 기준인 의도(사진과 무관)에서만 나오므로 **사진 답변 여부로 한쪽만 싣는다**:
+ *   - 사진 있음 → guide·look·products·contents·steps (v25 와 같은 문법 크기 — 운영 검증분)
+ *   - 사진 없음 → guide·compare·caution·products·contents·steps (look 이 빠져 v25 보다 작다)
+ * 어느 쪽이든 v25 보다 커지지 않는다. 사진을 올린 쓰레드는 성분 비교표를 못 받는 대신 계획이 산다.
+ * 새 섹션 종류를 더할 땐 반드시 이 분기 중 하나에만 넣고 `packages/pipeline/test/skeleton-schema.test.mjs` 로
+ * 갈래별 구성원을 확인할 것.
+ */
+export const PlanSkeletonPhotoSectionGen = z.discriminatedUnion('kind', [
+  GuideSectionGen,
+  LookSectionGen,
+  ProductsSlotGen,
+  ContentsSlotGen,
+  StepsSectionGen,
+])
+export const PlanSkeletonPlainSectionGen = z.discriminatedUnion('kind', [
+  GuideSectionGen,
+  CompareSectionGen,
+  CautionSectionGen,
+  ProductsSlotGen,
+  ContentsSlotGen,
+  StepsSectionGen,
+])
+export const PlanSkeletonPhotoGen = planSkeletonGenOf(PlanSkeletonPhotoSectionGen)
+export const PlanSkeletonPlainGen = planSkeletonGenOf(PlanSkeletonPlainSectionGen)
+/** 두 갈래의 출력 타입은 전체 합집합(PlanSkeletonGen)에 그대로 대입된다 — 소비자는 합집합 타입 하나만 안다 */
+export type PlanSkeletonGenSchema = typeof PlanSkeletonPhotoGen | typeof PlanSkeletonPlainGen
+
+/** 이번 요청의 뼈대 호출 스키마 — 사진을 올린 설문이면 look 갈래, 아니면 compare·caution 갈래 */
+export function planSkeletonGenFor(opts: { photo: boolean }): PlanSkeletonGenSchema {
+  return opts.photo ? PlanSkeletonPhotoGen : PlanSkeletonPlainGen
+}
 
 export const PlanProductsGen = z.object({
   sections: z
     .array(PlanSearchSectionGen)
     .min(1)
     .max(5)
-    .describe('추천 상품 섹션 1~2개 (참고 콘텐츠는 별도 단계가 만든다 — 여기서는 만들지 않는다)'),
+    .describe('추천 상품 섹션 — 각 단계마다 최소 1개씩 우선, 보통 2~3개 (참고 콘텐츠는 별도 단계가 만든다 — 여기서는 만들지 않는다)'),
 })
 export type PlanProductsGen = z.infer<typeof PlanProductsGen>
 
@@ -306,8 +397,8 @@ export type PlanProductsGen = z.infer<typeof PlanProductsGen>
 export const PlanContentsGen = z.object({
   sections: z
     .array(ContentsSectionGen)
-    .max(2)
-    .describe('참고 콘텐츠 섹션 — 계획의 단계 순서대로 1~2개 (검색해도 확인된 콘텐츠가 없으면 빈 배열)'),
+    .max(3)
+    .describe('참고 콘텐츠 섹션 — 계획의 단계 순서대로 각 단계마다 최소 1개씩 우선, 보통 2~3개 (검색해도 확인된 콘텐츠가 없으면 빈 배열)'),
 })
 export type PlanContentsGen = z.infer<typeof PlanContentsGen>
 
@@ -383,7 +474,7 @@ export const SurveyQuestionPartialGen = z.object({
 export type SurveyQuestionPartialGen = z.infer<typeof SurveyQuestionPartialGen>
 
 export const PlanSectionPartialGen = z.object({
-  kind: z.enum(['guide', 'look', 'steps', 'products', 'contents']),
+  kind: z.enum(['guide', 'look', 'steps', 'products', 'contents', 'compare', 'caution']),
   title: z.string().optional(),
   subtitle: z.string().optional(),
   body: z.string().optional(),
@@ -391,6 +482,11 @@ export const PlanSectionPartialGen = z.object({
   tone: LookTone.optional(),
   points: z.array(z.string()).optional(),
   steps: z.array(z.string()).optional(),
+  // 성분 비교표·주의 성분 — 자라는 중인 객체·행 배열은 unknown 으로 받고 완성분만 항목 스키마로 개별 검증한다 (partial.ts)
+  alt: z.unknown().optional(),
+  pick: z.unknown().optional(),
+  rows: z.array(z.unknown()).optional(),
+  items: z.array(z.unknown()).optional(),
 })
 export type PlanSectionPartialGen = z.infer<typeof PlanSectionPartialGen>
 
@@ -404,8 +500,26 @@ export const PlanSearchSectionPartialGen = z.object({
   webProducts: z.array(z.unknown()).optional(),
   catalogRatings: z.array(z.unknown()).optional(),
   items: z.array(z.unknown()).optional(),
+  catalogIds: z.array(z.unknown()).optional(),
 })
 export type PlanSearchSectionPartialGen = z.infer<typeof PlanSearchSectionPartialGen>
+
+/* ── 내재화 카탈로그 시딩 — 제품 유형 하나의 판매 상품을 웹 검색으로 모으는 배치 출력 (2026-09-17) ── */
+export const CatalogSeedProductGen = z.object({
+  name: z.string().describe('상품명 — 프로모션 대괄호·브랜드 중복 없이 상품 자체 이름'),
+  brand: z.string().describe('브랜드'),
+  price: z.number().int().describe('판매가(원) — 확인 못 했으면 0'),
+  mall: z.string().describe('판매처 — 지마켓·올리브영·쿠팡·무신사 등'),
+  url: z.string().describe('상품 상세 페이지(PDP) 주소 — 검색 결과에 실린 것 그대로 (지마켓 goodscode·올리브영 goodsNo·쿠팡 products 번호가 든 주소만)'),
+  imageUrl: z.string().describe('썸네일 주소 — 검색 결과에서 확인한 것만, 없으면 빈 문자열'),
+  tags: z.array(z.string()).max(6).describe('특징 태그 3~6개 — 제형·피부 타입·고민·마감·용량'),
+})
+export type CatalogSeedProductGen = z.infer<typeof CatalogSeedProductGen>
+
+export const CatalogSeedGen = z.object({
+  products: z.array(CatalogSeedProductGen).max(16).describe('검색으로 확인한 실제 판매 상품 8~12개 (확인 못 하면 그만큼만)'),
+})
+export type CatalogSeedGen = z.infer<typeof CatalogSeedGen>
 
 /* ── 홈 검색창 — 진입 분기(라우터)와 AI 검색어 추천 (짧은 구조화 호출, 스트리밍 없음) ── */
 export const SearchRouteGen = z.object({

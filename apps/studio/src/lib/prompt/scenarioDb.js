@@ -82,7 +82,7 @@ const SHAPE_DOC = `시나리오 하나는 아래 형태의 객체입니다. 최�
 
 const LAYOUT_RULES = `배치 규칙:
 - 좌표·크기 필드는 쓰지 않습니다. items 배열에 넣는 순서가 곧 세로 스택 순서입니다.
-- 계획 케이스 items는 보통 이 순서입니다: surveySummary → planTitle → noticeCard → (planStep → hscroll(+productCard 자식)) 반복 → hscroll(+videoCard/articleCard 자식) → ctaBar.
+- 계획 케이스 items는 보통 이 순서입니다: surveySummary → planTitle → noticeCard → (planStep → hscroll(+videoCard/articleCard 자식) → hscroll(+productCard 자식)) 반복 → ctaBar.
 - 컨테이너 자식은 slot을 0부터 매기고, 카드 폭 w는 컨테이너 props.cardW와 맞춥니다(예: 232).
 - 컨테이너 안에 컨테이너를 넣지 않습니다.
 
@@ -147,9 +147,9 @@ export function buildScenarioDbPrompt({
     '  · videoCard — 유튜브 등 영상. title·channel·duration·url을 검색에서 확인한 실제 값으로 채웁니다.',
     '  · articleCard — 블로그·기사. source·title·snippet·author·url을 실제 값으로 채웁니다.',
     '  · imageCard — 참고 이미지. imageUrl은 실제로 접근 가능한 주소만 씁니다.',
-    '- 케이스마다 1~3개를 붙이되 그 조합의 주제와 실제로 관련 있는 것만 고르고, 조합이 다르면 다른 콘텐츠를 고릅니다.',
+    '- 각 계획 단계(planStep)마다 관련 콘텐츠(videoCard/articleCard)와 상품(productCard)을 최소 1개씩 포함하는 것을 우선합니다. 해당 단계에 적합한 실제 콘텐츠·상품이 없을 때만 생략하고, 개수를 맞추려고 지어내거나 여러 단계에 반복하지 않습니다.',
     '- **url과 imageUrl은 검색으로 확인한 실제 주소만** 씁니다. 확인되지 않으면 빈 문자열("")로 두세요. 주소를 지어내면 안 됩니다.',
-    '- 외부 콘텐츠는 하나의 hscroll 패널(예: title "내 상황에 맞는 참고 콘텐츠")에 자식으로 담고, 계획 단계들 뒤 ctaBar 앞에 둡니다.',
+    '- 외부 콘텐츠는 단계별 hscroll 패널에 자식으로 담고, 해당 planStep 바로 뒤·그 단계의 상품 패널 앞에 둡니다. 콘텐츠를 계획 끝에 몰아 두지 않습니다.',
     '',
     '## 출력할 JSON 형태',
     SHAPE_DOC,
