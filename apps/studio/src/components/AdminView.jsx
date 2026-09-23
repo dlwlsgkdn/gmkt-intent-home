@@ -10,7 +10,8 @@ import { renderMarkdown, statusLabel, threadMarkdown } from '../lib/adminReport.
 import { timeAgo } from '../lib/timeAgo.js'
 import AdminFeedback from './AdminFeedback.jsx'
 import AdminThreadPreview, { threadPreviewPages } from './AdminThreadPreview.jsx'
-import PipelineStudio from './PipelineStudio.jsx'
+import PipelineDashboard from './PipelineDashboard.jsx'
+import PipelineExpertEditor from './PipelineExpertEditor.jsx'
 import AdminDashboard from './AdminDashboard.jsx'
 import AdminKnowledge from './AdminKnowledge.jsx'
 import AdminSeeding from './AdminSeeding.jsx'
@@ -54,8 +55,9 @@ const NAV_GROUPS = [
   {
     label: 'AI 설정',
     items: [
-      ['pipeline', '⌁', '추천 만드는 과정'],
-      ['prompts', '⌘', 'AI 지시서'],
+      ['pipeline', '⌁', '파이프라인 대시보드'],
+      ['prompts', '⌘', '쉽게 고치기'],
+      ['expert', '⌘', '전문가용 고치기'],
     ],
   },
 ]
@@ -301,7 +303,7 @@ export default function AdminView({ api, tab, studioScenarioId, threadId }) {
     {/* 파이프라인 탭은 3컬럼(지식·다이어그램·플레이그라운드)이라 넓은 컨테이너 변형을 쓴다 */}
     <main className={
       'sb-admin'
-      + (tab === 'pipeline' || tab === 'tagging' || tab === 'prompts' || tab === 'knowledge' || tab === 'seeding' ? ' sb-admin--wide' : '')
+      + (tab === 'pipeline' || tab === 'expert' || tab === 'tagging' || tab === 'prompts' || tab === 'knowledge' || tab === 'seeding' ? ' sb-admin--wide' : '')
       + (studioFullView ? ' sb-admin--studio-editor' : '')
     }>
 
@@ -321,9 +323,11 @@ export default function AdminView({ api, tab, studioScenarioId, threadId }) {
 
       {/* 파이프라인 탭 — 세로 흐름 다이어그램(엔진·모델 설정 포함) ∥ 플레이그라운드·지식.
           시스템 프롬프트는 별도 카드 없이 다이어그램의 단계 레이어 모달에서 열람·수정한다 */}
-      {tab === 'pipeline' && <PipelineStudio api={api} />}
+      {tab === 'pipeline' && <PipelineDashboard api={api} />}
 
       {tab === 'prompts' && <AdminPromptLibrary api={api} />}
+
+      {tab === 'expert' && <PipelineExpertEditor api={api} />}
 
       {tab === 'changes' && (
         <AdminChangeLog

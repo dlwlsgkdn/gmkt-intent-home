@@ -63,6 +63,7 @@ export default function PipelineFlow({
   knowledgeById, // Map<지식id, AdminKnowledgeEntry> — 유입 점의 라벨·값 유무
   activeKnowledge, // 지식 카드에서 손을 얹은 지식 id | null — 소비 노드를 강조
   onHoverStage, // 노드 hover → 지식 카드 역강조 (id | null)
+  readOnly = false, // 대시보드에서는 같은 흐름도를 클릭 없는 시각 자료로 쓴다
 }) {
   const byId = useMemo(() => new Map((stages || []).map((stage) => [stage.id, stage])), [stages])
   const run = running ? RUN_PATHS[running] : null
@@ -123,6 +124,18 @@ export default function PipelineFlow({
     else if (onPath && running) cls.push('is-path')
     if (selectedId === id) cls.push('is-on')
     if (activeKnowledge && feedByStage?.get(id)?.includes(activeKnowledge)) cls.push('is-fed')
+    const contents = (
+      <>
+        {feed(id)}
+        {(stage.promptCustom || result?.custom) && <i className="sb-flow__flag" title="프롬프트 재정의 사용 중" />}
+        <span className="sb-flow__no">{stage.no}</span>
+        <span className="sb-flow__text">
+          <span className="sb-flow__label">{SHORT_LABEL[id] || stage.label}</span>
+          <span className={'sb-flow__sub' + (done && !isLive ? ' sb-flow__sub--ok' : '')}>{sub}</span>
+        </span>
+      </>
+    )
+    if (readOnly) return <div key={id} className={`${cls.join(' ')} is-readonly`} title={stage.note}>{contents}</div>
     return (
       <button
         key={id}
@@ -136,15 +149,7 @@ export default function PipelineFlow({
         onMouseLeave={() => onHoverStage?.(null)}
         onFocus={() => onHoverStage?.(id)}
         onBlur={() => onHoverStage?.(null)}
-      >
-        {feed(id)}
-        {(stage.promptCustom || result?.custom) && <i className="sb-flow__flag" title="프롬프트 재정의 사용 중" />}
-        <span className="sb-flow__no">{stage.no}</span>
-        <span className="sb-flow__text">
-          <span className="sb-flow__label">{SHORT_LABEL[id] || stage.label}</span>
-          <span className={'sb-flow__sub' + (done && !isLive ? ' sb-flow__sub--ok' : '')}>{sub}</span>
-        </span>
-      </button>
+      >{contents}</button>
     )
   }
 
@@ -216,7 +221,9 @@ export default function PipelineFlow({
         <span><i className="sb-flow-legend__sw sb-flow-legend__sw--feed" /> 참고자료가 연결된 단계</span>
       </div>
       <p className="sb-flow-hint">
-        단계를 누르면 하는 일과 사용하는 참고자료를 볼 수 있어요. AI가 작성하는 단계에서는 세부 지시서도 확인할 수 있습니다.
+        {readOnly
+          ? '고객 요청부터 결과 저장까지의 처리 순서와 참고자료 연결 상태를 보여줍니다.'
+          : '단계를 누르면 하는 일과 사용하는 참고자료를 볼 수 있어요. AI가 작성하는 단계에서는 세부 지시서도 확인할 수 있습니다.'}
       </p>
     </>
   )

@@ -173,7 +173,7 @@ export default function AdminPromptLibrary({ api }) {
   return (
     <div className="sb-admin-prompts-page">
       <header className="sb-admin-pagehead sb-admin-prompt-head">
-        <div><p className="sb-admin-pagehead__eyebrow">AI에게 일을 설명하는 곳</p><h1>AI 지시서</h1><p>원하는 변화를 편하게 말해주세요. 설문부터 추천까지 함께 고치고, 화면으로 확인해요.</p></div>
+        <div><p className="sb-admin-pagehead__eyebrow">AI에게 일을 설명하는 곳</p><h1>쉽게 고치기</h1><p>원하는 변화를 편하게 말해주세요. 설문부터 추천까지 함께 고치고, 화면으로 확인해요.</p></div>
         <img src={promptGuide} alt="AI 지시서의 중요한 문장을 가리키는 안내 캐릭터" />
         {wire && <span className="sb-admin-health is-live"><i /> {wire.promptVersion}</span>}
       </header>
