@@ -60,6 +60,9 @@ export default function AdminPromptLibrary({ api }) {
   const [aiProposal, setAiProposal] = useState(null)
   const [aiMessages, setAiMessages] = useState([])
   const [aiError, setAiError] = useState(null)
+  const [versionsOpen, setVersionsOpen] = useState(false)
+  const [pendingRestore, setPendingRestore] = useState(null)
+  const [restoringVersion, setRestoringVersion] = useState(null)
 
   const load = async () => {
     setError(null)
@@ -75,6 +78,51 @@ export default function AdminPromptLibrary({ api }) {
       else out.other.push(prompt)
     }
     return out
+  }, [wire])
+
+  const versions = useMemo(() => {
+    const prompts = wire?.prompts || []
+    const events = prompts.flatMap((prompt) => (prompt.history || [])
+      .filter((revision) => !String(revision.id).endsWith('-previous'))
+      .map((revision) => ({
+        ...revision,
+        promptId: prompt.id,
+        promptLabel: prompt.label,
+        time: Date.parse(revision.at),
+      })))
+      .filter((revision) => Number.isFinite(revision.time))
+      .sort((a, b) => a.time - b.time)
+
+    const grouped = []
+    for (const event of events) {
+      const previous = grouped.at(-1)
+      if (previous && previous.note === event.note && event.time - previous.lastTime <= 10000) {
+        previous.lastTime = event.time
+        previous.at = event.at
+        previous.changes.push(event)
+      } else {
+        grouped.push({ note: event.note, at: event.at, lastTime: event.time, changes: [event] })
+      }
+    }
+
+    return grouped.map((group, index) => {
+      const snapshot = {}
+      for (const prompt of prompts) {
+        const revision = (prompt.history || []).find((item) => {
+          const time = Date.parse(item.at)
+          return Number.isFinite(time) && time <= group.lastTime
+        })
+        snapshot[prompt.id] = revision ? revision.text : null
+      }
+      const current = prompts.every((prompt) => (prompt.configured ?? null) === (snapshot[prompt.id] ?? null))
+      return {
+        ...group,
+        number: index + 1,
+        snapshot,
+        current,
+        labels: [...new Set(group.changes.map((change) => change.promptLabel))],
+      }
+    }).reverse()
   }, [wire])
 
   const open = (prompt) => {
@@ -105,6 +153,30 @@ export default function AdminPromptLibrary({ api }) {
   }
 
   const restore = (revision) => save(revision.text, `“${revision.note}” 버전으로 복구`)
+
+  const restoreAllPrompts = async (version) => {
+    if (!wire || restoringVersion != null) return
+    setRestoringVersion(version.number)
+    let next = wire
+    let changed = 0
+    try {
+      for (const prompt of wire.prompts || []) {
+        const target = version.snapshot[prompt.id] ?? null
+        if ((prompt.configured ?? null) === target) continue
+        const note = `V${version.number} 버전으로 전체 복구 · ${version.note}`.slice(0, 200)
+        next = await putAdminPrompt(prompt.id, target, note)
+        changed += 1
+      }
+      setWire(next)
+      setPendingRestore(null)
+      api.showToast(changed ? `V${version.number} 버전으로 돌아갔어요. 새 결과부터 반영됩니다.` : `이미 V${version.number} 버전을 사용 중이에요.`)
+    } catch (e) {
+      setWire(next)
+      api.showToast(e.message || `V${version.number} 버전으로 돌아가지 못했어요.`)
+    } finally {
+      setRestoringVersion(null)
+    }
+  }
 
   const askClaude = async () => {
     const instruction = aiInstruction.trim()
@@ -333,6 +405,80 @@ export default function AdminPromptLibrary({ api }) {
         </div>
       )}
       </>}
+
+      {!versionsOpen && (
+        <button
+          type="button"
+          className="sb-prompt-version-fab"
+          aria-label="프롬프트 버전 기록 열기"
+          title="프롬프트 버전 기록"
+          onClick={() => { setPendingRestore(null); setVersionsOpen(true) }}
+        >
+          <span className="sb-prompt-version-fab__icon" aria-hidden="true">◷</span>
+          <span className="sb-prompt-version-fab__label">버전 기록</span>
+          <b>{wire ? `V${versions[0]?.number || 0}` : '–'}</b>
+        </button>
+      )}
+
+      {versionsOpen && (
+        <div className="sb-prompt-version-layer" role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget && restoringVersion == null) { setPendingRestore(null); setVersionsOpen(false) }
+        }}>
+          <aside className="sb-prompt-version-drawer" role="dialog" aria-modal="true" aria-labelledby="sb-prompt-version-title">
+            <header>
+              <div>
+                <h2 id="sb-prompt-version-title">버전 기록</h2>
+                <p>적용한 프롬프트를 시간순으로 확인합니다.</p>
+              </div>
+              <div className="sb-prompt-version-drawer__head-actions">
+                <span>{wire ? `V${versions[0]?.number || 0}` : '연결 안 됨'}</span>
+                <button type="button" className="sb-icon-btn" aria-label="닫기" disabled={restoringVersion != null} onClick={() => { setPendingRestore(null); setVersionsOpen(false) }}>×</button>
+              </div>
+            </header>
+            <div className="sb-prompt-version-drawer__intro">
+              <span>실제 적용만 기록</span>
+              <p>원하는 시점으로 모든 지시서를 함께 되돌릴 수 있어요.</p>
+            </div>
+            <ol className="sb-prompt-version-list">
+              {versions.map((version) => (
+                <li key={`${version.number}-${version.at}`} className={version.current ? 'is-current' : ''}>
+                  <span className="sb-prompt-version-list__number">V{version.number}</span>
+                  <div className="sb-prompt-version-list__copy">
+                    <div>{version.current && <em>현재 사용 중</em>}<small>{formatAt(version.at)}</small></div>
+                    <b>{version.note}</b>
+                    <p>{version.labels.join(' · ')}</p>
+                    {pendingRestore === version.number && !version.current && (
+                      <div className="sb-prompt-version-list__confirm">
+                        <span>전체 지시서를 V{version.number} 상태로 되돌릴까요?</span>
+                        <div>
+                          <button type="button" className="sb-btn sb-btn--ghost sb-btn--tiny" disabled={restoringVersion != null} onClick={() => setPendingRestore(null)}>취소</button>
+                          <button type="button" className="sb-btn sb-btn--primary sb-btn--tiny" disabled={restoringVersion != null} onClick={() => restoreAllPrompts(version)}>{restoringVersion === version.number ? '복구 중…' : 'V' + version.number + '로 돌아가기'}</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {!version.current && pendingRestore !== version.number && (
+                    <button type="button" className="sb-btn sb-btn--ghost sb-btn--tiny" disabled={restoringVersion != null} onClick={() => setPendingRestore(version.number)}>돌아가기</button>
+                  )}
+                </li>
+              ))}
+              {!wire && (
+                <li className="sb-prompt-version-list__empty is-error">
+                  <b>버전 기록을 불러오지 못했어요.</b>
+                  <span>{error || '관리 서버 연결을 확인해주세요.'}</span>
+                  <button type="button" className="sb-btn sb-btn--ghost sb-btn--tiny" onClick={load}>다시 시도</button>
+                </li>
+              )}
+              {wire && versions.length === 0 && (
+                <li className="sb-prompt-version-list__empty">
+                  <b>아직 적용한 수정 기록이 없어요.</b>
+                  <span>지시서를 적용하면 첫 버전이 여기에 남습니다.</span>
+                </li>
+              )}
+            </ol>
+          </aside>
+        </div>
+      )}
     </div>
   )
 }
