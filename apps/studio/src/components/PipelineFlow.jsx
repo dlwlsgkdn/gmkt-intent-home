@@ -64,6 +64,7 @@ export default function PipelineFlow({
   activeKnowledge, // 지식 카드에서 손을 얹은 지식 id | null — 소비 노드를 강조
   onHoverStage, // 노드 hover → 지식 카드 역강조 (id | null)
   readOnly = false, // 대시보드에서는 같은 흐름도를 클릭 없는 시각 자료로 쓴다
+  inspectByStage, // 대시보드 조회용 Map<단계id, { inputs, data, uses, connection }> — 편집 동작 없음
 }) {
   const byId = useMemo(() => new Map((stages || []).map((stage) => [stage.id, stage])), [stages])
   const run = running ? RUN_PATHS[running] : null
@@ -133,9 +134,29 @@ export default function PipelineFlow({
           <span className="sb-flow__label">{SHORT_LABEL[id] || stage.label}</span>
           <span className={'sb-flow__sub' + (done && !isLive ? ' sb-flow__sub--ok' : '')}>{sub}</span>
         </span>
+        {readOnly && inspectByStage?.get(id) && (
+          <span id={`sb-flow-data-${id}`} className="sb-flow__data-tip" role="tooltip">
+            <span className="sb-flow__data-tip-head"><b>데이터 현황</b><em>{inspectByStage.get(id).status}</em></span>
+            <span><b>이 단계에 존재</b>{inspectByStage.get(id).data.join(' · ')}</span>
+            <span><b>사용되는 곳</b>{inspectByStage.get(id).uses.join(' · ')}</span>
+            <small>{inspectByStage.get(id).connection}</small>
+          </span>
+        )}
       </>
     )
-    if (readOnly) return <div key={id} className={`${cls.join(' ')} is-readonly`} title={stage.note}>{contents}</div>
+    if (readOnly) return (
+      <div
+        key={id}
+        className={`${cls.join(' ')} is-readonly`}
+        tabIndex={0}
+        aria-label={`${stage.no}단계 ${SHORT_LABEL[id] || stage.label}. 마우스를 올리면 데이터 현황을 볼 수 있습니다.`}
+        aria-describedby={inspectByStage?.get(id) ? `sb-flow-data-${id}` : undefined}
+        onMouseEnter={() => onHoverStage?.(id)}
+        onMouseLeave={() => onHoverStage?.(null)}
+        onFocus={() => onHoverStage?.(id)}
+        onBlur={() => onHoverStage?.(null)}
+      >{contents}</div>
+    )
     return (
       <button
         key={id}
@@ -222,7 +243,7 @@ export default function PipelineFlow({
       </div>
       <p className="sb-flow-hint">
         {readOnly
-          ? '고객 요청부터 결과 저장까지의 처리 순서와 참고자료 연결 상태를 보여줍니다.'
+          ? '각 단계에 마우스를 올리면 보유 데이터와 다음 사용처를 확인할 수 있습니다. 이 화면에서는 수정할 수 없습니다.'
           : '단계를 누르면 하는 일과 사용하는 참고자료를 볼 수 있어요. AI가 작성하는 단계에서는 세부 지시서도 확인할 수 있습니다.'}
       </p>
     </>

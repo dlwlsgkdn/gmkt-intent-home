@@ -12,6 +12,59 @@ import PipelineFlow from './PipelineFlow.jsx'
 
 const TEST_USER = 'ops-playground'
 
+const STAGE_DATA = {
+  objective: {
+    inputs: ['고객 한 줄 요청'],
+    data: ['원문 발화', '유효성 판정'],
+    uses: ['1단계 의도 파악', '쓰레드 진입 문구'],
+  },
+  intent: {
+    inputs: ['검증된 고객 발화'],
+    data: ['의도 유형', '목적·시점·대상'],
+    uses: ['2단계 조건 원장', '3단계 질문 생성', '5단계 추천 구성'],
+  },
+  ledger: {
+    inputs: ['의도 해석', '프로필', '설문 답변', '최근 피드백', '트렌드 키워드'],
+    data: ['조건 사실 목록', '출처·우선순위'],
+    uses: ['3단계 중복 질문 방지', '5a·5b·5c 생성 조건', '6단계 조건 역대조'],
+  },
+  survey: {
+    inputs: ['조건 원장', '설문 프롬프트'],
+    data: ['질문 1~3개', '선택지·입력 규칙'],
+    uses: ['고객 답변 수집', '2단계 원장 갱신', '5단계 추천 입력'],
+  },
+  candidates: {
+    inputs: ['의도·답변·프로필 검색어', '내부 카탈로그'],
+    data: ['상품 후보 최대 32개', '콘텐츠 후보 최대 16개'],
+    uses: ['5b 상품 추천', '5c 참고 콘텐츠 추천'],
+  },
+  'plan-skeleton': {
+    inputs: ['조건 원장', '설문·답변'],
+    data: ['추천 제목', '단계 순서', '상품·콘텐츠 자리'],
+    uses: ['5b·5c 결과 합치기', '고객 화면 조기 표시'],
+  },
+  'plan-products': {
+    inputs: ['조건 원장', '상품 후보', '웹 검색'],
+    data: ['단계별 추천 상품', '추천 이유·상품 URL'],
+    uses: ['5a 상품 자리 채우기', '6단계 상품 검증'],
+  },
+  'plan-contents': {
+    inputs: ['조건 원장', '콘텐츠 후보', '웹 검색'],
+    data: ['영상·게시글', '선정 이유·출처 URL'],
+    uses: ['5a 콘텐츠 자리 채우기', '6단계 출처 검증'],
+  },
+  verify: {
+    inputs: ['합쳐진 추천 계획', '조건 원장', '금지 목록'],
+    data: ['통과 결과', '제외 항목', '제외 사유 로그'],
+    uses: ['7단계 결과 저장', '최종 고객 화면'],
+  },
+  record: {
+    inputs: ['검증 완료 계획', '단계 실행 메타'],
+    data: ['쓰레드 스텝', '모델·프롬프트 버전', '추천 결과 원문'],
+    uses: ['고객 이어보기', '운영 로그·평가', '다음 추천 피드백'],
+  },
+}
+
 const formatAt = (at) => {
   const date = new Date(at)
   return Number.isNaN(date.getTime()) ? at : date.toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' })
@@ -65,6 +118,7 @@ export default function PipelineDashboard({ api }) {
   const [logsLoading, setLogsLoading] = useState(true)
   const [logsOpen, setLogsOpen] = useState(false)
   const [logMode, setLogMode] = useState('easy')
+  const [hoveredStageId, setHoveredStageId] = useState(null)
 
   useEffect(() => {
     let active = true
@@ -105,6 +159,27 @@ export default function PipelineDashboard({ api }) {
   const knowledge = pipeline?.knowledge || []
   const routing = useMemo(() => knowledgeRouting(knowledge, stages, prompts), [knowledge, stages, prompts])
   const knowledgeById = useMemo(() => new Map(knowledge.map((entry) => [entry.id, entry])), [knowledge])
+  const promptById = useMemo(() => new Map((prompts?.prompts || []).map((prompt) => [prompt.id, prompt])), [prompts])
+  const inspectByStage = useMemo(() => new Map(stages.map((stage) => {
+    const spec = STAGE_DATA[stage.id] || { inputs: [], data: [], uses: [] }
+    const prompt = stage.promptId ? promptById.get(stage.promptId) : null
+    const linkedKnowledge = (routing.byStage.get(stage.id) || []).map((id) => knowledgeById.get(id)).filter(Boolean)
+    const connectedKnowledge = linkedKnowledge.filter((entry) => entry.value).length
+    const connectionParts = []
+    if (stage.promptId) connectionParts.push(prompt ? `프롬프트 ${prompt.configured ? '수정본' : '기본값'} 연결` : '프롬프트 연결 확인 필요')
+    else connectionParts.push('코드 규칙으로 처리')
+    if (linkedKnowledge.length) connectionParts.push(`참고자료 ${connectedKnowledge}/${linkedKnowledge.length}개 값 있음`)
+    return [stage.id, {
+      ...spec,
+      status: stage.status === 'planned' ? '준비 중' : '운영 중',
+      connection: connectionParts.join(' · '),
+      knowledge: linkedKnowledge,
+      promptId: stage.promptId || null,
+      promptCustom: Boolean(prompt?.configured || stage.promptCustom),
+    }]
+  })), [stages, promptById, routing.byStage, knowledgeById])
+  const hoveredStage = hoveredStageId ? stages.find((stage) => stage.id === hoveredStageId) || null : null
+  const hoveredInspection = hoveredStage ? inspectByStage.get(hoveredStage.id) : null
   const configuredPrompts = useMemo(() => (prompts?.prompts || []).filter((prompt) => prompt.configured), [prompts])
   const testingTrials = useMemo(() => trials.filter((trial) => trial.status === 'testing'), [trials])
   const easyApplied = useMemo(() => configuredPrompts.map((prompt) => ({
@@ -157,20 +232,44 @@ export default function PipelineDashboard({ api }) {
             </div>
           </div>
           <div className="sb-pipeline-dashboard__expert-flow">
-            <PipelineFlow stages={stages} results={{}} feedByStage={routing.byStage} knowledgeById={knowledgeById} readOnly />
+            <PipelineFlow
+              stages={stages}
+              results={{}}
+              feedByStage={routing.byStage}
+              knowledgeById={knowledgeById}
+              readOnly
+              inspectByStage={inspectByStage}
+              onHoverStage={setHoveredStageId}
+            />
           </div>
         </section>
 
         <aside className="sb-admin-card sb-pipeline-dashboard__activity" aria-label="AI 설정 운영 로그 요약">
-          <div className="sb-pipeline-dashboard__activity-head"><span>운영 로그</span><i>{logError ? '연결 확인' : '자동 기록'}</i></div>
-          <div><h2>최근에 무엇이 바뀌었나요?</h2><p>적용한 지시서와 아직 결정하지 않은 시험을 확인합니다.</p></div>
-          <dl>
-            <div><dt>현재 적용 중</dt><dd>{logsLoading ? '…' : configuredPrompts.length}</dd><small>수정한 지시서</small></div>
-            <div><dt>테스트 중</dt><dd>{logsLoading ? '…' : testingTrials.length}</dd><small>결정 대기 쓰레드</small></div>
-          </dl>
-          {recent ? <div className="sb-pipeline-dashboard__recent"><span>최근 적용</span><b>{recent.title}</b><p>{recent.detail}</p><small>{formatAt(recent.at)}</small></div>
-            : <p className="sb-pipeline-dashboard__activity-empty">{logsLoading ? '로그를 불러오는 중…' : logError ? '운영 로그에 연결하지 못했어요.' : '아직 적용된 수정 기록이 없어요.'}</p>}
-          <button type="button" className="sb-btn sb-btn--ghost" onClick={() => setLogsOpen(true)}>로그 보기 <span>→</span></button>
+          {hoveredStage && hoveredInspection ? <>
+            <div className="sb-pipeline-dashboard__activity-head"><span>데이터 현황</span><i className={hoveredStage.status === 'planned' ? 'is-planned' : ''}>{hoveredInspection.status}</i></div>
+            <div><h2>{hoveredStage.no} · {hoveredStage.label}</h2><p>{hoveredStage.note}</p></div>
+            <div className="sb-pipeline-stage-data">
+              <section><span>들어오는 데이터</span><div>{hoveredInspection.inputs.map((item) => <em key={item}>{item}</em>)}</div></section>
+              <section><span>이 단계에 존재</span><div>{hoveredInspection.data.map((item) => <em key={item}>{item}</em>)}</div></section>
+              <section><span>어디에 이용</span><ul>{hoveredInspection.uses.map((item) => <li key={item}>{item}</li>)}</ul></section>
+            </div>
+            <div className="sb-pipeline-stage-connection">
+              <b>현재 연결</b><p>{hoveredInspection.connection}</p>
+              {hoveredInspection.promptId && <code>{hoveredInspection.promptId}</code>}
+              {hoveredInspection.knowledge.length > 0 && <div>{hoveredInspection.knowledge.map((entry) => <span key={entry.id} className={entry.value ? 'is-filled' : ''}>{entry.label} · {entry.value ? '값 있음' : '비어 있음'}</span>)}</div>}
+            </div>
+            <small className="sb-pipeline-stage-readonly">조회 전용 · 수정은 쉽게 고치기 또는 전문가용 고치기에서 합니다.</small>
+          </> : <>
+            <div className="sb-pipeline-dashboard__activity-head"><span>운영 로그</span><i>{logError ? '연결 확인' : '자동 기록'}</i></div>
+            <div><h2>최근에 무엇이 바뀌었나요?</h2><p>적용한 지시서와 아직 결정하지 않은 시험을 확인합니다.</p></div>
+            <dl>
+              <div><dt>현재 적용 중</dt><dd>{logsLoading ? '…' : configuredPrompts.length}</dd><small>수정한 지시서</small></div>
+              <div><dt>테스트 중</dt><dd>{logsLoading ? '…' : testingTrials.length}</dd><small>결정 대기 쓰레드</small></div>
+            </dl>
+            {recent ? <div className="sb-pipeline-dashboard__recent"><span>최근 적용</span><b>{recent.title}</b><p>{recent.detail}</p><small>{formatAt(recent.at)}</small></div>
+              : <p className="sb-pipeline-dashboard__activity-empty">{logsLoading ? '로그를 불러오는 중…' : logError ? '운영 로그에 연결하지 못했어요.' : '아직 적용된 수정 기록이 없어요.'}</p>}
+            <button type="button" className="sb-btn sb-btn--ghost" onClick={() => setLogsOpen(true)}>로그 보기 <span>→</span></button>
+          </>}
         </aside>
       </div>
 
