@@ -2,6 +2,9 @@
 /*
  * 내재화 카탈로그 Neon Postgres → 사내 Mongo 이관 — 일회성 스크립트 (2026-09-22).
  *
+ * 2026-09-23 결정으로 이 이관은 하지 않는다 — 옛 Neon 행을 가져오는 대신 운영 콘솔 「데이터 시딩」으로 새로 쌓는다.
+ * 스크립트는 필요해질 때를 위해 남겨 둔다(아래 그대로 쓰면 된다).
+ *
  * 옛 저장소(github.com dlwlsgkdn/gmkt-intent-home)는 카탈로그를 Neon 표 `catalog_products`·`catalog_contents`
  * (마이그레이션 0005)에 쌓았다 — 웹 검색 시딩 네 축 672단위 등. 이 저장소의 core 는 사내 Mongo 라 같은 행을
  * 같은 이름의 컬렉션으로 옮긴다. 행 모양은 src/db/schema.ts CatalogProductDoc·CatalogContentDoc (_id = 옛 id).
