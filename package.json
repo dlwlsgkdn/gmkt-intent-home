@@ -7,6 +7,7 @@
     "packages/*"
   ],
   "scripts": {
+    "postinstall": "node scripts/normalize-lockfile.mjs",
     "build": "npm run build --workspace=@ddak/schema && npm run build --workspace=@ddak/pipeline && npm run build --workspace=apps/core && npm run build --workspace=apps/bff && npm run build --workspace=apps/tagging-api && npm run build --workspace=apps/studio",
     "start": "node apps/tagging-api/dist/main.js",
     "start:tagging": "node apps/tagging-api/dist/main.js",
