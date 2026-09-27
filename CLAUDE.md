@@ -46,9 +46,10 @@ legacy/            ← 옛 HTML 프로토타입 원본 (빌드 시 apps/studio/d
   Vercel 에서 못 쓴다). 둘 다 같은 리포에 연결돼 main 푸시마다 빌드되는데(Root Directory `apps/bff`·`apps/core`,
   `apps/<앱>/vercel.json` 의 `ignoreCommand` 는 실제로는 안 걸러진다) **bff 는 현행 코드가 자동 배포되고, core 는
   09-19 Neon 빌드(`4b1d3f9`)에 고정돼 있어야 한다** — 09-22 Mongo 이관 뒤의 core 는 사내 Mongo 에만 닿아 Vercel 에
-  올라가면 DB 라우트가 전부 503 이다. 그래서 `ddak-core` 의 `NPM_CONFIG_REGISTRY` 는 일부러 development 에만
-  두어 빌드가 계속 실패(= 승격 안 됨)하게 뒀다. core 를 다시 올리려면 Vercel 에서 닿는 Mongo(예: Atlas)를
-  `MONGO_URI` 로 주고 그 환경변수 target 을 되돌린다.
+  올라가면 DB 라우트가 전부 503 이다. 그래서 **core 는 Vercel 에서 아예 빌드하지 않는다** — `apps/core/vercel.json`
+  의 `ignoreCommand` 가 `exit 0`(파일이 대시보드를 덮으므로 여기가 원천) 이고 프로젝트 Ignored Build Step 도
+  `exit 0`, `NPM_CONFIG_REGISTRY` 는 development 에만 있다. core 를 다시 올리려면 Vercel 에서 닿는 Mongo(예:
+  Atlas)를 `MONGO_URI` 로 주고 `ignoreCommand` 를 bff 와 같은 diff 판정으로 되돌린 뒤 그 환경변수 target 도 되돌린다.
 - **사외 빌드와 사내 미러 (2026-09-27 사고)**: 루트 `.npmrc` 가 사내 미러 `prm.gmarket.com` 을 registry 로
   박아 두어 Vercel·Actions 의 npm install 이 `getaddrinfo ENOTFOUND` 로 죽었다. 방어는 셋이 한 벌이다 —
   ① 스튜디오 설치 명령의 `--registry=https://registry.npmjs.org/`(루트·apps/studio vercel.json, pages.yml)
