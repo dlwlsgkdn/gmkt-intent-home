@@ -12,13 +12,17 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
-const src = path.resolve(here, '../../../node_modules/@mediapipe/tasks-vision/wasm')
+// 워크스페이스 설치는 루트 node_modules 에, 앱 단독 설치(Vercel `--workspaces=false`)는
+// apps/studio/node_modules 에 패키지가 놓인다 — 둘 다 찾는다
+const src = ['../node_modules', '../../../node_modules']
+  .map((dir) => path.resolve(here, dir, '@mediapipe/tasks-vision/wasm'))
+  .find((dir) => fs.existsSync(dir))
 const dest = path.resolve(here, '../public/mediapipe/wasm')
 
 // SIMD 빌드만 쓴다 (요즘 브라우저는 전부 지원 — nosimd까지 복사하면 11MB가 더 붙는다)
 const FILES = ['vision_wasm_internal.js', 'vision_wasm_internal.wasm']
 
-if (!fs.existsSync(src)) {
+if (!src) {
   console.warn('[mediapipe] 패키지를 찾지 못해 복사를 건너뜁니다 — 가상 메이크업 합성은 색조 프리셋으로 동작합니다')
   process.exit(0)
 }

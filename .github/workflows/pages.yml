@@ -26,7 +26,8 @@ jobs:
           node-version: 22
           cache: npm
       # 스튜디오만 독립 설치해 다른 워크스페이스의 prepare/잠금파일 오류와 분리한다.
-      - run: npm --prefix apps/studio install --workspaces=false --ignore-scripts --no-package-lock --no-save
+      # --registry: 루트 .npmrc 의 사내 미러(prm.gmarket.com)는 사외 빌더가 못 닿는다 — 공개 레지스트리를 명시한다.
+      - run: npm --prefix apps/studio install --workspaces=false --ignore-scripts --no-package-lock --no-save --registry=https://registry.npmjs.org/
       - run: npm run build --prefix apps/studio
       # 옛 주소(…/gmkt-intent-home/docs/) 북마크용 리다이렉트 스텁
       - name: Add /docs/ redirect stub

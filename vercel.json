@@ -1,5 +1,5 @@
 {
-  "installCommand": "npm --prefix apps/studio install --workspaces=false --ignore-scripts --no-package-lock --no-save",
+  "installCommand": "npm --prefix apps/studio install --workspaces=false --ignore-scripts --no-package-lock --no-save --registry=https://registry.npmjs.org/",
   "buildCommand": "npm run build --prefix apps/studio",
   "outputDirectory": "apps/studio/dist"
 }
