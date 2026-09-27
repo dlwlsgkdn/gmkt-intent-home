@@ -25,9 +25,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      # 스튜디오 배포에는 다른 워크스페이스의 prepare 빌드가 필요하지 않다.
-      - run: npm ci --ignore-scripts
-      - run: npm run build --workspace=apps/studio
+      # 스튜디오만 독립 설치해 다른 워크스페이스의 prepare/잠금파일 오류와 분리한다.
+      - run: npm --prefix apps/studio install --workspaces=false --ignore-scripts --no-package-lock --no-save
+      - run: npm run build --prefix apps/studio
       # 옛 주소(…/gmkt-intent-home/docs/) 북마크용 리다이렉트 스텁
       - name: Add /docs/ redirect stub
         run: |
