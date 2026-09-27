@@ -41,6 +41,14 @@ legacy/            ← 옛 HTML 프로토타입 원본 (빌드 시 apps/studio/d
   `apps/studio/vercel.json` 은 Root Directory 를 `apps/studio` 로 둘 때의 예비이고 지금은 안 쓴다. 공개
   주소는 `https://ddak-scenario-studio.vercel.app`(SSO 없음 — `-ddak`·`git-main` 별칭은 SSO 302). GitHub
   Pages 는 `.github/workflows/pages.yml`(같은 단독 설치 명령) → `https://dlwlsgkdn.github.io/gmkt-intent-home/`.
+  **공개 스튜디오의 라이브 기능은 Vercel 프로젝트 `ddak-bff`·`ddak-core` 위에서 돈다**(2026-09-27 확인 —
+  `middleware.js` 의 `BFF_URL` → Vercel bff → Vercel core. 퓨전 주소 `eevee-lab-*.d3.clouz.io` 는 사설 IP 라
+  Vercel 에서 못 쓴다). 둘 다 같은 리포에 연결돼 main 푸시마다 빌드되는데(Root Directory `apps/bff`·`apps/core`,
+  `apps/<앱>/vercel.json` 의 `ignoreCommand` 는 실제로는 안 걸러진다) **bff 는 현행 코드가 자동 배포되고, core 는
+  09-19 Neon 빌드(`4b1d3f9`)에 고정돼 있어야 한다** — 09-22 Mongo 이관 뒤의 core 는 사내 Mongo 에만 닿아 Vercel 에
+  올라가면 DB 라우트가 전부 503 이다. 그래서 `ddak-core` 의 `NPM_CONFIG_REGISTRY` 는 일부러 development 에만
+  두어 빌드가 계속 실패(= 승격 안 됨)하게 뒀다. core 를 다시 올리려면 Vercel 에서 닿는 Mongo(예: Atlas)를
+  `MONGO_URI` 로 주고 그 환경변수 target 을 되돌린다.
 - **사외 빌드와 사내 미러 (2026-09-27 사고)**: 루트 `.npmrc` 가 사내 미러 `prm.gmarket.com` 을 registry 로
   박아 두어 Vercel·Actions 의 npm install 이 `getaddrinfo ENOTFOUND` 로 죽었다. 방어는 셋이 한 벌이다 —
   ① 스튜디오 설치 명령의 `--registry=https://registry.npmjs.org/`(루트·apps/studio vercel.json, pages.yml)
@@ -56,8 +64,8 @@ legacy/            ← 옛 HTML 프로토타입 원본 (빌드 시 apps/studio/d
   `/mediapipe/wasm/vision_wasm_internal.wasm`(HEAD 200)·`/api/state?index=1`(Neon 함수)을 본다. 퓨전 앱
   (core·bff·tagging-api) = 사내 GHE 저장소에 반영 → **퓨전 콘솔에서 해당 앱 빌드를 다시 실행**(웹훅 없음).
 - **배포 확장 규칙**: Vercel 에 새 앱을 올린다면 같은 리포를 연결한 별도 프로젝트(Root Directory=`apps/<앱>`)
-  + `apps/<앱>/vercel.json` 의 `ignoreCommand` 로 무관 커밋을 스킵한다(이관 전 `ddak-bff`·`ddak-core`
-  프로젝트가 그 흔적으로 남아 있다). **사내 퓨전에서는 이 규칙을 쓰지 않는다** — 앱마다 별도 애플리케이션을
+  + `apps/<앱>/vercel.json` 의 `ignoreCommand` 로 무관 커밋을 스킵한다(`ddak-bff`·`ddak-core` 가 이 방식 —
+  위 「스튜디오 배포」의 고정 규칙 참고). **사내 퓨전에서는 이 규칙을 쓰지 않는다** — 앱마다 별도 애플리케이션을
   만들고 BuildConfig의 `NPM_RUN`으로 실행 대상을 가른다(위 「배포 (사내 퓨전)」)
 
 ## 명령어
