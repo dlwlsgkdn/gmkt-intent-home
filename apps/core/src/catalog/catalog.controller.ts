@@ -124,7 +124,7 @@ export class CatalogController {
   }
 
   @Post('ensure-schema')
-  @ApiOperation({ summary: '표 만들기 — 카탈로그 컬렉션·인덱스 보장 (멱등 — Mongo 라 마이그레이션이 없다, 운영 콘솔 「여기서 표 만들기」)' })
+  @ApiOperation({ summary: '표 만들기(멱등) — Neon 은 마이그레이션 0005 DDL + drizzle 이력, Mongo 는 컬렉션·인덱스 보장 (운영 콘솔 「여기서 표 만들기」)' })
   ensureSchema() {
     return this.catalog.ensureSchema()
   }

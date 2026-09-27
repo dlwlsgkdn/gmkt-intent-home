@@ -142,3 +142,12 @@ export function catalogContentToWire(doc: CatalogContentDoc, score?: number) {
     ...(score !== undefined ? { score } : {}),
   }
 }
+
+/* 두 저장소 구현이 공유하는 와이어 모양 — 추상 서비스(계약)와 Neon 매퍼(neon.wire.ts)가 이 이름으로 가리킨다 */
+export type ThreadWire = ReturnType<typeof threadToWire>
+export type ThreadStepWire = ReturnType<typeof stepToWire>
+export type SettingWire = ReturnType<typeof settingToWire>
+export type EvalCaseWire = ReturnType<typeof evalCaseToWire>
+export type EvalRunWire = ReturnType<typeof evalRunToWire>
+export type CatalogProductWire = ReturnType<typeof catalogProductToWire>
+export type CatalogContentWire = ReturnType<typeof catalogContentToWire>

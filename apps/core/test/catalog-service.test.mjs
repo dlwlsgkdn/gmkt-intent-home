@@ -1,9 +1,9 @@
 import 'reflect-metadata'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import svc from '../dist/catalog/catalog.service.js'
+import svc from '../dist/catalog/catalog.mongo.service.js'
 
-const { CatalogService } = svc
+const { CatalogMongoService: CatalogService } = svc
 
 /*
  * CatalogService 를 실제 Mongo 없이 돌린다 — 서비스가 쓰는 연산(find·sort·limit·countDocuments·bulkWrite updateOne upsert·
@@ -215,7 +215,8 @@ test('둘러보기 — updatedAt 내림차순 키셋 커서로 끝까지 겹치�
   await service.upsertProducts(Array.from({ length: 7 }, (_, i) => product(`gm-${i}`)))
   // 같은 시각에 들어간 행이 섞여도 _id 가 동률을 가른다 — 일부만 시각을 바꿔 둘 다 시험한다
   const coll = m.collection('catalog_products')
-  coll.docs.get('gm-5').updatedAt = new Date('2026-09-23T00:00:00Z')
+  // 나머지 행은 "지금" 시각이라 가장 최신이 되려면 미래여야 한다 — 고정 날짜(2026-09-23)는 작성 두 시간 뒤부터 과거가 돼 깨졌다
+  coll.docs.get('gm-5').updatedAt = new Date(Date.now() + 60_000)
   const seen = []
   let cursor
   for (let page = 0; page < 5; page++) {

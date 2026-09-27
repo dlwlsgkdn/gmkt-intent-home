@@ -112,6 +112,10 @@ npm error 404 Not Found - GET http://prm.gmarket.com/nexus/content/groups/npm-gr
 `NODE_ENV=production` 을 기본으로 두면 npm 이 devDependencies 를 건너뛰어 `nest: not found` 로
 깨진다. `.s2i/environment` 의 `NPM_CONFIG_PRODUCTION=false` 가 그것을 막는다.
 
+**core 의 저장소는 `.s2i/environment` 의 `CORE_STORE=mongo` 가 고른다**(2026-09-28). core 코드는 Neon(Drizzle)과 사내 Mongo
+구현을 둘 다 갖고 배포 환경이 하나를 꽂는다(`apps/core/src/db/store.ts`) — github.com/Vercel 배포는 `CORE_STORE=neon`. 그래서
+이 저장소 ↔ eevee-labatory 커밋 이관이 저장소 설정을 건드리지 않는다. `MONGO_URI` 는 여전히 시크릿으로만 준다.
+
 **`.env` 파일은 컨테이너에서 쓰이지 않는다.** 앱은 `dotenv` 로 프로세스 cwd 의 `.env` 를 읽는데
 루트에서 기동하면 그 파일이 없다(로컬에서 `apps/tagging-api` 안에서 띄울 때만 읽힌다).
 퓨전에서는 아래 표의 값을 **Deployment 환경변수·Secret 으로 주입**해야 한다. `MONGO_URI` 가

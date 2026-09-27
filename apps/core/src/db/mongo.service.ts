@@ -1,12 +1,14 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common'
 import { Collection, Db, Document, MongoClient } from 'mongodb'
 import { CATALOG_CONTENTS_COLL, CATALOG_PRODUCTS_COLL, EVAL_RUNS_COLL, THREAD_STEPS_COLL, THREADS_COLL } from './schema'
+import { STORE } from './store'
 
 /*
  * 사내 Mongo 연결 — apps/tagging-api의 MongoService와 같은 패턴이다: 연결 실패가
  * 부팅을 막지 않는다(사내망 밖에서 띄웠을 때 프로세스가 죽는 대신 DB 라우트만 503을 내는
  * 편이 진단하기 쉽고, 쿠버네티스 프로브가 healthz를 계속 200으로 본다). core는 tagging-api와
  * 별도 프로세스라 자기 연결을 따로 갖는다 — 같은 사내 Mongo 클러스터에 붙더라도 무관하다.
+ * 저장소로 Mongo 를 고르지 않은 프로세스(STORE≠mongo, 예: Vercel 의 Neon 배포)는 MONGO_URI 가 있어도 연결하지 않는다.
  */
 @Injectable()
 export class MongoService implements OnModuleInit, OnModuleDestroy {
@@ -14,8 +16,12 @@ export class MongoService implements OnModuleInit, OnModuleDestroy {
   private client: MongoClient | null = null
 
   async onModuleInit() {
+    if (STORE !== 'mongo') return
     const uri = process.env.MONGO_URI
-    if (!uri) return
+    if (!uri) {
+      this.logger.warn('CORE_STORE=mongo 인데 MONGO_URI 가 없다 — DB 라우트는 503')
+      return
+    }
     const dbName = process.env.MONGO_DB || 'eevee'
     try {
       this.client = await new MongoClient(uri, { serverSelectionTimeoutMS: 5000 }).connect()
