@@ -1,5 +1,5 @@
 {
-  "installCommand": "npm install",
+  "installCommand": "npm install --ignore-scripts",
   "buildCommand": "npm run build --workspace=apps/studio",
   "outputDirectory": "apps/studio/dist"
 }

@@ -25,7 +25,8 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      # 스튜디오 배포에는 다른 워크스페이스의 prepare 빌드가 필요하지 않다.
+      - run: npm ci --ignore-scripts
       - run: npm run build --workspace=apps/studio
       # 옛 주소(…/gmkt-intent-home/docs/) 북마크용 리다이렉트 스텁
       - name: Add /docs/ redirect stub
