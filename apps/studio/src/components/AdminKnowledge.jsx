@@ -11,7 +11,7 @@ import {
 /*
  * 운영 지식 — 트렌드 키워드 사전 한 벌 (담당자 엑셀 이관본, lib/trendKeywords.js).
  * 기본 화면은 TrendDashboard: 같은 allRows로 버블·신규 목록을 그리고 빠른 추가도 오버레이에 기록.
- * 시트처럼 바로 편집한다: 행 추가·키워드/설명/상품/입력자 인라인 입력, 구분·관련은 칩 팝오버.
+ * 시트처럼 바로 편집한다: 행 추가·키워드/유행 시작 연월/설명/상품/입력자 인라인 입력, 구분·관련은 칩 팝오버.
  * 관련 배열 순서는 추천 연결 우선순위라 화면 번호와 위·아래 이동으로 그대로 관리한다.
  * 편집은 코드 원본 위 오버레이(패치·추가·삭제)로 이 기기(localStorage)에 저장된다 —
  * 전 기기 공통 반영은 JSON 내보내기 → 코드(trendKeywords.js) 반영으로.
@@ -21,6 +21,13 @@ import {
 
 const OVERLAY_KEY = 'ddak-trend-dict-overlay-v1'
 const EMPTY_OVERLAY = { patches: {}, added: [], removed: [] }
+const MIN_TREND_YEAR = 1900
+const MAX_TREND_YEAR = new Date().getFullYear() + 1
+const MIN_TREND_MONTH = `${MIN_TREND_YEAR}-01`
+const MAX_TREND_MONTH = `${MAX_TREND_YEAR}-12`
+const trendMonthValue = (row) => row.startYear && row.startMonth
+  ? `${row.startYear}-${String(row.startMonth).padStart(2, '0')}`
+  : ''
 
 const loadOverlay = () => {
   try {
@@ -76,7 +83,7 @@ export default function AdminKnowledge({ api }) {
       if (trendLevel === 'none' && entry.levels.length > 0) return false
       if (trendLevel !== 'all' && trendLevel !== 'none' && !entry.levels.includes(trendLevel)) return false
       if (!query) return true
-      return [entry.word, entry.desc, entry.brands || '', entry.author || '', entry.related.join(' ')].join(' ').toLowerCase().includes(query)
+      return [entry.word, trendMonthValue(entry), entry.desc, entry.brands || '', entry.author || '', entry.related.join(' ')].join(' ').toLowerCase().includes(query)
     })
   }, [allRows, trendLevel, trendQuery])
 
@@ -110,7 +117,7 @@ export default function AdminKnowledge({ api }) {
   }
 
   const addRow = () => {
-    const row = { key: `add-${crypto.randomUUID()}`, createdAt: Date.now(), no: null, author: '', word: '', levels: [], related: [], desc: '', brands: '' }
+    const row = { key: `add-${crypto.randomUUID()}`, createdAt: Date.now(), no: null, author: '', word: '', startYear: null, startMonth: null, levels: [], related: [], desc: '', brands: '' }
     commitOverlay({ ...overlay, added: [...overlay.added, row] })
     setTrendLevel('all')
     setTrendQuery('')
@@ -118,14 +125,20 @@ export default function AdminKnowledge({ api }) {
     api.showToast('표 맨 위에 새 항목을 만들었어요. 각 칸을 바로 입력하세요.')
   }
 
-  const addKeyword = ({ word, level, desc }) => {
+  const addKeyword = ({ word, startYear, startMonth, level, desc }) => {
     const cleanWord = word.trim()
+    const cleanYear = Number(startYear)
+    const cleanMonth = Number(startMonth)
     if (!cleanWord) return false
+    if (!Number.isInteger(cleanYear) || cleanYear < MIN_TREND_YEAR || cleanYear > MAX_TREND_YEAR || !Number.isInteger(cleanMonth) || cleanMonth < 1 || cleanMonth > 12) {
+      api.showToast('유행 시작 연월을 정확히 입력해 주세요.')
+      return false
+    }
     if (allRows.some((row) => row.word.trim().toLocaleLowerCase() === cleanWord.toLocaleLowerCase())) {
       api.showToast('이미 사전에 있는 키워드예요. 검색해서 확인해 주세요.')
       return false
     }
-    const row = { key: `add-${crypto.randomUUID()}`, createdAt: Date.now(), no: null, author: '', word: cleanWord, levels: level ? [level] : [], related: [], desc: desc.trim(), brands: '' }
+    const row = { key: `add-${crypto.randomUUID()}`, createdAt: Date.now(), no: null, author: '', word: cleanWord, startYear: cleanYear, startMonth: cleanMonth, levels: level ? [level] : [], related: [], desc: desc.trim(), brands: '' }
     commitOverlay({ ...overlay, added: [...overlay.added, row] })
     api.showToast(`‘${cleanWord}’ 키워드를 추가했어요.`)
     return true
@@ -269,6 +282,7 @@ export default function AdminKnowledge({ api }) {
             ))}
           </ul>
         </details>
+        <p className="sb-admin-trend-priority-guide"><b>유행 시작은 현재 유행 파동 기준이에요.</b> 오래된 원료·기법이 다시 뜬 경우에는 발명 시점이 아니라 이번 재유행이 대중화된 연월을 적습니다.</p>
         <p className="sb-admin-trend-priority-guide"><b>관련 항목은 순서가 중요해요.</b> 1순위부터 왼쪽에 표시되며, 항목을 열어 ↑ ↓ 버튼으로 순서를 바꿀 수 있습니다.</p>
         <div className="sb-admin-callout">
           <span>i</span>
@@ -307,7 +321,7 @@ export default function AdminKnowledge({ api }) {
           <span className="sb-admin-trend-tools__right">
             <input
               type="search"
-              placeholder="키워드·상품·설명·입력자 검색"
+              placeholder="키워드·연도·상품·설명·입력자 검색"
               value={trendQuery}
               onChange={(event) => setTrendQuery(event.target.value)}
               aria-label="트렌드 키워드 검색"
@@ -319,7 +333,7 @@ export default function AdminKnowledge({ api }) {
           </span>
         </div>
         <div className="sb-table sb-admin-table sb-admin-trend-table"><div className="sb-table__scroll"><table>
-          <thead><tr><th>키워드·상품</th><th>유행 구분</th><th>관련 우선순위</th><th>설명</th><th>대표 상품·브랜드</th><th>입력자</th><th /></tr></thead>
+          <thead><tr><th>키워드·상품</th><th>유행 시작 연월</th><th>유행 구분</th><th>관련 우선순위</th><th>설명</th><th>대표 상품·브랜드</th><th>입력자</th><th /></tr></thead>
           <tbody>
             {trendRows.map((row) => {
               const patched = row.src === 'base' && !!overlay.patches[row.key]
@@ -332,6 +346,20 @@ export default function AdminKnowledge({ api }) {
                       placeholder="키워드 또는 상품명"
                       onChange={(event) => patchRow(row, { word: event.target.value })}
                       aria-label="키워드"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      className="sb-admin-trend-input sb-admin-trend-input--year"
+                      type="month"
+                      min={MIN_TREND_MONTH}
+                      max={MAX_TREND_MONTH}
+                      value={trendMonthValue(row)}
+                      onChange={(event) => {
+                        const [year, month] = event.target.value.split('-').map(Number)
+                        patchRow(row, { startYear: year || null, startMonth: month || null })
+                      }}
+                      aria-label={`${row.word || '새 키워드'} 유행 시작 연월`}
                     />
                   </td>
                   <td>{chipCell(row, 'levels', TREND_LEVEL_OPTIONS, '구분 선택')}</td>

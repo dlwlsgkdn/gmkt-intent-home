@@ -2934,6 +2934,7 @@
 .sb-admin-trend-input:hover { border-color: var(--sb-n-200); }
 .sb-admin-trend-input:focus { border-color: var(--sb-info); background: var(--sb-n-0); }
 .sb-admin-trend-input--word { min-width: 110px; font-weight: 500; }
+.sb-admin-trend-input--year { min-width: 118px; font-variant-numeric: tabular-nums; }
 .sb-admin-trend-input--author { min-width: 76px; }
 .sb-admin-trend-input--desc { min-height: 56px; resize: vertical; line-height: 1.5; }
 .sb-admin-trend-cellwrap { position: relative; min-width: 120px; }
@@ -3804,7 +3805,7 @@
 .sb-trend-toolbar h2 { margin: 0 0 6px; font-size: var(--sb-t-title); font-weight: 500; color: var(--sb-ink); }
 .sb-trend-toolbar p { margin: 0; color: var(--sb-muted); font-size: var(--sb-t-caption); }
 .sb-trend-toolbar > button { flex-shrink: 0; }
-.sb-trend-add { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 20px; border: 1px solid var(--sb-ops-mint); border-radius: var(--sb-r-xl); background: var(--sb-ops-mint-soft); }
+.sb-trend-add { display: grid; grid-template-columns: 1fr .7fr 1fr; gap: 14px; padding: 20px; border: 1px solid var(--sb-ops-mint); border-radius: var(--sb-r-xl); background: var(--sb-ops-mint-soft); }
 .sb-trend-add label { display: flex; flex-direction: column; gap: 7px; color: var(--sb-ink-2); font-size: var(--sb-t-caption); }
 .sb-trend-add input, .sb-trend-add select, .sb-trend-map__tools > input { min-width: 0; padding: 10px 12px; border: 1px solid var(--sb-n-200); border-radius: var(--sb-r-md); background: var(--sb-surface); color: var(--sb-ink); font: inherit; font-size: var(--sb-t-caption); }
 .sb-trend-add__desc { grid-column: 1 / -1; }
@@ -3873,6 +3874,7 @@
 .sb-trend-detail dl { margin: 18px 0; font-size: var(--sb-t-caption); line-height: 1.6; }
 .sb-trend-detail dt { color: var(--sb-muted); margin-top: 12px; font-size: var(--sb-t-micro); }
 .sb-trend-detail dd { color: var(--sb-ink-2); margin: 3px 0 0; }
+.sb-trend-detail__year { color: var(--sb-trend-purple); font-size: var(--sb-t-body); font-weight: 500; font-variant-numeric: tabular-nums; }
 .sb-trend-detail__empty { text-align: center; padding: 18px 0; }
 .sb-trend-detail__empty > span { display: grid; place-items: center; width: 70px; height: 70px; margin: 0 auto; border: 1px dashed var(--sb-ops-mint); border-radius: var(--sb-r-pill); color: var(--sb-success); font-size: var(--sb-t-title); }
 .clean-home-page .sb-trend-recent header { display: flex !important; align-items: center; justify-content: space-between; gap: 8px; padding: 0; }
